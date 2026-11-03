@@ -20,8 +20,9 @@ Future<File> captureScreenshot(WidgetTester tester, String name) async {
   await tester.pumpAndSettle();
   late File file;
   await tester.runAsync(() async {
-    final boundary = screenshotKey.currentContext!.findRenderObject()
-        as RenderRepaintBoundary;
+    final boundary =
+        screenshotKey.currentContext!.findRenderObject()
+            as RenderRepaintBoundary;
     final image = await boundary.toImage(pixelRatio: 1);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     file = File('screenshots/$name.png');

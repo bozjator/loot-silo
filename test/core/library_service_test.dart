@@ -7,17 +7,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
-void copyTree(String from, String to) {
-  for (final e in Directory(from).listSync(recursive: true)) {
-    final target = p.join(to, p.relative(e.path, from: from));
-    if (e is Directory) {
-      Directory(target).createSync(recursive: true);
-    } else if (e is File) {
-      Directory(p.dirname(target)).createSync(recursive: true);
-      e.copySync(target);
-    }
-  }
-}
+import '../helpers/fs.dart';
 
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;

@@ -6,12 +6,13 @@ Decision log: `../REPORT_APP_CREATION.md`
 ## Milestones
 - [x] 1. Setup — SDK, Linux toolchain, MCP, project, repo, progress/report files
 - [x] 2. Scanner and index — 201 packs (71 top-level, 130 sub-packs) in OLD; cold 1.6 s, warm 0.2 s
-- [ ] 3. Folder import
-  - [ ] `FolderImporter.plan(source)` → import plan rows (pack, author, types, tags, target `<Author>/<Pack>`), sub-packs stay inside their bundle
-  - [ ] copy step with per-pack file count + checksum verification; writes sidecars; never touches the source
-  - [ ] review UI (table, fix unknown authors, edit tags/types, target conflicts)
-  - [ ] run for real: `assets_library_OLD` → `assets_library`, verify counts/checksums
+- [x] 3. Folder import — OLD → `assets_library`: 71/71 packs, 49,778 files, SHA-1 verified; OLD byte-identical
 - [ ] 4. Dashboard
+  - [ ] thumbnail cache + preview picker (sidecar cover → preview/mockup names → gif → largest PNG)
+  - [ ] pack tile (preview, title, author, type chips; bundles group sub-packs)
+  - [ ] grid replacing the temporary list on the home screen
+  - [ ] FTS search box + filter chips (type, author, tag, source) + sorting
+  - [ ] goldens for tile + filter bar; screenshot check on real library
 - [ ] 5. Animations
 - [ ] 6. Pack detail
 - [ ] 7. Credits
@@ -28,14 +29,16 @@ xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.da
 Screenshots land in `screenshots/` (gitignored).
 
 ## Last iteration
-- Done: milestone 2. `lib/core/`: `sidecar`, `fs_tree` (tree snapshot + dir-mtime fingerprint),
-  `pack_detector`, `author_resolver`, `type_classifier` (+ path tag suggester), `library_scanner`,
-  `library_index` (drift + FTS5), `library_service` (warm/cold load in isolates).
-  Fixtures in `test/fixtures/{library_src,managed}`; 40 tests incl. read-only real-data test
-  (`test/real_library_test.dart`, auto-skips without `../assets_library_OLD`).
-  `dart run tool/scan_report.dart <folder>` prints a read-only detection report.
-- Next: milestone 3 — `FolderImporter.plan()` + copy/verify step (core first, then review UI).
-- After editing `library_index.dart`: `dart run build_runner build`.
+- Done: milestone 3. `lib/install/folder_importer.dart` (plan → targets with ` (n)` on clashes →
+  staged copy + per-file SHA-1 check → sidecar + merged author file → atomic rename; source/library
+  overlap refused; re-imports detected via `source_path`). `lib/state/` (settings JSON, Riverpod
+  providers, library notifier). UI: home (choose library / empty / temporary pack list), review screen
+  with editable author/types/tags, progress + summary. `tool/import_folder.dart` = headless import.
+  56 unit/widget tests + 3 integration tests (fixture import via UI, real OLD review, real library open).
+- Real run: 5 min for 2.9 GB; independent `sha1sum` check of OLD before/after identical; python
+  re-verification of every pack vs its `source_path`: 0 mismatches. Rescan of the library → 201 packs.
+- App settings written to `~/.local/share/dev.uzo.assets_explorer/settings.json` → `assets_library`.
+- Next: milestone 4 — thumbnail cache + preview picker, then tiles/grid.
 
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.

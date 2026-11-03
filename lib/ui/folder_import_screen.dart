@@ -1,0 +1,683 @@
+import 'dart:isolate';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../core/sidecar.dart';
+import '../core/type_classifier.dart';
+import '../install/folder_importer.dart';
+import '../state/providers.dart';
+import 'format.dart';
+
+/// Top-level so the isolate closure captures nothing but its arguments.
+Future<ImportPlan> _planInBackground(String source, String library) =>
+    Isolate.run(() => planFolderImport(source, library));
+
+enum _Phase { planning, review, importing, done }
+
+/// Review table for importing an existing folder into the library.
+///
+/// Pops with `true` when anything was imported.
+class FolderImportScreen extends ConsumerStatefulWidget {
+  const FolderImportScreen({super.key, required this.sourcePath});
+
+  final String sourcePath;
+
+  @override
+  ConsumerState<FolderImportScreen> createState() => _FolderImportScreenState();
+}
+
+class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
+  var _phase = _Phase.planning;
+  ImportPlan? _plan;
+  Object? _error;
+  final _outcomes = <ImportOutcome>[];
+  var _total = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _makePlan();
+  }
+
+  Future<void> _makePlan() async {
+    final source = widget.sourcePath;
+    final library = ref.read(settingsProvider).libraryPath!;
+    try {
+      final plan = await _planInBackground(source, library);
+      if (mounted) setState(() => (_plan = plan, _phase = _Phase.review));
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
+    }
+  }
+
+  Future<void> _import() async {
+    final plan = _plan!;
+    setState(() {
+      _phase = _Phase.importing;
+      _total = plan.selected.length;
+      _outcomes.clear();
+    });
+    await for (final o in runImport(plan)) {
+      if (!mounted) return;
+      setState(() => _outcomes.add(o));
+    }
+    if (mounted) setState(() => _phase = _Phase.done);
+  }
+
+  /// Authors already in the library plus those found in this import.
+  List<AuthorInfo> _knownAuthors() {
+    final byName = <String, AuthorInfo>{};
+    for (final p in ref.read(libraryProvider).value?.packs ?? const []) {
+      if (p.author != null) {
+        byName[p.author!] ??= AuthorInfo(user: p.author!, url: p.authorUrl);
+      }
+    }
+    for (final i in _plan?.items ?? const <ImportItem>[]) {
+      if (i.author != null) byName[i.author!.user] ??= i.author!;
+    }
+    return byName.values.toList()..sort((a, b) => a.user.compareTo(b.user));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Import folder'),
+        automaticallyImplyLeading: _phase != _Phase.importing,
+      ),
+      body: switch (_phase) {
+        _ when _error != null => Center(child: Text('Cannot import: $_error')),
+        _Phase.planning => const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Looking for packs…'),
+            ],
+          ),
+        ),
+        _Phase.review => _review(context),
+        _Phase.importing || _Phase.done => _progress(context),
+      },
+    );
+  }
+
+  Widget _review(BuildContext context) {
+    final theme = Theme.of(context);
+    final plan = _plan!;
+    final targets = plan.targets();
+    final selected = plan.selected.toList();
+    final files = selected.fold(0, (n, i) => n + i.fileCount);
+    final bytes = selected.fold(0, (n, i) => n + i.totalBytes);
+    final unknown = selected.where((i) => i.author == null).length;
+    final allSelected = selected.length == plan.items.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: '${plan.items.length} packs found in ',
+                  style: theme.textTheme.titleMedium,
+                ),
+                TextSpan(
+                  text: plan.sourceRoot,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontFamily: 'monospace',
+                  ),
+                ),
+                TextSpan(
+                  text:
+                      '\nFiles are copied into ${plan.libraryRoot}; '
+                      'the source folder is never changed. '
+                      'Click an author, type or tag to edit it.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ),
+        _HeaderRow(
+          value: allSelected ? true : (selected.isEmpty ? false : null),
+          onChanged: (v) => setState(() {
+            for (final i in plan.items) {
+              i.selected = v ?? false;
+            }
+          }),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView.separated(
+            itemCount: plan.items.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final item = plan.items[index];
+              return _ItemRow(
+                item: item,
+                target: targets[item],
+                onChanged: () => setState(() {}),
+                knownAuthors: _knownAuthors,
+              );
+            },
+          ),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              if (unknown > 0)
+                Text(
+                  '$unknown selected packs have no author; '
+                  'they go to "$unknownAuthor".',
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              const Spacer(),
+              Text(
+                '${formatCount(files)} files · ${formatBytes(bytes)}',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(width: 16),
+              FilledButton.icon(
+                onPressed: selected.isEmpty ? null : _import,
+                icon: const Icon(Icons.download_done),
+                label: Text('Import ${selected.length} packs'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _progress(BuildContext context) {
+    final theme = Theme.of(context);
+    final done = _phase == _Phase.done;
+    final failed = _outcomes.where((o) => !o.verified).toList();
+    final copied = _outcomes.fold(0, (n, o) => n + o.copiedFiles);
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            done
+                ? '${_outcomes.length - failed.length} of $_total packs imported '
+                      'and verified${failed.isEmpty ? '' : ', ${failed.length} failed'}'
+                : 'Importing ${_outcomes.length + 1} of $_total…',
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: _total == 0 ? null : _outcomes.length / _total,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${formatCount(copied)} files copied, every file checked '
+            'against the source by SHA-1.',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView(
+              children: [
+                for (final o in _outcomes.reversed)
+                  ListTile(
+                    dense: true,
+                    leading: Icon(
+                      o.verified ? Icons.check_circle : Icons.error,
+                      color: o.verified
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.error,
+                    ),
+                    title: Text(o.title),
+                    subtitle: Text(
+                      o.error ??
+                          '${o.target} · ${o.copiedFiles} files · '
+                              '${formatBytes(o.bytes)}',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (done)
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                onPressed: () =>
+                    Navigator.of(context).pop(_outcomes.isNotEmpty),
+                child: const Text('Done'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+const _colPack = 5;
+const _colAuthor = 3;
+const _colTypes = 3;
+const _colTags = 3;
+const _colSize = 2;
+const _colTarget = 4;
+
+class _HeaderRow extends StatelessWidget {
+  const _HeaderRow({required this.value, required this.onChanged});
+
+  final bool? value;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.labelMedium;
+    Widget col(int flex, String text) => Expanded(
+      flex: flex,
+      child: Text(text, style: style),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        children: [
+          Checkbox(tristate: true, value: value, onChanged: onChanged),
+          col(_colPack, 'Pack'),
+          col(_colAuthor, 'Author'),
+          col(_colTypes, 'Types'),
+          col(_colTags, 'Tags'),
+          col(_colSize, 'Files'),
+          col(_colTarget, 'Library folder'),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemRow extends StatelessWidget {
+  const _ItemRow({
+    required this.item,
+    required this.target,
+    required this.onChanged,
+    required this.knownAuthors,
+  });
+
+  final ImportItem item;
+  final String? target;
+  final VoidCallback onChanged;
+  final List<AuthorInfo> Function() knownAuthors;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final small = theme.textTheme.bodySmall;
+    final muted = small?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final renamed = target != null && !target!.endsWith('/${item.folderName}');
+
+    Widget editable(int flex, Widget child, Future<void> Function() onTap) =>
+        Expanded(
+          flex: flex,
+          child: InkWell(
+            onTap: () async {
+              await onTap();
+              onChanged();
+            },
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+              child: child,
+            ),
+          ),
+        );
+
+    return Opacity(
+      opacity: item.selected ? 1 : 0.55,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        child: Row(
+          children: [
+            Checkbox(
+              value: item.selected,
+              onChanged: (v) {
+                item.selected = v ?? false;
+                onChanged();
+              },
+            ),
+            Expanded(
+              flex: _colPack,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          item.title,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                      if (item.isContainer) ...[
+                        const SizedBox(width: 6),
+                        _Badge('bundle · ${item.subPackCount} sub-packs'),
+                      ],
+                    ],
+                  ),
+                  Text(
+                    item.sourceRel,
+                    overflow: TextOverflow.ellipsis,
+                    style: muted,
+                  ),
+                ],
+              ),
+            ),
+            editable(
+              _colAuthor,
+              item.author == null
+                  ? Text(
+                      'Unknown — set author',
+                      style: small?.copyWith(color: theme.colorScheme.error),
+                    )
+                  : Text(
+                      item.author!.user,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+              () async {
+                final a = await showDialog<AuthorInfo>(
+                  context: context,
+                  builder: (_) =>
+                      AuthorDialog(initial: item.author, known: knownAuthors()),
+                );
+                if (a != null) item.author = a;
+              },
+            ),
+            editable(
+              _colTypes,
+              Wrap(
+                spacing: 4,
+                runSpacing: 2,
+                children: [for (final t in item.types) _Badge(t)],
+              ),
+              () async {
+                final t = await showDialog<List<String>>(
+                  context: context,
+                  builder: (_) => TypesDialog(initial: item.types),
+                );
+                if (t != null) item.types = t;
+              },
+            ),
+            editable(
+              _colTags,
+              Text(
+                item.tags.isEmpty ? '—' : item.tags.join(', '),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: small,
+              ),
+              () async {
+                final t = await showDialog<List<String>>(
+                  context: context,
+                  builder: (_) => TagsDialog(initial: item.tags),
+                );
+                if (t != null) item.tags = t;
+              },
+            ),
+            Expanded(
+              flex: _colSize,
+              child: Text(
+                '${formatCount(item.fileCount)}\n${formatBytes(item.totalBytes)}',
+                style: small,
+              ),
+            ),
+            Expanded(
+              flex: _colTarget,
+              child: item.importedAs != null && !item.selected
+                  ? Text('Already imported as ${item.importedAs}', style: muted)
+                  : Row(
+                      children: [
+                        if (renamed)
+                          Tooltip(
+                            message:
+                                'A folder with this name exists; '
+                                'a number is added',
+                            child: Icon(
+                              Icons.info_outline,
+                              size: 16,
+                              color: theme.colorScheme.tertiary,
+                            ),
+                          ),
+                        Flexible(
+                          child: Text(
+                            target ?? '—',
+                            overflow: TextOverflow.ellipsis,
+                            style: small?.copyWith(fontFamily: 'monospace'),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  const _Badge(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall
+            ?.copyWith(color: scheme.onSecondaryContainer),
+      ),
+    );
+  }
+}
+
+/// Edits an author name and profile URL; known authors autocomplete.
+class AuthorDialog extends StatefulWidget {
+  const AuthorDialog({super.key, this.initial, this.known = const []});
+
+  final AuthorInfo? initial;
+  final List<AuthorInfo> known;
+
+  @override
+  State<AuthorDialog> createState() => _AuthorDialogState();
+}
+
+class _AuthorDialogState extends State<AuthorDialog> {
+  late final _url = TextEditingController(text: widget.initial?.url ?? '');
+  late String _name = widget.initial?.user ?? '';
+
+  @override
+  void dispose() {
+    _url.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _name.trim();
+    if (name.isEmpty) return;
+    final url = _url.text.trim();
+    final initial = widget.initial;
+    Navigator.of(context).pop(
+      AuthorInfo(
+        user: name,
+        url: url.isEmpty ? null : url,
+        license: initial?.user == name ? initial?.license : null,
+        itchUser: initial?.user == name ? initial?.itchUser : null,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Author'),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Autocomplete<AuthorInfo>(
+              initialValue: TextEditingValue(text: _name),
+              displayStringForOption: (a) => a.user,
+              optionsBuilder: (v) {
+                final q = v.text.toLowerCase();
+                return widget.known.where(
+                  (a) => q.isNotEmpty && a.user.toLowerCase().contains(q),
+                );
+              },
+              onSelected: (a) {
+                _name = a.user;
+                if (a.url != null) _url.text = a.url!;
+              },
+              fieldViewBuilder: (context, controller, focus, onSubmit) =>
+                  TextField(
+                    controller: controller,
+                    focusNode: focus,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                    onChanged: (v) => _name = v,
+                    onSubmitted: (_) => _submit(),
+                  ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _url,
+              decoration: const InputDecoration(
+                labelText: 'Profile URL',
+                hintText: 'https://name.itch.io/',
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Save')),
+      ],
+    );
+  }
+}
+
+class TypesDialog extends StatefulWidget {
+  const TypesDialog({super.key, required this.initial});
+
+  final List<String> initial;
+
+  @override
+  State<TypesDialog> createState() => _TypesDialogState();
+}
+
+class _TypesDialogState extends State<TypesDialog> {
+  late final _selected = [...widget.initial];
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Types'),
+      content: SizedBox(
+        width: 400,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final t in AssetType.values)
+              FilterChip(
+                label: Text(t.id),
+                selected: _selected.contains(t.id),
+                onSelected: (on) => setState(
+                  () => on ? _selected.add(t.id) : _selected.remove(t.id),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop([
+            for (final t in AssetType.values)
+              if (_selected.contains(t.id)) t.id,
+          ]),
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class TagsDialog extends StatefulWidget {
+  const TagsDialog({super.key, required this.initial});
+
+  final List<String> initial;
+
+  @override
+  State<TagsDialog> createState() => _TagsDialogState();
+}
+
+class _TagsDialogState extends State<TagsDialog> {
+  late final _text = TextEditingController(text: widget.initial.join(', '));
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final tags = <String>{
+      for (final t in _text.text.split(','))
+        if (t.trim().isNotEmpty) t.trim().toLowerCase(),
+    }.toList()..sort();
+    Navigator.of(context).pop(tags);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Tags'),
+      content: SizedBox(
+        width: 400,
+        child: TextField(
+          controller: _text,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Comma-separated tags'),
+          onSubmitted: (_) => _submit(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Save')),
+      ],
+    );
+  }
+}
