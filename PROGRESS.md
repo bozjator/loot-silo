@@ -43,4 +43,6 @@ Screenshots land in `screenshots/` (gitignored).
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.
   Can be split later by editing in the review UI.
+- `assets_library_OLD/INDEX.md` (root-level notes, not a pack) was not copied. Its license table could
+  pre-fill `license:` in author files during milestone 7.
 - None blocking. `7zz` isn't installed but `7z` is; extractor will try `7zz`, then `7z`, then `unrar`.
