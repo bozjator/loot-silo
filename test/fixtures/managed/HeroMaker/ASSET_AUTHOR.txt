@@ -1,0 +1,3 @@
+user: HeroMaker
+url: https://heromaker.itch.io/
+itch_user: heromaker

@@ -1,0 +1,2 @@
+user: Solo Artist
+url: https://soloartist.itch.io/

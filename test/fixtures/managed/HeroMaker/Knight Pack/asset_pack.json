@@ -1,0 +1,16 @@
+{
+  "title": "Knight Pack",
+  "types": [
+    "character"
+  ],
+  "tags": [
+    "knight",
+    "pixel-art"
+  ],
+  "source": "imported",
+  "source_path": "art/characters/HeroMaker/Knight Pack v1.0",
+  "used_in": [
+    "My Game"
+  ],
+  "future_field": 42
+}
