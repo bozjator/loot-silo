@@ -7,13 +7,13 @@ Decision log: `../REPORT_APP_CREATION.md`
 - [x] 1. Setup — SDK, Linux toolchain, MCP, project, repo, progress/report files
 - [x] 2. Scanner and index — 201 packs (71 top-level, 130 sub-packs) in OLD; cold 1.6 s, warm 0.2 s
 - [x] 3. Folder import — OLD → `assets_library`: 71/71 packs, 49,778 files, SHA-1 verified; OLD byte-identical
-- [ ] 4. Dashboard
-  - [ ] thumbnail cache + preview picker (sidecar cover → preview/mockup names → gif → largest PNG)
-  - [ ] pack tile (preview, title, author, type chips; bundles group sub-packs)
-  - [ ] grid replacing the temporary list on the home screen
-  - [ ] FTS search box + filter chips (type, author, tag, source) + sorting
-  - [ ] goldens for tile + filter bar; screenshot check on real library
+- [x] 4. Dashboard — preview picker, pixel-aware tiles, FTS search, type/author/tag/source filters, sort, bundle browsing, goldens
 - [ ] 5. Animations
+  - [ ] `animation_detector` (core): GIF/APNG/WebP, strips & grids (name hints `(96x96)`, `_8f`, `-sheet`, folder hints; square-frame and transparent-column heuristics), numbered frame sequences; cached per pack
+  - [ ] `AnimatedSprite` widget (frame slicing, ~10 fps, FilterQuality.none, integer scale)
+  - [ ] tile: static first frame, animate on hover; preview rank 5 (detected animation) and sprite-sheet tiles show one frame instead of the whole sheet
+  - [ ] detail controls (fps, frame size) saved to sidecar `animations{}` — may land with milestone 6 detail view
+  - [ ] tests with generated sheets; screenshots of Zerie, OboroPixel, Special Effects
 - [ ] 6. Pack detail
 - [ ] 7. Credits
 - [ ] 8. Archive import
@@ -29,16 +29,14 @@ xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.da
 Screenshots land in `screenshots/` (gitignored).
 
 ## Last iteration
-- Done: milestone 3. `lib/install/folder_importer.dart` (plan → targets with ` (n)` on clashes →
-  staged copy + per-file SHA-1 check → sidecar + merged author file → atomic rename; source/library
-  overlap refused; re-imports detected via `source_path`). `lib/state/` (settings JSON, Riverpod
-  providers, library notifier). UI: home (choose library / empty / temporary pack list), review screen
-  with editable author/types/tags, progress + summary. `tool/import_folder.dart` = headless import.
-  56 unit/widget tests + 3 integration tests (fixture import via UI, real OLD review, real library open).
-- Real run: 5 min for 2.9 GB; independent `sha1sum` check of OLD before/after identical; python
-  re-verification of every pack vs its `source_path`: 0 mismatches. Rescan of the library → 201 packs.
-- App settings written to `~/.local/share/dev.uzo.assets_explorer/settings.json` → `assets_library`.
-- Next: milestone 4 — thumbnail cache + preview picker, then tiles/grid.
+- Done: milestone 4. `core/preview_picker.dart` (plan priority + word rank, promo images skipped, bundles
+  fall back to a sub-pack preview); index schema v2 (`packs.preview`, `pack_files.size`).
+  `state/dashboard.dart` (query, pure `applyQuery`, facets, FTS hits). UI: `ui/dashboard.dart`,
+  `widgets/{pixel_image,pack_tile,filter_bar}.dart`; `/` focuses search, Esc leaves it.
+  Goldens in `test/ui/goldens/` (Roboto + Material Icons loaded from the SDK). 74 tests + 3 integration.
+- Kenney bundle sidecars in `assets_library` rewritten with the new bundle-type rule (≥10 % of sub-packs).
+- Next: milestone 5 — `animation_detector` with generated-sheet tests, then `AnimatedSprite` + hover.
+- Golden update: `flutter test test/ui --update-goldens` (Linux-rendered; regenerate on other OSes).
 
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.

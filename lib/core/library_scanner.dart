@@ -2,6 +2,7 @@ import 'package:path/path.dart' as p;
 
 import 'fs_tree.dart';
 import 'pack_detector.dart';
+import 'preview_picker.dart';
 import 'sidecar.dart';
 import 'type_classifier.dart';
 
@@ -19,6 +20,8 @@ class ScannedPack {
     required this.tags,
     required this.source,
     required this.files,
+    required this.sizes,
+    required this.preview,
     required this.totalBytes,
     required this.sidecar,
   });
@@ -39,6 +42,13 @@ class ScannedPack {
 
   /// Files relative to [path]; a container leaves out its sub-packs' files.
   final List<String> files;
+
+  /// Byte sizes, parallel to [files].
+  final List<int> sizes;
+
+  /// Representative image relative to [path]; for a bundle without one of
+  /// its own, a sub-pack's preview.
+  final String? preview;
   final int totalBytes;
   final PackSidecar? sidecar;
 }
@@ -99,10 +109,22 @@ ScanResult scanLibrary(String root) {
     if (sc != null && sc.types.isNotEmpty) {
       types = sc.types;
     } else if (subTypes.isNotEmpty) {
-      types = subTypes.keys.toList()
+      // Types shared by at least 10 % of the sub-packs; the sub-packs
+      // themselves stay searchable for the rare ones.
+      final min = dp.subPacks.length * 0.1;
+      types = subTypes.keys.where((t) => subTypes[t]! >= min).toList()
         ..sort((a, b) => subTypes[b]!.compareTo(subTypes[a]!));
     } else {
       types = [for (final t in classifyPack(id, files)) t.id];
+    }
+    var preview = pickPreview(files, sidecar: sc);
+    if (preview == null) {
+      for (final sub in packs.skip(slot).where((x) => x.parentId == id)) {
+        if (sub.preview != null) {
+          preview = '${sub.id.substring(id.length + 1)}/${sub.preview}';
+          break;
+        }
+      }
     }
     packs.insert(
       slot,
@@ -118,6 +140,8 @@ ScanResult scanLibrary(String root) {
         tags: sc != null && sc.tags.isNotEmpty ? sc.tags : suggestTags(id),
         source: sc?.source,
         files: [for (final (rel, _) in files) rel],
+        sizes: [for (final (_, f) in files) f.size],
+        preview: preview,
         totalBytes: files.fold(0, (sum, e) => sum + e.$2.size),
         sidecar: sc,
       ),

@@ -1,0 +1,111 @@
+import 'package:path/path.dart' as p;
+
+import 'fs_tree.dart';
+import 'sidecar.dart';
+
+/// Formats Flutter can decode for a tile preview.
+const previewExts = {'png', 'gif', 'jpg', 'jpeg', 'webp', 'bmp'};
+const animatedExts = {'gif', 'webp', 'apng'};
+
+final _previewWord = RegExp(
+  r'(^|[^a-z])(preview|mockup|cover|sample|showcase|screenshot|example|thumbnail)s?([^a-z]|$)',
+  caseSensitive: false,
+);
+final _allStem = RegExp(r'^all([^a-z]|$)', caseSensitive: false);
+
+/// Promo and housekeeping images that never represent the pack.
+final _promo = RegExp(
+  r'(coupon|promo|discount|banner_ad|advert|logo|donate|patreon|kofi|ko-fi|support[^a-z]*me|licen[cs]e|follow)',
+  caseSensitive: false,
+);
+
+/// Preferred preview words, best first.
+const _previewRank = [
+  'preview', 'mockup', 'cover', 'showcase', 'screenshot', 'thumbnail', //
+  'all', 'sample', 'example',
+];
+
+int _rank(String rel) {
+  final lower = rel.toLowerCase();
+  final stem = p.basenameWithoutExtension(lower);
+  for (var i = 0; i < _previewRank.length; i++) {
+    final w = _previewRank[i];
+    if (w == 'all' ? _allStem.hasMatch(stem) : stem.contains(w)) return i;
+  }
+  for (var i = 0; i < _previewRank.length; i++) {
+    if (p.dirname(lower).contains(_previewRank[i])) {
+      return _previewRank.length + i;
+    }
+  }
+  return 99;
+}
+
+/// Picks the image that best represents a pack, as a path relative to it.
+///
+/// Priority, as in the plan:
+/// 1. the sidecar `cover`;
+/// 2. itch cover/screenshots in `_itch/`;
+/// 3. files named, or inside folders named, preview / mockup / cover /
+///    sample / showcase / screenshot / example, or an `all*` sheet;
+/// 4. a GIF / animated WebP;
+/// 5. (animation detection — milestone 5);
+/// 6. the largest image near the root (depth ≤ 2), else anywhere.
+///
+/// Promo images (coupon, logo, patreon …) are never picked. Named previews
+/// are ordered by word (preview > mockup > cover > … > sample > example),
+/// file name before folder name, then shallower, then larger; static
+/// images beat animated ones there.
+String? pickPreview(List<(String, FileEntry)> files, {PackSidecar? sidecar}) {
+  final images = [
+    for (final f in files)
+      if (previewExts.contains(f.$2.ext) &&
+          !_promo.hasMatch(p.basenameWithoutExtension(f.$1)))
+        f,
+  ];
+  final cover = sidecar?.cover;
+  if (cover != null && files.any((f) => f.$1 == cover)) return cover;
+  if (images.isEmpty) return null;
+
+  int depth(String rel) => '/'.allMatches(rel).length;
+  (String, FileEntry)? best(Iterable<(String, FileEntry)> candidates) {
+    final list = candidates.toList();
+    if (list.isEmpty) return null;
+    list.sort((a, b) {
+      final r = _rank(a.$1).compareTo(_rank(b.$1));
+      if (r != 0) return r;
+      final d = depth(a.$1).compareTo(depth(b.$1));
+      if (d != 0) return d;
+      return b.$2.size.compareTo(a.$2.size);
+    });
+    return list.first;
+  }
+
+  final itch = best(images.where((f) => f.$1.startsWith('_itch/')));
+  if (itch != null) {
+    final covers = images.where((f) => f.$1.startsWith('_itch/cover'));
+    return covers.isNotEmpty ? covers.first.$1 : itch.$1;
+  }
+
+  final named = images.where((f) {
+    final stem = p.basenameWithoutExtension(f.$1);
+    final dirs = p.dirname(f.$1);
+    return _previewWord.hasMatch(stem) ||
+        _allStem.hasMatch(stem) ||
+        (dirs != '.' && _previewWord.hasMatch(dirs));
+  });
+  final namedStatic = best(
+    named.where((f) => !animatedExts.contains(f.$2.ext)),
+  );
+  final namedAny = namedStatic ?? best(named);
+  if (namedAny != null) return namedAny.$1;
+
+  final gif = best(images.where((f) => animatedExts.contains(f.$2.ext)));
+  if (gif != null) return gif.$1;
+
+  int largestFirst((String, FileEntry) a, (String, FileEntry) b) =>
+      b.$2.size.compareTo(a.$2.size);
+  final shallow = images.where((f) => depth(f.$1) <= 2).toList()
+    ..sort(largestFirst);
+  if (shallow.isNotEmpty) return shallow.first.$1;
+  return (images..sort(largestFirst)).first.$1;
+}

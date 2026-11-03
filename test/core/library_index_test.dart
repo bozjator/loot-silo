@@ -23,6 +23,7 @@ void main() {
     expect(knight.authorUrl, 'https://heromaker.itch.io/');
     expect(knight.types, ['character']);
     expect(knight.fileCount, 4);
+    expect(knight.preview, 'Knight/Knight-sheet(32x32).png');
     expect(await index.filesOf(knight.id), contains('Knight/idle_0.png'));
     expect(
       (await index.scanStateFor(scan.root))!.fingerprint,

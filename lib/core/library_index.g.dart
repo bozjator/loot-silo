@@ -107,6 +107,17 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _previewMeta = const VerificationMeta(
+    'preview',
+  );
+  @override
+  late final GeneratedColumn<String> preview = GeneratedColumn<String>(
+    'preview',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _fileCountMeta = const VerificationMeta(
     'fileCount',
   );
@@ -141,6 +152,7 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     types,
     tags,
     source,
+    preview,
     fileCount,
     totalBytes,
   ];
@@ -212,6 +224,12 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
         source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
       );
     }
+    if (data.containsKey('preview')) {
+      context.handle(
+        _previewMeta,
+        preview.isAcceptableOrUnknown(data['preview']!, _previewMeta),
+      );
+    }
     if (data.containsKey('file_count')) {
       context.handle(
         _fileCountMeta,
@@ -281,6 +299,10 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
         DriftSqlType.string,
         data['${effectivePrefix}source'],
       ),
+      preview: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}preview'],
+      ),
       fileCount: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}file_count'],
@@ -314,6 +336,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
   final List<String> types;
   final List<String> tags;
   final String? source;
+
+  /// Preview image relative to [path].
+  final String? preview;
   final int fileCount;
   final int totalBytes;
   const PackRow({
@@ -327,6 +352,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     required this.types,
     required this.tags,
     this.source,
+    this.preview,
     required this.fileCount,
     required this.totalBytes,
   });
@@ -355,6 +381,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     if (!nullToAbsent || source != null) {
       map['source'] = Variable<String>(source);
     }
+    if (!nullToAbsent || preview != null) {
+      map['preview'] = Variable<String>(preview);
+    }
     map['file_count'] = Variable<int>(fileCount);
     map['total_bytes'] = Variable<int>(totalBytes);
     return map;
@@ -380,6 +409,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       source: source == null && nullToAbsent
           ? const Value.absent()
           : Value(source),
+      preview: preview == null && nullToAbsent
+          ? const Value.absent()
+          : Value(preview),
       fileCount: Value(fileCount),
       totalBytes: Value(totalBytes),
     );
@@ -401,6 +433,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       types: serializer.fromJson<List<String>>(json['types']),
       tags: serializer.fromJson<List<String>>(json['tags']),
       source: serializer.fromJson<String?>(json['source']),
+      preview: serializer.fromJson<String?>(json['preview']),
       fileCount: serializer.fromJson<int>(json['fileCount']),
       totalBytes: serializer.fromJson<int>(json['totalBytes']),
     );
@@ -419,6 +452,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       'types': serializer.toJson<List<String>>(types),
       'tags': serializer.toJson<List<String>>(tags),
       'source': serializer.toJson<String?>(source),
+      'preview': serializer.toJson<String?>(preview),
       'fileCount': serializer.toJson<int>(fileCount),
       'totalBytes': serializer.toJson<int>(totalBytes),
     };
@@ -435,6 +469,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     List<String>? types,
     List<String>? tags,
     Value<String?> source = const Value.absent(),
+    Value<String?> preview = const Value.absent(),
     int? fileCount,
     int? totalBytes,
   }) => PackRow(
@@ -448,6 +483,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     types: types ?? this.types,
     tags: tags ?? this.tags,
     source: source.present ? source.value : this.source,
+    preview: preview.present ? preview.value : this.preview,
     fileCount: fileCount ?? this.fileCount,
     totalBytes: totalBytes ?? this.totalBytes,
   );
@@ -465,6 +501,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       types: data.types.present ? data.types.value : this.types,
       tags: data.tags.present ? data.tags.value : this.tags,
       source: data.source.present ? data.source.value : this.source,
+      preview: data.preview.present ? data.preview.value : this.preview,
       fileCount: data.fileCount.present ? data.fileCount.value : this.fileCount,
       totalBytes: data.totalBytes.present
           ? data.totalBytes.value
@@ -485,6 +522,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           ..write('types: $types, ')
           ..write('tags: $tags, ')
           ..write('source: $source, ')
+          ..write('preview: $preview, ')
           ..write('fileCount: $fileCount, ')
           ..write('totalBytes: $totalBytes')
           ..write(')'))
@@ -503,6 +541,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     types,
     tags,
     source,
+    preview,
     fileCount,
     totalBytes,
   );
@@ -520,6 +559,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           other.types == this.types &&
           other.tags == this.tags &&
           other.source == this.source &&
+          other.preview == this.preview &&
           other.fileCount == this.fileCount &&
           other.totalBytes == this.totalBytes);
 }
@@ -535,6 +575,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
   final Value<List<String>> types;
   final Value<List<String>> tags;
   final Value<String?> source;
+  final Value<String?> preview;
   final Value<int> fileCount;
   final Value<int> totalBytes;
   final Value<int> rowid;
@@ -549,6 +590,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     this.types = const Value.absent(),
     this.tags = const Value.absent(),
     this.source = const Value.absent(),
+    this.preview = const Value.absent(),
     this.fileCount = const Value.absent(),
     this.totalBytes = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -564,6 +606,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     required List<String> types,
     required List<String> tags,
     this.source = const Value.absent(),
+    this.preview = const Value.absent(),
     required int fileCount,
     required int totalBytes,
     this.rowid = const Value.absent(),
@@ -586,6 +629,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Expression<String>? types,
     Expression<String>? tags,
     Expression<String>? source,
+    Expression<String>? preview,
     Expression<int>? fileCount,
     Expression<int>? totalBytes,
     Expression<int>? rowid,
@@ -601,6 +645,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       if (types != null) 'types': types,
       if (tags != null) 'tags': tags,
       if (source != null) 'source': source,
+      if (preview != null) 'preview': preview,
       if (fileCount != null) 'file_count': fileCount,
       if (totalBytes != null) 'total_bytes': totalBytes,
       if (rowid != null) 'rowid': rowid,
@@ -618,6 +663,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Value<List<String>>? types,
     Value<List<String>>? tags,
     Value<String?>? source,
+    Value<String?>? preview,
     Value<int>? fileCount,
     Value<int>? totalBytes,
     Value<int>? rowid,
@@ -633,6 +679,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       types: types ?? this.types,
       tags: tags ?? this.tags,
       source: source ?? this.source,
+      preview: preview ?? this.preview,
       fileCount: fileCount ?? this.fileCount,
       totalBytes: totalBytes ?? this.totalBytes,
       rowid: rowid ?? this.rowid,
@@ -676,6 +723,9 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     if (source.present) {
       map['source'] = Variable<String>(source.value);
     }
+    if (preview.present) {
+      map['preview'] = Variable<String>(preview.value);
+    }
     if (fileCount.present) {
       map['file_count'] = Variable<int>(fileCount.value);
     }
@@ -701,6 +751,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
           ..write('types: $types, ')
           ..write('tags: $tags, ')
           ..write('source: $source, ')
+          ..write('preview: $preview, ')
           ..write('fileCount: $fileCount, ')
           ..write('totalBytes: $totalBytes, ')
           ..write('rowid: $rowid')
@@ -735,8 +786,17 @@ class $PackFilesTable extends PackFiles
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _sizeMeta = const VerificationMeta('size');
   @override
-  List<GeneratedColumn> get $columns => [packId, relPath];
+  late final GeneratedColumn<int> size = GeneratedColumn<int>(
+    'size',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [packId, relPath, size];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -765,6 +825,14 @@ class $PackFilesTable extends PackFiles
     } else if (isInserting) {
       context.missing(_relPathMeta);
     }
+    if (data.containsKey('size')) {
+      context.handle(
+        _sizeMeta,
+        size.isAcceptableOrUnknown(data['size']!, _sizeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sizeMeta);
+    }
     return context;
   }
 
@@ -782,6 +850,10 @@ class $PackFilesTable extends PackFiles
         DriftSqlType.string,
         data['${effectivePrefix}rel_path'],
       )!,
+      size: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size'],
+      )!,
     );
   }
 
@@ -794,17 +866,27 @@ class $PackFilesTable extends PackFiles
 class PackFile extends DataClass implements Insertable<PackFile> {
   final String packId;
   final String relPath;
-  const PackFile({required this.packId, required this.relPath});
+  final int size;
+  const PackFile({
+    required this.packId,
+    required this.relPath,
+    required this.size,
+  });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['pack_id'] = Variable<String>(packId);
     map['rel_path'] = Variable<String>(relPath);
+    map['size'] = Variable<int>(size);
     return map;
   }
 
   PackFilesCompanion toCompanion(bool nullToAbsent) {
-    return PackFilesCompanion(packId: Value(packId), relPath: Value(relPath));
+    return PackFilesCompanion(
+      packId: Value(packId),
+      relPath: Value(relPath),
+      size: Value(size),
+    );
   }
 
   factory PackFile.fromJson(
@@ -815,6 +897,7 @@ class PackFile extends DataClass implements Insertable<PackFile> {
     return PackFile(
       packId: serializer.fromJson<String>(json['packId']),
       relPath: serializer.fromJson<String>(json['relPath']),
+      size: serializer.fromJson<int>(json['size']),
     );
   }
   @override
@@ -823,15 +906,20 @@ class PackFile extends DataClass implements Insertable<PackFile> {
     return <String, dynamic>{
       'packId': serializer.toJson<String>(packId),
       'relPath': serializer.toJson<String>(relPath),
+      'size': serializer.toJson<int>(size),
     };
   }
 
-  PackFile copyWith({String? packId, String? relPath}) =>
-      PackFile(packId: packId ?? this.packId, relPath: relPath ?? this.relPath);
+  PackFile copyWith({String? packId, String? relPath, int? size}) => PackFile(
+    packId: packId ?? this.packId,
+    relPath: relPath ?? this.relPath,
+    size: size ?? this.size,
+  );
   PackFile copyWithCompanion(PackFilesCompanion data) {
     return PackFile(
       packId: data.packId.present ? data.packId.value : this.packId,
       relPath: data.relPath.present ? data.relPath.value : this.relPath,
+      size: data.size.present ? data.size.value : this.size,
     );
   }
 
@@ -839,44 +927,52 @@ class PackFile extends DataClass implements Insertable<PackFile> {
   String toString() {
     return (StringBuffer('PackFile(')
           ..write('packId: $packId, ')
-          ..write('relPath: $relPath')
+          ..write('relPath: $relPath, ')
+          ..write('size: $size')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(packId, relPath);
+  int get hashCode => Object.hash(packId, relPath, size);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is PackFile &&
           other.packId == this.packId &&
-          other.relPath == this.relPath);
+          other.relPath == this.relPath &&
+          other.size == this.size);
 }
 
 class PackFilesCompanion extends UpdateCompanion<PackFile> {
   final Value<String> packId;
   final Value<String> relPath;
+  final Value<int> size;
   final Value<int> rowid;
   const PackFilesCompanion({
     this.packId = const Value.absent(),
     this.relPath = const Value.absent(),
+    this.size = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   PackFilesCompanion.insert({
     required String packId,
     required String relPath,
+    required int size,
     this.rowid = const Value.absent(),
   }) : packId = Value(packId),
-       relPath = Value(relPath);
+       relPath = Value(relPath),
+       size = Value(size);
   static Insertable<PackFile> custom({
     Expression<String>? packId,
     Expression<String>? relPath,
+    Expression<int>? size,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (packId != null) 'pack_id': packId,
       if (relPath != null) 'rel_path': relPath,
+      if (size != null) 'size': size,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -884,11 +980,13 @@ class PackFilesCompanion extends UpdateCompanion<PackFile> {
   PackFilesCompanion copyWith({
     Value<String>? packId,
     Value<String>? relPath,
+    Value<int>? size,
     Value<int>? rowid,
   }) {
     return PackFilesCompanion(
       packId: packId ?? this.packId,
       relPath: relPath ?? this.relPath,
+      size: size ?? this.size,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -902,6 +1000,9 @@ class PackFilesCompanion extends UpdateCompanion<PackFile> {
     if (relPath.present) {
       map['rel_path'] = Variable<String>(relPath.value);
     }
+    if (size.present) {
+      map['size'] = Variable<int>(size.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -913,6 +1014,7 @@ class PackFilesCompanion extends UpdateCompanion<PackFile> {
     return (StringBuffer('PackFilesCompanion(')
           ..write('packId: $packId, ')
           ..write('relPath: $relPath, ')
+          ..write('size: $size, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1219,6 +1321,7 @@ typedef $$PacksTableCreateCompanionBuilder = PacksCompanion Function({
   required List<String> types,
   required List<String> tags,
   Value<String?> source,
+  Value<String?> preview,
   required int fileCount,
   required int totalBytes,
   Value<int> rowid,
@@ -1234,6 +1337,7 @@ typedef $$PacksTableUpdateCompanionBuilder = PacksCompanion Function({
   Value<List<String>> types,
   Value<List<String>> tags,
   Value<String?> source,
+  Value<String?> preview,
   Value<int> fileCount,
   Value<int> totalBytes,
   Value<int> rowid,
@@ -1296,6 +1400,11 @@ class $$PacksTableFilterComposer extends Composer<_$LibraryIndex, $PacksTable> {
 
   ColumnFilters<String> get source => $composableBuilder(
     column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get preview => $composableBuilder(
+    column: $table.preview,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1369,6 +1478,11 @@ class $$PacksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get preview => $composableBuilder(
+    column: $table.preview,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get fileCount => $composableBuilder(
     column: $table.fileCount,
     builder: (column) => ColumnOrderings(column),
@@ -1421,6 +1535,9 @@ class $$PacksTableAnnotationComposer
   GeneratedColumn<String> get source =>
       $composableBuilder(column: $table.source, builder: (column) => column);
 
+  GeneratedColumn<String> get preview =>
+      $composableBuilder(column: $table.preview, builder: (column) => column);
+
   GeneratedColumn<int> get fileCount =>
       $composableBuilder(column: $table.fileCount, builder: (column) => column);
 
@@ -1468,6 +1585,7 @@ class $$PacksTableTableManager
                 Value<List<String>> types = const Value.absent(),
                 Value<List<String>> tags = const Value.absent(),
                 Value<String?> source = const Value.absent(),
+                Value<String?> preview = const Value.absent(),
                 Value<int> fileCount = const Value.absent(),
                 Value<int> totalBytes = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1482,6 +1600,7 @@ class $$PacksTableTableManager
                 types: types,
                 tags: tags,
                 source: source,
+                preview: preview,
                 fileCount: fileCount,
                 totalBytes: totalBytes,
                 rowid: rowid,
@@ -1498,6 +1617,7 @@ class $$PacksTableTableManager
                 required List<String> types,
                 required List<String> tags,
                 Value<String?> source = const Value.absent(),
+                Value<String?> preview = const Value.absent(),
                 required int fileCount,
                 required int totalBytes,
                 Value<int> rowid = const Value.absent(),
@@ -1512,6 +1632,7 @@ class $$PacksTableTableManager
                 types: types,
                 tags: tags,
                 source: source,
+                preview: preview,
                 fileCount: fileCount,
                 totalBytes: totalBytes,
                 rowid: rowid,
@@ -1550,11 +1671,13 @@ typedef $$PacksTableProcessedTableManager =
 typedef $$PackFilesTableCreateCompanionBuilder = PackFilesCompanion Function({
   required String packId,
   required String relPath,
+  required int size,
   Value<int> rowid,
 });
 typedef $$PackFilesTableUpdateCompanionBuilder = PackFilesCompanion Function({
   Value<String> packId,
   Value<String> relPath,
+  Value<int> size,
   Value<int> rowid,
 });
 
@@ -1574,6 +1697,11 @@ class $$PackFilesTableFilterComposer
 
   ColumnFilters<String> get relPath => $composableBuilder(
     column: $table.relPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get size => $composableBuilder(
+    column: $table.size,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -1596,6 +1724,11 @@ class $$PackFilesTableOrderingComposer
     column: $table.relPath,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get size => $composableBuilder(
+    column: $table.size,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$PackFilesTableAnnotationComposer
@@ -1612,6 +1745,9 @@ class $$PackFilesTableAnnotationComposer
 
   GeneratedColumn<String> get relPath =>
       $composableBuilder(column: $table.relPath, builder: (column) => column);
+
+  GeneratedColumn<int> get size =>
+      $composableBuilder(column: $table.size, builder: (column) => column);
 }
 
 class $$PackFilesTableTableManager
@@ -1644,20 +1780,24 @@ class $$PackFilesTableTableManager
               ({
                 Value<String> packId = const Value.absent(),
                 Value<String> relPath = const Value.absent(),
+                Value<int> size = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PackFilesCompanion(
                 packId: packId,
                 relPath: relPath,
+                size: size,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
                 required String packId,
                 required String relPath,
+                required int size,
                 Value<int> rowid = const Value.absent(),
               }) => PackFilesCompanion.insert(
                 packId: packId,
                 relPath: relPath,
+                size: size,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

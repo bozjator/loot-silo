@@ -35,6 +35,16 @@ Future<void> pumpUntil(
   }
 }
 
+/// Gives file images time to decode on real threads.
+Future<void> settleImages(WidgetTester tester) async {
+  for (var i = 0; i < 20; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+  }
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -96,7 +106,7 @@ void main() {
       await captureScreenshot(tester, 'm3_done');
 
       await tester.tap(find.text('Done'));
-      await pumpUntil(tester, find.textContaining('7 packs · 3 sub-packs'));
+      await pumpUntil(tester, find.text('7 packs'));
       await tester.pumpAndSettle();
       await captureScreenshot(tester, 'm3_library');
       expect(
@@ -119,12 +129,41 @@ void main() {
     await captureScreenshot(tester, 'm3_review_real');
   });
 
-  testWidgets('opens the real managed assets_library', (tester) async {
+  testWidgets('dashboard on the real managed assets_library', (tester) async {
     final real = p.canonicalize('../assets_library');
     if (!Directory(real).existsSync()) return;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.textContaining('71 packs · 130 sub-packs'));
-    await tester.pumpAndSettle();
-    await captureScreenshot(tester, 'm3_real_library');
+    await pumpUntil(tester, find.text('71 packs'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm4_dashboard');
+
+    await tester.enterText(find.byType(TextField), 'slime');
+    await pumpUntil(tester, find.textContaining('Tiny RPG'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm4_search_slime');
+
+    await tester.enterText(find.byType(TextField), '');
+    await tester.tap(find.widgetWithText(FilterChip, '3d'));
+    await pumpUntil(tester, find.text('Clear'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm4_filter_3d');
+
+    await tester.tap(find.text('Clear'));
+    await pumpUntil(tester, find.text('71 packs'));
+    final kenney = find.text('Kenney Game Assets 1 version 42');
+    await tester.scrollUntilVisible(
+      kenney,
+      300,
+      scrollable: find.descendant(
+        of: find.byType(GridView),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm4_dashboard_scrolled');
+    await tester.tap(kenney);
+    await pumpUntil(tester, find.text('All packs'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm4_bundle_kenney1');
   });
 }

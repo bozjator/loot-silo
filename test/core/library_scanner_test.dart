@@ -56,6 +56,25 @@ void main() {
       ]);
     });
 
+    test(
+      'previews: named file, bundle falls back to a sub-pack, audio none',
+      () {
+        expect(
+          byId['bundles/Mega Bundle v3/2D assets/Tanks Pack']!.preview,
+          'Preview.png',
+        );
+        expect(
+          byId['bundles/Mega Bundle v3']!.preview,
+          startsWith('2D assets/'),
+        );
+        expect(
+          byId['art/environments/Forest Tiles 16x16']!.preview,
+          'Mockups/mockup.png',
+        );
+        expect(byId['sfx/Loose Sounds']!.preview, isNull);
+      },
+    );
+
     test('author guessed from an itch url in a readme', () {
       final loose = byId['sfx/Loose Sounds']!;
       expect(loose.author!.user, 'noisy');

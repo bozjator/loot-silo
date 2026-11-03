@@ -10,7 +10,7 @@ void main(List<String> args) {
     final indent = pk.parentId == null ? '' : '    ';
     stdout.writeln(
       '$indent${pk.isContainer ? '[bundle] ' : ''}${pk.id}'
-      '  | ${pk.author?.user ?? '?'} | ${pk.types.join(',')} | ${pk.tags.join(',')} | ${pk.files.length} files',
+      '  | ${pk.author?.user ?? '?'} | ${pk.types.join(',')} | ${pk.tags.join(',')} | ${pk.files.length} files | ${pk.preview}',
     );
   }
   stdout.writeln(

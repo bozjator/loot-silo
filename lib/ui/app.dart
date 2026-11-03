@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/providers.dart';
+import 'dashboard.dart';
 import 'folder_import_screen.dart';
 
 /// Root widget of Asset Explorer.
@@ -96,9 +97,8 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       body: switch (library) {
-        AsyncValue(:final value?) when value.packs.isNotEmpty => _PackList(
-          state: value,
-        ),
+        AsyncValue(:final value?) when value.packs.isNotEmpty =>
+          const Dashboard(),
         AsyncValue(:final error?) => _Message(
           icon: Icons.error_outline,
           title: 'Could not read the library',
@@ -116,49 +116,6 @@ class HomeScreen extends ConsumerWidget {
         ),
         _ => const Center(child: Text('Scanning library…')),
       },
-    );
-  }
-}
-
-class _PackList extends StatelessWidget {
-  const _PackList({required this.state});
-
-  final LibraryState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final top = state.topLevel.toList();
-    final subCount = state.packs.length - top.length;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Text(
-            '${top.length} packs'
-            '${subCount > 0 ? ' · $subCount sub-packs' : ''}'
-            ' · ${state.root}',
-            style: theme.textTheme.labelLarge,
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: top.length,
-            itemBuilder: (context, i) {
-              final pack = top[i];
-              return ListTile(
-                dense: true,
-                title: Text(pack.title),
-                subtitle: Text(
-                  '${pack.author ?? 'Unknown author'} · '
-                  '${pack.types.join(', ')} · ${pack.fileCount} files',
-                ),
-              );
-            },
-          ),
-        ),
-      ],
     );
   }
 }

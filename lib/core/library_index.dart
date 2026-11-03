@@ -29,6 +29,9 @@ class Packs extends Table {
   TextColumn get types => text().map(const StringListConverter())();
   TextColumn get tags => text().map(const StringListConverter())();
   TextColumn get source => text().nullable()();
+
+  /// Preview image relative to [path].
+  TextColumn get preview => text().nullable()();
   IntColumn get fileCount => integer()();
   IntColumn get totalBytes => integer()();
 
@@ -39,6 +42,7 @@ class Packs extends Table {
 class PackFiles extends Table {
   TextColumn get packId => text()();
   TextColumn get relPath => text()();
+  IntColumn get size => integer()();
 
   @override
   Set<Column> get primaryKey => {packId, relPath};
@@ -63,7 +67,7 @@ class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("
@@ -109,13 +113,18 @@ class LibraryIndex extends _$LibraryIndex {
             types: pk.types,
             tags: pk.tags,
             source: Value(pk.source?.name),
+            preview: Value(pk.preview),
             fileCount: pk.files.length,
             totalBytes: pk.totalBytes,
           ),
         );
         b.insertAll(packFiles, [
-          for (final f in pk.files)
-            PackFilesCompanion.insert(packId: pk.id, relPath: f),
+          for (var i = 0; i < pk.files.length; i++)
+            PackFilesCompanion.insert(
+              packId: pk.id,
+              relPath: pk.files[i],
+              size: pk.sizes[i],
+            ),
         ]);
       }
     });
