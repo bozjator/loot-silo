@@ -35,7 +35,11 @@ void main() {
     cols: 4,
   );
 
-  Future<void> pumpSprite(WidgetTester tester, {required bool playing}) async {
+  Future<void> pumpSprite(
+    WidgetTester tester, {
+    required bool playing,
+    SpriteAnim anim = anim,
+  }) async {
     final provider = FileImage(File(p.join(tmp.path, 'run.png')));
     await tester.pumpWidget(const SizedBox());
     await tester.runAsync(
@@ -95,5 +99,24 @@ void main() {
     }
     expect(seen, {1, 9, 17});
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('frames larger than the sheet do not read past the image', (
+    tester,
+  ) async {
+    // 8x16 cells on a 32x8 sheet: every cell reaches below the image.
+    await pumpSprite(
+      tester,
+      playing: false,
+      anim: const SpriteAnim(
+        path: 'run.png',
+        kind: AnimKind.sheet,
+        frameW: 8,
+        frameH: 16,
+        cols: 4,
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    expect(src(tester), const Rect.fromLTRB(1, 1, 7, 7));
   });
 }

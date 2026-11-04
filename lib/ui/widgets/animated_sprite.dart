@@ -147,11 +147,16 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
     final data = await image.toByteData();
     if (data == null || !mounted || !identical(frames, _frames)) return;
     final w = image.width;
+    final h = image.height;
     // Opaque bounds of a cell relative to its origin, or null when empty.
+    // A cell can reach past the image (frame size larger than the sheet),
+    // so the scan stays inside it.
     Rect? bounds(Rect r) {
       int? x0, y0, x1, y1;
-      for (var y = r.top.toInt(); y < r.bottom.toInt(); y++) {
-        for (var x = r.left.toInt(); x < r.right.toInt(); x++) {
+      final xEnd = math.min(r.right.toInt(), w);
+      final yEnd = math.min(r.bottom.toInt(), h);
+      for (var y = r.top.toInt(); y < yEnd; y++) {
+        for (var x = r.left.toInt(); x < xEnd; x++) {
           if (data.getUint8((y * w + x) * 4 + 3) == 0) continue;
           x0 = x0 == null ? x : math.min(x0, x);
           x1 = x1 == null ? x : math.max(x1, x);
