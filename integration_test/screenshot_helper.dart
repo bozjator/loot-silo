@@ -15,9 +15,18 @@ Widget screenshotable(Widget app) =>
 /// Writes a PNG of the app to `screenshots/<name>.png`.
 ///
 /// Desktop integration tests can't use `binding.takeScreenshot`, so we
-/// render the root boundary to an image instead.
-Future<File> captureScreenshot(WidgetTester tester, String name) async {
-  await tester.pumpAndSettle();
+/// render the root boundary to an image instead. Pass `settle: false` while
+/// something animates forever (a playing sprite never settles).
+Future<File> captureScreenshot(
+  WidgetTester tester,
+  String name, {
+  bool settle = true,
+}) async {
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+  }
   late File file;
   await tester.runAsync(() async {
     final boundary =

@@ -6,6 +6,7 @@ import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -165,5 +166,34 @@ void main() {
     await pumpUntil(tester, find.text('All packs'));
     await settleImages(tester);
     await captureScreenshot(tester, 'm4_bundle_kenney1');
+  });
+
+  testWidgets('sprite animations on tiles (real library)', (tester) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+
+    for (final (query, name) in [
+      ('zerie', 'm5_zerie'),
+      ('oboro', 'm5_oboropixel'),
+      ('ashishlko11', 'm5_special_effects'),
+    ]) {
+      await tester.enterText(find.byType(TextField), query);
+      await tester.pump(const Duration(milliseconds: 500));
+      await settleImages(tester);
+      await captureScreenshot(tester, '${name}_frame0');
+      // Hovering a tile plays its animation; capture a later frame.
+      final tile = find.byType(Card).first;
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(tile));
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 250)),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+      await captureScreenshot(tester, '${name}_hover', settle: false);
+      await mouse.removePointer();
+    }
   });
 }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:assets_explorer/core/animation_detector.dart';
 import 'package:assets_explorer/core/library_index.dart';
 import 'package:assets_explorer/state/dashboard.dart';
 import 'package:assets_explorer/ui/widgets/filter_bar.dart';
@@ -28,6 +29,7 @@ PackRow row({
   String? preview,
   bool container = false,
   List<String> types = const ['character'],
+  SpriteAnim? anim,
 }) => PackRow(
   id: 'Hero/Pack',
   path: File('test/fixtures/images').absolute.path,
@@ -37,6 +39,7 @@ PackRow row({
   types: types,
   tags: const [],
   preview: preview,
+  previewAnim: anim,
   fileCount: 42,
   totalBytes: 1234567,
 );
@@ -46,12 +49,16 @@ PackRow row({
 Future<void> precacheHero(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox());
   final context = tester.element(find.byType(SizedBox));
-  await tester.runAsync(
-    () => precacheImage(
+  await tester.runAsync(() async {
+    await precacheImage(
       PixelImage.providerFor(File('test/fixtures/images/hero.png').absolute),
       context,
-    ),
-  );
+    );
+    await precacheImage(
+      FileImage(File('test/fixtures/images/hero_walk.png').absolute),
+      context,
+    );
+  });
 }
 
 /// Lets real image decoding finish.
@@ -118,6 +125,31 @@ void main() {
     await expectLater(
       find.byType(Row).first,
       matchesGoldenFile('goldens/tile_bundle_audio.png'),
+    );
+  });
+
+  testWidgets('sprite-sheet tile shows its first frame', (tester) async {
+    await precacheHero(tester);
+    await tester.pumpWidget(
+      frame(
+        PackTile(
+          pack: row(
+            preview: 'hero_walk.png',
+            anim: const SpriteAnim(
+              path: 'hero_walk.png',
+              kind: AnimKind.sheet,
+              frameW: 12,
+              frameH: 10,
+              cols: 4,
+            ),
+          ),
+        ),
+      ),
+    );
+    await decode(tester);
+    await expectLater(
+      find.byType(PackTile),
+      matchesGoldenFile('goldens/tile_sheet_frame0.png'),
     );
   });
 

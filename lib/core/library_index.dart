@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 
+import 'animation_detector.dart';
 import 'library_scanner.dart';
 import 'type_classifier.dart';
 
@@ -17,6 +20,17 @@ class StringListConverter extends TypeConverter<List<String>, String> {
   String toSql(List<String> value) => value.join('\n');
 }
 
+class SpriteAnimConverter extends TypeConverter<SpriteAnim, String> {
+  const SpriteAnimConverter();
+
+  @override
+  SpriteAnim fromSql(String fromDb) =>
+      SpriteAnim.fromJson(jsonDecode(fromDb) as Map<String, Object?>);
+
+  @override
+  String toSql(SpriteAnim value) => jsonEncode(value.toJson());
+}
+
 @DataClassName('PackRow')
 class Packs extends Table {
   TextColumn get id => text()();
@@ -32,6 +46,10 @@ class Packs extends Table {
 
   /// Preview image relative to [path].
   TextColumn get preview => text().nullable()();
+
+  /// [SpriteAnim] JSON when the preview is a sheet or sequence.
+  TextColumn get previewAnim =>
+      text().map(const SpriteAnimConverter()).nullable()();
   IntColumn get fileCount => integer()();
   IntColumn get totalBytes => integer()();
 
@@ -67,7 +85,7 @@ class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("
@@ -114,6 +132,7 @@ class LibraryIndex extends _$LibraryIndex {
             tags: pk.tags,
             source: Value(pk.source?.name),
             preview: Value(pk.preview),
+            previewAnim: Value(pk.previewAnim),
             fileCount: pk.files.length,
             totalBytes: pk.totalBytes,
           ),

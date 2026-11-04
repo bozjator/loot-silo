@@ -1,5 +1,6 @@
 import 'package:path/path.dart' as p;
 
+import 'animation_detector.dart';
 import 'fs_tree.dart';
 import 'pack_detector.dart';
 import 'preview_picker.dart';
@@ -22,6 +23,7 @@ class ScannedPack {
     required this.files,
     required this.sizes,
     required this.preview,
+    this.previewAnim,
     required this.totalBytes,
     required this.sidecar,
   });
@@ -49,6 +51,9 @@ class ScannedPack {
   /// Representative image relative to [path]; for a bundle without one of
   /// its own, a sub-pack's preview.
   final String? preview;
+
+  /// Frame data when [preview] is a sprite sheet or frame sequence.
+  final SpriteAnim? previewAnim;
   final int totalBytes;
   final PackSidecar? sidecar;
 }
@@ -117,7 +122,15 @@ ScanResult scanLibrary(String root) {
     } else {
       types = [for (final t in classifyPack(id, files)) t.id];
     }
-    var preview = pickPreview(files, sidecar: sc);
+    final pick = pickPreviewRanked(files, sidecar: sc);
+    final chosen = choosePreviewAnimation(
+      dp.dir.path,
+      [for (final (rel, _) in files) rel],
+      preview: pick?.path,
+      rank: pick?.rank ?? 6,
+      overrides: sc?.animations ?? const {},
+    );
+    var preview = chosen.preview;
     if (preview == null) {
       for (final sub in packs.skip(slot).where((x) => x.parentId == id)) {
         if (sub.preview != null) {
@@ -142,6 +155,7 @@ ScanResult scanLibrary(String root) {
         files: [for (final (rel, _) in files) rel],
         sizes: [for (final (_, f) in files) f.size],
         preview: preview,
+        previewAnim: preview == chosen.preview ? chosen.anim : null,
         totalBytes: files.fold(0, (sum, e) => sum + e.$2.size),
         sidecar: sc,
       ),

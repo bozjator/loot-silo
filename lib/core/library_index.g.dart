@@ -118,6 +118,15 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  @override
+  late final GeneratedColumnWithTypeConverter<SpriteAnim?, String> previewAnim =
+      GeneratedColumn<String>(
+        'preview_anim',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      ).withConverter<SpriteAnim?>($PacksTable.$converterpreviewAnimn);
   static const VerificationMeta _fileCountMeta = const VerificationMeta(
     'fileCount',
   );
@@ -153,6 +162,7 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     tags,
     source,
     preview,
+    previewAnim,
     fileCount,
     totalBytes,
   ];
@@ -303,6 +313,12 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
         DriftSqlType.string,
         data['${effectivePrefix}preview'],
       ),
+      previewAnim: $PacksTable.$converterpreviewAnimn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}preview_anim'],
+        ),
+      ),
       fileCount: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}file_count'],
@@ -323,6 +339,10 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
       const StringListConverter();
   static TypeConverter<List<String>, String> $convertertags =
       const StringListConverter();
+  static TypeConverter<SpriteAnim, String> $converterpreviewAnim =
+      const SpriteAnimConverter();
+  static TypeConverter<SpriteAnim?, String?> $converterpreviewAnimn =
+      NullAwareTypeConverter.wrap($converterpreviewAnim);
 }
 
 class PackRow extends DataClass implements Insertable<PackRow> {
@@ -339,6 +359,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
 
   /// Preview image relative to [path].
   final String? preview;
+
+  /// [SpriteAnim] JSON when the preview is a sheet or sequence.
+  final SpriteAnim? previewAnim;
   final int fileCount;
   final int totalBytes;
   const PackRow({
@@ -353,6 +376,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     required this.tags,
     this.source,
     this.preview,
+    this.previewAnim,
     required this.fileCount,
     required this.totalBytes,
   });
@@ -384,6 +408,11 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     if (!nullToAbsent || preview != null) {
       map['preview'] = Variable<String>(preview);
     }
+    if (!nullToAbsent || previewAnim != null) {
+      map['preview_anim'] = Variable<String>(
+        $PacksTable.$converterpreviewAnimn.toSql(previewAnim),
+      );
+    }
     map['file_count'] = Variable<int>(fileCount);
     map['total_bytes'] = Variable<int>(totalBytes);
     return map;
@@ -412,6 +441,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       preview: preview == null && nullToAbsent
           ? const Value.absent()
           : Value(preview),
+      previewAnim: previewAnim == null && nullToAbsent
+          ? const Value.absent()
+          : Value(previewAnim),
       fileCount: Value(fileCount),
       totalBytes: Value(totalBytes),
     );
@@ -434,6 +466,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       tags: serializer.fromJson<List<String>>(json['tags']),
       source: serializer.fromJson<String?>(json['source']),
       preview: serializer.fromJson<String?>(json['preview']),
+      previewAnim: serializer.fromJson<SpriteAnim?>(json['previewAnim']),
       fileCount: serializer.fromJson<int>(json['fileCount']),
       totalBytes: serializer.fromJson<int>(json['totalBytes']),
     );
@@ -453,6 +486,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       'tags': serializer.toJson<List<String>>(tags),
       'source': serializer.toJson<String?>(source),
       'preview': serializer.toJson<String?>(preview),
+      'previewAnim': serializer.toJson<SpriteAnim?>(previewAnim),
       'fileCount': serializer.toJson<int>(fileCount),
       'totalBytes': serializer.toJson<int>(totalBytes),
     };
@@ -470,6 +504,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     List<String>? tags,
     Value<String?> source = const Value.absent(),
     Value<String?> preview = const Value.absent(),
+    Value<SpriteAnim?> previewAnim = const Value.absent(),
     int? fileCount,
     int? totalBytes,
   }) => PackRow(
@@ -484,6 +519,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     tags: tags ?? this.tags,
     source: source.present ? source.value : this.source,
     preview: preview.present ? preview.value : this.preview,
+    previewAnim: previewAnim.present ? previewAnim.value : this.previewAnim,
     fileCount: fileCount ?? this.fileCount,
     totalBytes: totalBytes ?? this.totalBytes,
   );
@@ -502,6 +538,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       tags: data.tags.present ? data.tags.value : this.tags,
       source: data.source.present ? data.source.value : this.source,
       preview: data.preview.present ? data.preview.value : this.preview,
+      previewAnim: data.previewAnim.present
+          ? data.previewAnim.value
+          : this.previewAnim,
       fileCount: data.fileCount.present ? data.fileCount.value : this.fileCount,
       totalBytes: data.totalBytes.present
           ? data.totalBytes.value
@@ -523,6 +562,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           ..write('tags: $tags, ')
           ..write('source: $source, ')
           ..write('preview: $preview, ')
+          ..write('previewAnim: $previewAnim, ')
           ..write('fileCount: $fileCount, ')
           ..write('totalBytes: $totalBytes')
           ..write(')'))
@@ -542,6 +582,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     tags,
     source,
     preview,
+    previewAnim,
     fileCount,
     totalBytes,
   );
@@ -560,6 +601,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           other.tags == this.tags &&
           other.source == this.source &&
           other.preview == this.preview &&
+          other.previewAnim == this.previewAnim &&
           other.fileCount == this.fileCount &&
           other.totalBytes == this.totalBytes);
 }
@@ -576,6 +618,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
   final Value<List<String>> tags;
   final Value<String?> source;
   final Value<String?> preview;
+  final Value<SpriteAnim?> previewAnim;
   final Value<int> fileCount;
   final Value<int> totalBytes;
   final Value<int> rowid;
@@ -591,6 +634,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     this.tags = const Value.absent(),
     this.source = const Value.absent(),
     this.preview = const Value.absent(),
+    this.previewAnim = const Value.absent(),
     this.fileCount = const Value.absent(),
     this.totalBytes = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -607,6 +651,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     required List<String> tags,
     this.source = const Value.absent(),
     this.preview = const Value.absent(),
+    this.previewAnim = const Value.absent(),
     required int fileCount,
     required int totalBytes,
     this.rowid = const Value.absent(),
@@ -630,6 +675,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Expression<String>? tags,
     Expression<String>? source,
     Expression<String>? preview,
+    Expression<String>? previewAnim,
     Expression<int>? fileCount,
     Expression<int>? totalBytes,
     Expression<int>? rowid,
@@ -646,6 +692,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       if (tags != null) 'tags': tags,
       if (source != null) 'source': source,
       if (preview != null) 'preview': preview,
+      if (previewAnim != null) 'preview_anim': previewAnim,
       if (fileCount != null) 'file_count': fileCount,
       if (totalBytes != null) 'total_bytes': totalBytes,
       if (rowid != null) 'rowid': rowid,
@@ -664,6 +711,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Value<List<String>>? tags,
     Value<String?>? source,
     Value<String?>? preview,
+    Value<SpriteAnim?>? previewAnim,
     Value<int>? fileCount,
     Value<int>? totalBytes,
     Value<int>? rowid,
@@ -680,6 +728,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       tags: tags ?? this.tags,
       source: source ?? this.source,
       preview: preview ?? this.preview,
+      previewAnim: previewAnim ?? this.previewAnim,
       fileCount: fileCount ?? this.fileCount,
       totalBytes: totalBytes ?? this.totalBytes,
       rowid: rowid ?? this.rowid,
@@ -726,6 +775,11 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     if (preview.present) {
       map['preview'] = Variable<String>(preview.value);
     }
+    if (previewAnim.present) {
+      map['preview_anim'] = Variable<String>(
+        $PacksTable.$converterpreviewAnimn.toSql(previewAnim.value),
+      );
+    }
     if (fileCount.present) {
       map['file_count'] = Variable<int>(fileCount.value);
     }
@@ -752,6 +806,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
           ..write('tags: $tags, ')
           ..write('source: $source, ')
           ..write('preview: $preview, ')
+          ..write('previewAnim: $previewAnim, ')
           ..write('fileCount: $fileCount, ')
           ..write('totalBytes: $totalBytes, ')
           ..write('rowid: $rowid')
@@ -1322,6 +1377,7 @@ typedef $$PacksTableCreateCompanionBuilder = PacksCompanion Function({
   required List<String> tags,
   Value<String?> source,
   Value<String?> preview,
+  Value<SpriteAnim?> previewAnim,
   required int fileCount,
   required int totalBytes,
   Value<int> rowid,
@@ -1338,6 +1394,7 @@ typedef $$PacksTableUpdateCompanionBuilder = PacksCompanion Function({
   Value<List<String>> tags,
   Value<String?> source,
   Value<String?> preview,
+  Value<SpriteAnim?> previewAnim,
   Value<int> fileCount,
   Value<int> totalBytes,
   Value<int> rowid,
@@ -1406,6 +1463,12 @@ class $$PacksTableFilterComposer extends Composer<_$LibraryIndex, $PacksTable> {
   ColumnFilters<String> get preview => $composableBuilder(
     column: $table.preview,
     builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<SpriteAnim?, SpriteAnim, String>
+  get previewAnim => $composableBuilder(
+    column: $table.previewAnim,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 
   ColumnFilters<int> get fileCount => $composableBuilder(
@@ -1483,6 +1546,11 @@ class $$PacksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get previewAnim => $composableBuilder(
+    column: $table.previewAnim,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get fileCount => $composableBuilder(
     column: $table.fileCount,
     builder: (column) => ColumnOrderings(column),
@@ -1538,6 +1606,12 @@ class $$PacksTableAnnotationComposer
   GeneratedColumn<String> get preview =>
       $composableBuilder(column: $table.preview, builder: (column) => column);
 
+  GeneratedColumnWithTypeConverter<SpriteAnim?, String> get previewAnim =>
+      $composableBuilder(
+        column: $table.previewAnim,
+        builder: (column) => column,
+      );
+
   GeneratedColumn<int> get fileCount =>
       $composableBuilder(column: $table.fileCount, builder: (column) => column);
 
@@ -1586,6 +1660,7 @@ class $$PacksTableTableManager
                 Value<List<String>> tags = const Value.absent(),
                 Value<String?> source = const Value.absent(),
                 Value<String?> preview = const Value.absent(),
+                Value<SpriteAnim?> previewAnim = const Value.absent(),
                 Value<int> fileCount = const Value.absent(),
                 Value<int> totalBytes = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1601,6 +1676,7 @@ class $$PacksTableTableManager
                 tags: tags,
                 source: source,
                 preview: preview,
+                previewAnim: previewAnim,
                 fileCount: fileCount,
                 totalBytes: totalBytes,
                 rowid: rowid,
@@ -1618,6 +1694,7 @@ class $$PacksTableTableManager
                 required List<String> tags,
                 Value<String?> source = const Value.absent(),
                 Value<String?> preview = const Value.absent(),
+                Value<SpriteAnim?> previewAnim = const Value.absent(),
                 required int fileCount,
                 required int totalBytes,
                 Value<int> rowid = const Value.absent(),
@@ -1633,6 +1710,7 @@ class $$PacksTableTableManager
                 tags: tags,
                 source: source,
                 preview: preview,
+                previewAnim: previewAnim,
                 fileCount: fileCount,
                 totalBytes: totalBytes,
                 rowid: rowid,

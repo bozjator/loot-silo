@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/library_index.dart';
 import '../format.dart';
+import 'animated_sprite.dart';
 import 'pixel_image.dart';
 
 IconData iconForTypes(List<String> types) => switch (types.firstOrNull) {
@@ -21,28 +22,44 @@ IconData iconForTypes(List<String> types) => switch (types.firstOrNull) {
 };
 
 /// One pack in the dashboard grid: preview, title, author and type chips.
-class PackTile extends StatelessWidget {
+///
+/// Sprite-sheet previews show their first frame and play while hovered
+/// (always, with [alwaysAnimate]); GIF previews do the same.
+class PackTile extends StatefulWidget {
   const PackTile({
     super.key,
     required this.pack,
     this.subPackCount = 0,
     this.onTap,
+    this.alwaysAnimate = false,
   });
 
   final PackRow pack;
   final int subPackCount;
   final VoidCallback? onTap;
+  final bool alwaysAnimate;
+
+  @override
+  State<PackTile> createState() => _PackTileState();
+}
+
+class _PackTileState extends State<PackTile> {
+  var _hover = false;
 
   @override
   Widget build(BuildContext context) {
+    final pack = widget.pack;
+    final subPackCount = widget.subPackCount;
+    final animate = _hover || widget.alwaysAnimate;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final preview = pack.preview;
-    return Card(
+    // MouseRegion, not InkWell.onHover: a disabled InkWell gets no hover.
+    final card = Card(
       clipBehavior: Clip.antiAlias,
       margin: EdgeInsets.zero,
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -57,11 +74,18 @@ class PackTile extends StatelessWidget {
                         ? _GeneratedPreview(pack: pack)
                         : Padding(
                             padding: const EdgeInsets.all(6),
-                            child: PixelImage(
-                              File(p.join(pack.path, preview)),
-                              errorBuilder: (_) =>
-                                  _GeneratedPreview(pack: pack),
-                            ),
+                            child: pack.previewAnim != null
+                                ? AnimatedSprite(
+                                    packPath: pack.path,
+                                    anim: pack.previewAnim!,
+                                    playing: animate,
+                                  )
+                                : PixelImage(
+                                    File(p.join(pack.path, preview)),
+                                    animate: animate,
+                                    errorBuilder: (_) =>
+                                        _GeneratedPreview(pack: pack),
+                                  ),
                           ),
                   ),
                   if (pack.isContainer)
@@ -112,6 +136,11 @@ class PackTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: card,
     );
   }
 }

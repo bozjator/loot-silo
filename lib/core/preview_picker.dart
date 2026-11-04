@@ -48,14 +48,26 @@ int _rank(String rel) {
 /// 3. files named, or inside folders named, preview / mockup / cover /
 ///    sample / showcase / screenshot / example, or an `all*` sheet;
 /// 4. a GIF / animated WebP;
-/// 5. (animation detection — milestone 5);
+/// 5. a detected animation (chosen by the scanner, see
+///    `choosePreviewAnimation`);
 /// 6. the largest image near the root (depth ≤ 2), else anywhere.
 ///
 /// Promo images (coupon, logo, patreon …) are never picked. Named previews
 /// are ordered by word (preview > mockup > cover > … > sample > example),
 /// file name before folder name, then shallower, then larger; static
 /// images beat animated ones there.
-String? pickPreview(List<(String, FileEntry)> files, {PackSidecar? sidecar}) {
+String? pickPreview(List<(String, FileEntry)> files, {PackSidecar? sidecar}) =>
+    pickPreviewRanked(files, sidecar: sidecar)?.path;
+
+/// The plan's preview priority: 1 sidecar cover … 6 largest image.
+typedef PreviewPick = ({String path, int rank});
+
+/// [pickPreview] plus which priority rule chose the file, so the scanner
+/// can try a detected animation (rank 5) before settling for rank 6.
+PreviewPick? pickPreviewRanked(
+  List<(String, FileEntry)> files, {
+  PackSidecar? sidecar,
+}) {
   final images = [
     for (final f in files)
       if (previewExts.contains(f.$2.ext) &&
@@ -63,7 +75,9 @@ String? pickPreview(List<(String, FileEntry)> files, {PackSidecar? sidecar}) {
         f,
   ];
   final cover = sidecar?.cover;
-  if (cover != null && files.any((f) => f.$1 == cover)) return cover;
+  if (cover != null && files.any((f) => f.$1 == cover)) {
+    return (path: cover, rank: 1);
+  }
   if (images.isEmpty) return null;
 
   int depth(String rel) => '/'.allMatches(rel).length;
@@ -83,7 +97,7 @@ String? pickPreview(List<(String, FileEntry)> files, {PackSidecar? sidecar}) {
   final itch = best(images.where((f) => f.$1.startsWith('_itch/')));
   if (itch != null) {
     final covers = images.where((f) => f.$1.startsWith('_itch/cover'));
-    return covers.isNotEmpty ? covers.first.$1 : itch.$1;
+    return (path: covers.isNotEmpty ? covers.first.$1 : itch.$1, rank: 2);
   }
 
   final named = images.where((f) {
@@ -97,15 +111,15 @@ String? pickPreview(List<(String, FileEntry)> files, {PackSidecar? sidecar}) {
     named.where((f) => !animatedExts.contains(f.$2.ext)),
   );
   final namedAny = namedStatic ?? best(named);
-  if (namedAny != null) return namedAny.$1;
+  if (namedAny != null) return (path: namedAny.$1, rank: 3);
 
   final gif = best(images.where((f) => animatedExts.contains(f.$2.ext)));
-  if (gif != null) return gif.$1;
+  if (gif != null) return (path: gif.$1, rank: 4);
 
   int largestFirst((String, FileEntry) a, (String, FileEntry) b) =>
       b.$2.size.compareTo(a.$2.size);
   final shallow = images.where((f) => depth(f.$1) <= 2).toList()
     ..sort(largestFirst);
-  if (shallow.isNotEmpty) return shallow.first.$1;
-  return (images..sort(largestFirst)).first.$1;
+  if (shallow.isNotEmpty) return (path: shallow.first.$1, rank: 6);
+  return (path: (images..sort(largestFirst)).first.$1, rank: 6);
 }
