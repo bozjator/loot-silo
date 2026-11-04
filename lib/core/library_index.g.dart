@@ -107,6 +107,15 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  @override
+  late final GeneratedColumnWithTypeConverter<List<String>, String> usedIn =
+      GeneratedColumn<String>(
+        'used_in',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<List<String>>($PacksTable.$converterusedIn);
   static const VerificationMeta _previewMeta = const VerificationMeta(
     'preview',
   );
@@ -161,6 +170,7 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     types,
     tags,
     source,
+    usedIn,
     preview,
     previewAnim,
     fileCount,
@@ -309,6 +319,12 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
         DriftSqlType.string,
         data['${effectivePrefix}source'],
       ),
+      usedIn: $PacksTable.$converterusedIn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}used_in'],
+        )!,
+      ),
       preview: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}preview'],
@@ -339,6 +355,8 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
       const StringListConverter();
   static TypeConverter<List<String>, String> $convertertags =
       const StringListConverter();
+  static TypeConverter<List<String>, String> $converterusedIn =
+      const StringListConverter();
   static TypeConverter<SpriteAnim, String> $converterpreviewAnim =
       const SpriteAnimConverter();
   static TypeConverter<SpriteAnim?, String?> $converterpreviewAnimn =
@@ -356,6 +374,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
   final List<String> types;
   final List<String> tags;
   final String? source;
+
+  /// Games this pack is credited in (sidecar `used_in`).
+  final List<String> usedIn;
 
   /// Preview image relative to [path].
   final String? preview;
@@ -375,6 +396,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     required this.types,
     required this.tags,
     this.source,
+    required this.usedIn,
     this.preview,
     this.previewAnim,
     required this.fileCount,
@@ -404,6 +426,11 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     }
     if (!nullToAbsent || source != null) {
       map['source'] = Variable<String>(source);
+    }
+    {
+      map['used_in'] = Variable<String>(
+        $PacksTable.$converterusedIn.toSql(usedIn),
+      );
     }
     if (!nullToAbsent || preview != null) {
       map['preview'] = Variable<String>(preview);
@@ -438,6 +465,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       source: source == null && nullToAbsent
           ? const Value.absent()
           : Value(source),
+      usedIn: Value(usedIn),
       preview: preview == null && nullToAbsent
           ? const Value.absent()
           : Value(preview),
@@ -465,6 +493,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       types: serializer.fromJson<List<String>>(json['types']),
       tags: serializer.fromJson<List<String>>(json['tags']),
       source: serializer.fromJson<String?>(json['source']),
+      usedIn: serializer.fromJson<List<String>>(json['usedIn']),
       preview: serializer.fromJson<String?>(json['preview']),
       previewAnim: serializer.fromJson<SpriteAnim?>(json['previewAnim']),
       fileCount: serializer.fromJson<int>(json['fileCount']),
@@ -485,6 +514,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       'types': serializer.toJson<List<String>>(types),
       'tags': serializer.toJson<List<String>>(tags),
       'source': serializer.toJson<String?>(source),
+      'usedIn': serializer.toJson<List<String>>(usedIn),
       'preview': serializer.toJson<String?>(preview),
       'previewAnim': serializer.toJson<SpriteAnim?>(previewAnim),
       'fileCount': serializer.toJson<int>(fileCount),
@@ -503,6 +533,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     List<String>? types,
     List<String>? tags,
     Value<String?> source = const Value.absent(),
+    List<String>? usedIn,
     Value<String?> preview = const Value.absent(),
     Value<SpriteAnim?> previewAnim = const Value.absent(),
     int? fileCount,
@@ -518,6 +549,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     types: types ?? this.types,
     tags: tags ?? this.tags,
     source: source.present ? source.value : this.source,
+    usedIn: usedIn ?? this.usedIn,
     preview: preview.present ? preview.value : this.preview,
     previewAnim: previewAnim.present ? previewAnim.value : this.previewAnim,
     fileCount: fileCount ?? this.fileCount,
@@ -537,6 +569,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       types: data.types.present ? data.types.value : this.types,
       tags: data.tags.present ? data.tags.value : this.tags,
       source: data.source.present ? data.source.value : this.source,
+      usedIn: data.usedIn.present ? data.usedIn.value : this.usedIn,
       preview: data.preview.present ? data.preview.value : this.preview,
       previewAnim: data.previewAnim.present
           ? data.previewAnim.value
@@ -561,6 +594,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           ..write('types: $types, ')
           ..write('tags: $tags, ')
           ..write('source: $source, ')
+          ..write('usedIn: $usedIn, ')
           ..write('preview: $preview, ')
           ..write('previewAnim: $previewAnim, ')
           ..write('fileCount: $fileCount, ')
@@ -581,6 +615,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     types,
     tags,
     source,
+    usedIn,
     preview,
     previewAnim,
     fileCount,
@@ -600,6 +635,7 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           other.types == this.types &&
           other.tags == this.tags &&
           other.source == this.source &&
+          other.usedIn == this.usedIn &&
           other.preview == this.preview &&
           other.previewAnim == this.previewAnim &&
           other.fileCount == this.fileCount &&
@@ -617,6 +653,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
   final Value<List<String>> types;
   final Value<List<String>> tags;
   final Value<String?> source;
+  final Value<List<String>> usedIn;
   final Value<String?> preview;
   final Value<SpriteAnim?> previewAnim;
   final Value<int> fileCount;
@@ -633,6 +670,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     this.types = const Value.absent(),
     this.tags = const Value.absent(),
     this.source = const Value.absent(),
+    this.usedIn = const Value.absent(),
     this.preview = const Value.absent(),
     this.previewAnim = const Value.absent(),
     this.fileCount = const Value.absent(),
@@ -650,6 +688,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     required List<String> types,
     required List<String> tags,
     this.source = const Value.absent(),
+    required List<String> usedIn,
     this.preview = const Value.absent(),
     this.previewAnim = const Value.absent(),
     required int fileCount,
@@ -661,6 +700,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
        isContainer = Value(isContainer),
        types = Value(types),
        tags = Value(tags),
+       usedIn = Value(usedIn),
        fileCount = Value(fileCount),
        totalBytes = Value(totalBytes);
   static Insertable<PackRow> custom({
@@ -674,6 +714,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Expression<String>? types,
     Expression<String>? tags,
     Expression<String>? source,
+    Expression<String>? usedIn,
     Expression<String>? preview,
     Expression<String>? previewAnim,
     Expression<int>? fileCount,
@@ -691,6 +732,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       if (types != null) 'types': types,
       if (tags != null) 'tags': tags,
       if (source != null) 'source': source,
+      if (usedIn != null) 'used_in': usedIn,
       if (preview != null) 'preview': preview,
       if (previewAnim != null) 'preview_anim': previewAnim,
       if (fileCount != null) 'file_count': fileCount,
@@ -710,6 +752,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Value<List<String>>? types,
     Value<List<String>>? tags,
     Value<String?>? source,
+    Value<List<String>>? usedIn,
     Value<String?>? preview,
     Value<SpriteAnim?>? previewAnim,
     Value<int>? fileCount,
@@ -727,6 +770,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       types: types ?? this.types,
       tags: tags ?? this.tags,
       source: source ?? this.source,
+      usedIn: usedIn ?? this.usedIn,
       preview: preview ?? this.preview,
       previewAnim: previewAnim ?? this.previewAnim,
       fileCount: fileCount ?? this.fileCount,
@@ -772,6 +816,11 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     if (source.present) {
       map['source'] = Variable<String>(source.value);
     }
+    if (usedIn.present) {
+      map['used_in'] = Variable<String>(
+        $PacksTable.$converterusedIn.toSql(usedIn.value),
+      );
+    }
     if (preview.present) {
       map['preview'] = Variable<String>(preview.value);
     }
@@ -805,6 +854,7 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
           ..write('types: $types, ')
           ..write('tags: $tags, ')
           ..write('source: $source, ')
+          ..write('usedIn: $usedIn, ')
           ..write('preview: $preview, ')
           ..write('previewAnim: $previewAnim, ')
           ..write('fileCount: $fileCount, ')
@@ -1376,6 +1426,7 @@ typedef $$PacksTableCreateCompanionBuilder = PacksCompanion Function({
   required List<String> types,
   required List<String> tags,
   Value<String?> source,
+  required List<String> usedIn,
   Value<String?> preview,
   Value<SpriteAnim?> previewAnim,
   required int fileCount,
@@ -1393,6 +1444,7 @@ typedef $$PacksTableUpdateCompanionBuilder = PacksCompanion Function({
   Value<List<String>> types,
   Value<List<String>> tags,
   Value<String?> source,
+  Value<List<String>> usedIn,
   Value<String?> preview,
   Value<SpriteAnim?> previewAnim,
   Value<int> fileCount,
@@ -1458,6 +1510,12 @@ class $$PacksTableFilterComposer extends Composer<_$LibraryIndex, $PacksTable> {
   ColumnFilters<String> get source => $composableBuilder(
     column: $table.source,
     builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<List<String>, List<String>, String>
+  get usedIn => $composableBuilder(
+    column: $table.usedIn,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 
   ColumnFilters<String> get preview => $composableBuilder(
@@ -1541,6 +1599,11 @@ class $$PacksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get usedIn => $composableBuilder(
+    column: $table.usedIn,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get preview => $composableBuilder(
     column: $table.preview,
     builder: (column) => ColumnOrderings(column),
@@ -1603,6 +1666,9 @@ class $$PacksTableAnnotationComposer
   GeneratedColumn<String> get source =>
       $composableBuilder(column: $table.source, builder: (column) => column);
 
+  GeneratedColumnWithTypeConverter<List<String>, String> get usedIn =>
+      $composableBuilder(column: $table.usedIn, builder: (column) => column);
+
   GeneratedColumn<String> get preview =>
       $composableBuilder(column: $table.preview, builder: (column) => column);
 
@@ -1659,6 +1725,7 @@ class $$PacksTableTableManager
                 Value<List<String>> types = const Value.absent(),
                 Value<List<String>> tags = const Value.absent(),
                 Value<String?> source = const Value.absent(),
+                Value<List<String>> usedIn = const Value.absent(),
                 Value<String?> preview = const Value.absent(),
                 Value<SpriteAnim?> previewAnim = const Value.absent(),
                 Value<int> fileCount = const Value.absent(),
@@ -1675,6 +1742,7 @@ class $$PacksTableTableManager
                 types: types,
                 tags: tags,
                 source: source,
+                usedIn: usedIn,
                 preview: preview,
                 previewAnim: previewAnim,
                 fileCount: fileCount,
@@ -1693,6 +1761,7 @@ class $$PacksTableTableManager
                 required List<String> types,
                 required List<String> tags,
                 Value<String?> source = const Value.absent(),
+                required List<String> usedIn,
                 Value<String?> preview = const Value.absent(),
                 Value<SpriteAnim?> previewAnim = const Value.absent(),
                 required int fileCount,
@@ -1709,6 +1778,7 @@ class $$PacksTableTableManager
                 types: types,
                 tags: tags,
                 source: source,
+                usedIn: usedIn,
                 preview: preview,
                 previewAnim: previewAnim,
                 fileCount: fileCount,

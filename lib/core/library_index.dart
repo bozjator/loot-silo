@@ -44,6 +44,9 @@ class Packs extends Table {
   TextColumn get tags => text().map(const StringListConverter())();
   TextColumn get source => text().nullable()();
 
+  /// Games this pack is credited in (sidecar `used_in`).
+  TextColumn get usedIn => text().map(const StringListConverter())();
+
   /// Preview image relative to [path].
   TextColumn get preview => text().nullable()();
 
@@ -85,7 +88,7 @@ class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("
@@ -131,6 +134,7 @@ class LibraryIndex extends _$LibraryIndex {
             types: pk.types,
             tags: pk.tags,
             source: Value(pk.source?.name),
+            usedIn: pk.sidecar?.usedIn ?? const [],
             preview: Value(pk.preview),
             previewAnim: Value(pk.previewAnim),
             fileCount: pk.files.length,

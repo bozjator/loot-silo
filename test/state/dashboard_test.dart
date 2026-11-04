@@ -23,6 +23,7 @@ PackRow pack(
   types: types,
   tags: tags,
   source: source,
+  usedIn: const [],
   fileCount: files,
   totalBytes: bytes,
 );

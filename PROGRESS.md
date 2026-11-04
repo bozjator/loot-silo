@@ -13,12 +13,13 @@ Decision log: `../REPORT_APP_CREATION.md`
 - [x] 6. Pack detail — carousel, info with editable title/types/tags (sidecar + quiet rescan), tabs for
   animations (fps / frame size / row, saved as sidecar overrides), images (viewer dialog), audio (play/stop),
   other files; open folder; author link; bundle details from the breadcrumb
-- [ ] 7. Credits
-  - [ ] mark packs "used in <game>" (sidecar `used_in`), from the detail view and multi-select on the dashboard
-  - [ ] credits screen: pick a game → CREDITS.md / .txt grouped by author (name, URL, license, packs)
-  - [ ] copy to clipboard + save file; license lines from author files (prefill from OLD INDEX.md table)
-  - [ ] tests + screenshots
+- [x] 7. Credits — "used in" chips on the detail page, Credits screen (games, pack picker, .md/.txt preview,
+  copy, save), author info dialog (URL, license, credit wording, attribution); licenses prefilled from OLD INDEX.md
 - [ ] 8. Archive import
+  - [ ] `core/archive_extractor`: zip via `archive` (zip-slip safe), rar/7z via `7zz` → `7z` → `unrar`
+  - [ ] normalise the root (unwrap single nested folders), staging dir, cleanup
+  - [ ] drop zone on the dashboard (desktop_drop) + "Import archive" button; author dialog → PackInstaller
+  - [ ] tests: zip with/without root, nested single folders, rar/7z via the CLI, bad archives
 - [ ] 9. itch sync
 - [ ] 10. Polish
 
@@ -31,15 +32,16 @@ xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.da
 Screenshots land in `screenshots/` (gitignored).
 
 ## Last iteration
-- Done: milestone 6. `core/pack_editor.dart` (`loadPackContents` in an isolate, `updatePackSidecar`,
-  `saveAnimationOverride`), `ui/pack_detail_screen.dart`, dialogs moved to `widgets/meta_dialogs.dart`,
-  `LibraryNotifier.reload()` (rescan without a loading screen), `LibraryIndex.filesWithSizes`.
-  93 tests + 6 integration (m6_* screenshots). Edits in tests run on temp copies only.
-- Next: milestone 7 — credits.
+- Done: milestone 7. `core/credits.dart` (`collectCredits`, markdown/text renderers), `setUsedIn` and
+  `updateAuthorInfo` in `pack_editor.dart`, index schema v4 (`packs.used_in`), `ui/credits_screen.dart`,
+  `GameNameDialog`/`AuthorInfoDialog`. `tool/prefill_licenses.dart` filled 9 author files in `assets_library`.
+  `pumpUntil` now waits in real time (isolate rescans). 96 tests + 7 integration (m7_credits screenshot).
+- Next: milestone 8 — archive import.
 
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.
   Can be split later by editing in the review UI.
-- `assets_library_OLD/INDEX.md` (root-level notes, not a pack) was not copied. Its license table could
-  pre-fill `license:` in author files during milestone 7.
+- `assets_library_OLD/INDEX.md` (root-level notes, not a pack) was not copied; its license table now lives in the
+  author files. Pixel Banner, Zerie, RafaelMatos, ashishlko11, greatdocbrown and Robert Brooks still have no license
+  on file — the Credits screen warns about them.
 - None blocking. `7zz` isn't installed but `7z` is; extractor will try `7zz`, then `7z`, then `unrar`.

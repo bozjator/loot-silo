@@ -54,6 +54,42 @@ class AuthorInfo {
     return parse(f.readAsStringSync());
   }
 
+  /// Exact credit wording the author asks for, when it differs from [user].
+  String? get credit => extra['credit'];
+
+  /// `required`, `optional` or `unknown` (from the license, when known).
+  String? get attribution => extra['attribution'];
+
+  /// Copy with new values; an empty string removes that key.
+  AuthorInfo copyWith({
+    String? url,
+    String? license,
+    String? credit,
+    String? attribution,
+  }) {
+    String? pick(String? next, String? old) =>
+        next == null ? old : (next.trim().isEmpty ? null : next.trim());
+    final extra = {...this.extra};
+    void put(String key, String? next) {
+      if (next == null) return;
+      if (next.trim().isEmpty) {
+        extra.remove(key);
+      } else {
+        extra[key] = next.trim();
+      }
+    }
+
+    put('credit', credit);
+    put('attribution', attribution);
+    return AuthorInfo(
+      user: user,
+      url: pick(url, this.url),
+      itchUser: itchUser,
+      license: pick(license, this.license),
+      extra: extra,
+    );
+  }
+
   /// The itch.io account slug, from `itch_user` or a `*.itch.io` url.
   String? get itchSlug {
     if (itchUser != null) return itchUser;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/providers.dart';
+import 'credits_screen.dart';
 import 'dashboard.dart';
 import 'folder_import_screen.dart';
 
@@ -80,6 +81,13 @@ class HomeScreen extends ConsumerWidget {
               )
             : null,
         actions: [
+          IconButton(
+            tooltip: 'Credits',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const CreditsScreen()),
+            ),
+            icon: const Icon(Icons.receipt_long_outlined),
+          ),
           IconButton(
             tooltip: 'Rescan library',
             onPressed: scanning

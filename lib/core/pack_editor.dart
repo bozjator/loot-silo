@@ -149,3 +149,35 @@ PackSidecar saveAnimationOverride(
 /// True when [packPath] still exists; the detail view checks before
 /// writing so a vanished folder isn't recreated by a sidecar write.
 bool packExists(String packPath) => Directory(packPath).existsSync();
+
+/// Adds or removes [game] from the pack's `used_in` list.
+PackSidecar setUsedIn(String packPath, String game, {required bool used}) {
+  final old = PackSidecar.read(packPath) ?? const PackSidecar();
+  final games = [...old.usedIn]..remove(game);
+  if (used) games.add(game);
+  final next = old.copyWith(usedIn: games);
+  next.write(packPath);
+  return next;
+}
+
+/// Updates URL / license / credit wording in an author folder's
+/// `ASSET_AUTHOR.txt`. The name stays: it is the folder name.
+AuthorInfo? updateAuthorInfo(
+  String authorDir, {
+  String? url,
+  String? license,
+  String? credit,
+  String? attribution,
+}) {
+  final path = p.join(authorDir, authorFileName);
+  final old =
+      AuthorInfo.read(path) ?? AuthorInfo(user: p.basename(authorDir));
+  final next = old.copyWith(
+    url: url,
+    license: license,
+    credit: credit,
+    attribution: attribution,
+  );
+  next.write(authorDir);
+  return next;
+}

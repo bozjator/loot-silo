@@ -26,6 +26,14 @@ final directoryPickerProvider = Provider<DirectoryPicker>(
       (title) => getDirectoryPath(confirmButtonText: title),
 );
 
+/// Asks where to save a file; swapped out in tests.
+typedef SaveLocationPicker = Future<String?> Function(String suggestedName);
+
+final saveLocationProvider = Provider<SaveLocationPicker>(
+  (ref) =>
+      (name) async => (await getSaveLocation(suggestedName: name))?.path,
+);
+
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(
   SettingsNotifier.new,
 );

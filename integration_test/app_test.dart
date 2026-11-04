@@ -32,7 +32,11 @@ Future<void> pumpUntil(
           .join(' | ');
       fail('Timed out waiting for $finder; on screen: $texts');
     }
-    await tester.pump(const Duration(milliseconds: 100));
+    // Isolates and file IO need real time, not just frames.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
   }
 }
 
@@ -70,6 +74,9 @@ void main() {
             LibraryIndex(NativeDatabase.memory()),
           ),
           directoryPickerProvider.overrideWithValue((_) async => source),
+          saveLocationProvider.overrideWithValue(
+            (name) async => p.join(tmp.path, name),
+          ),
         ],
         child: const AssetsExplorerApp(),
       ),
@@ -308,5 +315,64 @@ void main() {
     await captureScreenshot(tester, 'm6_detail_images', settle: false);
     expect(Directory(real).statSync().modified, before);
   });
-}
 
+  testWidgets('credits: mark used in, choose packs, save CREDITS.md', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Slimes'));
+
+    await tester.tap(find.text('Slimes'));
+    await pumpUntil(tester, find.byTooltip('Mark as used in a game'));
+    await tester.tap(find.byTooltip('Mark as used in a game'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'Orc Siege',
+    );
+    // Let Autocomplete rebuild its options layer before tapping.
+    await tester.pump();
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.widgetWithText(Chip, 'Orc Siege'));
+    await tester.pageBack();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await tester.tap(find.byTooltip('Credits'));
+    // The fixture's Knight Pack is already used in "My Game".
+    await pumpUntil(tester, find.widgetWithText(ListTile, 'Orc Siege'));
+    expect(find.widgetWithText(ListTile, 'My Game'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ListTile, 'Orc Siege'));
+    await pumpUntil(tester, find.textContaining('# Credits — Orc Siege'));
+    await tester.tap(find.text('Choose packs…'));
+    final knight = find.widgetWithText(CheckboxListTile, 'Knight Pack');
+    await pumpUntil(tester, knight);
+    await settleImages(tester);
+    await tester.tap(knight);
+    await pumpUntil(
+      tester,
+      find.byWidgetPredicate(
+        (w) =>
+            w is CheckboxListTile &&
+            w.value == true &&
+            (w.title as Text?)?.data == 'Knight Pack',
+      ),
+    );
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.textContaining('Knight Pack, Slimes'));
+    await captureScreenshot(tester, 'm7_credits');
+
+    await tester.tap(find.text('Save…'));
+    await pumpUntil(tester, find.textContaining('Saved'));
+    final saved = File(p.join(tmp.path, 'CREDITS.md')).readAsStringSync();
+    expect(saved, startsWith('# Credits — Orc Siege'));
+    expect(saved, contains('## HeroMaker'));
+    expect(saved, contains('- Assets: Knight Pack, Slimes'));
+    await tester.tap(find.text('.txt'));
+    await tester.pump();
+    expect(find.textContaining('CREDITS — Orc Siege'), findsOneWidget);
+  });
+}

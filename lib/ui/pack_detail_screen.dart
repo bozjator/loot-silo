@@ -7,8 +7,10 @@ import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/animation_detector.dart';
+import '../core/credits.dart';
 import '../core/library_index.dart';
 import '../core/pack_editor.dart';
+import '../core/sidecar.dart';
 import '../state/providers.dart';
 import 'format.dart';
 import 'widgets/animated_sprite.dart';
@@ -237,6 +239,37 @@ class _Info extends ConsumerWidget {
     await ref.read(libraryProvider.notifier).reload();
   }
 
+  /// The pack's author folder: the first path segment under the library.
+  String? _authorDir(WidgetRef ref) {
+    final root = ref.read(libraryProvider).value?.root;
+    return root == null ? null : p.join(root, p.split(pack.id).first);
+  }
+
+  AuthorInfo? _author(WidgetRef ref) {
+    final dir = _authorDir(ref);
+    return dir == null ? null : AuthorInfo.read(p.join(dir, authorFileName));
+  }
+
+  Future<void> _editAuthor(BuildContext context, WidgetRef ref) async {
+    final dir = _authorDir(ref);
+    if (dir == null) return;
+    final edit = await showDialog<AuthorEdit>(
+      context: context,
+      builder: (_) => AuthorInfoDialog(
+        initial: _author(ref) ?? AuthorInfo(user: p.basename(dir)),
+      ),
+    );
+    if (edit == null || !Directory(dir).existsSync()) return;
+    updateAuthorInfo(
+      dir,
+      url: edit.url,
+      license: edit.license,
+      credit: edit.credit,
+      attribution: edit.attribution == 'unknown' ? '' : edit.attribution,
+    );
+    await ref.read(libraryProvider.notifier).reload();
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -284,8 +317,23 @@ class _Info extends ConsumerWidget {
                 )
               else
                 Text(pack.author ?? 'Unknown author'),
+              IconButton(
+                tooltip: 'Edit author info',
+                icon: const Icon(Icons.edit, size: 18),
+                onPressed: () => _editAuthor(context, ref),
+              ),
             ],
           ),
+          if (_author(ref) case final AuthorInfo info when info.license != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 24),
+              child: Text(
+                'License: ${info.license}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
           const SizedBox(height: 16),
           _ChipRow(
             label: 'Types',
@@ -308,6 +356,28 @@ class _Info extends ConsumerWidget {
                 builder: (_) => TagsDialog(initial: pack.tags),
               );
               if (tags != null) await _save(ref, tags: tags);
+            },
+          ),
+          const SizedBox(height: 8),
+          _ChipRow(
+            label: 'Used in',
+            values: pack.usedIn,
+            editIcon: Icons.add,
+            editTooltip: 'Mark as used in a game',
+            onDelete: (game) async {
+              if (!packExists(pack.path)) return;
+              setUsedIn(pack.path, game, used: false);
+              await ref.read(libraryProvider.notifier).reload();
+            },
+            onEdit: () async {
+              final packs = ref.read(libraryProvider).value?.packs ?? const [];
+              final game = await showDialog<String>(
+                context: context,
+                builder: (_) => GameNameDialog(known: knownGames(packs)),
+              );
+              if (game == null || !packExists(pack.path)) return;
+              setUsedIn(pack.path, game, used: true);
+              await ref.read(libraryProvider.notifier).reload();
             },
           ),
           const SizedBox(height: 16),
@@ -335,11 +405,19 @@ class _ChipRow extends StatelessWidget {
     required this.label,
     required this.values,
     required this.onEdit,
+    this.onDelete,
+    this.editIcon = Icons.edit,
+    this.editTooltip,
   });
 
   final String label;
   final List<String> values;
   final VoidCallback onEdit;
+
+  /// When set, chips get a delete button.
+  final ValueChanged<String>? onDelete;
+  final IconData editIcon;
+  final String? editTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -347,7 +425,7 @@ class _ChipRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
-          width: 56,
+          width: 64,
           child: Text(label, style: Theme.of(context).textTheme.labelLarge),
         ),
         Expanded(
@@ -357,13 +435,18 @@ class _ChipRow extends StatelessWidget {
             children: [
               if (values.isEmpty) const Text('—'),
               for (final v in values)
-                Chip(label: Text(v), visualDensity: VisualDensity.compact),
+                Chip(
+                  label: Text(v),
+                  visualDensity: VisualDensity.compact,
+                  onDeleted: onDelete == null ? null : () => onDelete!(v),
+                  deleteButtonTooltipMessage: 'Remove $v',
+                ),
             ],
           ),
         ),
         IconButton(
-          tooltip: 'Edit ${label.toLowerCase()}',
-          icon: const Icon(Icons.edit, size: 18),
+          tooltip: editTooltip ?? 'Edit ${label.toLowerCase()}',
+          icon: Icon(editIcon, size: 18),
           onPressed: onEdit,
         ),
       ],
