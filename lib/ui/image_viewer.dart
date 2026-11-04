@@ -40,7 +40,6 @@ class ImageViewer extends ConsumerStatefulWidget {
     required this.images,
     required this.initialIndex,
     this.sizes = const {},
-    this.reveal = revealInFileManager,
   });
 
   final String packPath;
@@ -49,7 +48,6 @@ class ImageViewer extends ConsumerStatefulWidget {
 
   /// File sizes by relative path; missing ones are read from disk.
   final Map<String, int> sizes;
-  final Future<void> Function(String path) reveal;
 
   @override
   ConsumerState<ImageViewer> createState() => _ImageViewerState();
@@ -180,7 +178,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                         IconButton(
                           tooltip: 'Show in file manager',
                           icon: const Icon(Icons.drive_file_move_outline),
-                          onPressed: () => widget.reveal(file.path),
+                          onPressed: () => ref.read(revealProvider)(file.path),
                         ),
                         IconButton(
                           tooltip: 'Close',

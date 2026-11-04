@@ -29,7 +29,9 @@ Round 2 (plan: `FIXES_PLAN.md`):
 - [x] 12. Image viewer rework — near full-window viewer (fit keeping ratio, auto whole-step vs exact fit,
   `viewer_pixel_perfect` toggle, wheel zoom/pan), prettified title + path/size, prev/next by button and ←/→,
   reveal in file manager, carousel click opens it; fixed `PixelImage` stretching under tight constraints
-- [ ] 13. Reveal in file manager + text/Markdown preview
+- [x] 13. Reveal in file manager + text/Markdown preview — reveal buttons on image cards (hover), animation
+  cards, audio and file rows; text preview (UTF-8 → Latin-1, 1 MiB cap) and Markdown via `flutter_markdown_plus`
+  with Raw/Rendered, copy, open externally; remote images never fetched
 - [ ] 14. Thumbnail size controls
 - [ ] 15. Animations grid + focus mode
 - [ ] 16. Pinnable detail header + folder grouping
@@ -44,10 +46,9 @@ xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.da
 Screenshots land in `screenshots/` (gitignored).
 
 ## Last iteration
-- Done: milestone 12. `ui/image_viewer.dart` (`showImageViewer`), `ui/reveal.dart` (`revealInFileManager`),
-  `viewerScale()` + `fullResolution` in `PixelImage`; `OverflowBox` min size 0 fixes stretched tiles/images
-  (two tile goldens updated on purpose). 138 unit/widget tests + 14 integration.
-- Next: milestone 13 (reveal on cards + text/Markdown preview).
+- Done: milestone 13. `core/text_preview.dart`, `ui/text_preview_dialog.dart`, `revealProvider` in
+  `ui/reveal.dart` (tests record paths instead of opening a file manager). 146 unit/widget tests + 16 integration.
+- Next: milestone 14 (thumbnail size controls).
 
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.

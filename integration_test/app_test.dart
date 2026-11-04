@@ -10,6 +10,8 @@ import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
+import 'package:assets_explorer/ui/reveal.dart';
+import 'package:assets_explorer/ui/text_preview_dialog.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -103,6 +105,9 @@ void main() {
   /// Archives the "Import archive" button picks.
   var pickedArchives = <String>[];
 
+  /// Paths "Show in file manager" was asked for; no file manager opens.
+  final revealed = <String>[];
+
   Widget app(String source, {String? library}) {
     final store = SettingsStore(File(p.join(tmp.path, 'settings.json')))
       ..save(AppSettings(libraryPath: library ?? lib));
@@ -117,6 +122,7 @@ void main() {
           archivePickerProvider.overrideWithValue(() async => pickedArchives),
           extractRootProvider.overrideWithValue(p.join(tmp.path, 'extract')),
           keyStoreProvider.overrideWithValue(keyStore),
+          revealProvider.overrideWithValue((path) async => revealed.add(path)),
           if (itchClient == null && useLiveKey)
             envKeyProvider.overrideWithValue(
               () => readKeyFromEnvFile(liveEnvFile),
@@ -589,6 +595,123 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await settleImages(tester);
     await captureScreenshot(tester, 'm12_viewer_real_next', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m13: reveal in file manager, text and Markdown preview', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    File(p.join(pack, 'README.md')).writeAsStringSync('''
+# Knight Pack
+
+A **16×16** knight with *walk* and *idle* animations.
+
+## Contents
+- `knight.png` — sprite sheet
+- [itch.io page](https://heromaker.itch.io/knight)
+
+![Banner](docs/banner.png)
+
+| Animation | Frames |
+|-----------|--------|
+| Idle      | 4      |
+| Walk      | 6      |
+''');
+    final banner = img.Image(width: 96, height: 24);
+    for (final px in banner) {
+      final on = (px.x ~/ 8 + px.y ~/ 8).isEven;
+      px.setRgb(on ? 230 : 40, on ? 120 : 90, on ? 60 : 160);
+    }
+    File(p.join(pack, 'docs', 'banner.png'))
+      ..parent.createSync()
+      ..writeAsBytesSync(img.encodePng(banner));
+    // "Licence: © 2024 Café Studio" in Latin-1, not valid UTF-8.
+    File(p.join(pack, 'docs', 'License.txt'))
+      ..parent.createSync()
+      ..writeAsBytesSync([
+        ...'Licence: '.codeUnits,
+        0xA9,
+        ...' 2024 Caf'.codeUnits,
+        0xE9,
+        ...' Studio\r\nFree for commercial use.\r\n'.codeUnits,
+      ]);
+    revealed.clear();
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Other files ('));
+
+    // Image cards show the reveal button on hover.
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(tester.getCenter(find.text('knight.png')));
+    await tester.pump();
+    await captureScreenshot(tester, 'm13_image_hover', settle: false);
+    await tester.tap(find.byTooltip('Show in file manager').last);
+    expect(revealed.last, p.join(pack, 'knight.png'));
+    await mouse.moveTo(Offset.zero);
+
+    await tester.tap(find.textContaining('Other files ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('README.md'));
+    await pumpUntil(tester, find.text('Rendered'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await settleImages(tester);
+    expect(find.byType(Image), findsWidgets);
+    await captureScreenshot(tester, 'm13_markdown_rendered', settle: false);
+    await tester.tap(find.text('Raw'));
+    await tester.pump();
+    expect(find.textContaining('# Knight Pack'), findsOneWidget);
+    await captureScreenshot(tester, 'm13_markdown_raw', settle: false);
+    await tester.tap(find.byTooltip('Close'));
+    await pumpUntil(
+      tester,
+      find.byType(TextPreviewDialog),
+      seconds: 5,
+      gone: true,
+    );
+
+    await tester.tap(find.text('docs/License.txt'));
+    await pumpUntil(tester, find.textContaining('shown as Latin-1'));
+    expect(find.textContaining('© 2024 Café Studio'), findsOneWidget);
+    // Let the dialog finish fading in.
+    await tester.pump(const Duration(milliseconds: 400));
+    await captureScreenshot(tester, 'm13_text_latin1', settle: false);
+    await tester.tap(find.byTooltip('Show in file manager').last);
+    expect(revealed.last, p.join(pack, 'docs', 'License.txt'));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(
+      tester,
+      find.byType(TextPreviewDialog),
+      seconds: 5,
+      gone: true,
+    );
+  });
+
+  testWidgets('m13: text preview on the real library (read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+    await tester.enterText(find.byType(TextField), 'craftpix');
+    await pumpUntil(tester, find.text('Free-Basic-Pixel-Art-UI-for-RPG'));
+    await tester.tap(find.text('Free-Basic-Pixel-Art-UI-for-RPG'));
+    await pumpUntil(tester, find.textContaining('Other files ('));
+    await tester.tap(find.textContaining('Other files ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('License.txt'));
+    await pumpUntil(tester, find.byType(SelectableText));
+    await tester.pump(const Duration(milliseconds: 400));
+    await captureScreenshot(tester, 'm13_real_license', settle: false);
     expect(Directory(real).statSync().modified, before);
   });
 

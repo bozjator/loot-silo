@@ -118,7 +118,12 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [settingsStoreProvider.overrideWithValue(store)],
+          overrides: [
+            settingsStoreProvider.overrideWithValue(store),
+            revealProvider.overrideWithValue(
+              (path) async => revealed.add(path),
+            ),
+          ],
           child: MaterialApp(
             home: Builder(
               builder: (context) => TextButton(
@@ -128,7 +133,6 @@ void main() {
                     packPath: tmp.path,
                     images: images,
                     initialIndex: index,
-                    reveal: (path) async => revealed.add(path),
                   ),
                 ),
                 child: const Text('open'),

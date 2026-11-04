@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -7,6 +8,11 @@ import 'package:url_launcher/url_launcher.dart';
 typedef ProcessRunner = Future<ProcessResult> Function(
   String executable,
   List<String> arguments,
+);
+
+/// How the UI reveals a file; tests swap it so no file manager opens.
+final revealProvider = Provider<Future<void> Function(String path)>(
+  (ref) => revealInFileManager,
 );
 
 /// Shows [path] selected in the system file manager.

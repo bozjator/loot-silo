@@ -12,9 +12,12 @@ import '../core/credits.dart';
 import '../core/library_index.dart';
 import '../core/pack_editor.dart';
 import '../core/sidecar.dart';
+import '../core/text_preview.dart';
 import '../state/providers.dart';
 import 'format.dart';
 import 'image_viewer.dart';
+import 'reveal.dart';
+import 'text_preview_dialog.dart';
 import 'widgets/animated_sprite.dart';
 import 'widgets/meta_dialogs.dart';
 import 'widgets/pack_tile.dart' show iconForTypes;
@@ -96,7 +99,7 @@ class _Body extends ConsumerWidget {
       if (contents.other.isNotEmpty)
         (
           'Other files (${formatCount(contents.other.length)})',
-          _FilesTab(contents: contents),
+          _FilesTab(pack: pack, contents: contents),
         ),
     ];
     return DefaultTabController(
@@ -530,40 +533,43 @@ class _ImagesTab extends StatelessWidget {
       itemBuilder: (context, i) {
         final rel = images[i];
         final file = File(p.join(pack.path, rel));
-        return Card(
-          clipBehavior: Clip.antiAlias,
-          margin: EdgeInsets.zero,
-          child: InkWell(
-            mouseCursor: clickCursor,
-            onTap: () => showImageViewer(
-              context,
-              packPath: pack.path,
-              images: images,
-              index: i,
-              sizes: contents.sizes,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: PixelImage(file),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-                  child: Tooltip(
-                    message: rel,
-                    child: Text(
-                      p.basename(rel),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall,
+        return _HoverReveal(
+          path: file.path,
+          child: Card(
+            clipBehavior: Clip.antiAlias,
+            margin: EdgeInsets.zero,
+            child: InkWell(
+              mouseCursor: clickCursor,
+              onTap: () => showImageViewer(
+                context,
+                packPath: pack.path,
+                images: images,
+                index: i,
+                sizes: contents.sizes,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: PixelImage(file),
                     ),
                   ),
-                ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                    child: Tooltip(
+                      message: rel,
+                      child: Text(
+                        p.basename(rel),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -699,9 +705,16 @@ class _AnimationCardState extends State<_AnimationCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    prettyName(a.label, isFile: false),
-                    style: theme.textTheme.titleMedium,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          prettyName(a.label, isFile: false),
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      _RevealButton(p.join(widget.packPath, a.path)),
+                    ],
                   ),
                   Text(
                     a.path,
@@ -928,7 +941,13 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
                 ),
                 title: Text(p.basename(rel)),
                 subtitle: p.dirname(rel) == '.' ? null : Text(p.dirname(rel)),
-                trailing: Text(formatBytes(widget.contents.sizes[rel] ?? 0)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(formatBytes(widget.contents.sizes[rel] ?? 0)),
+                    _RevealButton(p.join(widget.pack.path, rel)),
+                  ],
+                ),
                 onTap: () => _toggle(rel),
               );
             },
@@ -940,8 +959,9 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
 }
 
 class _FilesTab extends StatelessWidget {
-  const _FilesTab({required this.contents});
+  const _FilesTab({required this.pack, required this.contents});
 
+  final PackRow pack;
   final PackContents contents;
 
   @override
@@ -952,11 +972,22 @@ class _FilesTab extends StatelessWidget {
       itemCount: files.length,
       itemBuilder: (context, i) {
         final rel = files[i];
+        final previewable = isTextPreviewable(rel);
         return ListTile(
           dense: true,
           leading: Icon(_iconFor(rel)),
           title: Text(rel),
-          trailing: Text(formatBytes(contents.sizes[rel] ?? 0)),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(formatBytes(contents.sizes[rel] ?? 0)),
+              _RevealButton(p.join(pack.path, rel)),
+            ],
+          ),
+          // Text files open in the preview; the rest only reveal.
+          onTap: previewable
+              ? () => showTextPreview(context, packPath: pack.path, rel: rel)
+              : null,
         );
       },
     );
@@ -965,10 +996,72 @@ class _FilesTab extends StatelessWidget {
   static IconData _iconFor(String rel) =>
       switch (p.extension(rel).toLowerCase()) {
         '.txt' || '.md' || '.pdf' => Icons.description_outlined,
+        '.json' ||
+        '.csv' ||
+        '.ini' ||
+        '.cfg' ||
+        '.tsx' ||
+        '.tmx' ||
+        '.xml' => Icons.data_object,
         '.ttf' || '.otf' || '.woff' || '.woff2' => Icons.font_download_outlined,
         '.fbx' || '.obj' || '.glb' || '.gltf' || '.blend' => Icons.view_in_ar,
         '.zip' || '.rar' || '.7z' => Icons.archive_outlined,
         '.aseprite' || '.ase' || '.psd' || '.kra' => Icons.brush_outlined,
         _ => Icons.insert_drive_file_outlined,
       };
+}
+
+/// Small "show in file manager" button for a file row or card.
+class _RevealButton extends ConsumerWidget {
+  const _RevealButton(this.path);
+
+  final String path;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => IconButton(
+    tooltip: 'Show in file manager',
+    iconSize: 18,
+    visualDensity: VisualDensity.compact,
+    icon: const Icon(Icons.drive_file_move_outline),
+    onPressed: () => ref.read(revealProvider)(path),
+  );
+}
+
+/// Shows a [_RevealButton] in the top-right corner of [child] while the
+/// mouse is over it, so small image cards stay uncluttered.
+class _HoverReveal extends StatefulWidget {
+  const _HoverReveal({required this.path, required this.child});
+
+  final String path;
+  final Widget child;
+
+  @override
+  State<_HoverReveal> createState() => _HoverRevealState();
+}
+
+class _HoverRevealState extends State<_HoverReveal> {
+  var _hover = false;
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) => setState(() => _hover = true),
+    onExit: (_) => setState(() => _hover = false),
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        widget.child,
+        if (_hover)
+          Positioned(
+            top: 2,
+            right: 2,
+            child: Material(
+              color: Theme.of(context).colorScheme.surface
+                  .withValues(alpha: 0.85),
+              shape: const CircleBorder(),
+              child: _RevealButton(widget.path),
+            ),
+          ),
+      ],
+    ),
+  );
 }
