@@ -8,6 +8,7 @@ import '../install/folder_importer.dart';
 import '../state/providers.dart';
 import 'format.dart';
 import 'widgets/meta_dialogs.dart';
+import 'cursors.dart';
 
 /// Top-level so the isolate closure captures nothing but its arguments.
 Future<ImportPlan> _planInBackground(
@@ -359,6 +360,7 @@ class _ItemRow extends StatelessWidget {
         Expanded(
           flex: flex,
           child: InkWell(
+            mouseCursor: clickCursor,
             onTap: () async {
               await onTap();
               onChanged();

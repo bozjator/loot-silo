@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/sidecar.dart';
 import '../../core/type_classifier.dart';
+import '../cursors.dart';
 
 /// Edits an author name and profile URL; known authors autocomplete.
 class AuthorDialog extends StatefulWidget {
@@ -118,6 +119,7 @@ class _TypesDialogState extends State<TypesDialog> {
           children: [
             for (final t in AssetType.values)
               FilterChip(
+                mouseCursor: clickCursor,
                 label: Text(t.id),
                 selected: _selected.contains(t.id),
                 onSelected: (on) => setState(
@@ -403,3 +405,28 @@ class _AuthorInfoDialogState extends State<AuthorInfoDialog> {
     );
   }
 }
+
+/// Asks before taking [pack] out of [game]'s credits; true to go ahead.
+Future<bool> confirmRemoveFromGame(
+  BuildContext context, {
+  required String pack,
+  required String game,
+}) async =>
+    await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove from game?'),
+        content: Text('Remove "$pack" from "$game"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    ) ??
+    false;

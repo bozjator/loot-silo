@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/type_classifier.dart';
 import '../../state/dashboard.dart';
+import '../cursors.dart';
 
 /// Search box, type chips, author / tag / source menus and sorting.
 class FilterBar extends StatelessWidget {
@@ -96,6 +97,8 @@ class FilterBar extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               DropdownButton<PackSort>(
+                mouseCursor: clickCursor,
+                dropdownMenuItemMouseCursor: clickCursor,
                 value: query.sort,
                 underline: const SizedBox(),
                 icon: const Icon(Icons.sort),
@@ -117,6 +120,7 @@ class FilterBar extends StatelessWidget {
                   children: [
                     for (final t in AssetType.values)
                       FilterChip(
+                        mouseCursor: clickCursor,
                         label: Text(t.id),
                         visualDensity: VisualDensity.compact,
                         selected: query.types.contains(t.id),
@@ -127,6 +131,7 @@ class FilterBar extends StatelessWidget {
                         avatar: Icon(icon, size: 16),
                         label: Text(value),
                         visualDensity: VisualDensity.compact,
+                        deleteIcon: deleteIcon,
                         onDeleted: () => toggle(value),
                       ),
                   ],

@@ -23,7 +23,15 @@ Decision log: `../REPORT_APP_CREATION.md`
 - [x] 10. Polish — settings screen (library path with confirm, theme, animate-all, itch status), shortcuts
   (`/`/Ctrl+F, Esc, Ctrl+I, Ctrl+O, F5/Ctrl+R, Ctrl+,), missing-library state with recovery, m10 screenshots
 
-**All milestones done.**
+Round 2 (plan: `FIXES_PLAN.md`):
+- [x] 11. Quick wins — `prettyName()` titles, hand cursor on clickable controls, mouse back button, confirm
+  "remove from game", info panel sized to content, audio loop toggle (`audio_loop`)
+- [ ] 12. Image viewer rework
+- [ ] 13. Reveal in file manager + text/Markdown preview
+- [ ] 14. Thumbnail size controls
+- [ ] 15. Animations grid + focus mode
+- [ ] 16. Pinnable detail header + folder grouping
+- [ ] 17. Dashboard sub-folder view + tag sort
 
 ## How to verify
 ```
@@ -34,10 +42,10 @@ xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.da
 Screenshots land in `screenshots/` (gitignored).
 
 ## Last iteration
-- Done: milestone 10. `ui/settings_screen.dart`, `AppSettings.theme/animateAll`, app-wide Esc-to-close, home
-  shortcuts, `LibraryMissing` error with "Try again" / "Choose another folder". 120 unit tests + 11 integration.
-- Next: nothing planned. Ideas: split Pixel-Banner into per-character packs, bulk license editing, a Windows/macOS
-  build check.
+- Done: milestone 11. `ui/cursors.dart` (theme + `clickCursor`), `prettyName()` in `ui/format.dart`,
+  `confirmRemoveFromGame()` in `meta_dialogs.dart`, back button + Esc leave bundles (`app.dart`),
+  `AppSettings.audioLoop`. 126 unit/widget tests + 12 integration.
+- Next: milestone 12 (image viewer).
 
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.

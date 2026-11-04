@@ -10,6 +10,7 @@ class AppSettings {
     this.libraryPath,
     this.theme = ThemeChoice.system,
     this.animateAll = false,
+    this.audioLoop = false,
   });
 
   /// The managed library folder; null until the user picks one.
@@ -19,26 +20,33 @@ class AppSettings {
   /// Play every sprite preview on the dashboard, not just the hovered one.
   final bool animateAll;
 
+  /// Repeat the playing sound in a pack's Audio tab.
+  final bool audioLoop;
+
   factory AppSettings.fromJson(Map<String, Object?> json) => AppSettings(
     libraryPath: json['library_path'] as String?,
     theme: ThemeChoice.values.asNameMap()[json['theme']] ?? ThemeChoice.system,
     animateAll: json['animate_all'] == true,
+    audioLoop: json['audio_loop'] == true,
   );
 
   Map<String, Object?> toJson() => {
     'library_path': ?libraryPath,
     'theme': theme.name,
     'animate_all': animateAll,
+    'audio_loop': audioLoop,
   };
 
   AppSettings copyWith({
     String? libraryPath,
     ThemeChoice? theme,
     bool? animateAll,
+    bool? audioLoop,
   }) => AppSettings(
     libraryPath: libraryPath ?? this.libraryPath,
     theme: theme ?? this.theme,
     animateAll: animateAll ?? this.animateAll,
+    audioLoop: audioLoop ?? this.audioLoop,
   );
 }
 

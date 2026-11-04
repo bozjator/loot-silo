@@ -7,6 +7,7 @@ import '../../core/library_index.dart';
 import '../format.dart';
 import 'animated_sprite.dart';
 import 'pixel_image.dart';
+import '../cursors.dart';
 
 IconData iconForTypes(List<String> types) => switch (types.firstOrNull) {
   'music' => Icons.music_note,
@@ -59,6 +60,7 @@ class _PackTileState extends State<PackTile> {
       clipBehavior: Clip.antiAlias,
       margin: EdgeInsets.zero,
       child: InkWell(
+        mouseCursor: clickCursor,
         onTap: widget.onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

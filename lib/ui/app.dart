@@ -1,11 +1,13 @@
 import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../install/archive_extractor.dart';
+import '../state/dashboard.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
 import 'archive_import.dart';
@@ -14,6 +16,7 @@ import 'dashboard.dart';
 import 'folder_import_screen.dart';
 import 'itch_screen.dart';
 import 'settings_screen.dart';
+import 'cursors.dart';
 
 /// Root widget of Asset Explorer.
 class AssetsExplorerApp extends ConsumerStatefulWidget {
@@ -25,6 +28,15 @@ class AssetsExplorerApp extends ConsumerStatefulWidget {
 
 class _AppState extends ConsumerState<AssetsExplorerApp> {
   final _navigator = GlobalKey<NavigatorState>();
+
+  /// Closes the top page or dialog; on the dashboard, leaves an open bundle.
+  Future<void> _back() async {
+    if (await _navigator.currentState?.maybePop() ?? false) return;
+    final query = ref.read(dashboardQueryProvider.notifier);
+    if (ref.read(dashboardQueryProvider).bundleId != null) {
+      query.openBundle(null);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,21 +50,22 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
         ThemeChoice.light => ThemeMode.light,
         ThemeChoice.dark => ThemeMode.dark,
       },
-      // Esc closes the current page; dialogs and search handle it first.
-      builder: (context, child) => CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.escape): () =>
-              _navigator.currentState?.maybePop(),
+      // Esc and the mouse back button close the current page; dialogs and
+      // search handle Esc first.
+      builder: (context, child) => Listener(
+        onPointerDown: (event) {
+          if (event.buttons & kBackMouseButton != 0) _back();
         },
-        child: child!,
+        child: CallbackShortcuts(
+          bindings: {const SingleActivator(LogicalKeyboardKey.escape): _back},
+          child: child!,
+        ),
       ),
-      theme: ThemeData(
-        colorSchemeSeed: Colors.teal,
-        brightness: Brightness.light,
+      theme: withClickCursors(
+        ThemeData(colorSchemeSeed: Colors.teal, brightness: Brightness.light),
       ),
-      darkTheme: ThemeData(
-        colorSchemeSeed: Colors.teal,
-        brightness: Brightness.dark,
+      darkTheme: withClickCursors(
+        ThemeData(colorSchemeSeed: Colors.teal, brightness: Brightness.dark),
       ),
       home: const HomeScreen(),
     );

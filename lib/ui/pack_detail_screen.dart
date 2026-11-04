@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
@@ -17,6 +18,7 @@ import 'widgets/animated_sprite.dart';
 import 'widgets/meta_dialogs.dart';
 import 'widgets/pack_tile.dart' show iconForTypes;
 import 'widgets/pixel_image.dart';
+import 'cursors.dart';
 
 /// Everything about one pack: previews, files, animations, metadata.
 class PackDetailScreen extends ConsumerWidget {
@@ -103,13 +105,21 @@ class _Body extends ConsumerWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: SizedBox(
-              height: 300,
+            // The info sizes to its content; it only scrolls when it would
+            // take more than half the window from the tabs.
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: math.max(
+                  300,
+                  MediaQuery.sizeOf(context).height * 0.5,
+                ),
+              ),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  AspectRatio(
-                    aspectRatio: 4 / 3,
+                  SizedBox(
+                    width: 400,
+                    height: 300,
                     child: _Carousel(
                       pack: pack,
                       images: contents.carousel(pack.preview),
@@ -314,6 +324,7 @@ class _Info extends ConsumerWidget {
               const SizedBox(width: 6),
               if (authorUrl != null)
                 InkWell(
+                  mouseCursor: clickCursor,
                   onTap: () => launchUrl(Uri.parse(authorUrl)),
                   child: Text(
                     pack.author ?? authorUrl,
@@ -373,7 +384,12 @@ class _Info extends ConsumerWidget {
             editIcon: Icons.add,
             editTooltip: 'Mark as used in a game',
             onDelete: (game) async {
-              if (!packExists(pack.path)) return;
+              final ok = await confirmRemoveFromGame(
+                context,
+                pack: pack.title,
+                game: game,
+              );
+              if (!ok || !packExists(pack.path)) return;
               setUsedIn(pack.path, game, used: false);
               await ref.read(libraryProvider.notifier).reload();
             },
@@ -446,6 +462,7 @@ class _ChipRow extends StatelessWidget {
                 Chip(
                   label: Text(v),
                   visualDensity: VisualDensity.compact,
+                  deleteIcon: deleteIcon,
                   onDeleted: onDelete == null ? null : () => onDelete!(v),
                   deleteButtonTooltipMessage: 'Remove $v',
                 ),
@@ -487,6 +504,7 @@ class _ImagesTab extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           margin: EdgeInsets.zero,
           child: InkWell(
+            mouseCursor: clickCursor,
             onTap: () => showDialog<void>(
               context: context,
               builder: (_) =>
@@ -692,7 +710,10 @@ class _AnimationCardState extends State<_AnimationCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(a.label, style: theme.textTheme.titleMedium),
+                  Text(
+                    prettyName(a.label, isFile: false),
+                    style: theme.textTheme.titleMedium,
+                  ),
                   Text(
                     a.path,
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -751,6 +772,8 @@ class _AnimationCardState extends State<_AnimationCard> {
                         ),
                         if (a.rows > 1)
                           DropdownButton<int?>(
+                            mouseCursor: clickCursor,
+                            dropdownMenuItemMouseCursor: clickCursor,
                             value: _row,
                             items: [
                               const DropdownMenuItem(
@@ -821,24 +844,29 @@ class _NumberField extends StatelessWidget {
 }
 
 /// Audio files with one shared player; only one sound plays at a time.
-class _AudioTab extends StatefulWidget {
+class _AudioTab extends ConsumerStatefulWidget {
   const _AudioTab({required this.pack, required this.contents});
 
   final PackRow pack;
   final PackContents contents;
 
   @override
-  State<_AudioTab> createState() => _AudioTabState();
+  ConsumerState<_AudioTab> createState() => _AudioTabState();
 }
 
-class _AudioTabState extends State<_AudioTab> {
+class _AudioTabState extends ConsumerState<_AudioTab> {
   // Created on first play so tests and silent browsing never touch audio.
   AudioPlayer? _player;
   String? _playing;
 
+  static ReleaseMode _modeFor(bool loop) =>
+      loop ? ReleaseMode.loop : ReleaseMode.release;
+
   Future<void> _toggle(String rel) async {
     final player = _player ??= AudioPlayer()
       ..onPlayerComplete.listen((_) {
+        // Looping players report each pass as complete; they keep playing.
+        if (_player?.releaseMode == ReleaseMode.loop) return;
         if (mounted) setState(() => _playing = null);
       });
     if (_playing == rel) {
@@ -849,6 +877,9 @@ class _AudioTabState extends State<_AudioTab> {
     setState(() => _playing = rel);
     try {
       await player.stop();
+      await player.setReleaseMode(
+        _modeFor(ref.read(settingsProvider).audioLoop),
+      );
       await player.play(DeviceFileSource(p.join(widget.pack.path, rel)));
     } on Object catch (e) {
       if (!mounted) return;
@@ -856,6 +887,12 @@ class _AudioTabState extends State<_AudioTab> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Could not play $rel: $e')));
     }
+  }
+
+  /// Turning loop off lets the current sound finish its pass.
+  void _setLoop(bool on) {
+    ref.read(settingsProvider.notifier).setAudioLoop(on);
+    _player?.setReleaseMode(_modeFor(on));
   }
 
   @override
@@ -867,25 +904,48 @@ class _AudioTabState extends State<_AudioTab> {
   @override
   Widget build(BuildContext context) {
     final audio = widget.contents.audio;
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: audio.length,
-      itemBuilder: (context, i) {
-        final rel = audio[i];
-        final playing = _playing == rel;
-        return ListTile(
-          dense: true,
-          leading: IconButton(
-            tooltip: playing ? 'Stop' : 'Play',
-            icon: Icon(playing ? Icons.stop_circle : Icons.play_circle),
-            onPressed: () => _toggle(rel),
+    final loop = ref.watch(settingsProvider.select((s) => s.audioLoop));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FilterChip(
+              mouseCursor: clickCursor,
+              avatar: const Icon(Icons.repeat, size: 18),
+              label: const Text('Loop'),
+              tooltip: 'Repeat the playing sound',
+              selected: loop,
+              showCheckmark: false,
+              onSelected: _setLoop,
+            ),
           ),
-          title: Text(p.basename(rel)),
-          subtitle: p.dirname(rel) == '.' ? null : Text(p.dirname(rel)),
-          trailing: Text(formatBytes(widget.contents.sizes[rel] ?? 0)),
-          onTap: () => _toggle(rel),
-        );
-      },
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: audio.length,
+            itemBuilder: (context, i) {
+              final rel = audio[i];
+              final playing = _playing == rel;
+              return ListTile(
+                dense: true,
+                leading: IconButton(
+                  tooltip: playing ? 'Stop' : 'Play',
+                  icon: Icon(playing ? Icons.stop_circle : Icons.play_circle),
+                  onPressed: () => _toggle(rel),
+                ),
+                title: Text(p.basename(rel)),
+                subtitle: p.dirname(rel) == '.' ? null : Text(p.dirname(rel)),
+                trailing: Text(formatBytes(widget.contents.sizes[rel] ?? 0)),
+                onTap: () => _toggle(rel),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

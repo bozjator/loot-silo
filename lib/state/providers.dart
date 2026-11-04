@@ -72,6 +72,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   void setAnimateAll(bool on) => _save(state.copyWith(animateAll: on));
 
+  void setAudioLoop(bool on) => _save(state.copyWith(audioLoop: on));
+
   void _save(AppSettings settings) {
     state = settings;
     ref.read(settingsStoreProvider).save(state);

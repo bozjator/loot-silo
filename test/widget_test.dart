@@ -2,10 +2,12 @@ import 'dart:io';
 
 import 'package:assets_explorer/core/library_index.dart';
 import 'package:assets_explorer/state/itch.dart';
+import 'package:assets_explorer/state/dashboard.dart';
 import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/settings_screen.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
@@ -55,15 +57,18 @@ void main() {
         libraryPath: '/lib',
         theme: ThemeChoice.dark,
         animateAll: true,
+        audioLoop: true,
       ),
     );
     final back = store.load();
+    expect(back.audioLoop, isTrue);
     expect(back.libraryPath, '/lib');
     expect(back.theme, ThemeChoice.dark);
     expect(back.animateAll, isTrue);
     f.writeAsStringSync('{"library_path": "/x", "theme": "neon"}');
     expect(store.load().theme, ThemeChoice.system);
     expect(store.load().animateAll, isFalse);
+    expect(store.load().audioLoop, isFalse);
   });
 
   testWidgets('settings screen saves theme and animation, Esc closes it', (
@@ -112,6 +117,53 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
     expect(find.byType(SettingsScreen), findsOneWidget);
+  });
+
+  testWidgets('mouse back button closes a page, then an open bundle', (
+    tester,
+  ) async {
+    final store = SettingsStore(File(p.join(tmp.path, 'settings.json')))
+      ..save(AppSettings(libraryPath: tmp.path));
+    final index = LibraryIndex(NativeDatabase.memory());
+    addTearDown(index.close);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settingsStoreProvider.overrideWithValue(store),
+          libraryIndexProvider.overrideWithValue(index),
+          keyStoreProvider.overrideWithValue(_NoKey()),
+          envKeyProvider.overrideWithValue(() => null),
+        ],
+        child: const AssetsExplorerApp(),
+      ),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(Duration(milliseconds: 300)),
+    );
+    await tester.pump();
+    Future<void> mouseBack() async {
+      final mouse = await tester.startGesture(
+        tester.getCenter(find.byType(Scaffold).last),
+        kind: PointerDeviceKind.mouse,
+        buttons: kBackMouseButton,
+      );
+      await mouse.up();
+      await tester.pumpAndSettle();
+    }
+
+    await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsScreen), findsOneWidget);
+    await mouseBack();
+    expect(find.byType(SettingsScreen), findsNothing);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(HomeScreen)),
+    );
+    container.read(dashboardQueryProvider.notifier).openBundle('Some/Bundle');
+    await mouseBack();
+    expect(container.read(dashboardQueryProvider).bundleId, isNull);
+    expect(find.byType(HomeScreen), findsOneWidget);
   });
 
   testWidgets('a missing library folder offers another one', (tester) async {

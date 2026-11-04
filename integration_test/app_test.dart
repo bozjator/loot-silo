@@ -428,6 +428,69 @@ void main() {
     expect(find.textContaining('CREDITS — Orc Siege'), findsOneWidget);
   });
 
+  testWidgets('m11: loop toggle, confirm removal, taller detail header', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    // Any bytes do: the scanner classifies by extension, nothing plays.
+    File(p.join(lib, 'HeroMaker', 'Knight Pack', 'sword_swing-01.wav'))
+        .writeAsBytesSync(List.filled(64, 0));
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.widgetWithText(Chip, 'My Game'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm11_detail_header', settle: false);
+
+    // Removing "used in" from the detail page asks first; Cancel keeps it.
+    await tester.tap(
+      find.descendant(
+        of: find.widgetWithText(Chip, 'My Game'),
+        matching: find.byIcon(Icons.clear),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Remove "Knight Pack" from "My Game"?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.widgetWithText(Chip, 'My Game'), findsOneWidget);
+
+    await tester.tap(find.textContaining('Audio ('));
+    await pumpUntil(tester, find.text('Loop'));
+    // Let the tab slide in before tapping.
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.widgetWithText(FilterChip, 'Loop'));
+    await tester.pump(const Duration(milliseconds: 300));
+    final settings = File(p.join(tmp.path, 'settings.json'));
+    expect(settings.readAsStringSync(), contains('"audio_loop": true'));
+    await captureScreenshot(tester, 'm11_audio_loop', settle: false);
+    await tester.pageBack();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await tester.tap(find.byTooltip('Credits'));
+    await pumpUntil(tester, find.widgetWithText(ListTile, 'My Game'));
+    await tester.tap(find.widgetWithText(ListTile, 'My Game'));
+    final remove = find.byTooltip('Remove from My Game');
+    await pumpUntil(tester, remove);
+    await tester.tap(remove);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Remove "Knight Pack" from "My Game"?'), findsOneWidget);
+    await captureScreenshot(tester, 'm11_credits_confirm', settle: false);
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+    await pumpUntil(
+      tester,
+      find.text(
+        'No games yet. Create one, or mark a '
+        'pack as "used in" from its detail page.',
+      ),
+    );
+    final sidecar = File(
+      p.join(lib, 'HeroMaker', 'Knight Pack', 'asset_pack.json'),
+    ).readAsStringSync();
+    expect(sidecar, isNot(contains('My Game')));
+  });
+
   testWidgets('archive import: zip and tar.gz through the review screen', (
     tester,
   ) async {

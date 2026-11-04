@@ -62,7 +62,8 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
   }
 
   Future<void> _remove(PackRow pk, String game) async {
-    if (!packExists(pk.path)) return;
+    final ok = await confirmRemoveFromGame(context, pack: pk.title, game: game);
+    if (!ok || !packExists(pk.path)) return;
     setUsedIn(pk.path, game, used: false);
     await ref.read(libraryProvider.notifier).reload();
   }
