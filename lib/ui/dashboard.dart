@@ -166,23 +166,14 @@ class _DashboardState extends ConsumerState<Dashboard> {
                     onSteps: (n) => settings.setDashboardTileSize(
                       dashboardTileRange.nudge(tileSize, n),
                     ),
-                    child: GridView.builder(
+                    child: ThumbRows(
                       // Root and each bundle keep their own scroll position.
                       key: PageStorageKey(
                         'grid:${query.bundleId}:${view.name}',
                       ),
                       physics: const CtrlWheelPhysics(),
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                      // A 4:3 preview over a footer for title, author and
-                      // types; narrow tiles get room for a second chip row.
-                      gridDelegate: ThumbGridDelegate(
-                        maxTileWidth: tileSize,
-                        imageAspect: 4 / 3,
-                        footer: (w) =>
-                            (w < 190 ? 148 : 120) +
-                            (query.sort == PackSort.tags ? tagsLineHeight : 0),
-                        footerKey: query.sort == PackSort.tags,
-                      ),
+                      maxTileWidth: tileSize,
                       itemCount: tiles.length,
                       itemBuilder: (context, i) {
                         final DashboardTile(:tile, :pack, :folder) = tiles[i];

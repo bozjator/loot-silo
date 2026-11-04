@@ -27,9 +27,6 @@ IconData iconForTypes(List<String> types) => switch (types.firstOrNull) {
 ///
 /// Sprite-sheet previews show their first frame and play while hovered
 /// (always, with [alwaysAnimate]); GIF previews do the same.
-/// Extra footer height a tile needs for its tags line.
-const tagsLineHeight = 22.0;
-
 class PackTile extends StatefulWidget {
   const PackTile({
     super.key,
@@ -46,8 +43,7 @@ class PackTile extends StatefulWidget {
   final bool alwaysAnimate;
 
   /// Adds a line with the pack's tags, sorted, under the type chips (when
-  /// the dashboard sorts by tag); the grid gives such tiles
-  /// [tagsLineHeight] more footer.
+  /// the dashboard sorts by tag).
   final bool showTags;
 
   @override

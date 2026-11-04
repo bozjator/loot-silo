@@ -13,19 +13,19 @@ import 'package:path/path.dart' as p;
 
 import '../helpers/fonts.dart';
 
-/// The dashboard's delegate, as `dashboard.dart` builds it.
-ThumbGridDelegate dashboardGrid(double size, {bool tags = false}) =>
-    ThumbGridDelegate(
-      maxTileWidth: size,
-      imageAspect: 4 / 3,
-      footer: (w) => (w < 190 ? 148 : 120) + (tags ? tagsLineHeight : 0),
-      footerKey: tags,
-    );
+/// A delegate with a fixed footer, as the dashboard used before rows sized
+/// to their content.
+ThumbGridDelegate dashboardGrid(double size) => ThumbGridDelegate(
+  maxTileWidth: size,
+  imageAspect: 4 / 3,
+  footer: (w) => w < 190 ? 148 : 120,
+);
 
-PackRow longPack(int i) => PackRow(
+PackRow longPack(int i, {String? title}) => PackRow(
   id: 'p$i',
   path: '/nowhere',
-  title: 'The Extremely Long Pack Title Of Many Words Volume $i Deluxe',
+  title:
+      title ?? 'The Extremely Long Pack Title Of Many Words Volume $i Deluxe',
   author: 'An Author With A Rather Long Name Indeed',
   isContainer: false,
   types: const ['character', 'environment', 'tileset', 'ui', 'vfx'],
@@ -110,9 +110,9 @@ void main() {
             fontFamily: 'Roboto',
           ),
           home: Scaffold(
-            body: GridView.builder(
+            body: ThumbRows(
               padding: const EdgeInsets.all(16),
-              gridDelegate: dashboardGrid(size),
+              maxTileWidth: size,
               itemCount: 12,
               itemBuilder: (_, i) => PackTile(pack: longPack(i), onTap: () {}),
             ),
@@ -122,7 +122,7 @@ void main() {
       // A RenderFlex overflow would be reported here.
       expect(tester.takeException(), isNull);
       await expectLater(
-        find.byType(GridView),
+        find.byType(ThumbRows),
         matchesGoldenFile('goldens/tiles_${size.round()}.png'),
       );
     });
@@ -138,9 +138,9 @@ void main() {
         MaterialApp(
           theme: ThemeData(fontFamily: 'Roboto'),
           home: Scaffold(
-            body: GridView.builder(
+            body: ThumbRows(
               padding: const EdgeInsets.all(16),
-              gridDelegate: dashboardGrid(size, tags: true),
+              maxTileWidth: size,
               itemCount: 12,
               itemBuilder: (_, i) =>
                   PackTile(pack: longPack(i), onTap: () {}, showTags: true),
@@ -158,12 +158,39 @@ void main() {
     });
   }
 
-  test('a tags footer change lays the grid out again', () {
-    expect(dashboardGrid(240).shouldRelayout(dashboardGrid(240)), isFalse);
-    expect(
-      dashboardGrid(240, tags: true).shouldRelayout(dashboardGrid(240)),
-      isTrue,
+  testWidgets('rows are as tall as their tallest card, no taller', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1040, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    // Four 240 px columns; row 1 has one long card, row 2 only short ones.
+    final packs = [
+      longPack(0),
+      for (var i = 1; i < 8; i++)
+        longPack(i, title: 'Short $i').copyWith(types: const ['music']),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(fontFamily: 'Roboto'),
+        home: Scaffold(
+          body: ThumbRows(
+            padding: const EdgeInsets.all(16),
+            maxTileWidth: 240,
+            itemCount: packs.length,
+            itemBuilder: (_, i) => PackTile(pack: packs[i]),
+          ),
+        ),
+      ),
     );
+    expect(tester.takeException(), isNull);
+    double height(int i) => tester.getSize(find.byType(PackTile).at(i)).height;
+    final image = tester.getSize(find.byType(PackTile).first).width * 3 / 4;
+    // Row 1 matches the long card; its short neighbours stretch to it.
+    expect(height(1), height(0));
+    // Row 2: title, author and one chip row — about 80 px under the image,
+    // where the fixed grid footer was 120 px.
+    expect(height(4) - image, lessThan(90));
+    expect(height(0), greaterThan(height(4) + 30));
   });
 
   testWidgets('Ctrl + wheel resizes instead of scrolling', (tester) async {

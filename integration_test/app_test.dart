@@ -13,6 +13,7 @@ import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:assets_explorer/ui/reveal.dart';
 import 'package:assets_explorer/ui/text_preview_dialog.dart';
+import 'package:assets_explorer/ui/widgets/thumb_size.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -223,7 +224,7 @@ void main() {
       kenney,
       300,
       scrollable: find.descendant(
-        of: find.byType(GridView),
+        of: find.byType(ThumbRows),
         matching: find.byType(Scrollable),
       ),
     );
@@ -988,8 +989,9 @@ A **16×16** knight with *walk* and *idle* animations.
 
     // Folder names are searchable; switching views keeps the search.
     await tester.enterText(find.byType(TextField), 'skeleton');
-    await pumpUntil(tester, find.text('SkeletonWarrior'));
-    expect(find.text('Wolf'), findsNothing);
+    // The old results go once the search has run.
+    await pumpUntil(tester, find.text('Wolf'), gone: true);
+    expect(find.text('SkeletonWarrior'), findsOneWidget);
     await settleImages(tester);
     await captureScreenshot(tester, 'm17_expanded_search', settle: false);
     await tester.tap(find.text('Packs'));
