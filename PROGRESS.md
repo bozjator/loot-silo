@@ -20,10 +20,10 @@ Decision log: `../REPORT_APP_CREATION.md`
 - [x] 9. itch sync — key from keychain (or ITCH_API_KEY / .env / ITCH_ENV_FILE, never logged), owned keys
   paginated, IDF title matcher + author check (real account: 53 to link, 12 inside Pixel-Banner, 5 missing),
   link/download queue through the import pipeline, covers + screenshots in `<Pack>/_itch/`
-- [ ] 10. Polish
-  - [ ] settings screen: library path, theme, animate-all, itch key
-  - [ ] keyboard shortcuts (Ctrl+F search, Ctrl+I import, Ctrl+R rescan, Esc back)
-  - [ ] empty / error states reviewed; final screenshots; report finalised
+- [x] 10. Polish — settings screen (library path with confirm, theme, animate-all, itch status), shortcuts
+  (`/`/Ctrl+F, Esc, Ctrl+I, Ctrl+O, F5/Ctrl+R, Ctrl+,), missing-library state with recovery, m10 screenshots
+
+**All milestones done.**
 
 ## How to verify
 ```
@@ -34,10 +34,10 @@ xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.da
 Screenshots land in `screenshots/` (gitignored).
 
 ## Last iteration
-- Done: milestone 9. `itch/` (api, matcher, page scraper, key, sync), `state/itch.dart`, `ui/itch_screen.dart`.
-  "Download all" leaves out tools and bundles from authors already in the library. 117 unit tests (+1 live, opt-in
-  with `-t live`) and 10 integration tests, including read-only screenshots of the real account.
-- Next: milestone 10 — polish.
+- Done: milestone 10. `ui/settings_screen.dart`, `AppSettings.theme/animateAll`, app-wide Esc-to-close, home
+  shortcuts, `LibraryMissing` error with "Try again" / "Choose another folder". 120 unit tests + 11 integration.
+- Next: nothing planned. Ideas: split Pixel-Banner into per-character packs, bulk license editing, a Windows/macOS
+  build check.
 
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.

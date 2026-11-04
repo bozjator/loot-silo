@@ -2,25 +2,50 @@ import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../install/archive_extractor.dart';
 import '../state/providers.dart';
+import '../state/settings.dart';
 import 'archive_import.dart';
 import 'credits_screen.dart';
 import 'dashboard.dart';
 import 'folder_import_screen.dart';
 import 'itch_screen.dart';
+import 'settings_screen.dart';
 
 /// Root widget of Asset Explorer.
-class AssetsExplorerApp extends StatelessWidget {
+class AssetsExplorerApp extends ConsumerStatefulWidget {
   const AssetsExplorerApp({super.key});
 
   @override
+  ConsumerState<AssetsExplorerApp> createState() => _AppState();
+}
+
+class _AppState extends ConsumerState<AssetsExplorerApp> {
+  final _navigator = GlobalKey<NavigatorState>();
+
+  @override
   Widget build(BuildContext context) {
+    final theme = ref.watch(settingsProvider.select((s) => s.theme));
     return MaterialApp(
       title: 'Asset Explorer',
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navigator,
+      themeMode: switch (theme) {
+        ThemeChoice.system => ThemeMode.system,
+        ThemeChoice.light => ThemeMode.light,
+        ThemeChoice.dark => ThemeMode.dark,
+      },
+      // Esc closes the current page; dialogs and search handle it first.
+      builder: (context, child) => CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              _navigator.currentState?.maybePop(),
+        },
+        child: child!,
+      ),
       theme: ThemeData(
         colorSchemeSeed: Colors.teal,
         brightness: Brightness.light,
@@ -34,7 +59,8 @@ class AssetsExplorerApp extends StatelessWidget {
   }
 }
 
-/// Library overview. A plain list until the dashboard milestone lands.
+/// Library overview: the dashboard plus import, itch.io, credits and
+/// settings.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -104,6 +130,9 @@ class HomeScreen extends ConsumerWidget {
     if (imported) await ref.read(libraryProvider.notifier).rescan();
   }
 
+  void _openSettings(BuildContext context) => Navigator.of(context)
+      .push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final libraryPath = ref.watch(
@@ -129,74 +158,113 @@ class HomeScreen extends ConsumerWidget {
 
     final library = ref.watch(libraryProvider);
     final scanning = library.isLoading;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Asset Explorer'),
-        bottom: scanning
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(4),
-                child: LinearProgressIndicator(),
-              )
-            : null,
-        actions: [
-          IconButton(
-            tooltip: 'itch.io',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute<void>(builder: (_) => const ItchScreen())),
-            icon: const Icon(Icons.storefront_outlined),
+    void rescan() {
+      if (!scanning) ref.read(libraryProvider.notifier).rescan();
+    }
+
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyI, control: true): () =>
+            _importFolder(context, ref),
+        const SingleActivator(LogicalKeyboardKey.keyO, control: true): () =>
+            _importArchive(context, ref),
+        const SingleActivator(LogicalKeyboardKey.keyR, control: true): rescan,
+        const SingleActivator(LogicalKeyboardKey.f5): rescan,
+        const SingleActivator(LogicalKeyboardKey.comma, control: true): () =>
+            _openSettings(context),
+      },
+      // Keeps the shortcuts working when nothing inside has focus (e.g.
+      // the empty-library message); the dashboard's own focus wins.
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Asset Explorer'),
+            bottom: scanning
+                ? const PreferredSize(
+                    preferredSize: Size.fromHeight(4),
+                    child: LinearProgressIndicator(),
+                  )
+                : null,
+            actions: [
+              IconButton(
+                tooltip: 'itch.io',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const ItchScreen()),
+                ),
+                icon: const Icon(Icons.storefront_outlined),
+              ),
+              IconButton(
+                tooltip: 'Credits',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const CreditsScreen(),
+                  ),
+                ),
+                icon: const Icon(Icons.receipt_long_outlined),
+              ),
+              IconButton(
+                tooltip: 'Rescan library (F5)',
+                onPressed: scanning ? null : rescan,
+                icon: const Icon(Icons.refresh),
+              ),
+              IconButton(
+                tooltip: 'Settings (Ctrl+,)',
+                onPressed: () => _openSettings(context),
+                icon: const Icon(Icons.settings_outlined),
+              ),
+              const SizedBox(width: 4),
+              OutlinedButton.icon(
+                onPressed: () => _importArchive(context, ref),
+                icon: const Icon(Icons.archive_outlined),
+                label: const Text('Import archive'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: () => _importFolder(context, ref),
+                icon: const Icon(Icons.drive_folder_upload_outlined),
+                label: const Text('Import folder'),
+              ),
+              const SizedBox(width: 12),
+            ],
           ),
-          IconButton(
-            tooltip: 'Credits',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const CreditsScreen()),
-            ),
-            icon: const Icon(Icons.receipt_long_outlined),
+          body: DropZone(
+            onDrop: (paths) => _onDrop(context, ref, paths),
+            child: switch (library) {
+              AsyncValue(:final value?) when value.packs.isNotEmpty =>
+                const Dashboard(),
+              AsyncValue(:final error?) => _Message(
+                icon: Icons.error_outline,
+                title: 'Could not read the library',
+                body: '$error',
+                action: Wrap(
+                  spacing: 8,
+                  children: [
+                    OutlinedButton(
+                      onPressed: rescan,
+                      child: const Text('Try again'),
+                    ),
+                    FilledButton(
+                      onPressed: () => _chooseLibrary(context, ref),
+                      child: const Text('Choose another folder'),
+                    ),
+                  ],
+                ),
+              ),
+              AsyncValue(hasValue: true) => _Message(
+                icon: Icons.inventory_2_outlined,
+                title: 'Your library is empty',
+                body: 'Import a folder or drop an archive to get started.',
+                action: FilledButton.icon(
+                  onPressed: () => _importFolder(context, ref),
+                  icon: const Icon(Icons.drive_folder_upload_outlined),
+                  label: const Text('Import folder'),
+                ),
+              ),
+              _ => const Center(child: Text('Scanning library…')),
+            },
           ),
-          IconButton(
-            tooltip: 'Rescan library',
-            onPressed: scanning
-                ? null
-                : () => ref.read(libraryProvider.notifier).rescan(),
-            icon: const Icon(Icons.refresh),
-          ),
-          const SizedBox(width: 4),
-          OutlinedButton.icon(
-            onPressed: () => _importArchive(context, ref),
-            icon: const Icon(Icons.archive_outlined),
-            label: const Text('Import archive'),
-          ),
-          const SizedBox(width: 8),
-          FilledButton.tonalIcon(
-            onPressed: () => _importFolder(context, ref),
-            icon: const Icon(Icons.drive_folder_upload_outlined),
-            label: const Text('Import folder'),
-          ),
-          const SizedBox(width: 12),
-        ],
-      ),
-      body: DropZone(
-        onDrop: (paths) => _onDrop(context, ref, paths),
-        child: switch (library) {
-          AsyncValue(:final value?) when value.packs.isNotEmpty =>
-            const Dashboard(),
-          AsyncValue(:final error?) => _Message(
-            icon: Icons.error_outline,
-            title: 'Could not read the library',
-            body: '$error',
-          ),
-          AsyncValue(hasValue: true) => _Message(
-            icon: Icons.inventory_2_outlined,
-            title: 'Your library is empty',
-            body: 'Import a folder or drop an archive to get started.',
-            action: FilledButton.icon(
-              onPressed: () => _importFolder(context, ref),
-              icon: const Icon(Icons.drive_folder_upload_outlined),
-              label: const Text('Import folder'),
-            ),
-          ),
-          _ => const Center(child: Text('Scanning library…')),
-        },
+        ),
       ),
     );
   }

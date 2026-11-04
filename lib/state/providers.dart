@@ -66,8 +66,14 @@ class SettingsNotifier extends Notifier<AppSettings> {
   @override
   AppSettings build() => ref.read(settingsStoreProvider).load();
 
-  void setLibraryPath(String path) {
-    state = state.copyWith(libraryPath: path);
+  void setLibraryPath(String path) => _save(state.copyWith(libraryPath: path));
+
+  void setTheme(ThemeChoice theme) => _save(state.copyWith(theme: theme));
+
+  void setAnimateAll(bool on) => _save(state.copyWith(animateAll: on));
+
+  void _save(AppSettings settings) {
+    state = settings;
     ref.read(settingsStoreProvider).save(state);
   }
 }
@@ -86,6 +92,18 @@ final libraryProvider = AsyncNotifierProvider<LibraryNotifier, LibraryState>(
   LibraryNotifier.new,
 );
 
+/// The library folder was moved, deleted or is on an unmounted drive.
+class LibraryMissing implements Exception {
+  const LibraryMissing(this.path);
+
+  final String path;
+
+  @override
+  String toString() =>
+      'The library folder $path is missing. Reconnect the drive or choose '
+      'another folder.';
+}
+
 class LibraryNotifier extends AsyncNotifier<LibraryState> {
   @override
   Future<LibraryState> build() => _load(force: false);
@@ -93,6 +111,9 @@ class LibraryNotifier extends AsyncNotifier<LibraryState> {
   Future<LibraryState> _load({required bool force}) async {
     final root = ref.watch(settingsProvider.select((s) => s.libraryPath));
     if (root == null) return const LibraryState();
+    if (!Directory(root).existsSync()) {
+      throw LibraryMissing(root);
+    }
     final service = LibraryService(ref.read(libraryIndexProvider));
     final result = await service.load(root, force: force);
     return LibraryState(root: root, packs: result.packs, result: result);

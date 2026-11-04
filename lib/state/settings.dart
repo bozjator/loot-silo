@@ -1,20 +1,45 @@
 import 'dart:convert';
 import 'dart:io';
 
+/// Light, dark or follow the system.
+enum ThemeChoice { system, light, dark }
+
 /// User settings, stored as JSON in the app support folder.
 class AppSettings {
-  const AppSettings({this.libraryPath});
+  const AppSettings({
+    this.libraryPath,
+    this.theme = ThemeChoice.system,
+    this.animateAll = false,
+  });
 
   /// The managed library folder; null until the user picks one.
   final String? libraryPath;
+  final ThemeChoice theme;
 
-  factory AppSettings.fromJson(Map<String, Object?> json) =>
-      AppSettings(libraryPath: json['library_path'] as String?);
+  /// Play every sprite preview on the dashboard, not just the hovered one.
+  final bool animateAll;
 
-  Map<String, Object?> toJson() => {'library_path': ?libraryPath};
+  factory AppSettings.fromJson(Map<String, Object?> json) => AppSettings(
+    libraryPath: json['library_path'] as String?,
+    theme: ThemeChoice.values.asNameMap()[json['theme']] ?? ThemeChoice.system,
+    animateAll: json['animate_all'] == true,
+  );
 
-  AppSettings copyWith({String? libraryPath}) =>
-      AppSettings(libraryPath: libraryPath ?? this.libraryPath);
+  Map<String, Object?> toJson() => {
+    'library_path': ?libraryPath,
+    'theme': theme.name,
+    'animate_all': animateAll,
+  };
+
+  AppSettings copyWith({
+    String? libraryPath,
+    ThemeChoice? theme,
+    bool? animateAll,
+  }) => AppSettings(
+    libraryPath: libraryPath ?? this.libraryPath,
+    theme: theme ?? this.theme,
+    animateAll: animateAll ?? this.animateAll,
+  );
 }
 
 class SettingsStore {

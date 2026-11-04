@@ -13,6 +13,7 @@ import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -626,5 +627,48 @@ void main() {
     await settleImages(tester);
     await captureScreenshot(tester, 'm9_real_to_link');
     expect(keyStore.key, isNull, reason: 'env key is never saved');
+  });
+
+  testWidgets('polish: settings, dark theme, empty and missing library', (
+    tester,
+  ) async {
+    final empty = p.join(tmp.path, 'empty_lib');
+    Directory(empty).createSync();
+    await tester.pumpWidget(app(empty, library: p.join(tmp.path, 'gone')));
+    await pumpUntil(tester, find.textContaining('is missing'));
+    await captureScreenshot(tester, 'm10_library_missing');
+    await tester.tap(find.text('Choose another folder'));
+    await pumpUntil(tester, find.text('Your library is empty'));
+    await captureScreenshot(tester, 'm10_library_empty');
+
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+    await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
+    await pumpUntil(tester, find.text('Keyboard shortcuts'));
+    await captureScreenshot(tester, 'm10_settings');
+
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Animate all sprite previews'));
+    await tester.pumpAndSettle();
+    await captureScreenshot(tester, 'm10_settings_dark');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.text('71 packs'));
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+    await captureScreenshot(tester, 'm10_dashboard_dark', settle: false);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'knight');
+    await pumpUntil(tester, find.textContaining('packs'));
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+    await captureScreenshot(tester, 'm10_search_dark', settle: false);
   });
 }

@@ -164,10 +164,7 @@ void main() {
     final library = Directory(p.join(tmp.path, 'library'))..createSync();
     final ea = extractArchive(a, out);
     final eb = extractArchive(b, out);
-    final origins = {
-      p.basename(ea.folder): a,
-      p.basename(eb.folder): b,
-    };
+    final origins = {p.basename(ea.folder): a, p.basename(eb.folder): b};
     final plan = planFolderImport(out, library.path, origins: origins);
     expect(
       {for (final i in plan.items) i.sourceRel: i.origin},

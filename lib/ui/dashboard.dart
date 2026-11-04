@@ -33,12 +33,15 @@ class _DashboardState extends ConsumerState<Dashboard> {
     super.dispose();
   }
 
-  /// `/` jumps to search from anywhere except a text field; Esc leaves it.
+  /// `/` or Ctrl+F jumps to search (`/` not while typing); Esc leaves it.
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final typing =
         FocusManager.instance.primaryFocus?.context?.widget is EditableText;
-    if (event.logicalKey == LogicalKeyboardKey.slash && !typing) {
+    final ctrlF =
+        event.logicalKey == LogicalKeyboardKey.keyF &&
+        HardwareKeyboard.instance.isControlPressed;
+    if (ctrlF || (event.logicalKey == LogicalKeyboardKey.slash && !typing)) {
       _searchFocus.requestFocus();
       return KeyEventResult.handled;
     }
@@ -68,6 +71,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
         : allPacks.where((p) => p.id == query.bundleId).firstOrNull;
     final packs = visible.value ?? const [];
     final theme = Theme.of(context);
+    final animateAll = ref.watch(settingsProvider.select((s) => s.animateAll));
 
     return Focus(
       autofocus: true,
@@ -156,6 +160,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                         key: ValueKey(pack.id),
                         pack: pack,
                         subPackCount: subCounts[pack.id] ?? 0,
+                        alwaysAnimate: animateAll,
                         onTap: pack.isContainer
                             ? () => notifier.openBundle(pack.id)
                             : () => openPackDetail(context, pack.id),
