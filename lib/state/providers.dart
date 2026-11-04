@@ -1,11 +1,14 @@
+import 'dart:io';
 import 'dart:isolate';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../core/library_index.dart';
 import '../core/library_service.dart';
 import '../core/pack_editor.dart';
+import '../install/archive_extractor.dart';
 import 'settings.dart';
 
 /// Overridden in `main` (and tests) once the app support folder is known.
@@ -32,6 +35,27 @@ typedef SaveLocationPicker = Future<String?> Function(String suggestedName);
 final saveLocationProvider = Provider<SaveLocationPicker>(
   (ref) =>
       (name) async => (await getSaveLocation(suggestedName: name))?.path,
+);
+
+/// Asks for archives to import; swapped out in tests.
+typedef ArchivePicker = Future<List<String>> Function();
+
+final archivePickerProvider = Provider<ArchivePicker>(
+  (ref) => () async {
+    final files = await openFiles(
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'Archives', extensions: archiveExtensions),
+      ],
+      confirmButtonText: 'Import',
+    );
+    return [for (final f in files) f.path];
+  },
+);
+
+/// Where archives are unpacked before import; outside the library so the
+/// importer can copy from it. Overridden in `main` with the app cache.
+final extractRootProvider = Provider<String>(
+  (ref) => p.join(Directory.systemTemp.path, 'assets_explorer_extract'),
 );
 
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(

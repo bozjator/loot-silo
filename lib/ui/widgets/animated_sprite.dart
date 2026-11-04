@@ -179,9 +179,7 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
     if (kept.isEmpty) return;
     final crop = union!;
     setState(() {
-      _frames = [
-        for (final (i, r) in kept) (i, crop.shift(r.topLeft)),
-      ];
+      _frames = [for (final (i, r) in kept) (i, crop.shift(r.topLeft))];
       _frame = _frame % _frames.length;
     });
   }

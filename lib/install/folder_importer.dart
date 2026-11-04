@@ -36,6 +36,7 @@ class ImportItem {
     required this.fileCount,
     required this.totalBytes,
     this.importedAs,
+    this.origin,
   }) : folderName = safeFolderName(p.basename(sourcePath)),
        selected = importedAs == null;
 
@@ -51,6 +52,10 @@ class ImportItem {
 
   /// Library-relative path of an earlier import of the same source.
   final String? importedAs;
+
+  /// What to record as `source_path` when [sourcePath] is a temporary
+  /// extraction: the archive (plus the sub-folder for multi-pack archives).
+  final String? origin;
 
   AuthorInfo? author;
   List<String> types;
@@ -132,7 +137,14 @@ Map<String, String> importedSources(String libraryRoot) {
 /// The source is only read. Every top-level pack becomes one item (bundles
 /// carry their sub-packs along), with detected author, types and tags.
 /// Packs imported before (same source path) start unselected.
-ImportPlan planFolderImport(String sourceRoot, String libraryRoot) {
+///
+/// [origins] maps a top-level folder name in [sourceRoot] to the archive it
+/// was extracted from, so sidecars point at the archive, not a temp folder.
+ImportPlan planFolderImport(
+  String sourceRoot,
+  String libraryRoot, {
+  Map<String, String> origins = const {},
+}) {
   checkRoots(sourceRoot, libraryRoot);
   final scan = scanLibrary(sourceRoot);
   final imported = importedSources(libraryRoot);
@@ -142,6 +154,13 @@ ImportPlan planFolderImport(String sourceRoot, String libraryRoot) {
       children.putIfAbsent(pk.parentId!, () => []).add(pk);
     }
   }
+  String? originOf(String id) {
+    final parts = id.split('/');
+    final archive = origins[parts.first];
+    if (archive == null) return null;
+    return parts.length == 1 ? archive : p.joinAll([archive, ...parts.skip(1)]);
+  }
+
   final items = [
     for (final pk in scan.packs.where((x) => x.parentId == null))
       ImportItem(
@@ -159,7 +178,8 @@ ImportPlan planFolderImport(String sourceRoot, String libraryRoot) {
         totalBytes:
             pk.totalBytes +
             (children[pk.id] ?? const []).fold(0, (n, c) => n + c.totalBytes),
-        importedAs: imported[p.canonicalize(pk.path)],
+        origin: originOf(pk.id),
+        importedAs: imported[p.canonicalize(originOf(pk.id) ?? pk.path)],
       ),
   ];
   return ImportPlan(sourceRoot, libraryRoot, items);
@@ -269,7 +289,7 @@ ImportOutcome importItem(
           types: item.types,
           tags: item.tags,
           source: PackSource.imported,
-          sourcePath: p.canonicalize(item.sourcePath),
+          sourcePath: item.origin ?? p.canonicalize(item.sourcePath),
           isContainer: item.isContainer,
         )
         .write(staging.path);

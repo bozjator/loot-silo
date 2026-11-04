@@ -31,7 +31,9 @@ class PackDetailScreen extends ConsumerWidget {
     if (pack == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: const Center(child: Text('This pack is no longer in the library')),
+        body: const Center(
+          child: Text('This pack is no longer in the library'),
+        ),
       );
     }
     final contents = ref.watch(packContentsProvider(packId));
@@ -49,7 +51,9 @@ class PackDetailScreen extends ConsumerWidget {
       ),
       body: switch (contents) {
         AsyncData(:final value) => _Body(pack: pack, contents: value),
-        AsyncError(:final error) => Center(child: Text('Could not read: $error')),
+        AsyncError(:final error) => Center(
+          child: Text('Could not read: $error'),
+        ),
         _ => const Center(child: CircularProgressIndicator()),
       },
     );
@@ -106,7 +110,9 @@ class _Body extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: 24),
-                  Expanded(child: _Info(pack: pack, contents: contents)),
+                  Expanded(
+                    child: _Info(pack: pack, contents: contents),
+                  ),
                 ],
               ),
             ),
@@ -153,11 +159,7 @@ class _CarouselState extends State<_Carousel> {
     final Widget view;
     if (images.isEmpty) {
       view = Center(
-        child: Icon(
-          iconForTypes(pack.types),
-          size: 72,
-          color: scheme.primary,
-        ),
+        child: Icon(iconForTypes(pack.types), size: 72, color: scheme.primary),
       );
     } else if (i == 0 && pack.previewAnim != null) {
       view = AnimatedSprite(packPath: pack.path, anim: pack.previewAnim!);
@@ -845,9 +847,8 @@ class _AudioTabState extends State<_AudioTab> {
     } on Object catch (e) {
       if (!mounted) return;
       setState(() => _playing = null);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not play $rel: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Could not play $rel: $e')));
     }
   }
 

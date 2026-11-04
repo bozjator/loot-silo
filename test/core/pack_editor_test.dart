@@ -44,7 +44,10 @@ void main() {
       'tiles.png',
     ]);
     expect(c.audio, ['sfx/hit.wav']);
-    expect(c.other, ['license.txt', 'src/hero.psd'], reason: 'PSD is not shown');
+    expect(c.other, [
+      'license.txt',
+      'src/hero.psd',
+    ], reason: 'PSD is not shown');
     expect(c.sizes['preview.png'], 20);
     expect(c.animations.single.path, 'Hero/Idle.png');
     expect(c.carousel('preview.png'), ['preview.png', '_itch/cover.png']);

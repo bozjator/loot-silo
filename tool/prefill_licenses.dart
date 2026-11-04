@@ -88,9 +88,8 @@ List<LicenseRow> parseLicenseTable(String markdown) {
           ? out.last.license!
           : '${out.last.license!} Note: $rest.';
     }
-    final required = RegExp(
-      r'^Required:\s*(?:exact wording\s*)?"?([^"]+?)"?$',
-    ).firstMatch(credit);
+    final required = RegExp(r'^Required:\s*(?:exact wording\s*)?"?([^"]+?)"?$')
+        .firstMatch(credit);
     out.add((
       author: author.replaceAll(RegExp(r'\s*\(`.*`\)'), ''),
       license: summary.isEmpty ? null : summary,

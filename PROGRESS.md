@@ -15,12 +15,14 @@ Decision log: `../REPORT_APP_CREATION.md`
   other files; open folder; author link; bundle details from the breadcrumb
 - [x] 7. Credits — "used in" chips on the detail page, Credits screen (games, pack picker, .md/.txt preview,
   copy, save), author info dialog (URL, license, credit wording, attribution); licenses prefilled from OLD INDEX.md
-- [ ] 8. Archive import
-  - [ ] `core/archive_extractor`: zip via `archive` (zip-slip safe), rar/7z via `7zz` → `7z` → `unrar`
-  - [ ] normalise the root (unwrap single nested folders), staging dir, cleanup
-  - [ ] drop zone on the dashboard (desktop_drop) + "Import archive" button; author dialog → PackInstaller
-  - [ ] tests: zip with/without root, nested single folders, rar/7z via the CLI, bad archives
+- [x] 8. Archive import — zip/tar/tar.gz via `archive` (zip-slip safe), 7z/rar via 7zz → 7z → unrar; root
+  normalised; drop zone + "Import archive" button feed the folder-import review; source_path = the archive
 - [ ] 9. itch sync
+  - [ ] API key from secure storage / env file (never logged); settings field
+  - [ ] client: owned keys (paginated), game + uploads, download URL; live smoke test with the env key
+  - [ ] matching owned games ↔ library packs (itch_game_id, url, normalised title + author)
+  - [ ] itch screen: matched / missing list, "Download all missing", per-item download → archive installer
+  - [ ] covers + screenshots into `<Pack>/_itch/`; app fully usable without a key
 - [ ] 10. Polish
 
 ## How to verify
@@ -32,11 +34,10 @@ xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.da
 Screenshots land in `screenshots/` (gitignored).
 
 ## Last iteration
-- Done: milestone 7. `core/credits.dart` (`collectCredits`, markdown/text renderers), `setUsedIn` and
-  `updateAuthorInfo` in `pack_editor.dart`, index schema v4 (`packs.used_in`), `ui/credits_screen.dart`,
-  `GameNameDialog`/`AuthorInfoDialog`. `tool/prefill_licenses.dart` filled 9 author files in `assets_library`.
-  `pumpUntil` now waits in real time (isolate rescans). 96 tests + 7 integration (m7_credits screenshot).
-- Next: milestone 8 — archive import.
+- Done: milestone 8. `install/archive_extractor.dart`, `ui/archive_import.dart`, `DropZone` on the home screen,
+  `planFolderImport(origins:)` so archive imports record the archive as `source_path` and re-imports are flagged.
+  107 tests + 8 integration (m8_* screenshots).
+- Next: milestone 9 — itch sync.
 
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.
@@ -44,4 +45,6 @@ Screenshots land in `screenshots/` (gitignored).
 - `assets_library_OLD/INDEX.md` (root-level notes, not a pack) was not copied; its license table now lives in the
   author files. Pixel Banner, Zerie, RafaelMatos, ashishlko11, greatdocbrown and Robert Brooks still have no license
   on file — the Credits screen warns about them.
-- None blocking. `7zz` isn't installed but `7z` is; extractor will try `7zz`, then `7z`, then `unrar`.
+- None blocking. `7zz` isn't installed but `7z` is; the extractor tries `7zz`, `7z`, `7za`, then `unrar`.
+- No `.rar` test fixture: nothing on this machine can create one (`rar` isn't installed). 7z goes through the
+  same CLI path and is tested; drag-and-drop itself can't be driven under xvfb (the drop handler is plain code).

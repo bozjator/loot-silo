@@ -35,11 +35,10 @@ List<String> knownGames(Iterable<PackRow> packs) =>
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
 /// Packs marked as used in [game].
-List<PackRow> packsUsedIn(Iterable<PackRow> packs, String game) =>
-    [
-      for (final pk in packs)
-        if (pk.usedIn.contains(game)) pk,
-    ]..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+List<PackRow> packsUsedIn(Iterable<PackRow> packs, String game) => [
+  for (final pk in packs)
+    if (pk.usedIn.contains(game)) pk,
+]..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
 
 /// Groups the packs used in [game] by author, reading each author's
 /// `ASSET_AUTHOR.txt` from `<root>/<Author>/` for URL and license.

@@ -75,9 +75,9 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
     _toast('Saved $path');
   }
 
-  void _toast(String message) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(message)));
+  void _toast(String message) =>
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
 
   @override
   Widget build(BuildContext context) {
@@ -197,9 +197,7 @@ class _GameCredits extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text(game, style: theme.textTheme.headlineSmall),
-              ),
+              Expanded(child: Text(game, style: theme.textTheme.headlineSmall)),
               SegmentedButton<_Format>(
                 segments: const [
                   ButtonSegment(value: _Format.markdown, label: Text('.md')),

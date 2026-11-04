@@ -50,11 +50,10 @@ void main() {
     expect(knownGames(packs), ['Orc Siege', 'Other']);
 
     final credits = collectCredits(tmp.path, packs, 'Orc Siege');
-    expect([for (final c in credits) c.displayName], [
-      'Kenney',
-      'Matt Firth (shikashipx)',
-      'Nobody',
-    ]);
+    expect(
+      [for (final c in credits) c.displayName],
+      ['Kenney', 'Matt Firth (shikashipx)', 'Nobody'],
+    );
     expect(credits.first.packs, ['Sub', 'Tiny Town']);
     expect(credits.first.license, 'CC0');
     expect(credits[1].attribution, 'required');
@@ -83,10 +82,9 @@ void main() {
     expect((info.user, info.license, info.credit), ('A', 'CC0', 'A. Person'));
     updateAuthorInfo(authorDir, url: 'https://a.itch.io/', credit: '');
     info = AuthorInfo.read(p.join(authorDir, authorFileName))!;
-    expect((info.url, info.license, info.credit), (
-      'https://a.itch.io/',
-      'CC0',
-      null,
-    ));
+    expect(
+      (info.url, info.license, info.credit),
+      ('https://a.itch.io/', 'CC0', null),
+    );
   });
 }

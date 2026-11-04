@@ -84,7 +84,9 @@ void main() {
     expect(src(tester).left, 1);
   });
 
-  testWidgets('advances at fps, skips the empty cell, crops padding', (tester) async {
+  testWidgets('advances at fps, skips the empty cell, crops padding', (
+    tester,
+  ) async {
     await pumpSprite(tester, playing: true);
     final seen = <double>{};
     for (var i = 0; i < 12; i++) {

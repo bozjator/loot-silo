@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:archive/archive_io.dart';
 import 'package:assets_explorer/core/library_index.dart';
 import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
@@ -63,6 +64,9 @@ void main() {
   });
   tearDown(() => tmp.deleteSync(recursive: true));
 
+  /// Archives the "Import archive" button picks.
+  var pickedArchives = <String>[];
+
   Widget app(String source, {String? library}) {
     final store = SettingsStore(File(p.join(tmp.path, 'settings.json')))
       ..save(AppSettings(libraryPath: library ?? lib));
@@ -74,6 +78,8 @@ void main() {
             LibraryIndex(NativeDatabase.memory()),
           ),
           directoryPickerProvider.overrideWithValue((_) async => source),
+          archivePickerProvider.overrideWithValue(() async => pickedArchives),
+          extractRootProvider.overrideWithValue(p.join(tmp.path, 'extract')),
           saveLocationProvider.overrideWithValue(
             (name) async => p.join(tmp.path, name),
           ),
@@ -229,9 +235,8 @@ void main() {
     );
     await tester.tap(find.text('Save'));
     await pumpUntil(tester, find.widgetWithText(Chip, 'cute'));
-    final json =
-        File(p.join(lib, 'HeroMaker', 'Slimes', 'asset_pack.json'))
-            .readAsStringSync();
+    final json = File(p.join(lib, 'HeroMaker', 'Slimes', 'asset_pack.json'))
+        .readAsStringSync();
     expect(json, contains('"cute"'));
     expect(json, contains('"source": "manual"'));
     await tester.pageBack();
@@ -277,7 +282,11 @@ void main() {
     await captureScreenshot(tester, 'm6_detail_zerie_override', settle: false);
     await tester.tap(find.text('Reset to detected'));
     await pumpUntil(tester, find.text('Apply size'));
-    for (var i = 0; i < 50 && find.text('Reset to detected').evaluate().isNotEmpty; i++) {
+    for (
+      var i = 0;
+      i < 50 && find.text('Reset to detected').evaluate().isNotEmpty;
+      i++
+    ) {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 100)),
       );
@@ -374,5 +383,66 @@ void main() {
     await tester.tap(find.text('.txt'));
     await tester.pump();
     expect(find.textContaining('CREDITS — Orc Siege'), findsOneWidget);
+  });
+
+  testWidgets('archive import: zip and tar.gz through the review screen', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final orc = Archive()
+      ..add(ArchiveFile.string('Orc Pack/preview.png', 'x'))
+      ..add(
+        ArchiveFile.bytes(
+          'Orc Pack/orc.png',
+          File('test/fixtures/images/hero.png').readAsBytesSync(),
+        ),
+      )
+      ..add(
+        ArchiveFile.string('Orc Pack/credits.txt', 'https://orcs.itch.io/'),
+      );
+    final zipPath = p.join(tmp.path, 'orc_pack_v1.zip');
+    File(zipPath).writeAsBytesSync(ZipEncoder().encodeBytes(orc));
+    final sfx = Archive()
+      ..add(ArchiveFile.string('hit.wav', 'RIFF'))
+      ..add(ArchiveFile.string('jump.wav', 'RIFF'));
+    final tgzPath = p.join(tmp.path, 'Retro SFX.tar.gz');
+    File(tgzPath).writeAsBytesSync(
+      GZipEncoder().encodeBytes(TarEncoder().encodeBytes(sfx)),
+    );
+    final badPath = p.join(tmp.path, 'broken.zip');
+    File(badPath).writeAsStringSync('nope');
+    pickedArchives = [zipPath, tgzPath, badPath];
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Slimes'));
+    await tester.tap(find.text('Import archive'));
+    await pumpUntil(tester, find.text('Import 2 packs'));
+    await captureScreenshot(tester, 'm8_archive_review');
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm8_archive_review');
+
+    await tester.tap(find.text('Import 2 packs'));
+    await pumpUntil(tester, find.text('Done'));
+    expect(
+      find.textContaining('2 of 2 packs imported and verified'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Done'));
+    await pumpUntil(tester, find.text('Orc Pack'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm8_library_after');
+    final sidecar = File(p.join(lib, 'orcs', 'Orc Pack', 'asset_pack.json'))
+        .readAsStringSync();
+    expect(sidecar, contains(zipPath));
+    expect(
+      Directory(p.join(lib, 'Unknown Author', 'Retro SFX')).existsSync(),
+      isTrue,
+    );
+    expect(
+      Directory(p.join(tmp.path, 'extract')).listSync(),
+      isEmpty,
+      reason: 'temporary extraction removed',
+    );
+    expect(File(zipPath).existsSync(), isTrue, reason: 'archive kept');
   });
 }

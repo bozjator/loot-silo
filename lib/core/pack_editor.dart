@@ -30,8 +30,7 @@ class PackContents {
 
   /// [detected] with the sidecar's overrides applied.
   List<SpriteAnim> get animations => [
-    for (final a in detected)
-      applyOverride(a, sidecar?.animations[a.path]),
+    for (final a in detected) applyOverride(a, sidecar?.animations[a.path]),
   ];
 
   /// Images worth flipping through at the top of the page: the tile
@@ -43,14 +42,16 @@ class PackContents {
       if (out.contains(f)) continue;
       final words = pathWords(f);
       if (f.startsWith('_itch/') ||
-          words.any(const {
-            'preview',
-            'mockup',
-            'cover',
-            'showcase',
-            'screenshot',
-            'thumbnail',
-          }.contains)) {
+          words.any(
+            const {
+              'preview',
+              'mockup',
+              'cover',
+              'showcase',
+              'screenshot',
+              'thumbnail',
+            }.contains,
+          )) {
         out.add(f);
       }
     }
@@ -60,10 +61,7 @@ class PackContents {
 
 /// Splits [files] into images / audio / other and detects animations,
 /// applying the sidecar's overrides. Pure Dart; run it in an isolate.
-PackContents loadPackContents(
-  String packPath,
-  List<(String, int)> files,
-) {
+PackContents loadPackContents(String packPath, List<(String, int)> files) {
   final sidecar = PackSidecar.read(packPath);
   final images = <String>[], audio = <String>[], other = <String>[];
   for (final (rel, _) in files) {
@@ -170,8 +168,7 @@ AuthorInfo? updateAuthorInfo(
   String? attribution,
 }) {
   final path = p.join(authorDir, authorFileName);
-  final old =
-      AuthorInfo.read(path) ?? AuthorInfo(user: p.basename(authorDir));
+  final old = AuthorInfo.read(path) ?? AuthorInfo(user: p.basename(authorDir));
   final next = old.copyWith(
     url: url,
     license: license,

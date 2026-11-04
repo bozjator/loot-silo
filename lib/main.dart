@@ -14,6 +14,7 @@ import 'ui/app.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final support = await getApplicationSupportDirectory();
+  final cache = await getApplicationCacheDirectory();
   final index = LibraryIndex(
     driftDatabase(
       name: 'library_index',
@@ -27,6 +28,7 @@ Future<void> main() async {
           SettingsStore(File(p.join(support.path, 'settings.json'))),
         ),
         libraryIndexProvider.overrideWithValue(index),
+        extractRootProvider.overrideWithValue(p.join(cache.path, 'extract')),
       ],
       child: const AssetsExplorerApp(),
     ),

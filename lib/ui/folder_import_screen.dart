@@ -10,8 +10,11 @@ import 'format.dart';
 import 'widgets/meta_dialogs.dart';
 
 /// Top-level so the isolate closure captures nothing but its arguments.
-Future<ImportPlan> _planInBackground(String source, String library) =>
-    Isolate.run(() => planFolderImport(source, library));
+Future<ImportPlan> _planInBackground(
+  String source,
+  String library,
+  Map<String, String> origins,
+) => Isolate.run(() => planFolderImport(source, library, origins: origins));
 
 enum _Phase { planning, review, importing, done }
 
@@ -19,9 +22,22 @@ enum _Phase { planning, review, importing, done }
 ///
 /// Pops with `true` when anything was imported.
 class FolderImportScreen extends ConsumerStatefulWidget {
-  const FolderImportScreen({super.key, required this.sourcePath});
+  const FolderImportScreen({
+    super.key,
+    required this.sourcePath,
+    this.origins = const {},
+    this.title = 'Import folder',
+    this.notes = const [],
+  });
 
   final String sourcePath;
+
+  /// Top-level folder → archive it came from (see [planFolderImport]).
+  final Map<String, String> origins;
+  final String title;
+
+  /// Problems from an earlier step (e.g. archives that failed to extract).
+  final List<String> notes;
 
   @override
   ConsumerState<FolderImportScreen> createState() => _FolderImportScreenState();
@@ -44,7 +60,7 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
     final source = widget.sourcePath;
     final library = ref.read(settingsProvider).libraryPath!;
     try {
-      final plan = await _planInBackground(source, library);
+      final plan = await _planInBackground(source, library, widget.origins);
       if (mounted) setState(() => (_plan = plan, _phase = _Phase.review));
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -83,7 +99,7 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Import folder'),
+        title: Text(widget.title),
         automaticallyImplyLeading: _phase != _Phase.importing,
       ),
       body: switch (_phase) {
@@ -123,26 +139,47 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
             TextSpan(
               children: [
                 TextSpan(
-                  text: '${plan.items.length} packs found in ',
+                  text: widget.origins.isEmpty
+                      ? '${plan.items.length} packs found in '
+                      : '${plan.items.length} packs found in '
+                            '${widget.origins.length} '
+                            '${widget.origins.length == 1 ? 'archive' : 'archives'}',
                   style: theme.textTheme.titleMedium,
                 ),
-                TextSpan(
-                  text: plan.sourceRoot,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontFamily: 'monospace',
+                if (widget.origins.isEmpty)
+                  TextSpan(
+                    text: plan.sourceRoot,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontFamily: 'monospace',
+                    ),
                   ),
-                ),
                 TextSpan(
-                  text:
-                      '\nFiles are copied into ${plan.libraryRoot}; '
-                      'the source folder is never changed. '
-                      'Click an author, type or tag to edit it.',
+                  text: widget.origins.isEmpty
+                      ? '\nFiles are copied into ${plan.libraryRoot}; '
+                            'the source folder is never changed. '
+                            'Click an author, type or tag to edit it.'
+                      : '\nExtracted files are copied into '
+                            '${plan.libraryRoot}; the archives are kept. '
+                            'Click an author, type or tag to edit it.',
                   style: theme.textTheme.bodySmall,
                 ),
               ],
             ),
           ),
         ),
+        for (final note in widget.notes)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Card(
+              margin: EdgeInsets.zero,
+              color: theme.colorScheme.errorContainer,
+              child: ListTile(
+                dense: true,
+                leading: const Icon(Icons.error_outline),
+                title: Text(note),
+              ),
+            ),
+          ),
         _HeaderRow(
           value: allSelected ? true : (selected.isEmpty ? false : null),
           onChanged: (v) => setState(() {
