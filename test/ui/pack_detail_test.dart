@@ -190,9 +190,7 @@ void main() {
     expect(find.byTooltip('Show the whole pack'), findsNothing);
   });
 
-  testWidgets('sorting by tags shows each tile\'s tags, sorted', (
-    tester,
-  ) async {
+  testWidgets('sorting by tags adds each tile\'s tags, sorted', (tester) async {
     await openKnight(tester, open: false);
     expect(find.textContaining('No tags'), findsNothing);
     await tester.tap(find.byType(DropdownButton<PackSort>));
@@ -210,6 +208,14 @@ void main() {
           .first,
     );
     expect(tags.data, 'knight, pixel-art');
+    // The type chips stay.
+    expect(
+      find.descendant(
+        of: find.byType(PackTile),
+        matching: find.text('character'),
+      ),
+      findsWidgets,
+    );
     final shown = tags.data!.split(', ');
     expect(shown, sortedTags(shown));
   });

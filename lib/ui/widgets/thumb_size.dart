@@ -28,6 +28,7 @@ class ThumbGridDelegate extends SliverGridDelegate {
     required this.maxTileWidth,
     required this.imageAspect,
     required this.footer,
+    this.footerKey,
     this.spacing = 12,
   });
 
@@ -38,6 +39,10 @@ class ThumbGridDelegate extends SliverGridDelegate {
 
   /// Footer height for a tile of the given width.
   final double Function(double tileWidth) footer;
+
+  /// Changes whenever [footer] gives different heights, so the grid lays
+  /// out again (functions can't be compared).
+  final Object? footerKey;
   final double spacing;
 
   @override
@@ -60,6 +65,7 @@ class ThumbGridDelegate extends SliverGridDelegate {
   bool shouldRelayout(ThumbGridDelegate old) =>
       old.maxTileWidth != maxTileWidth ||
       old.imageAspect != imageAspect ||
+      old.footerKey != footerKey ||
       old.spacing != spacing;
 }
 

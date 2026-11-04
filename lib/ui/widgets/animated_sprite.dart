@@ -42,7 +42,11 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker = createTicker(_tick);
   final _images = <ui.Image>[];
+
+  /// Streams still being listened to; a listener detaches itself once its
+  /// image has arrived.
   final _streams = <(ImageStream, ImageStreamListener)>[];
+  var _loading = false;
 
   /// (image index, source rect) per frame.
   List<(int, Rect)> _frames = const [];
@@ -52,7 +56,7 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_streams.isEmpty) _load();
+    if (!_loading) _load();
   }
 
   @override
@@ -70,6 +74,7 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
   }
 
   void _load() {
+    _loading = true;
     final anim = widget.anim;
     final paths = anim.kind == AnimKind.sequence ? anim.frames : [anim.path];
     final pending = List<ui.Image?>.filled(paths.length, null);
@@ -84,6 +89,9 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
           pending[i] = info.image.clone();
           info.dispose();
           stream.removeListener(listener);
+          // Detached: once the image cache lets go, the stream is disposed
+          // and removing the listener again in [_release] would throw.
+          _streams.removeWhere((e) => identical(e.$2, listener));
           if (--remaining == 0 && mounted) {
             setState(() {
               _images
@@ -100,8 +108,9 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
           if (mounted) setState(() => _error = e);
         },
       );
-      stream.addListener(listener);
+      // Recorded first: a cached image calls the listener right away.
       _streams.add((stream, listener));
+      stream.addListener(listener);
     }
   }
 

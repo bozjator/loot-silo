@@ -27,6 +27,9 @@ IconData iconForTypes(List<String> types) => switch (types.firstOrNull) {
 ///
 /// Sprite-sheet previews show their first frame and play while hovered
 /// (always, with [alwaysAnimate]); GIF previews do the same.
+/// Extra footer height a tile needs for its tags line.
+const tagsLineHeight = 22.0;
+
 class PackTile extends StatefulWidget {
   const PackTile({
     super.key,
@@ -42,8 +45,9 @@ class PackTile extends StatefulWidget {
   final VoidCallback? onTap;
   final bool alwaysAnimate;
 
-  /// The pack's tags, sorted, in place of the type chips (when the
-  /// dashboard sorts by tag).
+  /// Adds a line with the pack's tags, sorted, under the type chips (when
+  /// the dashboard sorts by tag); the grid gives such tiles
+  /// [tagsLineHeight] more footer.
   final bool showTags;
 
   @override
@@ -129,7 +133,17 @@ class _PackTileState extends State<PackTile> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  if (widget.showTags)
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      for (final t in pack.types.take(3)) _TypeChip(t),
+                      if (pack.types.length > 3)
+                        _TypeChip('+${pack.types.length - 3}'),
+                    ],
+                  ),
+                  if (widget.showTags) ...[
+                    const SizedBox(height: 6),
                     Row(
                       children: [
                         Icon(
@@ -143,7 +157,7 @@ class _PackTileState extends State<PackTile> {
                             pack.tags.isEmpty
                                 ? 'No tags'
                                 : sortedTags(pack.tags).join(', '),
-                            maxLines: 2,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: scheme.onSurfaceVariant,
@@ -151,17 +165,8 @@ class _PackTileState extends State<PackTile> {
                           ),
                         ),
                       ],
-                    )
-                  else
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: [
-                        for (final t in pack.types.take(3)) _TypeChip(t),
-                        if (pack.types.length > 3)
-                          _TypeChip('+${pack.types.length - 3}'),
-                      ],
                     ),
+                  ],
                 ],
               ),
             ),

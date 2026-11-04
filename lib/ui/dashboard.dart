@@ -178,7 +178,10 @@ class _DashboardState extends ConsumerState<Dashboard> {
                       gridDelegate: ThumbGridDelegate(
                         maxTileWidth: tileSize,
                         imageAspect: 4 / 3,
-                        footer: (w) => w < 190 ? 148 : 120,
+                        footer: (w) =>
+                            (w < 190 ? 148 : 120) +
+                            (query.sort == PackSort.tags ? tagsLineHeight : 0),
+                        footerKey: query.sort == PackSort.tags,
                       ),
                       itemCount: tiles.length,
                       itemBuilder: (context, i) {

@@ -14,11 +14,13 @@ import 'package:path/path.dart' as p;
 import '../helpers/fonts.dart';
 
 /// The dashboard's delegate, as `dashboard.dart` builds it.
-ThumbGridDelegate dashboardGrid(double size) => ThumbGridDelegate(
-  maxTileWidth: size,
-  imageAspect: 4 / 3,
-  footer: (w) => w < 190 ? 148 : 120,
-);
+ThumbGridDelegate dashboardGrid(double size, {bool tags = false}) =>
+    ThumbGridDelegate(
+      maxTileWidth: size,
+      imageAspect: 4 / 3,
+      footer: (w) => (w < 190 ? 148 : 120) + (tags ? tagsLineHeight : 0),
+      footerKey: tags,
+    );
 
 PackRow longPack(int i) => PackRow(
   id: 'p$i',
@@ -27,7 +29,7 @@ PackRow longPack(int i) => PackRow(
   author: 'An Author With A Rather Long Name Indeed',
   isContainer: false,
   types: const ['character', 'environment', 'tileset', 'ui', 'vfx'],
-  tags: const [],
+  tags: const ['zebra', 'Animals', 'a very long tag name indeed', 'cozy'],
   usedIn: const [],
   preview: null,
   previewAnim: null,
@@ -125,6 +127,44 @@ void main() {
       );
     });
   }
+
+  for (final size in [dashboardTileRange.min, dashboardTileRange.max]) {
+    testWidgets('tiles at ${size.round()} px fit types and tags', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1440, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(fontFamily: 'Roboto'),
+          home: Scaffold(
+            body: GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate: dashboardGrid(size, tags: true),
+              itemCount: 12,
+              itemBuilder: (_, i) =>
+                  PackTile(pack: longPack(i), onTap: () {}, showTags: true),
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      // Type chips stay; the tags line comes under them, sorted.
+      expect(find.text('character'), findsWidgets);
+      expect(
+        find.text('a very long tag name indeed, Animals, cozy, zebra'),
+        findsWidgets,
+      );
+    });
+  }
+
+  test('a tags footer change lays the grid out again', () {
+    expect(dashboardGrid(240).shouldRelayout(dashboardGrid(240)), isFalse);
+    expect(
+      dashboardGrid(240, tags: true).shouldRelayout(dashboardGrid(240)),
+      isTrue,
+    );
+  });
 
   testWidgets('Ctrl + wheel resizes instead of scrolling', (tester) async {
     final steps = <int>[];

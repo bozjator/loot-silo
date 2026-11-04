@@ -119,4 +119,19 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(src(tester), const Rect.fromLTRB(1, 1, 7, 7));
   });
+
+  testWidgets('unmounting after the image cache dropped the sheet is safe', (
+    tester,
+  ) async {
+    await pumpSprite(tester, playing: true);
+    expect(find.byType(CustomPaint), findsWidgets);
+    // The cache letting go disposes the stream the sprite loaded from (the
+    // dashboard does this when many previews pass through the cache).
+    imageCache.clear();
+    imageCache.clearLiveImages();
+    // The cache lets go of its handle at the end of the frame.
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox());
+    expect(tester.takeException(), isNull);
+  });
 }
