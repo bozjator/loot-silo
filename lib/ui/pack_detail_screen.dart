@@ -22,6 +22,7 @@ import 'widgets/animated_sprite.dart';
 import 'widgets/meta_dialogs.dart';
 import 'widgets/pack_tile.dart' show iconForTypes;
 import 'widgets/pixel_image.dart';
+import 'widgets/thumb_size.dart';
 import 'cursors.dart';
 
 /// Everything about one pack: previews, files, animations, metadata.
@@ -512,22 +513,55 @@ class _ChipRow extends StatelessWidget {
   }
 }
 
-class _ImagesTab extends StatelessWidget {
+class _ImagesTab extends ConsumerWidget {
   const _ImagesTab({required this.pack, required this.contents});
 
   final PackRow pack;
   final PackContents contents;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final images = contents.images;
+    final size = imageThumbRange.clamp(
+      ref.watch(settingsProvider.select((s) => s.imageThumbSize)),
+    );
+    final settings = ref.read(settingsProvider.notifier);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: ThumbSizeSlider(
+              range: imageThumbRange,
+              value: size,
+              onChanged: settings.setImageThumbSize,
+            ),
+          ),
+        ),
+        Expanded(
+          child: CtrlWheelResize(
+            onSteps: (n) =>
+                settings.setImageThumbSize(imageThumbRange.nudge(size, n)),
+            child: _imageGrid(context, images, size),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _imageGrid(BuildContext context, List<String> images, double size) {
     return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 160,
-        childAspectRatio: 0.85,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
+      key: PageStorageKey('images:${pack.id}'),
+      physics: const CtrlWheelPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      // A square image over a one-line file name.
+      gridDelegate: ThumbGridDelegate(
+        maxTileWidth: size,
+        imageAspect: 1,
+        footer: (_) => 26,
+        spacing: 8,
       ),
       itemCount: images.length,
       itemBuilder: (context, i) {

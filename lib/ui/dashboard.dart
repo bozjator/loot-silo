@@ -6,6 +6,7 @@ import '../state/dashboard.dart';
 import '../state/providers.dart';
 import 'pack_detail_screen.dart';
 import 'widgets/filter_bar.dart';
+import 'widgets/thumb_size.dart';
 import 'widgets/pack_tile.dart';
 
 /// The pack grid with search, filters, sorting and bundle browsing.
@@ -72,6 +73,10 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final packs = visible.value ?? const [];
     final theme = Theme.of(context);
     final animateAll = ref.watch(settingsProvider.select((s) => s.animateAll));
+    final tileSize = dashboardTileRange.clamp(
+      ref.watch(settingsProvider.select((s) => s.dashboardTileSize)),
+    );
+    final settings = ref.read(settingsProvider.notifier);
 
     return Focus(
       autofocus: true,
@@ -95,6 +100,11 @@ class _DashboardState extends ConsumerState<Dashboard> {
               _search.clear();
               notifier.clearFilters();
             },
+            trailing: ThumbSizeSlider(
+              range: dashboardTileRange,
+              value: tileSize,
+              onChanged: settings.setDashboardTileSize,
+            ),
           ),
           if (bundle != null)
             Padding(
@@ -142,30 +152,36 @@ class _DashboardState extends ConsumerState<Dashboard> {
                       ],
                     ),
                   )
-                : GridView.builder(
-                    // Root and each bundle keep their own scroll position.
-                    key: PageStorageKey('grid:${query.bundleId}'),
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 240,
-                          childAspectRatio: 0.8,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                    itemCount: packs.length,
-                    itemBuilder: (context, i) {
-                      final pack = packs[i];
-                      return PackTile(
-                        key: ValueKey(pack.id),
-                        pack: pack,
-                        subPackCount: subCounts[pack.id] ?? 0,
-                        alwaysAnimate: animateAll,
-                        onTap: pack.isContainer
-                            ? () => notifier.openBundle(pack.id)
-                            : () => openPackDetail(context, pack.id),
-                      );
-                    },
+                : CtrlWheelResize(
+                    onSteps: (n) => settings.setDashboardTileSize(
+                      dashboardTileRange.nudge(tileSize, n),
+                    ),
+                    child: GridView.builder(
+                      // Root and each bundle keep their own scroll position.
+                      key: PageStorageKey('grid:${query.bundleId}'),
+                      physics: const CtrlWheelPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      // A 4:3 preview over a footer for title, author and
+                      // types; narrow tiles get room for a second chip row.
+                      gridDelegate: ThumbGridDelegate(
+                        maxTileWidth: tileSize,
+                        imageAspect: 4 / 3,
+                        footer: (w) => w < 190 ? 148 : 120,
+                      ),
+                      itemCount: packs.length,
+                      itemBuilder: (context, i) {
+                        final pack = packs[i];
+                        return PackTile(
+                          key: ValueKey(pack.id),
+                          pack: pack,
+                          subPackCount: subCounts[pack.id] ?? 0,
+                          alwaysAnimate: animateAll,
+                          onTap: pack.isContainer
+                              ? () => notifier.openBundle(pack.id)
+                              : () => openPackDetail(context, pack.id),
+                        );
+                      },
+                    ),
                   ),
           ),
         ],

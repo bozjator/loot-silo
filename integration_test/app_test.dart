@@ -715,6 +715,59 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m14: tile and image thumbnail sizes (real library, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    final settings = File(p.join(tmp.path, 'settings.json'));
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+
+    // Slider to the far left, then the far right.
+    for (final (dx, size, shot) in [
+      (-400.0, 140, 'm14_dashboard_min'),
+      (400.0, 480, 'm14_dashboard_max'),
+    ]) {
+      await tester.drag(find.byType(Slider), Offset(dx, 0));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        settings.readAsStringSync(),
+        contains('"dashboard_tile_size": $size'),
+      );
+      await settleImages(tester);
+      await captureScreenshot(tester, shot, settle: false);
+    }
+
+    await tester.enterText(find.byType(TextField), 'ashishlko11');
+    await pumpUntil(tester, find.text('Special Effects Vol.03'));
+    await tester.tap(find.text('Special Effects Vol.03'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Ctrl + wheel up over the images grid: three steps bigger.
+    final grid = tester.getCenter(find.byType(GridView));
+    final mouse = TestPointer(1, PointerDeviceKind.mouse)..hover(grid);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    for (var i = 0; i < 3; i++) {
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, -50)));
+      await tester.pump();
+    }
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    expect(settings.readAsStringSync(), contains('"image_thumb_size": 220'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm14_images_220', settle: false);
+
+    await tester.drag(find.byType(Slider), const Offset(-400, 0));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(settings.readAsStringSync(), contains('"image_thumb_size": 80'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm14_images_min', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('archive import: zip and tar.gz through the review screen', (
     tester,
   ) async {

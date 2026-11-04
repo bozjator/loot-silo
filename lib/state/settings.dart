@@ -12,6 +12,8 @@ class AppSettings {
     this.animateAll = false,
     this.audioLoop = false,
     this.viewerPixelPerfect = false,
+    this.dashboardTileSize = 240,
+    this.imageThumbSize = 160,
   });
 
   /// The managed library folder; null until the user picks one.
@@ -28,12 +30,20 @@ class AppSettings {
   /// would fill much more of the window.
   final bool viewerPixelPerfect;
 
+  /// Widest a dashboard tile may get, in logical pixels.
+  final double dashboardTileSize;
+
+  /// Widest an image card in a pack's Images tab may get.
+  final double imageThumbSize;
+
   factory AppSettings.fromJson(Map<String, Object?> json) => AppSettings(
     libraryPath: json['library_path'] as String?,
     theme: ThemeChoice.values.asNameMap()[json['theme']] ?? ThemeChoice.system,
     animateAll: json['animate_all'] == true,
     audioLoop: json['audio_loop'] == true,
     viewerPixelPerfect: json['viewer_pixel_perfect'] == true,
+    dashboardTileSize: (json['dashboard_tile_size'] as num?)?.toDouble() ?? 240,
+    imageThumbSize: (json['image_thumb_size'] as num?)?.toDouble() ?? 160,
   );
 
   Map<String, Object?> toJson() => {
@@ -42,6 +52,8 @@ class AppSettings {
     'animate_all': animateAll,
     'audio_loop': audioLoop,
     'viewer_pixel_perfect': viewerPixelPerfect,
+    'dashboard_tile_size': dashboardTileSize,
+    'image_thumb_size': imageThumbSize,
   };
 
   AppSettings copyWith({
@@ -50,12 +62,16 @@ class AppSettings {
     bool? animateAll,
     bool? audioLoop,
     bool? viewerPixelPerfect,
+    double? dashboardTileSize,
+    double? imageThumbSize,
   }) => AppSettings(
     libraryPath: libraryPath ?? this.libraryPath,
     theme: theme ?? this.theme,
     animateAll: animateAll ?? this.animateAll,
     audioLoop: audioLoop ?? this.audioLoop,
     viewerPixelPerfect: viewerPixelPerfect ?? this.viewerPixelPerfect,
+    dashboardTileSize: dashboardTileSize ?? this.dashboardTileSize,
+    imageThumbSize: imageThumbSize ?? this.imageThumbSize,
   );
 }
 

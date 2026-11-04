@@ -77,6 +77,18 @@ class SettingsNotifier extends Notifier<AppSettings> {
   void setViewerPixelPerfect(bool on) =>
       _save(state.copyWith(viewerPixelPerfect: on));
 
+  void setDashboardTileSize(double size) {
+    if (size != state.dashboardTileSize) {
+      _save(state.copyWith(dashboardTileSize: size));
+    }
+  }
+
+  void setImageThumbSize(double size) {
+    if (size != state.imageThumbSize) {
+      _save(state.copyWith(imageThumbSize: size));
+    }
+  }
+
   void _save(AppSettings settings) {
     state = settings;
     ref.read(settingsStoreProvider).save(state);

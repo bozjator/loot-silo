@@ -20,6 +20,7 @@ class FilterBar extends StatelessWidget {
     required this.onToggleSource,
     required this.onSort,
     required this.onClear,
+    this.trailing,
   });
 
   final DashboardQuery query;
@@ -34,6 +35,9 @@ class FilterBar extends StatelessWidget {
   final ValueChanged<String> onToggleSource;
   final ValueChanged<PackSort> onSort;
   final VoidCallback onClear;
+
+  /// Shown after the sort menu, e.g. the tile size slider.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +112,10 @@ class FilterBar extends StatelessWidget {
                 ],
                 onChanged: (s) => onSort(s!),
               ),
+              if (trailing case final trailing?) ...[
+                const SizedBox(width: 16),
+                trailing,
+              ],
             ],
           ),
           const SizedBox(height: 10),
