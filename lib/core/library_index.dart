@@ -191,6 +191,14 @@ class LibraryIndex extends _$LibraryIndex {
     return q.map((f) => f.relPath).get();
   }
 
+  /// (relative path, size) of every file that belongs to [packId].
+  Future<List<(String, int)>> filesWithSizes(String packId) {
+    final q = select(packFiles)
+      ..where((f) => f.packId.equals(packId))
+      ..orderBy([(f) => OrderingTerm.asc(f.relPath)]);
+    return q.map((f) => (f.relPath, f.size)).get();
+  }
+
   /// Pack ids matching [query], best match first. Every word must match
   /// as a prefix in any column.
   Future<List<String>> search(String query) async {

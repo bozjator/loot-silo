@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/dashboard.dart';
 import '../state/providers.dart';
+import 'pack_detail_screen.dart';
 import 'widgets/filter_bar.dart';
 import 'widgets/pack_tile.dart';
 
@@ -103,12 +104,17 @@ class _DashboardState extends ConsumerState<Dashboard> {
                   ),
                   const Icon(Icons.chevron_right, size: 18),
                   const SizedBox(width: 4),
-                  Expanded(
+                  Flexible(
                     child: Text(
                       '${bundle.title} · ${bundle.author ?? ''}',
                       style: theme.textTheme.titleSmall,
                       overflow: TextOverflow.ellipsis,
                     ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => openPackDetail(context, bundle.id),
+                    icon: const Icon(Icons.info_outline, size: 18),
+                    label: const Text('Bundle details'),
                   ),
                 ],
               ),
@@ -152,7 +158,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                         subPackCount: subCounts[pack.id] ?? 0,
                         onTap: pack.isContainer
                             ? () => notifier.openBundle(pack.id)
-                            : null,
+                            : () => openPackDetail(context, pack.id),
                       );
                     },
                   ),
@@ -161,4 +167,13 @@ class _DashboardState extends ConsumerState<Dashboard> {
       ),
     );
   }
+}
+
+void openPackDetail(BuildContext context, String packId) {
+  // Leaving search focused would restore it on return without a live text
+  // input connection; start from the grid instead (`/` refocuses).
+  FocusManager.instance.primaryFocus?.unfocus();
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => PackDetailScreen(packId: packId)),
+  );
 }

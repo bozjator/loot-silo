@@ -1,0 +1,835 @@
+import 'dart:io';
+
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:url_launcher/url_launcher.dart';
+
+import '../core/animation_detector.dart';
+import '../core/library_index.dart';
+import '../core/pack_editor.dart';
+import '../state/providers.dart';
+import 'format.dart';
+import 'widgets/animated_sprite.dart';
+import 'widgets/meta_dialogs.dart';
+import 'widgets/pack_tile.dart' show iconForTypes;
+import 'widgets/pixel_image.dart';
+
+/// Everything about one pack: previews, files, animations, metadata.
+class PackDetailScreen extends ConsumerWidget {
+  const PackDetailScreen({super.key, required this.packId});
+
+  final String packId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final library = ref.watch(libraryProvider).value;
+    final pack = library?.packs.where((p) => p.id == packId).firstOrNull;
+    if (pack == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: Text('This pack is no longer in the library')),
+      );
+    }
+    final contents = ref.watch(packContentsProvider(packId));
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(pack.title),
+        actions: [
+          IconButton(
+            tooltip: 'Open folder',
+            icon: const Icon(Icons.folder_open),
+            onPressed: () => launchUrl(Uri.directory(pack.path)),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: switch (contents) {
+        AsyncData(:final value) => _Body(pack: pack, contents: value),
+        AsyncError(:final error) => Center(child: Text('Could not read: $error')),
+        _ => const Center(child: CircularProgressIndicator()),
+      },
+    );
+  }
+}
+
+class _Body extends ConsumerWidget {
+  const _Body({required this.pack, required this.contents});
+
+  final PackRow pack;
+  final PackContents contents;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tabs = <(String, Widget)>[
+      if (contents.animations.isNotEmpty)
+        (
+          'Animations (${formatCount(contents.animations.length)})',
+          _AnimationsTab(pack: pack, contents: contents),
+        ),
+      if (contents.images.isNotEmpty)
+        (
+          'Images (${formatCount(contents.images.length)})',
+          _ImagesTab(pack: pack, contents: contents),
+        ),
+      if (contents.audio.isNotEmpty)
+        (
+          'Audio (${formatCount(contents.audio.length)})',
+          _AudioTab(pack: pack, contents: contents),
+        ),
+      if (contents.other.isNotEmpty)
+        (
+          'Other files (${formatCount(contents.other.length)})',
+          _FilesTab(contents: contents),
+        ),
+    ];
+    return DefaultTabController(
+      length: tabs.length,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: SizedBox(
+              height: 300,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AspectRatio(
+                    aspectRatio: 4 / 3,
+                    child: _Carousel(
+                      pack: pack,
+                      images: contents.carousel(pack.preview),
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(child: _Info(pack: pack, contents: contents)),
+                ],
+              ),
+            ),
+          ),
+          if (tabs.isEmpty)
+            const Expanded(child: Center(child: Text('No files')))
+          else ...[
+            TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              tabs: [for (final (label, _) in tabs) Tab(text: label)],
+            ),
+            Expanded(
+              child: TabBarView(children: [for (final (_, t) in tabs) t]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The tile preview (animated when it's a sheet) plus covers and named
+/// previews, one at a time.
+class _Carousel extends StatefulWidget {
+  const _Carousel({required this.pack, required this.images});
+
+  final PackRow pack;
+  final List<String> images;
+
+  @override
+  State<_Carousel> createState() => _CarouselState();
+}
+
+class _CarouselState extends State<_Carousel> {
+  var _index = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final images = widget.images;
+    final pack = widget.pack;
+    final i = images.isEmpty ? 0 : _index % images.length;
+    final Widget view;
+    if (images.isEmpty) {
+      view = Center(
+        child: Icon(
+          iconForTypes(pack.types),
+          size: 72,
+          color: scheme.primary,
+        ),
+      );
+    } else if (i == 0 && pack.previewAnim != null) {
+      view = AnimatedSprite(packPath: pack.path, anim: pack.previewAnim!);
+    } else {
+      view = PixelImage(File(p.join(pack.path, images[i])), animate: true);
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: ColoredBox(
+        color: scheme.surfaceContainerHighest,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Padding(padding: const EdgeInsets.all(8), child: view),
+            if (images.length > 1) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton.filledTonal(
+                  tooltip: 'Previous image',
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: () => setState(
+                    () => _index = (i - 1 + images.length) % images.length,
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton.filledTonal(
+                  tooltip: 'Next image',
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: () =>
+                      setState(() => _index = (i + 1) % images.length),
+                ),
+              ),
+              Positioned(
+                bottom: 8,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: scheme.surface.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${i + 1} / ${images.length} · ${p.basename(images[i])}',
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Title, author, types, tags and totals, each editable in place.
+class _Info extends ConsumerWidget {
+  const _Info({required this.pack, required this.contents});
+
+  final PackRow pack;
+  final PackContents contents;
+
+  Future<void> _save(
+    WidgetRef ref, {
+    String? title,
+    List<String>? types,
+    List<String>? tags,
+  }) async {
+    if (!packExists(pack.path)) return;
+    updatePackSidecar(pack.path, title: title, types: types, tags: tags);
+    await ref.read(libraryProvider.notifier).reload();
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final authorUrl = pack.authorUrl;
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Flexible(
+                child: Text(pack.title, style: theme.textTheme.headlineSmall),
+              ),
+              IconButton(
+                tooltip: 'Edit title',
+                icon: const Icon(Icons.edit, size: 18),
+                onPressed: () async {
+                  final title = await showDialog<String>(
+                    context: context,
+                    builder: (_) => TitleDialog(
+                      initial: contents.sidecar?.title ?? pack.title,
+                      folderName: p.basename(pack.path),
+                    ),
+                  );
+                  if (title != null) await _save(ref, title: title);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.person_outline, size: 18),
+              const SizedBox(width: 6),
+              if (authorUrl != null)
+                InkWell(
+                  onTap: () => launchUrl(Uri.parse(authorUrl)),
+                  child: Text(
+                    pack.author ?? authorUrl,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: theme.colorScheme.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                )
+              else
+                Text(pack.author ?? 'Unknown author'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _ChipRow(
+            label: 'Types',
+            values: pack.types,
+            onEdit: () async {
+              final types = await showDialog<List<String>>(
+                context: context,
+                builder: (_) => TypesDialog(initial: pack.types),
+              );
+              if (types != null) await _save(ref, types: types);
+            },
+          ),
+          const SizedBox(height: 8),
+          _ChipRow(
+            label: 'Tags',
+            values: pack.tags,
+            onEdit: () async {
+              final tags = await showDialog<List<String>>(
+                context: context,
+                builder: (_) => TagsDialog(initial: pack.tags),
+              );
+              if (tags != null) await _save(ref, tags: tags);
+            },
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '${formatCount(pack.fileCount)} files · '
+            '${formatBytes(pack.totalBytes)}'
+            '${pack.source == null ? '' : ' · ${pack.source}'}',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 4),
+          SelectableText(
+            pack.path,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChipRow extends StatelessWidget {
+  const _ChipRow({
+    required this.label,
+    required this.values,
+    required this.onEdit,
+  });
+
+  final String label;
+  final List<String> values;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 56,
+          child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+        ),
+        Expanded(
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              if (values.isEmpty) const Text('—'),
+              for (final v in values)
+                Chip(label: Text(v), visualDensity: VisualDensity.compact),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: 'Edit ${label.toLowerCase()}',
+          icon: const Icon(Icons.edit, size: 18),
+          onPressed: onEdit,
+        ),
+      ],
+    );
+  }
+}
+
+class _ImagesTab extends StatelessWidget {
+  const _ImagesTab({required this.pack, required this.contents});
+
+  final PackRow pack;
+  final PackContents contents;
+
+  @override
+  Widget build(BuildContext context) {
+    final images = contents.images;
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 160,
+        childAspectRatio: 0.85,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: images.length,
+      itemBuilder: (context, i) {
+        final rel = images[i];
+        final file = File(p.join(pack.path, rel));
+        return Card(
+          clipBehavior: Clip.antiAlias,
+          margin: EdgeInsets.zero,
+          child: InkWell(
+            onTap: () => showDialog<void>(
+              context: context,
+              builder: (_) =>
+                  _ImageDialog(file: file, rel: rel, size: contents.sizes[rel]),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: PixelImage(file),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                  child: Tooltip(
+                    message: rel,
+                    child: Text(
+                      p.basename(rel),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ImageDialog extends StatelessWidget {
+  const _ImageDialog({required this.file, required this.rel, this.size});
+
+  final File file;
+  final String rel;
+  final int? size;
+
+  @override
+  Widget build(BuildContext context) {
+    final dims = readImageSize(file.path);
+    return Dialog(
+      child: SizedBox(
+        width: 900,
+        height: 700,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: PixelImage(file, animate: true),
+              ),
+            ),
+            ListTile(
+              title: Text(rel),
+              subtitle: Text(
+                [
+                  if (dims != null) '${dims.$1} × ${dims.$2} px',
+                  if (size != null) formatBytes(size!),
+                ].join(' · '),
+              ),
+              trailing: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimationsTab extends ConsumerWidget {
+  const _AnimationsTab({required this.pack, required this.contents});
+
+  final PackRow pack;
+  final PackContents contents;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final anims = contents.animations;
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: anims.length,
+      itemBuilder: (context, i) => _AnimationCard(
+        key: ValueKey(anims[i].path),
+        packPath: pack.path,
+        detected: contents.detected[i],
+        current: anims[i],
+        onSave: (anim) async {
+          if (!packExists(pack.path)) return;
+          saveAnimationOverride(pack.path, contents.detected[i], anim);
+          // The tile preview may be this sheet; rescan picks the override up.
+          await ref.read(libraryProvider.notifier).reload();
+        },
+      ),
+    );
+  }
+}
+
+/// Plays one animation with live fps / frame-size / row controls; Save
+/// writes the override into the pack sidecar.
+class _AnimationCard extends StatefulWidget {
+  const _AnimationCard({
+    super.key,
+    required this.packPath,
+    required this.detected,
+    required this.current,
+    required this.onSave,
+  });
+
+  final String packPath;
+  final SpriteAnim detected;
+  final SpriteAnim current;
+
+  /// Null resets to the detected values.
+  final Future<void> Function(SpriteAnim? anim) onSave;
+
+  @override
+  State<_AnimationCard> createState() => _AnimationCardState();
+}
+
+class _AnimationCardState extends State<_AnimationCard> {
+  late SpriteAnim _anim = widget.current;
+  int? _row = 0;
+  late final _w = TextEditingController(text: '${widget.current.frameW}');
+  late final _h = TextEditingController(text: '${widget.current.frameH}');
+
+  @override
+  void didUpdateWidget(_AnimationCard old) {
+    super.didUpdateWidget(old);
+    if (old.current != widget.current) _reset(widget.current);
+  }
+
+  void _reset(SpriteAnim a) {
+    setState(() {
+      _anim = a;
+      _row = 0;
+      _w.text = '${a.frameW}';
+      _h.text = '${a.frameH}';
+    });
+  }
+
+  void _applySize() {
+    final w = int.tryParse(_w.text);
+    final h = int.tryParse(_h.text);
+    if (w == null || h == null || w < 1 || h < 1) return;
+    // Re-slice from the detected sheet so repeated edits don't drift.
+    setState(() {
+      _anim = widget.detected.copyWith(frameW: w, frameH: h, fps: _anim.fps);
+      _row = 0;
+    });
+  }
+
+  @override
+  void dispose() {
+    _w.dispose();
+    _h.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final a = _anim;
+    final isSheet = a.kind == AnimKind.sheet;
+    final dirty = a != widget.current;
+    final overridden = widget.current != widget.detected;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 160,
+              height: 160,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.all(8),
+              child: a.kind == AnimKind.gif
+                  ? PixelImage(
+                      File(p.join(widget.packPath, a.path)),
+                      animate: true,
+                    )
+                  : AnimatedSprite(
+                      packPath: widget.packPath,
+                      anim: a,
+                      row: _row,
+                    ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(a.label, style: theme.textTheme.titleMedium),
+                  Text(
+                    a.path,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(switch (a.kind) {
+                    AnimKind.sheet =>
+                      'Sheet · ${a.frameW}×${a.frameH} frames · '
+                          '${a.cols} × ${a.rows}',
+                    AnimKind.sequence =>
+                      'Sequence · ${a.frames.length} files · '
+                          '${a.frameW}×${a.frameH}',
+                    AnimKind.gif => 'Animated GIF',
+                  }),
+                  if (a.kind != AnimKind.gif)
+                    Row(
+                      children: [
+                        const Text('FPS'),
+                        SizedBox(
+                          width: 240,
+                          child: Slider(
+                            min: 1,
+                            max: 30,
+                            divisions: 29,
+                            value: a.fps.clamp(1, 30),
+                            label: a.fps.round().toString(),
+                            onChanged: (v) => setState(
+                              () => _anim = a.copyWith(fps: v.roundToDouble()),
+                            ),
+                          ),
+                        ),
+                        Text('${a.fps.round()}'),
+                      ],
+                    ),
+                  if (isSheet)
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _NumberField(
+                          label: 'Frame width',
+                          controller: _w,
+                          onSubmit: _applySize,
+                        ),
+                        _NumberField(
+                          label: 'Frame height',
+                          controller: _h,
+                          onSubmit: _applySize,
+                        ),
+                        OutlinedButton(
+                          onPressed: _applySize,
+                          child: const Text('Apply size'),
+                        ),
+                        if (a.rows > 1)
+                          DropdownButton<int?>(
+                            value: _row,
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('All rows'),
+                              ),
+                              for (var r = 0; r < a.rows; r++)
+                                DropdownMenuItem(
+                                  value: r,
+                                  child: Text('Row ${r + 1}'),
+                                ),
+                            ],
+                            onChanged: (r) => setState(() => _row = r),
+                          ),
+                      ],
+                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      FilledButton(
+                        onPressed: dirty ? () => widget.onSave(a) : null,
+                        child: const Text('Save'),
+                      ),
+                      const SizedBox(width: 8),
+                      if (overridden)
+                        TextButton(
+                          onPressed: () => widget.onSave(null),
+                          child: const Text('Reset to detected'),
+                        )
+                      else if (dirty)
+                        TextButton(
+                          onPressed: () => _reset(widget.current),
+                          child: const Text('Undo'),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NumberField extends StatelessWidget {
+  const _NumberField({
+    required this.label,
+    required this.controller,
+    required this.onSubmit,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 110,
+    child: TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(labelText: label, isDense: true),
+      onSubmitted: (_) => onSubmit(),
+    ),
+  );
+}
+
+/// Audio files with one shared player; only one sound plays at a time.
+class _AudioTab extends StatefulWidget {
+  const _AudioTab({required this.pack, required this.contents});
+
+  final PackRow pack;
+  final PackContents contents;
+
+  @override
+  State<_AudioTab> createState() => _AudioTabState();
+}
+
+class _AudioTabState extends State<_AudioTab> {
+  // Created on first play so tests and silent browsing never touch audio.
+  AudioPlayer? _player;
+  String? _playing;
+
+  Future<void> _toggle(String rel) async {
+    final player = _player ??= AudioPlayer()
+      ..onPlayerComplete.listen((_) {
+        if (mounted) setState(() => _playing = null);
+      });
+    if (_playing == rel) {
+      await player.stop();
+      setState(() => _playing = null);
+      return;
+    }
+    setState(() => _playing = rel);
+    try {
+      await player.stop();
+      await player.play(DeviceFileSource(p.join(widget.pack.path, rel)));
+    } on Object catch (e) {
+      if (!mounted) return;
+      setState(() => _playing = null);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not play $rel: $e')));
+    }
+  }
+
+  @override
+  void dispose() {
+    _player?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final audio = widget.contents.audio;
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: audio.length,
+      itemBuilder: (context, i) {
+        final rel = audio[i];
+        final playing = _playing == rel;
+        return ListTile(
+          dense: true,
+          leading: IconButton(
+            tooltip: playing ? 'Stop' : 'Play',
+            icon: Icon(playing ? Icons.stop_circle : Icons.play_circle),
+            onPressed: () => _toggle(rel),
+          ),
+          title: Text(p.basename(rel)),
+          subtitle: p.dirname(rel) == '.' ? null : Text(p.dirname(rel)),
+          trailing: Text(formatBytes(widget.contents.sizes[rel] ?? 0)),
+          onTap: () => _toggle(rel),
+        );
+      },
+    );
+  }
+}
+
+class _FilesTab extends StatelessWidget {
+  const _FilesTab({required this.contents});
+
+  final PackContents contents;
+
+  @override
+  Widget build(BuildContext context) {
+    final files = contents.other;
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: files.length,
+      itemBuilder: (context, i) {
+        final rel = files[i];
+        return ListTile(
+          dense: true,
+          leading: Icon(_iconFor(rel)),
+          title: Text(rel),
+          trailing: Text(formatBytes(contents.sizes[rel] ?? 0)),
+        );
+      },
+    );
+  }
+
+  static IconData _iconFor(String rel) =>
+      switch (p.extension(rel).toLowerCase()) {
+        '.txt' || '.md' || '.pdf' => Icons.description_outlined,
+        '.ttf' || '.otf' || '.woff' || '.woff2' => Icons.font_download_outlined,
+        '.fbx' || '.obj' || '.glb' || '.gltf' || '.blend' => Icons.view_in_ar,
+        '.zip' || '.rar' || '.7z' => Icons.archive_outlined,
+        '.aseprite' || '.ase' || '.psd' || '.kra' => Icons.brush_outlined,
+        _ => Icons.insert_drive_file_outlined,
+      };
+}

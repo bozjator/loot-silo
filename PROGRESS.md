@@ -10,13 +10,14 @@ Decision log: `../REPORT_APP_CREATION.md`
 - [x] 4. Dashboard — preview picker, pixel-aware tiles, FTS search, type/author/tag/source filters, sort, bundle browsing, goldens
 - [x] 5. Animations — strips/grids/sequences/GIFs detected at scan time (schema v3 `previewAnim`); tiles show one
   cropped frame and play on hover; fps/frame-size editing moved into milestone 6 (detail view)
-- [ ] 6. Pack detail
-  - [ ] detail screen (opens from tile): header (title, author link, types, tags, size), preview carousel
-  - [ ] file browser grid (images/sprites, audio rows with play, other files), open folder
-  - [ ] animations list with fps + frame-size controls saved to sidecar `animations{}`
-  - [ ] edit types/tags/title (writes `asset_pack.json`, re-indexes)
-  - [ ] tests + screenshots
+- [x] 6. Pack detail — carousel, info with editable title/types/tags (sidecar + quiet rescan), tabs for
+  animations (fps / frame size / row, saved as sidecar overrides), images (viewer dialog), audio (play/stop),
+  other files; open folder; author link; bundle details from the breadcrumb
 - [ ] 7. Credits
+  - [ ] mark packs "used in <game>" (sidecar `used_in`), from the detail view and multi-select on the dashboard
+  - [ ] credits screen: pick a game → CREDITS.md / .txt grouped by author (name, URL, license, packs)
+  - [ ] copy to clipboard + save file; license lines from author files (prefill from OLD INDEX.md table)
+  - [ ] tests + screenshots
 - [ ] 8. Archive import
 - [ ] 9. itch sync
 - [ ] 10. Polish
@@ -30,12 +31,11 @@ xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.da
 Screenshots land in `screenshots/` (gitignored).
 
 ## Last iteration
-- Done: milestone 5. `core/animation_detector.dart` (PNG/GIF header sizes; strips/grids from `(WxH)` and `_Nf`
-  hints, square-frame strips, pack-wide strip-height consensus for grids; numbered sequences; transparency-gap
-  grid detection for effect packs); scanner stores `previewAnim` (index schema v3).
-  `widgets/animated_sprite.dart` slices frames, drops empty cells, crops to shared opaque bounds, integer scale.
-  Tiles hover-animate via MouseRegion. 89 tests + 4 integration (m5_* screenshots: Zerie, OboroPixel, Special Effects).
-- Next: milestone 6 — pack detail screen.
+- Done: milestone 6. `core/pack_editor.dart` (`loadPackContents` in an isolate, `updatePackSidecar`,
+  `saveAnimationOverride`), `ui/pack_detail_screen.dart`, dialogs moved to `widgets/meta_dialogs.dart`,
+  `LibraryNotifier.reload()` (rescan without a loading screen), `LibraryIndex.filesWithSizes`.
+  93 tests + 6 integration (m6_* screenshots). Edits in tests run on temp copies only.
+- Next: milestone 7 — credits.
 
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.

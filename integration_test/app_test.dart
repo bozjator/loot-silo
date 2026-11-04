@@ -196,4 +196,117 @@ void main() {
       await mouse.removePointer();
     }
   });
+
+  testWidgets('pack detail: edit tags, save and reset an animation', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final zerie = p.canonicalize('../assets_library/Zerie');
+    final hasZerie = Directory(zerie).existsSync();
+    if (hasZerie) copyTree(zerie, p.join(lib, 'Zerie'));
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Slimes'));
+
+    await tester.tap(find.text('Slimes'));
+    await pumpUntil(tester, find.byTooltip('Edit tags'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm6_detail_slimes', settle: false);
+    await tester.tap(find.byTooltip('Edit tags'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'green, Cute',
+    );
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.widgetWithText(Chip, 'cute'));
+    final json =
+        File(p.join(lib, 'HeroMaker', 'Slimes', 'asset_pack.json'))
+            .readAsStringSync();
+    expect(json, contains('"cute"'));
+    expect(json, contains('"source": "manual"'));
+    await tester.pageBack();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    if (!hasZerie) return;
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'zerie');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.textContaining('Tiny RPG').first);
+    await pumpUntil(tester, find.textContaining('Animations ('));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm6_detail_zerie', settle: false);
+
+    final card = find.ancestor(
+      of: find.text('Apply size').first,
+      matching: find.byType(Card),
+    );
+    await tester.enterText(
+      find.descendant(
+        of: card.first,
+        matching: find.widgetWithText(TextField, 'Frame width'),
+      ),
+      '50',
+    );
+    await tester.tap(
+      find.descendant(of: card.first, matching: find.text('Apply size')),
+    );
+    await tester.pump();
+    await tester.tap(
+      find.descendant(of: card.first, matching: find.text('Save')),
+    );
+    await pumpUntil(tester, find.text('Reset to detected'));
+    final sidecar = Directory(p.join(lib, 'Zerie'))
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => p.basename(f.path) == 'asset_pack.json')
+        .map((f) => f.readAsStringSync())
+        .firstWhere((s) => s.contains('animations'));
+    expect(sidecar, contains('"frame_w": 50'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm6_detail_zerie_override', settle: false);
+    await tester.tap(find.text('Reset to detected'));
+    await pumpUntil(tester, find.text('Apply size'));
+    for (var i = 0; i < 50 && find.text('Reset to detected').evaluate().isNotEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+    }
+    expect(find.text('Reset to detected'), findsNothing);
+  });
+
+  testWidgets('pack detail on the real library (read-only)', (tester) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+
+    await tester.enterText(find.byType(TextField), 'monster sound effects 3');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Monster Sound Effects 3'));
+    await pumpUntil(tester, find.textContaining('Audio ('));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm6_detail_audio', settle: false);
+    await tester.pageBack();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // After a route pop the test text input needs a fresh tap.
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'ashishlko11');
+    await pumpUntil(tester, find.text('Special Effects Vol.03'));
+    await tester.tap(find.text('Special Effects Vol.03'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm6_detail_images', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
 }
+

@@ -199,6 +199,7 @@ class PackSidecar {
     String? sourcePath,
     bool? isContainer,
     List<String>? usedIn,
+    Map<String, Object?>? animations,
   }) => PackSidecar(
     title: title ?? this.title,
     types: types ?? this.types,
@@ -211,7 +212,7 @@ class PackSidecar {
     notes: notes,
     usedIn: usedIn ?? this.usedIn,
     isContainer: isContainer ?? this.isContainer,
-    animations: animations,
+    animations: animations ?? this.animations,
     extra: extra,
   );
 }

@@ -1,8 +1,11 @@
+import 'dart:isolate';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/library_index.dart';
 import '../core/library_service.dart';
+import '../core/pack_editor.dart';
 import 'settings.dart';
 
 /// Overridden in `main` (and tests) once the app support folder is known.
@@ -68,4 +71,24 @@ class LibraryNotifier extends AsyncNotifier<LibraryState> {
     state = const AsyncLoading<LibraryState>();
     state = await AsyncValue.guard(() => _load(force: true));
   }
+
+  /// Rescan that keeps showing the current packs until it finishes, e.g.
+  /// after editing one pack's sidecar.
+  Future<void> reload() async {
+    state = await AsyncValue.guard(() => _load(force: true));
+  }
 }
+
+/// Files and animations of one pack, for the detail view.
+final packContentsProvider = FutureProvider.autoDispose
+    .family<PackContents, String>((ref, packId) async {
+      final library = await ref.watch(libraryProvider.future);
+      final pack = library.packs.firstWhere((p) => p.id == packId);
+      final files = await ref.read(libraryIndexProvider).filesWithSizes(packId);
+      return _contentsInBackground(pack.path, files);
+    });
+
+Future<PackContents> _contentsInBackground(
+  String path,
+  List<(String, int)> files,
+) => Isolate.run(() => loadPackContents(path, files));
