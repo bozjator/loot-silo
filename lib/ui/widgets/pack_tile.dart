@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/library_index.dart';
+import '../../state/dashboard.dart';
 import '../format.dart';
 import 'animated_sprite.dart';
 import 'pixel_image.dart';
@@ -33,12 +34,17 @@ class PackTile extends StatefulWidget {
     this.subPackCount = 0,
     this.onTap,
     this.alwaysAnimate = false,
+    this.showTags = false,
   });
 
   final PackRow pack;
   final int subPackCount;
   final VoidCallback? onTap;
   final bool alwaysAnimate;
+
+  /// The pack's tags, sorted, in place of the type chips (when the
+  /// dashboard sorts by tag).
+  final bool showTags;
 
   @override
   State<PackTile> createState() => _PackTileState();
@@ -123,15 +129,39 @@ class _PackTileState extends State<PackTile> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: [
-                      for (final t in pack.types.take(3)) _TypeChip(t),
-                      if (pack.types.length > 3)
-                        _TypeChip('+${pack.types.length - 3}'),
-                    ],
-                  ),
+                  if (widget.showTags)
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.sell_outlined,
+                          size: 14,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            pack.tags.isEmpty
+                                ? 'No tags'
+                                : sortedTags(pack.tags).join(', '),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: [
+                        for (final t in pack.types.take(3)) _TypeChip(t),
+                        if (pack.types.length > 3)
+                          _TypeChip('+${pack.types.length - 3}'),
+                      ],
+                    ),
                 ],
               ),
             ),

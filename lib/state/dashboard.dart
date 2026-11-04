@@ -1,14 +1,20 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../core/library_index.dart';
+import '../core/type_classifier.dart';
+import '../ui/format.dart';
 import 'providers.dart';
+import 'settings.dart';
 
 enum PackSort {
   relevance('Best match'),
   title('Name'),
   author('Author'),
   size('Size'),
-  files('File count');
+  files('File count'),
+  tags('Tags');
 
   const PackSort(this.label);
   final String label;
@@ -154,9 +160,112 @@ List<PackRow> applyQuery(
       list.sort((a, b) => b.totalBytes.compareTo(a.totalBytes));
     case PackSort.files:
       list.sort((a, b) => b.fileCount.compareTo(a.fileCount));
+    case PackSort.tags:
+      final keys = {for (final p in list) p.id: tagSortKey(p.tags)};
+      list.sort((a, b) {
+        final ka = keys[a.id], kb = keys[b.id];
+        if (ka == null || kb == null) {
+          if (ka != kb) return ka == null ? 1 : -1;
+          return byTitle(a, b);
+        }
+        final c = ka.compareTo(kb);
+        return c != 0 ? c : byTitle(a, b);
+      });
   }
   return list;
 }
+
+/// [tags] sorted case-insensitively, as tiles show them when sorting by
+/// tag.
+List<String> sortedTags(List<String> tags) =>
+    [...tags]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+/// What the Tags sort orders by: the sorted tags joined with `, `
+/// (lowercase), or null for an untagged pack, which goes last.
+String? tagSortKey(List<String> tags) =>
+    tags.isEmpty ? null : sortedTags(tags).join(', ').toLowerCase();
+
+/// One dashboard tile: a pack, or in the Expanded view one of its
+/// first-level folders.
+class DashboardTile {
+  const DashboardTile(this.tile, this.pack, [this.folder]);
+
+  /// What the tile shows. For a folder: its path, preview and counts, the
+  /// folder name as title and the pack title as subtitle.
+  final PackRow tile;
+  final PackRow pack;
+  final String? folder;
+
+  String get key => folder == null ? pack.id : '${pack.id}/$folder';
+}
+
+/// Replaces each pack in [packs] that splits ([subFolders]) with one tile
+/// per folder, in the pack's place. With [searchText], a pack whose folder
+/// names match every word shows only those folders.
+List<DashboardTile> expandPacks(
+  List<PackRow> packs,
+  Map<String, List<SubFolderRow>> subFolders, {
+  String searchText = '',
+}) {
+  final words = pathWords(searchText);
+  bool matches(String folder) {
+    final names = pathWords(folder);
+    return words.every((w) => names.any((n) => n.startsWith(w)));
+  }
+
+  return [
+    for (final pack in packs)
+      if (subFolders[pack.id] case final subs? when subs.isNotEmpty) ...[
+        for (final sf in _matchingOrAll(subs, words.isEmpty ? null : matches))
+          DashboardTile(
+            pack.copyWith(
+              path: p.join(pack.path, sf.folder),
+              title: prettyName(sf.folder, isFile: false),
+              author: Value(pack.title),
+              preview: Value(sf.preview),
+              previewAnim: Value(sf.previewAnim),
+              fileCount: sf.fileCount,
+              totalBytes: sf.totalBytes,
+            ),
+            pack,
+            sf.folder,
+          ),
+      ] else
+        DashboardTile(pack, pack),
+  ];
+}
+
+List<SubFolderRow> _matchingOrAll(
+  List<SubFolderRow> subs,
+  bool Function(String)? matches,
+) {
+  if (matches == null) return subs;
+  final hit = subs.where((s) => matches(s.folder)).toList();
+  return hit.isEmpty ? subs : hit;
+}
+
+/// The dashboard grid's tiles: [visiblePacksProvider], split by folder in
+/// the Expanded view.
+final visibleTilesProvider = Provider<AsyncValue<List<DashboardTile>>>((ref) {
+  final packs = ref.watch(visiblePacksProvider);
+  final view = ref.watch(settingsProvider.select((s) => s.dashboardView));
+  if (view == DashboardView.packs) {
+    return packs.whenData((l) => [for (final p in l) DashboardTile(p, p)]);
+  }
+  final subs = ref.watch(subFoldersProvider);
+  final text = ref.watch(dashboardQueryProvider.select((q) => q.text));
+  return switch ((packs, subs)) {
+    (AsyncValue(:final error?, :final stackTrace), _) ||
+    (
+      _,
+      AsyncValue(:final error?, :final stackTrace),
+    ) => AsyncError(error, stackTrace ?? StackTrace.current),
+    (AsyncValue(value: final l?), AsyncValue(value: final s?)) => AsyncData(
+      expandPacks(l, s, searchText: text),
+    ),
+    _ => const AsyncLoading(),
+  };
+});
 
 final visiblePacksProvider = Provider<AsyncValue<List<PackRow>>>((ref) {
   final library = ref.watch(libraryProvider);

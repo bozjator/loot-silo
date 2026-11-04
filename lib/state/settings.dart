@@ -7,6 +7,10 @@ enum ThemeChoice { system, light, dark }
 /// How a pack's Images and Animations tabs list their files.
 enum ItemsView { flat, folders }
 
+/// The dashboard shows one tile per pack, or splits packs that are
+/// collections (one tile per character folder, say).
+enum DashboardView { packs, expanded }
+
 /// User settings, stored as JSON in the app support folder.
 class AppSettings {
   const AppSettings({
@@ -21,6 +25,7 @@ class AppSettings {
     this.detailHeaderPinned = true,
     this.imagesView = ItemsView.flat,
     this.animationsView = ItemsView.flat,
+    this.dashboardView = DashboardView.packs,
   });
 
   /// The managed library folder; null until the user picks one.
@@ -52,6 +57,7 @@ class AppSettings {
 
   final ItemsView imagesView;
   final ItemsView animationsView;
+  final DashboardView dashboardView;
 
   factory AppSettings.fromJson(Map<String, Object?> json) => AppSettings(
     libraryPath: json['library_path'] as String?,
@@ -68,6 +74,9 @@ class AppSettings {
         ItemsView.values.asNameMap()[json['images_view']] ?? ItemsView.flat,
     animationsView:
         ItemsView.values.asNameMap()[json['animations_view']] ?? ItemsView.flat,
+    dashboardView:
+        DashboardView.values.asNameMap()[json['dashboard_view']] ??
+        DashboardView.packs,
   );
 
   Map<String, Object?> toJson() => {
@@ -82,6 +91,7 @@ class AppSettings {
     'detail_header_pinned': detailHeaderPinned,
     'images_view': imagesView.name,
     'animations_view': animationsView.name,
+    'dashboard_view': dashboardView.name,
   };
 
   AppSettings copyWith({
@@ -96,6 +106,7 @@ class AppSettings {
     bool? detailHeaderPinned,
     ItemsView? imagesView,
     ItemsView? animationsView,
+    DashboardView? dashboardView,
   }) => AppSettings(
     libraryPath: libraryPath ?? this.libraryPath,
     theme: theme ?? this.theme,
@@ -108,6 +119,7 @@ class AppSettings {
     detailHeaderPinned: detailHeaderPinned ?? this.detailHeaderPinned,
     imagesView: imagesView ?? this.imagesView,
     animationsView: animationsView ?? this.animationsView,
+    dashboardView: dashboardView ?? this.dashboardView,
   );
 }
 

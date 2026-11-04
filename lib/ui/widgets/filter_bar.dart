@@ -11,6 +11,7 @@ class FilterBar extends StatelessWidget {
     required this.query,
     required this.facets,
     required this.resultCount,
+    this.resultUnit = 'pack',
     required this.searchController,
     required this.searchFocus,
     required this.onText,
@@ -26,6 +27,9 @@ class FilterBar extends StatelessWidget {
   final DashboardQuery query;
   final Facets facets;
   final int resultCount;
+
+  /// What [resultCount] counts, singular.
+  final String resultUnit;
   final TextEditingController searchController;
   final FocusNode searchFocus;
   final ValueChanged<String> onText;
@@ -147,7 +151,7 @@ class FilterBar extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Text(
-                '$resultCount ${resultCount == 1 ? 'pack' : 'packs'}',
+                '$resultCount ${resultCount == 1 ? resultUnit : '${resultUnit}s'}',
                 style: theme.textTheme.labelLarge,
               ),
               if (query.isFlat)

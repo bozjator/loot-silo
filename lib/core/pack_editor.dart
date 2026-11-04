@@ -28,6 +28,26 @@ class PackContents {
   final Map<String, int> sizes;
   final PackSidecar? sidecar;
 
+  /// Only what lies under [folder] (pack-relative, no trailing slash).
+  PackContents within(String folder) {
+    final prefix = '$folder/';
+    List<String> under(List<String> l) => [
+      for (final f in l)
+        if (f.startsWith(prefix)) f,
+    ];
+    return PackContents(
+      images: under(images),
+      audio: under(audio),
+      other: under(other),
+      detected: [
+        for (final a in detected)
+          if (a.path.startsWith(prefix)) a,
+      ],
+      sizes: sizes,
+      sidecar: sidecar,
+    );
+  }
+
   /// [detected] with the sidecar's overrides applied.
   List<SpriteAnim> get animations => [
     for (final a in detected) applyOverride(a, sidecar?.animations[a.path]),

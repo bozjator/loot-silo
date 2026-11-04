@@ -39,7 +39,10 @@ Round 2 (plan: `FIXES_PLAN.md`):
 - [x] 16. Pinnable detail header + folder grouping — pin button / `H` (`detail_header_pinned`), slim bar with
   floating header on hover; Flat | By folder for images and animations (`images_view`, `animations_view`) with
   collapsible sections at an adaptive folder depth; viewer and ←/→ follow the on-screen order
-- [ ] 17. Dashboard sub-folder view + tag sort
+- [x] 17. Dashboard sub-folder view + tag sort — Packs | Expanded (`dashboard_view`): packs with ≥2 meaningful
+  first-level image folders become one tile per folder (indexed at scan time, schema v6; Pixel-Banner → 12),
+  folder-name search, tile opens the detail limited to that folder; `Tags` sort (precomputed key, untagged last)
+  with sorted tag lines on tiles
 
 ## How to verify
 ```
@@ -50,9 +53,9 @@ xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.da
 Screenshots land in `screenshots/` (gitignored).
 
 ## Last iteration
-- Done: milestone 16. `ui/folder_groups.dart` (`groupByFolder`, `visibleOrder`, `GroupedGrid`, `ItemsViewToggle`),
-  `_Header` / `_SlimHeader` in the detail screen. 163 unit/widget tests + 20 integration.
-- Next: milestone 17 (dashboard sub-folder view + tag sort) — the last one.
+- Done: milestone 17 — the last one. `core/sub_folders.dart`, `pack_sub_folders` table (index schema 5 → 6),
+  `expandPacks` / `visibleTilesProvider`, `PackSort.tags`. 177 unit/widget tests + 21 integration.
+- Next: nothing — round 2 is complete.
 
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.

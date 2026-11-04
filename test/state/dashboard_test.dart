@@ -1,6 +1,15 @@
+import 'dart:io';
+
 import 'package:assets_explorer/core/library_index.dart';
 import 'package:assets_explorer/state/dashboard.dart';
+import 'package:assets_explorer/state/providers.dart';
+import 'package:assets_explorer/state/settings.dart';
+import 'package:drift/native.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
+
+import '../core/sub_folders_test.dart' show writeFiles;
 
 PackRow pack(
   String id, {
@@ -145,5 +154,150 @@ void main() {
     const q = DashboardQuery(bundleId: 'x');
     expect(q.copyWith(bundleId: () => null).bundleId, isNull);
     expect(q.copyWith(text: 'a').bundleId, 'x');
+  });
+
+  group('tag sort', () {
+    final tagged = [
+      pack('p/one', title: 'Zeta', tags: ['pixel', 'Animals']),
+      pack('p/two', title: 'Alpha', tags: ['animals', 'pixel']),
+      pack('p/three', title: 'Beta'),
+      pack('p/four', title: 'Gamma', tags: ['UI']),
+      pack('p/five', title: 'Aardvark'),
+    ];
+    List<String> sorted(List<PackRow> l) => [
+      for (final x in applyQuery(
+        l,
+        const DashboardQuery(sort: PackSort.tags),
+        null,
+      ))
+        x.title,
+    ];
+
+    test('orders by sorted tags, ties by title, untagged last', () {
+      expect(sorted(tagged), ['Alpha', 'Zeta', 'Gamma', 'Aardvark', 'Beta']);
+    });
+
+    test('is stable whatever the input order', () {
+      expect(sorted(tagged.reversed.toList()), sorted(tagged));
+      expect(sorted([...tagged]..shuffle()), sorted(tagged));
+    });
+
+    test('keys are the case-insensitively sorted tags', () {
+      expect(sortedTags(['pixel', 'Animals', 'cute']), [
+        'Animals',
+        'cute',
+        'pixel',
+      ]);
+      expect(tagSortKey(['pixel', 'Animals']), 'animals, pixel');
+      expect(tagSortKey(const []), isNull);
+      expect(PackSort.tags.label, 'Tags');
+    });
+  });
+
+  group('expanded view', () {
+    SubFolderRow sub(String packId, String folder) => SubFolderRow(
+      packId: packId,
+      folder: folder,
+      preview: 'idle.png',
+      fileCount: 3,
+      totalBytes: 30,
+    );
+    final list = [
+      pack('A/Knights', author: 'A', tags: ['t']),
+      pack('P/Banner', title: 'Pixel Banner'),
+    ];
+    final subs = {
+      'P/Banner': [
+        sub('P/Banner', 'ArcherSkeleton'),
+        sub('P/Banner', 'Wolf_pack'),
+      ],
+    };
+
+    test('replaces a splitting pack with one tile per folder in place', () {
+      final tiles = expandPacks(list, subs);
+      expect(
+        [for (final t in tiles) t.key],
+        ['A/Knights', 'P/Banner/ArcherSkeleton', 'P/Banner/Wolf_pack'],
+      );
+      final wolf = tiles.last;
+      expect(wolf.tile.title, 'Wolf pack');
+      expect(wolf.tile.author, 'Pixel Banner');
+      expect(wolf.tile.path, '/lib/P/Banner/Wolf_pack');
+      expect(wolf.tile.preview, 'idle.png');
+      expect(wolf.tile.fileCount, 3);
+      expect(wolf.pack.id, 'P/Banner');
+      expect(wolf.folder, 'Wolf_pack');
+      expect(tiles.first.folder, isNull);
+    });
+
+    test('search narrows to matching folders, or keeps them all', () {
+      List<String?> folders(String text) => [
+        for (final t in expandPacks(list, subs, searchText: text)) t.folder,
+      ];
+      expect(folders('skel'), [null, 'ArcherSkeleton']);
+      expect(folders('archer skel'), [null, 'ArcherSkeleton']);
+      expect(folders('banner'), [null, 'ArcherSkeleton', 'Wolf_pack']);
+    });
+
+    test(
+      'view state: switching keeps search and filters; it persists',
+      () async {
+        final tmp = Directory.systemTemp.createTempSync('expanded');
+        addTearDown(() => tmp.deleteSync(recursive: true));
+        final root = p.join(tmp.path, 'lib');
+        writeFiles(root, [
+          'Heroes/Knight/idle.png',
+          'Heroes/Mage/idle.png',
+          'Other/a.png',
+        ]);
+        final store = SettingsStore(File(p.join(tmp.path, 'settings.json')))
+          ..save(AppSettings(libraryPath: root));
+        final index = LibraryIndex(NativeDatabase.memory());
+        addTearDown(index.close);
+        final c = ProviderContainer(
+          overrides: [
+            settingsStoreProvider.overrideWithValue(store),
+            libraryIndexProvider.overrideWithValue(index),
+          ],
+        );
+        addTearDown(c.dispose);
+        final sub = c.listen(visibleTilesProvider, (_, _) {});
+        Future<List<String>> keys() async {
+          await c.read(subFoldersProvider.future);
+          await c.read(searchHitsProvider.future);
+          return [for (final t in sub.read().requireValue) t.key];
+        }
+
+        await c.read(libraryProvider.future);
+        expect(await keys(), ['Heroes', 'Other']);
+
+        c.read(dashboardQueryProvider.notifier).setText('mage');
+        c
+            .read(settingsProvider.notifier)
+            .setDashboardView(DashboardView.expanded);
+        expect(await keys(), ['Heroes/Mage']);
+        expect(c.read(dashboardQueryProvider).text, 'mage');
+        expect(store.load().dashboardView, DashboardView.expanded);
+
+        c.read(dashboardQueryProvider.notifier).setText('');
+        expect(await keys(), ['Heroes/Knight', 'Heroes/Mage', 'Other']);
+
+        c.read(settingsProvider.notifier).setDashboardView(DashboardView.packs);
+        expect(await keys(), ['Heroes', 'Other']);
+      },
+    );
+  });
+
+  test('dashboard_view round-trips and defaults to packs', () {
+    final tmp = Directory.systemTemp.createTempSync('view');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final f = File(p.join(tmp.path, 'settings.json'));
+    final store = SettingsStore(f);
+    expect(store.load().dashboardView, DashboardView.packs);
+    store.save(const AppSettings(dashboardView: DashboardView.expanded));
+    expect(f.readAsStringSync(), contains('"dashboard_view": "expanded"'));
+    expect(store.load().dashboardView, DashboardView.expanded);
+    f.writeAsStringSync('{"dashboard_view": "bogus"}');
+    expect(store.load().dashboardView, DashboardView.packs);
   });
 }

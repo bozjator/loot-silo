@@ -2,10 +2,12 @@ import 'dart:io';
 
 import 'package:assets_explorer/core/library_index.dart';
 import 'package:assets_explorer/state/itch.dart';
+import 'package:assets_explorer/state/dashboard.dart';
 import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
+import 'package:assets_explorer/ui/widgets/pack_tile.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -49,17 +51,19 @@ void main() {
   Future<void> openKnight(
     WidgetTester tester, {
     Size size = const Size(1400, 900),
-  }) async {
-    final lib = p.join(tmp.path, 'library');
-    copyTree('test/fixtures/managed', lib);
-    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
-    for (final rel in [
+    List<String> files = const [
       'heroes/knight_red/a.png',
       'heroes/knight_red/b.png',
       'heroes/archer/c.png',
       'heroes/archer/d.png',
       'z_root.png',
-    ]) {
+    ],
+    bool open = true,
+  }) async {
+    final lib = p.join(tmp.path, 'library');
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    for (final rel in files) {
       File(p.join(pack, rel))
         ..parent.createSync(recursive: true)
         ..writeAsBytesSync(img.encodePng(img.Image(width: 8, height: 8)));
@@ -82,6 +86,7 @@ void main() {
       ),
     );
     await pumpUntil(tester, find.text('Knight Pack'));
+    if (!open) return;
     await tester.tap(find.text('Knight Pack'));
     await pumpUntil(tester, find.textContaining('Images ('));
     // Let the page finish sliding in.
@@ -153,5 +158,59 @@ void main() {
     await tester.tap(find.text('a.png'));
     await tester.pumpAndSettle();
     expect(find.text('3 / 4'), findsOneWidget);
+  });
+
+  testWidgets('expanded tiles open the pack at their folder', (tester) async {
+    await openKnight(
+      tester,
+      files: ['Archer/c.png', 'Archer/d.png', 'Mage/e.png'],
+      open: false,
+    );
+    expect(find.text('Archer'), findsNothing);
+    await tester.tap(find.text('Expanded'));
+    await pumpUntil(tester, find.text('Mage'));
+    expect(store.load().dashboardView, DashboardView.expanded);
+    expect(find.text('Archer'), findsOneWidget);
+    // The pack title is the folder tiles' subtitle.
+    expect(find.text('Knight Pack'), findsNWidgets(2));
+
+    await tester.tap(find.text('Mage'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Images (1)'), findsOneWidget);
+    expect(find.byTooltip('Show the whole pack'), findsOneWidget);
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pumpAndSettle();
+    expect(find.text('e.png'), findsOneWidget);
+    expect(find.text('c.png'), findsNothing);
+
+    await tester.tap(find.text('Show whole pack'));
+    await tester.pumpAndSettle();
+    expect(find.text('Images (4)'), findsOneWidget);
+    expect(find.byTooltip('Show the whole pack'), findsNothing);
+  });
+
+  testWidgets('sorting by tags shows each tile\'s tags, sorted', (
+    tester,
+  ) async {
+    await openKnight(tester, open: false);
+    expect(find.textContaining('No tags'), findsNothing);
+    await tester.tap(find.byType(DropdownButton<PackSort>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tags').last);
+    await tester.pumpAndSettle();
+    final tags = tester.widget<Text>(
+      find
+          .descendant(
+            of: find.byType(PackTile),
+            matching: find.byWidgetPredicate(
+              (w) => w is Text && (w.data ?? '').contains(','),
+            ),
+          )
+          .first,
+    );
+    expect(tags.data, 'knight, pixel-art');
+    final shown = tags.data!.split(', ');
+    expect(shown, sortedTags(shown));
   });
 }

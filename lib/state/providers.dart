@@ -91,6 +91,9 @@ class SettingsNotifier extends Notifier<AppSettings> {
   void setAnimationsView(ItemsView view) =>
       _save(state.copyWith(animationsView: view));
 
+  void setDashboardView(DashboardView view) =>
+      _save(state.copyWith(dashboardView: view));
+
   void setAnimationThumbSize(double size) {
     if (size != state.animationThumbSize) {
       _save(state.copyWith(animationThumbSize: size));
@@ -162,6 +165,14 @@ class LibraryNotifier extends AsyncNotifier<LibraryState> {
     state = await AsyncValue.guard(() => _load(force: true));
   }
 }
+
+/// Expanded-view folders by pack id; re-read after every load.
+final subFoldersProvider = FutureProvider<Map<String, List<SubFolderRow>>>((
+  ref,
+) async {
+  await ref.watch(libraryProvider.future);
+  return ref.read(libraryIndexProvider).allSubFolders();
+});
 
 /// Files and animations of one pack, for the detail view.
 final packContentsProvider = FutureProvider.autoDispose

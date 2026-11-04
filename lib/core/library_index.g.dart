@@ -1231,6 +1231,428 @@ class PackFilesCompanion extends UpdateCompanion<PackFile> {
   }
 }
 
+class $PackSubFoldersTable extends PackSubFolders
+    with TableInfo<$PackSubFoldersTable, SubFolderRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PackSubFoldersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _packIdMeta = const VerificationMeta('packId');
+  @override
+  late final GeneratedColumn<String> packId = GeneratedColumn<String>(
+    'pack_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _folderMeta = const VerificationMeta('folder');
+  @override
+  late final GeneratedColumn<String> folder = GeneratedColumn<String>(
+    'folder',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _previewMeta = const VerificationMeta(
+    'preview',
+  );
+  @override
+  late final GeneratedColumn<String> preview = GeneratedColumn<String>(
+    'preview',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<SpriteAnim?, String> previewAnim =
+      GeneratedColumn<String>(
+        'preview_anim',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      ).withConverter<SpriteAnim?>($PackSubFoldersTable.$converterpreviewAnimn);
+  static const VerificationMeta _fileCountMeta = const VerificationMeta(
+    'fileCount',
+  );
+  @override
+  late final GeneratedColumn<int> fileCount = GeneratedColumn<int>(
+    'file_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _totalBytesMeta = const VerificationMeta(
+    'totalBytes',
+  );
+  @override
+  late final GeneratedColumn<int> totalBytes = GeneratedColumn<int>(
+    'total_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    packId,
+    folder,
+    preview,
+    previewAnim,
+    fileCount,
+    totalBytes,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'pack_sub_folders';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SubFolderRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('pack_id')) {
+      context.handle(
+        _packIdMeta,
+        packId.isAcceptableOrUnknown(data['pack_id']!, _packIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_packIdMeta);
+    }
+    if (data.containsKey('folder')) {
+      context.handle(
+        _folderMeta,
+        folder.isAcceptableOrUnknown(data['folder']!, _folderMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_folderMeta);
+    }
+    if (data.containsKey('preview')) {
+      context.handle(
+        _previewMeta,
+        preview.isAcceptableOrUnknown(data['preview']!, _previewMeta),
+      );
+    }
+    if (data.containsKey('file_count')) {
+      context.handle(
+        _fileCountMeta,
+        fileCount.isAcceptableOrUnknown(data['file_count']!, _fileCountMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fileCountMeta);
+    }
+    if (data.containsKey('total_bytes')) {
+      context.handle(
+        _totalBytesMeta,
+        totalBytes.isAcceptableOrUnknown(data['total_bytes']!, _totalBytesMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_totalBytesMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {packId, folder};
+  @override
+  SubFolderRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SubFolderRow(
+      packId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pack_id'],
+      )!,
+      folder: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}folder'],
+      )!,
+      preview: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}preview'],
+      ),
+      previewAnim: $PackSubFoldersTable.$converterpreviewAnimn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}preview_anim'],
+        ),
+      ),
+      fileCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}file_count'],
+      )!,
+      totalBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}total_bytes'],
+      )!,
+    );
+  }
+
+  @override
+  $PackSubFoldersTable createAlias(String alias) {
+    return $PackSubFoldersTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<SpriteAnim, String> $converterpreviewAnim =
+      const SpriteAnimConverter();
+  static TypeConverter<SpriteAnim?, String?> $converterpreviewAnimn =
+      NullAwareTypeConverter.wrap($converterpreviewAnim);
+}
+
+class SubFolderRow extends DataClass implements Insertable<SubFolderRow> {
+  final String packId;
+  final String folder;
+
+  /// Preview image relative to the folder.
+  final String? preview;
+  final SpriteAnim? previewAnim;
+  final int fileCount;
+  final int totalBytes;
+  const SubFolderRow({
+    required this.packId,
+    required this.folder,
+    this.preview,
+    this.previewAnim,
+    required this.fileCount,
+    required this.totalBytes,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['pack_id'] = Variable<String>(packId);
+    map['folder'] = Variable<String>(folder);
+    if (!nullToAbsent || preview != null) {
+      map['preview'] = Variable<String>(preview);
+    }
+    if (!nullToAbsent || previewAnim != null) {
+      map['preview_anim'] = Variable<String>(
+        $PackSubFoldersTable.$converterpreviewAnimn.toSql(previewAnim),
+      );
+    }
+    map['file_count'] = Variable<int>(fileCount);
+    map['total_bytes'] = Variable<int>(totalBytes);
+    return map;
+  }
+
+  PackSubFoldersCompanion toCompanion(bool nullToAbsent) {
+    return PackSubFoldersCompanion(
+      packId: Value(packId),
+      folder: Value(folder),
+      preview: preview == null && nullToAbsent
+          ? const Value.absent()
+          : Value(preview),
+      previewAnim: previewAnim == null && nullToAbsent
+          ? const Value.absent()
+          : Value(previewAnim),
+      fileCount: Value(fileCount),
+      totalBytes: Value(totalBytes),
+    );
+  }
+
+  factory SubFolderRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SubFolderRow(
+      packId: serializer.fromJson<String>(json['packId']),
+      folder: serializer.fromJson<String>(json['folder']),
+      preview: serializer.fromJson<String?>(json['preview']),
+      previewAnim: serializer.fromJson<SpriteAnim?>(json['previewAnim']),
+      fileCount: serializer.fromJson<int>(json['fileCount']),
+      totalBytes: serializer.fromJson<int>(json['totalBytes']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'packId': serializer.toJson<String>(packId),
+      'folder': serializer.toJson<String>(folder),
+      'preview': serializer.toJson<String?>(preview),
+      'previewAnim': serializer.toJson<SpriteAnim?>(previewAnim),
+      'fileCount': serializer.toJson<int>(fileCount),
+      'totalBytes': serializer.toJson<int>(totalBytes),
+    };
+  }
+
+  SubFolderRow copyWith({
+    String? packId,
+    String? folder,
+    Value<String?> preview = const Value.absent(),
+    Value<SpriteAnim?> previewAnim = const Value.absent(),
+    int? fileCount,
+    int? totalBytes,
+  }) => SubFolderRow(
+    packId: packId ?? this.packId,
+    folder: folder ?? this.folder,
+    preview: preview.present ? preview.value : this.preview,
+    previewAnim: previewAnim.present ? previewAnim.value : this.previewAnim,
+    fileCount: fileCount ?? this.fileCount,
+    totalBytes: totalBytes ?? this.totalBytes,
+  );
+  SubFolderRow copyWithCompanion(PackSubFoldersCompanion data) {
+    return SubFolderRow(
+      packId: data.packId.present ? data.packId.value : this.packId,
+      folder: data.folder.present ? data.folder.value : this.folder,
+      preview: data.preview.present ? data.preview.value : this.preview,
+      previewAnim: data.previewAnim.present
+          ? data.previewAnim.value
+          : this.previewAnim,
+      fileCount: data.fileCount.present ? data.fileCount.value : this.fileCount,
+      totalBytes: data.totalBytes.present
+          ? data.totalBytes.value
+          : this.totalBytes,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SubFolderRow(')
+          ..write('packId: $packId, ')
+          ..write('folder: $folder, ')
+          ..write('preview: $preview, ')
+          ..write('previewAnim: $previewAnim, ')
+          ..write('fileCount: $fileCount, ')
+          ..write('totalBytes: $totalBytes')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(packId, folder, preview, previewAnim, fileCount, totalBytes);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SubFolderRow &&
+          other.packId == this.packId &&
+          other.folder == this.folder &&
+          other.preview == this.preview &&
+          other.previewAnim == this.previewAnim &&
+          other.fileCount == this.fileCount &&
+          other.totalBytes == this.totalBytes);
+}
+
+class PackSubFoldersCompanion extends UpdateCompanion<SubFolderRow> {
+  final Value<String> packId;
+  final Value<String> folder;
+  final Value<String?> preview;
+  final Value<SpriteAnim?> previewAnim;
+  final Value<int> fileCount;
+  final Value<int> totalBytes;
+  final Value<int> rowid;
+  const PackSubFoldersCompanion({
+    this.packId = const Value.absent(),
+    this.folder = const Value.absent(),
+    this.preview = const Value.absent(),
+    this.previewAnim = const Value.absent(),
+    this.fileCount = const Value.absent(),
+    this.totalBytes = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PackSubFoldersCompanion.insert({
+    required String packId,
+    required String folder,
+    this.preview = const Value.absent(),
+    this.previewAnim = const Value.absent(),
+    required int fileCount,
+    required int totalBytes,
+    this.rowid = const Value.absent(),
+  }) : packId = Value(packId),
+       folder = Value(folder),
+       fileCount = Value(fileCount),
+       totalBytes = Value(totalBytes);
+  static Insertable<SubFolderRow> custom({
+    Expression<String>? packId,
+    Expression<String>? folder,
+    Expression<String>? preview,
+    Expression<String>? previewAnim,
+    Expression<int>? fileCount,
+    Expression<int>? totalBytes,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (packId != null) 'pack_id': packId,
+      if (folder != null) 'folder': folder,
+      if (preview != null) 'preview': preview,
+      if (previewAnim != null) 'preview_anim': previewAnim,
+      if (fileCount != null) 'file_count': fileCount,
+      if (totalBytes != null) 'total_bytes': totalBytes,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PackSubFoldersCompanion copyWith({
+    Value<String>? packId,
+    Value<String>? folder,
+    Value<String?>? preview,
+    Value<SpriteAnim?>? previewAnim,
+    Value<int>? fileCount,
+    Value<int>? totalBytes,
+    Value<int>? rowid,
+  }) {
+    return PackSubFoldersCompanion(
+      packId: packId ?? this.packId,
+      folder: folder ?? this.folder,
+      preview: preview ?? this.preview,
+      previewAnim: previewAnim ?? this.previewAnim,
+      fileCount: fileCount ?? this.fileCount,
+      totalBytes: totalBytes ?? this.totalBytes,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (packId.present) {
+      map['pack_id'] = Variable<String>(packId.value);
+    }
+    if (folder.present) {
+      map['folder'] = Variable<String>(folder.value);
+    }
+    if (preview.present) {
+      map['preview'] = Variable<String>(preview.value);
+    }
+    if (previewAnim.present) {
+      map['preview_anim'] = Variable<String>(
+        $PackSubFoldersTable.$converterpreviewAnimn.toSql(previewAnim.value),
+      );
+    }
+    if (fileCount.present) {
+      map['file_count'] = Variable<int>(fileCount.value);
+    }
+    if (totalBytes.present) {
+      map['total_bytes'] = Variable<int>(totalBytes.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PackSubFoldersCompanion(')
+          ..write('packId: $packId, ')
+          ..write('folder: $folder, ')
+          ..write('preview: $preview, ')
+          ..write('previewAnim: $previewAnim, ')
+          ..write('fileCount: $fileCount, ')
+          ..write('totalBytes: $totalBytes, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $ScanStatesTable extends ScanStates
     with TableInfo<$ScanStatesTable, ScanState> {
   @override
@@ -1508,6 +1930,7 @@ abstract class _$LibraryIndex extends GeneratedDatabase {
   $LibraryIndexManager get managers => $LibraryIndexManager(this);
   late final $PacksTable packs = $PacksTable(this);
   late final $PackFilesTable packFiles = $PackFilesTable(this);
+  late final $PackSubFoldersTable packSubFolders = $PackSubFoldersTable(this);
   late final $ScanStatesTable scanStates = $ScanStatesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -1516,6 +1939,7 @@ abstract class _$LibraryIndex extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     packs,
     packFiles,
+    packSubFolders,
     scanStates,
   ];
 }
@@ -2124,6 +2548,242 @@ typedef $$PackFilesTableProcessedTableManager =
       PackFile,
       PrefetchHooks Function()
     >;
+typedef $$PackSubFoldersTableCreateCompanionBuilder =
+    PackSubFoldersCompanion Function({
+      required String packId,
+      required String folder,
+      Value<String?> preview,
+      Value<SpriteAnim?> previewAnim,
+      required int fileCount,
+      required int totalBytes,
+      Value<int> rowid,
+    });
+typedef $$PackSubFoldersTableUpdateCompanionBuilder =
+    PackSubFoldersCompanion Function({
+      Value<String> packId,
+      Value<String> folder,
+      Value<String?> preview,
+      Value<SpriteAnim?> previewAnim,
+      Value<int> fileCount,
+      Value<int> totalBytes,
+      Value<int> rowid,
+    });
+
+class $$PackSubFoldersTableFilterComposer
+    extends Composer<_$LibraryIndex, $PackSubFoldersTable> {
+  $$PackSubFoldersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get packId => $composableBuilder(
+    column: $table.packId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get folder => $composableBuilder(
+    column: $table.folder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get preview => $composableBuilder(
+    column: $table.preview,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<SpriteAnim?, SpriteAnim, String>
+  get previewAnim => $composableBuilder(
+    column: $table.previewAnim,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<int> get fileCount => $composableBuilder(
+    column: $table.fileCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get totalBytes => $composableBuilder(
+    column: $table.totalBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PackSubFoldersTableOrderingComposer
+    extends Composer<_$LibraryIndex, $PackSubFoldersTable> {
+  $$PackSubFoldersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get packId => $composableBuilder(
+    column: $table.packId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get folder => $composableBuilder(
+    column: $table.folder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get preview => $composableBuilder(
+    column: $table.preview,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get previewAnim => $composableBuilder(
+    column: $table.previewAnim,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get fileCount => $composableBuilder(
+    column: $table.fileCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get totalBytes => $composableBuilder(
+    column: $table.totalBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PackSubFoldersTableAnnotationComposer
+    extends Composer<_$LibraryIndex, $PackSubFoldersTable> {
+  $$PackSubFoldersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get packId =>
+      $composableBuilder(column: $table.packId, builder: (column) => column);
+
+  GeneratedColumn<String> get folder =>
+      $composableBuilder(column: $table.folder, builder: (column) => column);
+
+  GeneratedColumn<String> get preview =>
+      $composableBuilder(column: $table.preview, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<SpriteAnim?, String> get previewAnim =>
+      $composableBuilder(
+        column: $table.previewAnim,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<int> get fileCount =>
+      $composableBuilder(column: $table.fileCount, builder: (column) => column);
+
+  GeneratedColumn<int> get totalBytes => $composableBuilder(
+    column: $table.totalBytes,
+    builder: (column) => column,
+  );
+}
+
+class $$PackSubFoldersTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryIndex,
+          $PackSubFoldersTable,
+          SubFolderRow,
+          $$PackSubFoldersTableFilterComposer,
+          $$PackSubFoldersTableOrderingComposer,
+          $$PackSubFoldersTableAnnotationComposer,
+          $$PackSubFoldersTableCreateCompanionBuilder,
+          $$PackSubFoldersTableUpdateCompanionBuilder,
+          (
+            SubFolderRow,
+            BaseReferences<_$LibraryIndex, $PackSubFoldersTable, SubFolderRow>,
+          ),
+          SubFolderRow,
+          PrefetchHooks Function()
+        > {
+  $$PackSubFoldersTableTableManager(
+    _$LibraryIndex db,
+    $PackSubFoldersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PackSubFoldersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PackSubFoldersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PackSubFoldersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> packId = const Value.absent(),
+                Value<String> folder = const Value.absent(),
+                Value<String?> preview = const Value.absent(),
+                Value<SpriteAnim?> previewAnim = const Value.absent(),
+                Value<int> fileCount = const Value.absent(),
+                Value<int> totalBytes = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PackSubFoldersCompanion(
+                packId: packId,
+                folder: folder,
+                preview: preview,
+                previewAnim: previewAnim,
+                fileCount: fileCount,
+                totalBytes: totalBytes,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String packId,
+                required String folder,
+                Value<String?> preview = const Value.absent(),
+                Value<SpriteAnim?> previewAnim = const Value.absent(),
+                required int fileCount,
+                required int totalBytes,
+                Value<int> rowid = const Value.absent(),
+              }) => PackSubFoldersCompanion.insert(
+                packId: packId,
+                folder: folder,
+                preview: preview,
+                previewAnim: previewAnim,
+                fileCount: fileCount,
+                totalBytes: totalBytes,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$PackSubFoldersTable, SubFolderRow>(table),
+                  BaseReferences<
+                    _$LibraryIndex,
+                    $PackSubFoldersTable,
+                    SubFolderRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PackSubFoldersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryIndex,
+      $PackSubFoldersTable,
+      SubFolderRow,
+      $$PackSubFoldersTableFilterComposer,
+      $$PackSubFoldersTableOrderingComposer,
+      $$PackSubFoldersTableAnnotationComposer,
+      $$PackSubFoldersTableCreateCompanionBuilder,
+      $$PackSubFoldersTableUpdateCompanionBuilder,
+      (
+        SubFolderRow,
+        BaseReferences<_$LibraryIndex, $PackSubFoldersTable, SubFolderRow>,
+      ),
+      SubFolderRow,
+      PrefetchHooks Function()
+    >;
 typedef $$ScanStatesTableCreateCompanionBuilder = ScanStatesCompanion Function({
   required String root,
   required String fingerprint,
@@ -2300,6 +2960,8 @@ class $LibraryIndexManager {
       $$PacksTableTableManager(_db, _db.packs);
   $$PackFilesTableTableManager get packFiles =>
       $$PackFilesTableTableManager(_db, _db.packFiles);
+  $$PackSubFoldersTableTableManager get packSubFolders =>
+      $$PackSubFoldersTableTableManager(_db, _db.packSubFolders);
   $$ScanStatesTableTableManager get scanStates =>
       $$ScanStatesTableTableManager(_db, _db.scanStates);
 }

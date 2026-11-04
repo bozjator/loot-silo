@@ -5,6 +5,7 @@ import 'fs_tree.dart';
 import 'pack_detector.dart';
 import 'preview_picker.dart';
 import 'sidecar.dart';
+import 'sub_folders.dart';
 import 'type_classifier.dart';
 
 /// One pack as seen by a scan, ready for the index.
@@ -26,6 +27,7 @@ class ScannedPack {
     this.previewAnim,
     required this.totalBytes,
     required this.sidecar,
+    this.subFolders = const [],
   });
 
   /// Path relative to the scanned root, `/`-separated. Stable across scans.
@@ -56,6 +58,10 @@ class ScannedPack {
   final SpriteAnim? previewAnim;
   final int totalBytes;
   final PackSidecar? sidecar;
+
+  /// Tiles for the dashboard's Expanded view; empty when the pack stays
+  /// one tile.
+  final List<SubFolder> subFolders;
 }
 
 class ScanResult {
@@ -158,6 +164,13 @@ ScanResult scanLibrary(String root) {
         previewAnim: preview == chosen.preview ? chosen.anim : null,
         totalBytes: files.fold(0, (sum, e) => sum + e.$2.size),
         sidecar: sc,
+        subFolders: dp.isContainer
+            ? const []
+            : splitSubFolders(
+                dp.dir.path,
+                files,
+                overrides: sc?.animations ?? const {},
+              ),
       ),
     );
     return types;

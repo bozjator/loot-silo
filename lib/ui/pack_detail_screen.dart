@@ -14,6 +14,7 @@ import '../core/library_index.dart';
 import '../core/pack_editor.dart';
 import '../core/sidecar.dart';
 import '../core/text_preview.dart';
+import '../state/dashboard.dart' show sortedTags;
 import '../state/providers.dart';
 import '../state/settings.dart';
 import 'format.dart';
@@ -31,9 +32,13 @@ import 'cursors.dart';
 
 /// Everything about one pack: previews, files, animations, metadata.
 class PackDetailScreen extends ConsumerWidget {
-  const PackDetailScreen({super.key, required this.packId});
+  const PackDetailScreen({super.key, required this.packId, this.folder});
 
   final String packId;
+
+  /// First-level folder the Images and Animations tabs start at (from an
+  /// Expanded dashboard tile).
+  final String? folder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -100,6 +105,7 @@ class PackDetailScreen extends ConsumerWidget {
             pack: pack,
             contents: value,
             pinned: pinned,
+            folder: folder,
           ),
           AsyncError(:final error) => Center(
             child: Text('Could not read: $error'),
@@ -116,10 +122,12 @@ class _Body extends StatefulWidget {
     required this.pack,
     required this.contents,
     required this.pinned,
+    this.folder,
   });
 
   final PackRow pack;
   final PackContents contents;
+  final String? folder;
 
   /// False: a slim bar replaces the header; hovering it shows the header
   /// floating over the tabs, so nothing below moves.
@@ -131,6 +139,7 @@ class _Body extends StatefulWidget {
 
 class _BodyState extends State<_Body> {
   var _peek = false;
+  late String? _folder = widget.folder;
 
   @override
   void didUpdateWidget(_Body old) {
@@ -141,7 +150,10 @@ class _BodyState extends State<_Body> {
   @override
   Widget build(BuildContext context) {
     final pack = widget.pack;
-    final contents = widget.contents;
+    final folder = _folder;
+    final contents = folder == null
+        ? widget.contents
+        : widget.contents.within(folder);
     final tabs = <(String, Widget)>[
       if (contents.animations.isNotEmpty)
         (
@@ -164,8 +176,13 @@ class _BodyState extends State<_Body> {
           _FilesTab(pack: pack, contents: contents),
         ),
     ];
-    final header = _Header(pack: pack, contents: contents);
+    final header = _Header(pack: pack, contents: widget.contents);
     final tabArea = <Widget>[
+      if (folder != null)
+        _FolderBar(
+          folder: folder,
+          onShowAll: () => setState(() => _folder = null),
+        ),
       if (tabs.isEmpty)
         const Expanded(child: Center(child: Text('No files')))
       else ...[
@@ -178,6 +195,9 @@ class _BodyState extends State<_Body> {
       ],
     ];
     return DefaultTabController(
+      // A new controller when the folder is cleared and the tab count
+      // changes.
+      key: ValueKey(folder),
       length: tabs.length,
       child: widget.pinned
           ? Column(
@@ -212,6 +232,39 @@ class _BodyState extends State<_Body> {
                   ),
               ],
             ),
+    );
+  }
+}
+
+/// Says the tabs show one folder of the pack, with a way back to all of it.
+class _FolderBar extends StatelessWidget {
+  const _FolderBar({required this.folder, required this.onShowAll});
+
+  final String folder;
+  final VoidCallback onShowAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: Row(
+        children: [
+          InputChip(
+            avatar: const Icon(Icons.folder_outlined, size: 18),
+            label: Text(prettyName(folder, isFile: false)),
+            tooltip: 'Showing only this folder',
+            mouseCursor: clickCursor,
+            onDeleted: onShowAll,
+            deleteButtonTooltipMessage: 'Show the whole pack',
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onShowAll,
+            child: Text('Show whole pack', style: theme.textTheme.labelLarge),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -544,7 +597,7 @@ class _Info extends ConsumerWidget {
           const SizedBox(height: 8),
           _ChipRow(
             label: 'Tags',
-            values: pack.tags,
+            values: sortedTags(pack.tags),
             onEdit: () async {
               final tags = await showDialog<List<String>>(
                 context: context,

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/dashboard.dart';
 import '../state/providers.dart';
+import '../state/settings.dart';
 import 'pack_detail_screen.dart';
 import 'widgets/filter_bar.dart';
 import 'widgets/thumb_size.dart';
@@ -58,7 +59,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
   Widget build(BuildContext context) {
     final query = ref.watch(dashboardQueryProvider);
     final notifier = ref.read(dashboardQueryProvider.notifier);
-    final visible = ref.watch(visiblePacksProvider);
+    final visible = ref.watch(visibleTilesProvider);
     final library = ref.watch(libraryProvider).value;
     final allPacks = library?.packs ?? const [];
     final subCounts = <String, int>{};
@@ -70,7 +71,8 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final bundle = query.bundleId == null
         ? null
         : allPacks.where((p) => p.id == query.bundleId).firstOrNull;
-    final packs = visible.value ?? const [];
+    final tiles = visible.value ?? const [];
+    final view = ref.watch(settingsProvider.select((s) => s.dashboardView));
     final theme = Theme.of(context);
     final animateAll = ref.watch(settingsProvider.select((s) => s.animateAll));
     final tileSize = dashboardTileRange.clamp(
@@ -87,7 +89,8 @@ class _DashboardState extends ConsumerState<Dashboard> {
           FilterBar(
             query: query,
             facets: ref.watch(facetsProvider),
-            resultCount: packs.length,
+            resultCount: tiles.length,
+            resultUnit: view == DashboardView.expanded ? 'tile' : 'pack',
             searchController: _search,
             searchFocus: _searchFocus,
             onText: notifier.setText,
@@ -100,10 +103,17 @@ class _DashboardState extends ConsumerState<Dashboard> {
               _search.clear();
               notifier.clearFilters();
             },
-            trailing: ThumbSizeSlider(
-              range: dashboardTileRange,
-              value: tileSize,
-              onChanged: settings.setDashboardTileSize,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ViewToggle(view: view, onChanged: settings.setDashboardView),
+                const SizedBox(width: 12),
+                ThumbSizeSlider(
+                  range: dashboardTileRange,
+                  value: tileSize,
+                  onChanged: settings.setDashboardTileSize,
+                ),
+              ],
             ),
           ),
           if (bundle != null)
@@ -134,7 +144,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
               ),
             ),
           Expanded(
-            child: packs.isEmpty && visible.hasValue
+            child: tiles.isEmpty && visible.hasValue
                 ? Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -158,7 +168,9 @@ class _DashboardState extends ConsumerState<Dashboard> {
                     ),
                     child: GridView.builder(
                       // Root and each bundle keep their own scroll position.
-                      key: PageStorageKey('grid:${query.bundleId}'),
+                      key: PageStorageKey(
+                        'grid:${query.bundleId}:${view.name}',
+                      ),
                       physics: const CtrlWheelPhysics(),
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                       // A 4:3 preview over a footer for title, author and
@@ -168,17 +180,22 @@ class _DashboardState extends ConsumerState<Dashboard> {
                         imageAspect: 4 / 3,
                         footer: (w) => w < 190 ? 148 : 120,
                       ),
-                      itemCount: packs.length,
+                      itemCount: tiles.length,
                       itemBuilder: (context, i) {
-                        final pack = packs[i];
+                        final DashboardTile(:tile, :pack, :folder) = tiles[i];
                         return PackTile(
-                          key: ValueKey(pack.id),
-                          pack: pack,
+                          key: ValueKey(tiles[i].key),
+                          pack: tile,
                           subPackCount: subCounts[pack.id] ?? 0,
                           alwaysAnimate: animateAll,
+                          showTags: query.sort == PackSort.tags,
                           onTap: pack.isContainer
                               ? () => notifier.openBundle(pack.id)
-                              : () => openPackDetail(context, pack.id),
+                              : () => openPackDetail(
+                                  context,
+                                  pack.id,
+                                  folder: folder,
+                                ),
                         );
                       },
                     ),
@@ -190,11 +207,48 @@ class _DashboardState extends ConsumerState<Dashboard> {
   }
 }
 
-void openPackDetail(BuildContext context, String packId) {
+/// Packs or Expanded (one tile per character folder and the like).
+class _ViewToggle extends StatelessWidget {
+  const _ViewToggle({required this.view, required this.onChanged});
+
+  final DashboardView view;
+  final ValueChanged<DashboardView> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SegmentedButton<DashboardView>(
+    showSelectedIcon: false,
+    style: const ButtonStyle(
+      visualDensity: VisualDensity.compact,
+      mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
+    ),
+    segments: const [
+      ButtonSegment(
+        value: DashboardView.packs,
+        icon: Icon(Icons.grid_view, size: 18),
+        label: Text('Packs'),
+        tooltip: 'One tile per pack',
+      ),
+      ButtonSegment(
+        value: DashboardView.expanded,
+        icon: Icon(Icons.view_comfy_alt_outlined, size: 18),
+        label: Text('Expanded'),
+        tooltip: 'One tile per sub-folder of packs that are collections',
+      ),
+    ],
+    selected: {view},
+    onSelectionChanged: (s) => onChanged(s.first),
+  );
+}
+
+/// Opens a pack; with [folder], its Images and Animations tabs start at
+/// that first-level folder.
+void openPackDetail(BuildContext context, String packId, {String? folder}) {
   // Leaving search focused would restore it on return without a live text
   // input connection; start from the grid instead (`/` refocuses).
   FocusManager.instance.primaryFocus?.unfocus();
   Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => PackDetailScreen(packId: packId)),
+    MaterialPageRoute<void>(
+      builder: (_) => PackDetailScreen(packId: packId, folder: folder),
+    ),
   );
 }

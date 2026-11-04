@@ -72,4 +72,17 @@ void main() {
       );
     });
   });
+
+  const managed = '../assets_library';
+  test(
+    'Pixel-Banner splits into its 12 character folders (read-only)',
+    skip: Directory(managed).existsSync() ? false : 'no $managed',
+    () {
+      final banner = scanLibrary(managed).packs
+          .firstWhere((p) => p.id == 'Pixel Banner/Pixel-Banner');
+      expect(banner.subFolders, hasLength(12));
+      expect(banner.subFolders.map((s) => s.folder), contains('SkeletonMage'));
+      expect(banner.subFolders.every((s) => s.preview != null), isTrue);
+    },
+  );
 }

@@ -73,6 +73,23 @@ class PackFiles extends Table {
   Set<Column> get primaryKey => {packId, relPath};
 }
 
+/// First-level folders a pack splits into in the dashboard's Expanded view.
+@DataClassName('SubFolderRow')
+class PackSubFolders extends Table {
+  TextColumn get packId => text()();
+  TextColumn get folder => text()();
+
+  /// Preview image relative to the folder.
+  TextColumn get preview => text().nullable()();
+  TextColumn get previewAnim =>
+      text().map(const SpriteAnimConverter()).nullable()();
+  IntColumn get fileCount => integer()();
+  IntColumn get totalBytes => integer()();
+
+  @override
+  Set<Column> get primaryKey => {packId, folder};
+}
+
 class ScanStates extends Table {
   TextColumn get root => text()();
   TextColumn get fingerprint => text()();
@@ -87,12 +104,12 @@ class ScanStates extends Table {
 ///
 /// It can always be rebuilt from the library folder, so schema changes
 /// simply drop and recreate everything.
-@DriftDatabase(tables: [Packs, PackFiles, ScanStates])
+@DriftDatabase(tables: [Packs, PackFiles, PackSubFolders, ScanStates])
 class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("
@@ -122,6 +139,7 @@ class LibraryIndex extends _$LibraryIndex {
   Future<void> replaceScan(ScanResult result) => transaction(() async {
     await delete(packs).go();
     await delete(packFiles).go();
+    await delete(packSubFolders).go();
     await customStatement('DELETE FROM pack_fts');
     await batch((b) {
       for (final pk in result.packs) {
@@ -153,6 +171,17 @@ class LibraryIndex extends _$LibraryIndex {
               packId: pk.id,
               relPath: pk.files[i],
               size: pk.sizes[i],
+            ),
+        ]);
+        b.insertAll(packSubFolders, [
+          for (final sf in pk.subFolders)
+            PackSubFoldersCompanion.insert(
+              packId: pk.id,
+              folder: sf.folder,
+              preview: Value(sf.preview),
+              previewAnim: Value(sf.previewAnim),
+              fileCount: sf.fileCount,
+              totalBytes: sf.totalBytes,
             ),
         ]);
       }
@@ -193,6 +222,19 @@ class LibraryIndex extends _$LibraryIndex {
 
   Future<List<PackRow>> allPacks() =>
       (select(packs)..orderBy([(p) => OrderingTerm.asc(p.title)])).get();
+
+  /// Expanded-view folders of every pack that splits, by pack id, in
+  /// folder order.
+  Future<Map<String, List<SubFolderRow>>> allSubFolders() async {
+    final rows = await (select(
+      packSubFolders,
+    )..orderBy([(f) => OrderingTerm.asc(f.folder)])).get();
+    final out = <String, List<SubFolderRow>>{};
+    for (final r in rows) {
+      (out[r.packId] ??= []).add(r);
+    }
+    return out;
+  }
 
   Future<List<String>> filesOf(String packId) {
     final q = select(packFiles)

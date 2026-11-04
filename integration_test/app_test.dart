@@ -5,6 +5,7 @@ import 'package:archive/archive_io.dart';
 import 'package:assets_explorer/core/library_index.dart';
 import 'package:assets_explorer/itch/itch_api.dart';
 import 'package:assets_explorer/itch/itch_key.dart';
+import 'package:assets_explorer/state/dashboard.dart';
 import 'package:assets_explorer/state/itch.dart';
 import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
@@ -957,6 +958,73 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Used in'), findsOneWidget);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m17: expanded view and tag sort (real library, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+
+    await tester.tap(find.text('Expanded'));
+    await pumpUntil(tester, find.textContaining(' tiles'));
+    expect(
+      File(p.join(tmp.path, 'settings.json')).readAsStringSync(),
+      contains('"dashboard_view": "expanded"'),
+    );
+    await tester.enterText(find.byType(TextField), 'pixel banner');
+    await pumpUntil(tester, find.text('ArcherSkeleton'));
+    // One tile per character folder, the pack title underneath.
+    expect(find.text('Pixel-Banner', skipOffstage: false), findsNWidgets(12));
+    for (final c in ['SkeletonMage', 'Wolf', 'WarriorBandit']) {
+      expect(find.text(c, skipOffstage: false), findsOneWidget);
+    }
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm17_expanded', settle: false);
+
+    // Folder names are searchable; switching views keeps the search.
+    await tester.enterText(find.byType(TextField), 'skeleton');
+    await pumpUntil(tester, find.text('SkeletonWarrior'));
+    expect(find.text('Wolf'), findsNothing);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm17_expanded_search', settle: false);
+    await tester.tap(find.text('Packs'));
+    await pumpUntil(tester, find.text('SkeletonWarrior'), gone: true);
+    expect(find.text('Pixel-Banner'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'skeleton'), findsOneWidget);
+    await tester.tap(find.text('Expanded'));
+    await pumpUntil(tester, find.text('SkeletonMage'));
+
+    // A tile opens the pack at its folder.
+    await tester.tap(find.text('SkeletonMage'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byTooltip('Show the whole pack'), findsOneWidget);
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm17_detail_folder', settle: false);
+    await tester.tap(find.text('Show whole pack'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byTooltip('Show the whole pack'), findsNothing);
+    await tester.pageBack();
+    await tester.pump(const Duration(seconds: 1));
+
+    // Tag sort: tiles show their tags, sorted.
+    await tester.enterText(find.byType(TextField), '');
+    await tester.tap(find.text('Packs'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.byType(DropdownButton<PackSort>));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Tags').last);
+    await tester.pump(const Duration(milliseconds: 500));
+    await pumpUntil(tester, find.byIcon(Icons.sell_outlined));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm17_tag_sort', settle: false);
     expect(Directory(real).statSync().modified, before);
   });
 
