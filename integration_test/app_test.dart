@@ -305,10 +305,10 @@ void main() {
     await settleImages(tester);
     await captureScreenshot(tester, 'm6_detail_zerie', settle: false);
 
-    final card = find.ancestor(
-      of: find.text('Apply size').first,
-      matching: find.byType(Card),
-    );
+    // Fps / frame size / row are edited in a dialog from the grid card.
+    await tester.tap(find.byTooltip('Edit animation').first);
+    await pumpUntil(tester, find.text('Apply size'));
+    final card = find.byType(Dialog);
     await tester.enterText(
       find.descendant(
         of: card.first,
@@ -346,6 +346,8 @@ void main() {
       await tester.pump();
     }
     expect(find.text('Reset to detected'), findsNothing);
+    await tester.tap(find.widgetWithText(TextButton, 'Close'));
+    await tester.pump(const Duration(milliseconds: 300));
   });
 
   testWidgets('pack detail on the real library (read-only)', (tester) async {
@@ -765,6 +767,125 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(settings.readAsStringSync(), contains('"image_thumb_size": 80'));
     await settleImages(tester);
     await captureScreenshot(tester, 'm14_images_min', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m15: animations grid, focus mode, 60 animations', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final zoo = Directory(p.join(lib, 'HeroMaker', 'Monster Zoo'))
+      ..createSync(recursive: true);
+    File(p.join(zoo.path, 'asset_pack.json'))
+        .writeAsStringSync('{"title": "Monster Zoo", "types": ["character"]}');
+    // 60 four-frame strips of 32 px squares: a block hopping across.
+    for (var i = 0; i < 60; i++) {
+      final strip = img.Image(width: 128, height: 32, numChannels: 4);
+      final color = img.ColorRgba8(
+        60 + (i * 37) % 190,
+        60 + (i * 91) % 190,
+        60 + (i * 53) % 190,
+        255,
+      );
+      for (var f = 0; f < 4; f++) {
+        img.fillRect(
+          strip,
+          x1: f * 32 + 4 + f * 4,
+          y1: 8 + (f.isEven ? 0 : 6),
+          x2: f * 32 + 16 + f * 4,
+          y2: 22 + (f.isEven ? 0 : 6),
+          color: color,
+        );
+      }
+      final name = 'monster_${(i + 1).toString().padLeft(2, '0')}-walk.png';
+      File(p.join(zoo.path, name)).writeAsBytesSync(img.encodePng(strip));
+    }
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Monster Zoo'));
+    await tester.tap(find.text('Monster Zoo'));
+    await pumpUntil(tester, find.text('Animations (60)'));
+    await settleImages(tester);
+    expect(find.text('Monster 01 walk'), findsOneWidget);
+    await captureScreenshot(tester, 'm15_grid', settle: false);
+
+    await tester.tap(find.text('Monster 03 walk'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm15_focus', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump(const Duration(milliseconds: 300));
+    final walk4 = tester.widget<AnimatedOpacity>(
+      find.ancestor(
+        of: find.text('Monster 04 walk'),
+        matching: find.byType(AnimatedOpacity),
+      ),
+    );
+    expect(walk4.opacity, 1);
+    // Esc clears the focus first; the page stays open.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Animations (60)'), findsOneWidget);
+    final walk3 = tester.widget<AnimatedOpacity>(
+      find.ancestor(
+        of: find.text('Monster 03 walk'),
+        matching: find.byType(AnimatedOpacity),
+      ),
+    );
+    expect(walk3.opacity, 1);
+
+    // Scroll the whole grid while every visible card plays.
+    final binding = IntegrationTestWidgetsFlutterBinding.instance;
+    await binding.watchPerformance(() async {
+      for (var i = 0; i < 6; i++) {
+        await tester.fling(find.byType(GridView), const Offset(0, -500), 2000);
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+    }, reportKey: 'm15_scroll');
+    final perf = binding.reportData?['m15_scroll'] as Map<String, dynamic>?;
+    debugPrint(
+      'm15 scroll: frames ${perf?['frame_count']}, '
+      'build avg ${perf?['average_frame_build_time_millis']} ms, '
+      'p90 ${perf?['90th_percentile_frame_build_time_millis']} ms, '
+      'raster avg ${perf?['average_frame_rasterizer_time_millis']} ms',
+    );
+    await settleImages(tester);
+    expect(find.text('Monster 60 walk'), findsOneWidget);
+    await captureScreenshot(tester, 'm15_scrolled', settle: false);
+
+    // Ctrl + wheel: two steps bigger.
+    final mouse = TestPointer(1, PointerDeviceKind.mouse)
+      ..hover(tester.getCenter(find.byType(GridView)));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    for (var i = 0; i < 2; i++) {
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, -50)));
+      await tester.pump();
+    }
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    expect(
+      File(p.join(tmp.path, 'settings.json')).readAsStringSync(),
+      contains('"animation_thumb_size": 240'),
+    );
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm15_bigger', settle: false);
+  });
+
+  testWidgets('m15: focus mode on the real library (read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+    await tester.enterText(find.byType(TextField), 'oboropixel');
+    await pumpUntil(tester, find.text('CharactersAnimationsAssetPack'));
+    await tester.tap(find.text('CharactersAnimationsAssetPack'));
+    await pumpUntil(tester, find.textContaining('Animations ('));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm15_real_grid', settle: false);
+    await tester.tap(find.byType(AnimatedOpacity).at(4));
+    await tester.pump(const Duration(milliseconds: 300));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm15_real_focus', settle: false);
     expect(Directory(real).statSync().modified, before);
   });
 

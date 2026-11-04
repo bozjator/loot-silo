@@ -10,6 +10,7 @@ typedef SizeRange = ({double min, double max, double step});
 
 const dashboardTileRange = (min: 140.0, max: 480.0, step: 20.0);
 const imageThumbRange = (min: 80.0, max: 400.0, step: 20.0);
+const animationThumbRange = (min: 120.0, max: 400.0, step: 20.0);
 
 extension SizeRangeClamp on SizeRange {
   double clamp(double v) => v.clamp(min, max).toDouble();

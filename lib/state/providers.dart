@@ -83,6 +83,12 @@ class SettingsNotifier extends Notifier<AppSettings> {
     }
   }
 
+  void setAnimationThumbSize(double size) {
+    if (size != state.animationThumbSize) {
+      _save(state.copyWith(animationThumbSize: size));
+    }
+  }
+
   void setImageThumbSize(double size) {
     if (size != state.imageThumbSize) {
       _save(state.copyWith(imageThumbSize: size));

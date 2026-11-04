@@ -34,7 +34,8 @@ Round 2 (plan: `FIXES_PLAN.md`):
   with Raw/Rendered, copy, open externally; remote images never fetched
 - [x] 14. Thumbnail size controls — sliders for dashboard tiles (140–480, `dashboard_tile_size`) and image cards
   (80–400, `image_thumb_size`), Ctrl + wheel over either grid, `ThumbGridDelegate` (fixed footer, no clipping)
-- [ ] 15. Animations grid + focus mode
+- [x] 15. Animations grid + focus mode — responsive grid (`animation_thumb_size`, slider + Ctrl + wheel), editor
+  in an Edit dialog (saving unchanged), focus dims/pauses others, Esc/click/←→; 60 animations scroll at ~2 ms/frame
 - [ ] 16. Pinnable detail header + folder grouping
 - [ ] 17. Dashboard sub-folder view + tag sort
 
@@ -47,9 +48,9 @@ xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.da
 Screenshots land in `screenshots/` (gitignored).
 
 ## Last iteration
-- Done: milestone 14. `ui/widgets/thumb_size.dart` (`ThumbGridDelegate`, `ThumbSizeSlider`, `CtrlWheelResize` +
-  `CtrlWheelPhysics`), `FilterBar.trailing`; goldens `tiles_140`/`tiles_480`. 153 unit/widget tests + 17 integration.
-- Next: milestone 15 (animations grid + focus mode).
+- Done: milestone 15. `ui/animation_grid.dart` (`AnimationGrid`, `_AnimationTile`), `_AnimationEditorDialog` in the
+  detail screen, `RevealButton` in `ui/reveal.dart`. 156 unit/widget tests + 19 integration.
+- Next: milestone 16 (pinnable detail header + folder grouping).
 
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.

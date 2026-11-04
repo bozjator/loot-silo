@@ -15,6 +15,7 @@ import '../core/sidecar.dart';
 import '../core/text_preview.dart';
 import '../state/providers.dart';
 import 'format.dart';
+import 'animation_grid.dart';
 import 'image_viewer.dart';
 import 'reveal.dart';
 import 'text_preview_dialog.dart';
@@ -612,38 +613,85 @@ class _ImagesTab extends ConsumerWidget {
   }
 }
 
-class _AnimationsTab extends ConsumerWidget {
+class _AnimationsTab extends StatelessWidget {
   const _AnimationsTab({required this.pack, required this.contents});
 
   final PackRow pack;
   final PackContents contents;
 
   @override
+  Widget build(BuildContext context) => AnimationGrid(
+    gridId: pack.id,
+    packPath: pack.path,
+    animations: contents.animations,
+    detected: contents.detected,
+    onEdit: (anim) => showDialog<void>(
+      context: context,
+      builder: (_) => _AnimationEditorDialog(pack: pack, path: anim.path),
+    ),
+  );
+}
+
+/// The fps / frame size / row editor for the animation at [path]. Watches
+/// the pack, so after Save the editor shows the stored override, as the old
+/// in-list cards did.
+class _AnimationEditorDialog extends ConsumerWidget {
+  const _AnimationEditorDialog({required this.pack, required this.path});
+
+  final PackRow pack;
+  final String path;
+
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final anims = contents.animations;
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: anims.length,
-      itemBuilder: (context, i) => _AnimationCard(
-        key: ValueKey(anims[i].path),
-        packPath: pack.path,
-        detected: contents.detected[i],
-        current: anims[i],
-        onSave: (anim) async {
-          if (!packExists(pack.path)) return;
-          saveAnimationOverride(pack.path, contents.detected[i], anim);
-          // The tile preview may be this sheet; rescan picks the override up.
-          await ref.read(libraryProvider.notifier).reload();
-        },
+    final contents = ref.watch(packContentsProvider(pack.id)).value;
+    final i = contents?.detected.indexWhere((a) => a.path == path) ?? -1;
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: contents == null || i < 0
+              ? const SizedBox(
+                  height: 200,
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    _AnimationEditor(
+                      key: ValueKey(path),
+                      packPath: pack.path,
+                      detected: contents.detected[i],
+                      current: contents.animations[i],
+                      onSave: (anim) async {
+                        if (!packExists(pack.path)) return;
+                        saveAnimationOverride(
+                          pack.path,
+                          contents.detected[i],
+                          anim,
+                        );
+                        // The tile preview may be this sheet; rescan picks the
+                        // override up.
+                        await ref.read(libraryProvider.notifier).reload();
+                      },
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }
 }
 
 /// Plays one animation with live fps / frame-size / row controls; Save
-/// writes the override into the pack sidecar.
-class _AnimationCard extends StatefulWidget {
-  const _AnimationCard({
+/// writes the override into the pack sidecar. Shown in the Edit dialog.
+class _AnimationEditor extends StatefulWidget {
+  const _AnimationEditor({
     super.key,
     required this.packPath,
     required this.detected,
@@ -659,17 +707,17 @@ class _AnimationCard extends StatefulWidget {
   final Future<void> Function(SpriteAnim? anim) onSave;
 
   @override
-  State<_AnimationCard> createState() => _AnimationCardState();
+  State<_AnimationEditor> createState() => _AnimationEditorState();
 }
 
-class _AnimationCardState extends State<_AnimationCard> {
+class _AnimationEditorState extends State<_AnimationEditor> {
   late SpriteAnim _anim = widget.current;
   int? _row = 0;
   late final _w = TextEditingController(text: '${widget.current.frameW}');
   late final _h = TextEditingController(text: '${widget.current.frameH}');
 
   @override
-  void didUpdateWidget(_AnimationCard old) {
+  void didUpdateWidget(_AnimationEditor old) {
     super.didUpdateWidget(old);
     if (old.current != widget.current) _reset(widget.current);
   }
@@ -708,16 +756,16 @@ class _AnimationCardState extends State<_AnimationCard> {
     final isSheet = a.kind == AnimKind.sheet;
     final dirty = a != widget.current;
     final overridden = widget.current != widget.detected;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+    return Material(
+      type: MaterialType.transparency,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 160,
-              height: 160,
+              width: 240,
+              height: 240,
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(8),
@@ -747,7 +795,7 @@ class _AnimationCardState extends State<_AnimationCard> {
                           style: theme.textTheme.titleMedium,
                         ),
                       ),
-                      _RevealButton(p.join(widget.packPath, a.path)),
+                      RevealButton(p.join(widget.packPath, a.path)),
                     ],
                   ),
                   Text(
@@ -979,7 +1027,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(formatBytes(widget.contents.sizes[rel] ?? 0)),
-                    _RevealButton(p.join(widget.pack.path, rel)),
+                    RevealButton(p.join(widget.pack.path, rel)),
                   ],
                 ),
                 onTap: () => _toggle(rel),
@@ -1015,7 +1063,7 @@ class _FilesTab extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(formatBytes(contents.sizes[rel] ?? 0)),
-              _RevealButton(p.join(pack.path, rel)),
+              RevealButton(p.join(pack.path, rel)),
             ],
           ),
           // Text files open in the preview; the rest only reveal.
@@ -1045,23 +1093,7 @@ class _FilesTab extends StatelessWidget {
       };
 }
 
-/// Small "show in file manager" button for a file row or card.
-class _RevealButton extends ConsumerWidget {
-  const _RevealButton(this.path);
-
-  final String path;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => IconButton(
-    tooltip: 'Show in file manager',
-    iconSize: 18,
-    visualDensity: VisualDensity.compact,
-    icon: const Icon(Icons.drive_file_move_outline),
-    onPressed: () => ref.read(revealProvider)(path),
-  );
-}
-
-/// Shows a [_RevealButton] in the top-right corner of [child] while the
+/// Shows a [RevealButton] in the top-right corner of [child] while the
 /// mouse is over it, so small image cards stay uncluttered.
 class _HoverReveal extends StatefulWidget {
   const _HoverReveal({required this.path, required this.child});
@@ -1092,7 +1124,7 @@ class _HoverRevealState extends State<_HoverReveal> {
               color: Theme.of(context).colorScheme.surface
                   .withValues(alpha: 0.85),
               shape: const CircleBorder(),
-              child: _RevealButton(widget.path),
+              child: RevealButton(widget.path),
             ),
           ),
       ],

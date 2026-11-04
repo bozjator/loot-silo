@@ -171,9 +171,17 @@ void main() {
     final store = SettingsStore(File(p.join(dir.path, 'settings.json')));
     expect(store.load().dashboardTileSize, 240);
     expect(store.load().imageThumbSize, 160);
-    store.save(const AppSettings(dashboardTileSize: 400, imageThumbSize: 80));
+    expect(store.load().animationThumbSize, 200);
+    store.save(
+      const AppSettings(
+        dashboardTileSize: 400,
+        imageThumbSize: 80,
+        animationThumbSize: 320,
+      ),
+    );
     expect(store.load().dashboardTileSize, 400);
     expect(store.load().imageThumbSize, 80);
+    expect(store.load().animationThumbSize, 320);
     expect(
       File(p.join(dir.path, 'settings.json')).readAsStringSync(),
       allOf(

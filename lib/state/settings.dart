@@ -14,6 +14,7 @@ class AppSettings {
     this.viewerPixelPerfect = false,
     this.dashboardTileSize = 240,
     this.imageThumbSize = 160,
+    this.animationThumbSize = 200,
   });
 
   /// The managed library folder; null until the user picks one.
@@ -36,6 +37,9 @@ class AppSettings {
   /// Widest an image card in a pack's Images tab may get.
   final double imageThumbSize;
 
+  /// Widest an animation card in a pack's Animations tab may get.
+  final double animationThumbSize;
+
   factory AppSettings.fromJson(Map<String, Object?> json) => AppSettings(
     libraryPath: json['library_path'] as String?,
     theme: ThemeChoice.values.asNameMap()[json['theme']] ?? ThemeChoice.system,
@@ -44,6 +48,8 @@ class AppSettings {
     viewerPixelPerfect: json['viewer_pixel_perfect'] == true,
     dashboardTileSize: (json['dashboard_tile_size'] as num?)?.toDouble() ?? 240,
     imageThumbSize: (json['image_thumb_size'] as num?)?.toDouble() ?? 160,
+    animationThumbSize:
+        (json['animation_thumb_size'] as num?)?.toDouble() ?? 200,
   );
 
   Map<String, Object?> toJson() => {
@@ -54,6 +60,7 @@ class AppSettings {
     'viewer_pixel_perfect': viewerPixelPerfect,
     'dashboard_tile_size': dashboardTileSize,
     'image_thumb_size': imageThumbSize,
+    'animation_thumb_size': animationThumbSize,
   };
 
   AppSettings copyWith({
@@ -64,6 +71,7 @@ class AppSettings {
     bool? viewerPixelPerfect,
     double? dashboardTileSize,
     double? imageThumbSize,
+    double? animationThumbSize,
   }) => AppSettings(
     libraryPath: libraryPath ?? this.libraryPath,
     theme: theme ?? this.theme,
@@ -72,6 +80,7 @@ class AppSettings {
     viewerPixelPerfect: viewerPixelPerfect ?? this.viewerPixelPerfect,
     dashboardTileSize: dashboardTileSize ?? this.dashboardTileSize,
     imageThumbSize: imageThumbSize ?? this.imageThumbSize,
+    animationThumbSize: animationThumbSize ?? this.animationThumbSize,
   );
 }
 

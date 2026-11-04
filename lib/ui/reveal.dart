@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
@@ -51,4 +52,20 @@ Future<void> revealInFileManager(
       }
       await open(Uri.directory(p.dirname(path)));
   }
+}
+
+/// Small "show in file manager" button for a file row or card.
+class RevealButton extends ConsumerWidget {
+  const RevealButton(this.path, {super.key});
+
+  final String path;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => IconButton(
+    tooltip: 'Show in file manager',
+    iconSize: 18,
+    visualDensity: VisualDensity.compact,
+    icon: const Icon(Icons.drive_file_move_outline),
+    onPressed: () => ref.read(revealProvider)(path),
+  );
 }
