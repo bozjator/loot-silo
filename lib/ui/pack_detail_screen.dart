@@ -14,6 +14,7 @@ import '../core/pack_editor.dart';
 import '../core/sidecar.dart';
 import '../state/providers.dart';
 import 'format.dart';
+import 'image_viewer.dart';
 import 'widgets/animated_sprite.dart';
 import 'widgets/meta_dialogs.dart';
 import 'widgets/pack_tile.dart' show iconForTypes;
@@ -123,6 +124,7 @@ class _Body extends ConsumerWidget {
                     child: _Carousel(
                       pack: pack,
                       images: contents.carousel(pack.preview),
+                      sizes: contents.sizes,
                     ),
                   ),
                   const SizedBox(width: 24),
@@ -154,10 +156,15 @@ class _Body extends ConsumerWidget {
 /// The tile preview (animated when it's a sheet) plus covers and named
 /// previews, one at a time.
 class _Carousel extends StatefulWidget {
-  const _Carousel({required this.pack, required this.images});
+  const _Carousel({
+    required this.pack,
+    required this.images,
+    this.sizes = const {},
+  });
 
   final PackRow pack;
   final List<String> images;
+  final Map<String, int> sizes;
 
   @override
   State<_Carousel> createState() => _CarouselState();
@@ -189,7 +196,30 @@ class _CarouselState extends State<_Carousel> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Padding(padding: const EdgeInsets.all(8), child: view),
+            if (images.isEmpty)
+              Padding(padding: const EdgeInsets.all(8), child: view)
+            else
+              // Click to enlarge, on the same list at the same image.
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () => showImageViewer(
+                    context,
+                    packPath: pack.path,
+                    images: images,
+                    index: i,
+                    sizes: widget.sizes,
+                  ),
+                  child: Tooltip(
+                    message: 'Enlarge',
+                    waitDuration: const Duration(milliseconds: 600),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: view,
+                    ),
+                  ),
+                ),
+              ),
             if (images.length > 1) ...[
               Align(
                 alignment: Alignment.centerLeft,
@@ -505,10 +535,12 @@ class _ImagesTab extends StatelessWidget {
           margin: EdgeInsets.zero,
           child: InkWell(
             mouseCursor: clickCursor,
-            onTap: () => showDialog<void>(
-              context: context,
-              builder: (_) =>
-                  _ImageDialog(file: file, rel: rel, size: contents.sizes[rel]),
+            onTap: () => showImageViewer(
+              context,
+              packPath: pack.path,
+              images: images,
+              index: i,
+              sizes: contents.sizes,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -536,49 +568,6 @@ class _ImagesTab extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class _ImageDialog extends StatelessWidget {
-  const _ImageDialog({required this.file, required this.rel, this.size});
-
-  final File file;
-  final String rel;
-  final int? size;
-
-  @override
-  Widget build(BuildContext context) {
-    final dims = readImageSize(file.path);
-    return Dialog(
-      child: SizedBox(
-        width: 900,
-        height: 700,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: PixelImage(file, animate: true),
-              ),
-            ),
-            ListTile(
-              title: Text(rel),
-              subtitle: Text(
-                [
-                  if (dims != null) '${dims.$1} × ${dims.$2} px',
-                  if (size != null) formatBytes(size!),
-                ].join(' · '),
-              ),
-              trailing: TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Close'),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

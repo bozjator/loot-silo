@@ -9,6 +9,7 @@ import 'package:assets_explorer/state/itch.dart';
 import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
+import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -17,6 +18,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 import 'package:http/testing.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path/path.dart' as p;
@@ -37,14 +39,16 @@ class MemoryKeyStore implements KeyStore {
   Future<void> delete() async => key = null;
 }
 
-/// Pumps until [finder] matches; real isolates need real time.
+/// Pumps until [finder] matches (or, with [gone], stops matching); real
+/// isolates need real time.
 Future<void> pumpUntil(
   WidgetTester tester,
   Finder finder, {
   int seconds = 60,
+  bool gone = false,
 }) async {
   final end = DateTime.now().add(Duration(seconds: seconds));
-  while (finder.evaluate().isEmpty) {
+  while (finder.evaluate().isEmpty != gone) {
     if (DateTime.now().isAfter(end)) {
       final texts = find
           .byType(Text)
@@ -489,6 +493,103 @@ void main() {
       p.join(lib, 'HeroMaker', 'Knight Pack', 'asset_pack.json'),
     ).readAsStringSync();
     expect(sidecar, isNot(contains('My Game')));
+  });
+
+  testWidgets('m12: image viewer from the carousel and the images tab', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    // Checkerboards, so proportions and crispness show in the screenshots.
+    void checker(String rel, int w, int h, int cell) {
+      final image = img.Image(width: w, height: h);
+      for (final px in image) {
+        final on = (px.x ~/ cell + px.y ~/ cell).isEven;
+        px.setRgb(on ? 230 : 40, on ? 120 : 90, on ? 60 : 160);
+      }
+      File(p.join(pack, rel))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(img.encodePng(image));
+    }
+
+    checker('knight_mockup.png', 500, 300, 50);
+    checker('ui/tall_banner-panel.png', 300, 1200, 60);
+    checker('fx/wide_strip.png', 4000, 200, 100);
+    checker('tiny_gem.png', 16, 16, 4);
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.byTooltip('Enlarge'));
+    await settleImages(tester);
+
+    // The header preview opens the viewer on the carousel's list.
+    await tester.tap(find.byTooltip('Enlarge'));
+    await pumpUntil(tester, find.byType(ImageViewer));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm12_viewer_carousel', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await settleImages(tester);
+    expect(find.text('Knight mockup'), findsOneWidget);
+    await captureScreenshot(tester, 'm12_viewer_mockup', settle: false);
+
+    // The mouse back button closes it like Esc.
+    final mouse = await tester.startGesture(
+      const Offset(20, 20),
+      kind: PointerDeviceKind.mouse,
+      buttons: kBackMouseButton,
+    );
+    await mouse.up();
+    await pumpUntil(tester, find.byType(ImageViewer), seconds: 5, gone: true);
+    expect(find.text('Knight Pack'), findsWidgets);
+
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await tester.tap(find.text('wide_strip.png'));
+    await pumpUntil(tester, find.text('Wide strip'));
+    await settleImages(tester);
+    expect(find.textContaining('4000 × 200 px'), findsOneWidget);
+    await captureScreenshot(tester, 'm12_viewer_strip', settle: false);
+    // Sorted order: fx/wide_strip, knight, knight_mockup, tiny_gem, ui/tall.
+    for (final (steps, title, shot) in [
+      (3, 'Tiny gem', 'm12_viewer_tiny'),
+      (1, 'Tall banner panel', 'm12_viewer_tall'),
+    ]) {
+      for (var i = 0; i < steps; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+      }
+      expect(find.text(title), findsOneWidget);
+      await settleImages(tester);
+      await captureScreenshot(tester, shot, settle: false);
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.byType(ImageViewer), seconds: 5, gone: true);
+  });
+
+  testWidgets('m12: image viewer on the real library (read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+    await tester.enterText(find.byType(TextField), 'ashishlko11');
+    await pumpUntil(tester, find.text('Special Effects Vol.03'));
+    await tester.tap(find.text('Special Effects Vol.03'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await tester.tap(find.text('1.png'));
+    await pumpUntil(tester, find.byType(ImageViewer));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm12_viewer_real', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm12_viewer_real_next', settle: false);
+    expect(Directory(real).statSync().modified, before);
   });
 
   testWidgets('archive import: zip and tar.gz through the review screen', (

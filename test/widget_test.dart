@@ -58,10 +58,12 @@ void main() {
         theme: ThemeChoice.dark,
         animateAll: true,
         audioLoop: true,
+        viewerPixelPerfect: true,
       ),
     );
     final back = store.load();
     expect(back.audioLoop, isTrue);
+    expect(back.viewerPixelPerfect, isTrue);
     expect(back.libraryPath, '/lib');
     expect(back.theme, ThemeChoice.dark);
     expect(back.animateAll, isTrue);
@@ -69,6 +71,7 @@ void main() {
     expect(store.load().theme, ThemeChoice.system);
     expect(store.load().animateAll, isFalse);
     expect(store.load().audioLoop, isFalse);
+    expect(store.load().viewerPixelPerfect, isFalse);
   });
 
   testWidgets('settings screen saves theme and animation, Esc closes it', (

@@ -74,6 +74,9 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   void setAudioLoop(bool on) => _save(state.copyWith(audioLoop: on));
 
+  void setViewerPixelPerfect(bool on) =>
+      _save(state.copyWith(viewerPixelPerfect: on));
+
   void _save(AppSettings settings) {
     state = settings;
     ref.read(settingsStoreProvider).save(state);

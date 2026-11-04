@@ -18,6 +18,8 @@ class PixelImage extends StatefulWidget {
     super.key,
     this.animate = false,
     this.fit = BoxFit.contain,
+    this.scale = integerScale,
+    this.fullResolution = false,
     this.errorBuilder,
   });
 
@@ -27,6 +29,14 @@ class PixelImage extends StatefulWidget {
   /// `contain` letterboxes; `cover` fills and crops (still in whole steps
   /// when upscaling).
   final BoxFit fit;
+
+  /// Turns the exact fit scale into the one drawn; [integerScale] for
+  /// tiles, [viewerScale] in the image viewer.
+  final double Function(double fitScale) scale;
+
+  /// Decodes at the file's own size instead of [maxDecodeEdge]; for the one
+  /// image the viewer shows.
+  final bool fullResolution;
   final WidgetBuilder? errorBuilder;
 
   static ImageProvider providerFor(File file) => ResizeImage(
@@ -56,7 +66,8 @@ class _PixelImageState extends State<PixelImage> {
   @override
   void didUpdateWidget(PixelImage old) {
     super.didUpdateWidget(old);
-    if (old.file.path != widget.file.path) {
+    if (old.file.path != widget.file.path ||
+        old.fullResolution != widget.fullResolution) {
       _info = null;
       _error = null;
       _resolve();
@@ -66,8 +77,10 @@ class _PixelImageState extends State<PixelImage> {
   }
 
   void _resolve({bool force = false}) {
-    final stream = PixelImage.providerFor(widget.file)
-        .resolve(createLocalImageConfiguration(context));
+    final provider = widget.fullResolution
+        ? FileImage(widget.file)
+        : PixelImage.providerFor(widget.file);
+    final stream = provider.resolve(createLocalImageConfiguration(context));
     if (!force && stream.key == _stream?.key) return;
     _stream?.removeListener(_listener);
     _stream = stream..addListener(_listener);
@@ -109,9 +122,13 @@ class _PixelImageState extends State<PixelImage> {
         final fitScale = widget.fit == BoxFit.cover
             ? math.max(box.maxWidth / w, box.maxHeight / h)
             : math.min(box.maxWidth / w, box.maxHeight / h);
-        final scale = integerScale(fitScale);
+        final scale = widget.scale(fitScale);
         return ClipRect(
+          // Min 0: under tight constraints (a stretched column, the
+          // viewer) the image would otherwise be forced to the box size.
           child: OverflowBox(
+            minWidth: 0,
+            minHeight: 0,
             maxWidth: double.infinity,
             maxHeight: double.infinity,
             child: RawImage(
@@ -133,3 +150,17 @@ class _PixelImageState extends State<PixelImage> {
 /// Whole-number upscaling (crisp pixels); fractional when shrinking.
 double integerScale(double fitScale) =>
     fitScale >= 1 ? fitScale.floorToDouble() : fitScale;
+
+/// Image viewer scaling: whole steps while they fill at least [minFill] of
+/// the exact fit (crisp pixel art), the exact fit otherwise, so a 500 px
+/// image in an 868 px box isn't left at 1×. [pixelPerfect] always keeps
+/// whole steps.
+double viewerScale(
+  double fitScale, {
+  bool pixelPerfect = false,
+  double minFill = 0.75,
+}) {
+  final whole = integerScale(fitScale);
+  if (pixelPerfect || whole >= fitScale * minFill) return whole;
+  return fitScale;
+}

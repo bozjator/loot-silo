@@ -1,0 +1,251 @@
+import 'dart:io';
+
+import 'package:assets_explorer/state/providers.dart';
+import 'package:assets_explorer/state/settings.dart';
+import 'package:assets_explorer/ui/image_viewer.dart';
+import 'package:assets_explorer/ui/reveal.dart';
+import 'package:assets_explorer/ui/widgets/pixel_image.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
+import 'package:path/path.dart' as p;
+
+void main() {
+  group('viewerScale', () {
+    test('keeps whole steps while they fill most of the fit', () {
+      expect(viewerScale(54.2), 54); // 16 px sprite in a big window
+      expect(viewerScale(2.33), 2); // 500 px wide: 2× fills 86%
+      expect(viewerScale(4.9), 4); // 82%
+    });
+
+    test('fits exactly when whole steps would waste space', () {
+      expect(viewerScale(1.73), 1.73); // 500 px in 868 px: 1× is only 58%
+      expect(viewerScale(1.2, minFill: 0.9), 1.2);
+    });
+
+    test('shrinks big images exactly; pixel-perfect forces whole steps', () {
+      expect(viewerScale(0.31), 0.31);
+      expect(viewerScale(1.73, pixelPerfect: true), 1);
+      expect(viewerScale(0.31, pixelPerfect: true), 0.31);
+    });
+
+    test('tiles keep floored upscaling', () => expect(integerScale(1.73), 1));
+  });
+
+  group('revealInFileManager', () {
+    test('Linux asks the file manager over D-Bus', () async {
+      final calls = <List<String>>[];
+      Uri? opened;
+      await revealInFileManager(
+        '/lib/My Pack/a b.png',
+        os: 'linux',
+        run: (exe, args) async {
+          calls.add([exe, ...args]);
+          return ProcessResult(0, 0, '', '');
+        },
+        open: (uri) async {
+          opened = uri;
+          return true;
+        },
+      );
+      expect(calls.single.first, 'dbus-send');
+      expect(
+        calls.single,
+        contains('array:string:file:///lib/My%20Pack/a%20b.png'),
+      );
+      expect(opened, isNull);
+    });
+
+    test('Linux opens the parent folder when D-Bus fails', () async {
+      for (final fail in [
+        () async => ProcessResult(0, 1, '', 'no service'),
+        () async => throw const ProcessException('dbus-send', []),
+      ]) {
+        Uri? opened;
+        await revealInFileManager(
+          '/lib/Pack/x.png',
+          os: 'linux',
+          run: (_, _) => fail(),
+          open: (uri) async {
+            opened = uri;
+            return true;
+          },
+        );
+        expect(opened, Uri.directory('/lib/Pack'));
+      }
+    });
+
+    test('Windows selects with explorer, macOS with open -R', () async {
+      final calls = <List<String>>[];
+      Future<ProcessResult> run(String exe, List<String> args) async {
+        calls.add([exe, ...args]);
+        return ProcessResult(0, 1, '', '');
+      }
+
+      await revealInFileManager(r'C:\lib\x.png', os: 'windows', run: run);
+      await revealInFileManager('/lib/x.png', os: 'macos', run: run);
+      expect(calls, [
+        ['explorer', r'/select,C:\lib\x.png'],
+        ['open', '-R', '/lib/x.png'],
+      ]);
+    });
+  });
+
+  group('ImageViewer', () {
+    late Directory tmp;
+    late SettingsStore store;
+    setUp(() {
+      tmp = Directory.systemTemp.createTempSync('viewer');
+      store = SettingsStore(File(p.join(tmp.path, 'settings.json')));
+    });
+    tearDown(() => tmp.deleteSync(recursive: true));
+
+    void png(String rel, int w, int h) {
+      final f = File(p.join(tmp.path, rel))..parent.createSync(recursive: true);
+      f.writeAsBytesSync(img.encodePng(img.Image(width: w, height: h)));
+    }
+
+    final revealed = <String>[];
+
+    Future<void> open(
+      WidgetTester tester,
+      List<String> images, {
+      int index = 0,
+    }) async {
+      await tester.binding.setSurfaceSize(const Size(1440, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [settingsStoreProvider.overrideWithValue(store)],
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => ImageViewer(
+                    packPath: tmp.path,
+                    images: images,
+                    initialIndex: index,
+                    reveal: (path) async => revealed.add(path),
+                  ),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    /// The drawn size of the image once it has decoded.
+    Future<Size> drawn(WidgetTester tester) async {
+      for (var i = 0; i < 20 && find.byType(RawImage).evaluate().isEmpty; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+      // The laid-out size, not the requested one: tight constraints used
+      // to stretch the image to the whole area.
+      return tester.getSize(find.byType(RawImage));
+    }
+
+    testWidgets('title is prettified; details show path, size and bytes', (
+      tester,
+    ) async {
+      png('chars/knight_idle-sheet.png', 32, 16);
+      await open(tester, ['chars/knight_idle-sheet.png']);
+      expect(find.text('Knight idle sheet'), findsOneWidget);
+      expect(
+        find.textContaining('chars/knight_idle-sheet.png'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('32 × 16 px'), findsOneWidget);
+      expect(find.text('1 / 1'), findsOneWidget);
+      // One image: no chevrons.
+      expect(find.byIcon(Icons.chevron_left), findsNothing);
+    });
+
+    testWidgets('prev/next by button and arrow keys, stopping at the ends', (
+      tester,
+    ) async {
+      for (final n in ['a', 'b', 'c']) {
+        png('$n.png', 8, 8);
+      }
+      await open(tester, ['a.png', 'b.png', 'c.png'], index: 1);
+      expect(find.text('2 / 3'), findsOneWidget);
+      await tester.tap(find.byTooltip('Next image (→)'));
+      await tester.pump();
+      expect(find.text('3 / 3'), findsOneWidget);
+      expect(find.text('C'), findsOneWidget);
+      final next = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.chevron_right),
+      );
+      expect(next.onPressed, isNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(find.text('3 / 3'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(find.text('1 / 3'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(find.text('1 / 3'), findsOneWidget);
+      final prev = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.chevron_left),
+      );
+      expect(prev.onPressed, isNull);
+    });
+
+    testWidgets('images fill the viewer with their own proportions', (
+      tester,
+    ) async {
+      const cases = {
+        'tiny.png': (16, 16),
+        'mid.png': (500, 300),
+        'strip.png': (4000, 200),
+        'tall.png': (300, 1200),
+      };
+      cases.forEach((name, d) => png(name, d.$1, d.$2));
+      await open(tester, cases.keys.toList());
+      final area = tester.getSize(find.byType(InteractiveViewer));
+      for (final (w, h) in cases.values) {
+        final size = await drawn(tester);
+        expect(size.width / size.height, closeTo(w / h, 0.01));
+        // Fills at least 75% of one side of the (padded) area.
+        final fill =
+            (size.width / (area.width - 128)).clamp(0, 1) > 0.75 ||
+            (size.height / (area.height - 32)).clamp(0, 1) > 0.75;
+        expect(fill, isTrue, reason: '$w×$h drawn at $size in $area');
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+      }
+    });
+
+    testWidgets('pixel-perfect toggle is saved; reveal gets the file', (
+      tester,
+    ) async {
+      png('x.png', 8, 8);
+      await open(tester, ['x.png']);
+      await tester.tap(find.byTooltip('Fit to window'));
+      await tester.pump();
+      expect(store.load().viewerPixelPerfect, isTrue);
+      expect(find.byTooltip('Pixel-perfect (whole steps)'), findsOneWidget);
+      await tester.tap(find.byTooltip('Show in file manager'));
+      expect(revealed.last, p.join(tmp.path, 'x.png'));
+    });
+
+    testWidgets('Esc closes the viewer', (tester) async {
+      png('x.png', 8, 8);
+      await open(tester, ['x.png']);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.byType(ImageViewer), findsNothing);
+    });
+  });
+}
