@@ -750,7 +750,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump(const Duration(milliseconds: 500));
 
     // Ctrl + wheel up over the images grid: three steps bigger.
-    final grid = tester.getCenter(find.byType(GridView));
+    final grid = tester.getCenter(find.byType(CustomScrollView));
     final mouse = TestPointer(1, PointerDeviceKind.mouse)..hover(grid);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     for (var i = 0; i < 3; i++) {
@@ -836,7 +836,11 @@ A **16×16** knight with *walk* and *idle* animations.
     final binding = IntegrationTestWidgetsFlutterBinding.instance;
     await binding.watchPerformance(() async {
       for (var i = 0; i < 6; i++) {
-        await tester.fling(find.byType(GridView), const Offset(0, -500), 2000);
+        await tester.fling(
+          find.byType(CustomScrollView),
+          const Offset(0, -500),
+          2000,
+        );
         await tester.pump(const Duration(milliseconds: 400));
       }
     }, reportKey: 'm15_scroll');
@@ -853,7 +857,7 @@ A **16×16** knight with *walk* and *idle* animations.
 
     // Ctrl + wheel: two steps bigger.
     final mouse = TestPointer(1, PointerDeviceKind.mouse)
-      ..hover(tester.getCenter(find.byType(GridView)));
+      ..hover(tester.getCenter(find.byType(CustomScrollView)));
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     for (var i = 0; i < 2; i++) {
       await tester.sendEventToBinding(mouse.scroll(const Offset(0, -50)));
@@ -886,6 +890,73 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump(const Duration(milliseconds: 300));
     await settleImages(tester);
     await captureScreenshot(tester, 'm15_real_focus', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m16: pin/unpin header, by-folder view (real library)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+    await tester.enterText(find.byType(TextField), 'pixel banner');
+    await pumpUntil(tester, find.text('Pixel-Banner'));
+    await tester.tap(find.text('Pixel-Banner'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('By folder'));
+    await tester.pump(const Duration(milliseconds: 300));
+    // One section per character, not one per action sub-folder.
+    expect(find.text('ArcherSkeleton'), findsOneWidget);
+    expect(find.textContaining('ArcherSkeleton /'), findsNothing);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm16_images_by_folder', settle: false);
+
+    // Unpinned: the grid gets the height the header had.
+    final gridTop = tester.getTopLeft(find.byType(CustomScrollView)).dy;
+    await tester.tap(find.byTooltip('Unpin header — show it on hover (H)'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      tester.getTopLeft(find.byType(CustomScrollView)).dy,
+      lessThan(gridTop - 250),
+    );
+    expect(
+      File(p.join(tmp.path, 'settings.json')).readAsStringSync(),
+      contains('"detail_header_pinned": false'),
+    );
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm16_unpinned', settle: false);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(700, 700));
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(tester.getCenter(find.text('Hover for details')));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Used in'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm16_hover_header', settle: false);
+    await mouse.moveTo(const Offset(700, 700));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Used in'), findsNothing);
+
+    await tester.tap(find.textContaining('Animations ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('By folder'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('ArcherSkeleton'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm16_animations_folded', settle: false);
+
+    // H pins the header again.
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Used in'), findsOneWidget);
     expect(Directory(real).statSync().modified, before);
   });
 

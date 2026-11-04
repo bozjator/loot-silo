@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
@@ -14,8 +15,10 @@ import '../core/pack_editor.dart';
 import '../core/sidecar.dart';
 import '../core/text_preview.dart';
 import '../state/providers.dart';
+import '../state/settings.dart';
 import 'format.dart';
 import 'animation_grid.dart';
+import 'folder_groups.dart';
 import 'image_viewer.dart';
 import 'reveal.dart';
 import 'text_preview_dialog.dart';
@@ -45,43 +48,100 @@ class PackDetailScreen extends ConsumerWidget {
       );
     }
     final contents = ref.watch(packContentsProvider(packId));
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(pack.title),
-        actions: [
-          if (pack.itchUrl case final url?)
-            IconButton(
-              tooltip: 'itch.io page',
-              icon: const Icon(Icons.storefront_outlined),
-              onPressed: () => launchUrl(Uri.parse(url)),
-            ),
-          IconButton(
-            tooltip: 'Open folder',
-            icon: const Icon(Icons.folder_open),
-            onPressed: () => launchUrl(Uri.directory(pack.path)),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: switch (contents) {
-        AsyncData(:final value) => _Body(pack: pack, contents: value),
-        AsyncError(:final error) => Center(
-          child: Text('Could not read: $error'),
-        ),
-        _ => const Center(child: CircularProgressIndicator()),
+    final pinned = ref.watch(
+      settingsProvider.select((s) => s.detailHeaderPinned),
+    );
+    void togglePin() =>
+        ref.read(settingsProvider.notifier).setDetailHeaderPinned(!pinned);
+    return Focus(
+      autofocus: true,
+      // H pins or unpins the header, unless a text field has the key.
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent ||
+            event.logicalKey != LogicalKeyboardKey.keyH ||
+            HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isAltPressed ||
+            FocusManager.instance.primaryFocus?.context?.widget
+                is EditableText) {
+          return KeyEventResult.ignored;
+        }
+        togglePin();
+        return KeyEventResult.handled;
       },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(pack.title),
+          actions: [
+            IconButton(
+              tooltip: pinned
+                  ? 'Unpin header — show it on hover (H)'
+                  : 'Pin header (H)',
+              isSelected: pinned,
+              icon: const Icon(Icons.push_pin_outlined),
+              selectedIcon: const Icon(Icons.push_pin),
+              onPressed: togglePin,
+            ),
+            if (pack.itchUrl case final url?)
+              IconButton(
+                tooltip: 'itch.io page',
+                icon: const Icon(Icons.storefront_outlined),
+                onPressed: () => launchUrl(Uri.parse(url)),
+              ),
+            IconButton(
+              tooltip: 'Open folder',
+              icon: const Icon(Icons.folder_open),
+              onPressed: () => launchUrl(Uri.directory(pack.path)),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: switch (contents) {
+          AsyncData(:final value) => _Body(
+            pack: pack,
+            contents: value,
+            pinned: pinned,
+          ),
+          AsyncError(:final error) => Center(
+            child: Text('Could not read: $error'),
+          ),
+          _ => const Center(child: CircularProgressIndicator()),
+        },
+      ),
     );
   }
 }
 
-class _Body extends ConsumerWidget {
-  const _Body({required this.pack, required this.contents});
+class _Body extends StatefulWidget {
+  const _Body({
+    required this.pack,
+    required this.contents,
+    required this.pinned,
+  });
 
   final PackRow pack;
   final PackContents contents;
 
+  /// False: a slim bar replaces the header; hovering it shows the header
+  /// floating over the tabs, so nothing below moves.
+  final bool pinned;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  State<_Body> createState() => _BodyState();
+}
+
+class _BodyState extends State<_Body> {
+  var _peek = false;
+
+  @override
+  void didUpdateWidget(_Body old) {
+    super.didUpdateWidget(old);
+    if (widget.pinned) _peek = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pack = widget.pack;
+    final contents = widget.contents;
     final tabs = <(String, Widget)>[
       if (contents.animations.isNotEmpty)
         (
@@ -104,54 +164,135 @@ class _Body extends ConsumerWidget {
           _FilesTab(pack: pack, contents: contents),
         ),
     ];
+    final header = _Header(pack: pack, contents: contents);
+    final tabArea = <Widget>[
+      if (tabs.isEmpty)
+        const Expanded(child: Center(child: Text('No files')))
+      else ...[
+        TabBar(
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: [for (final (label, _) in tabs) Tab(text: label)],
+        ),
+        Expanded(child: TabBarView(children: [for (final (_, t) in tabs) t])),
+      ],
+    ];
     return DefaultTabController(
       length: tabs.length,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            // The info sizes to its content; it only scrolls when it would
-            // take more than half the window from the tabs.
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: math.max(
-                  300,
-                  MediaQuery.sizeOf(context).height * 0.5,
+      child: widget.pinned
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [header, ...tabArea],
+            )
+          : Stack(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    MouseRegion(
+                      onEnter: (_) => setState(() => _peek = true),
+                      child: _SlimHeader(pack: pack, contents: contents),
+                    ),
+                    ...tabArea,
+                  ],
                 ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 400,
-                    height: 300,
-                    child: _Carousel(
-                      pack: pack,
-                      images: contents.carousel(pack.preview),
-                      sizes: contents.sizes,
+                if (_peek)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: MouseRegion(
+                      onExit: (_) => setState(() => _peek = false),
+                      child: Material(
+                        elevation: 8,
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: header,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 24),
-                  Expanded(
-                    child: _Info(pack: pack, contents: contents),
-                  ),
-                ],
+              ],
+            ),
+    );
+  }
+}
+
+/// Carousel and info side by side.
+class _Header extends StatelessWidget {
+  const _Header({required this.pack, required this.contents});
+
+  final PackRow pack;
+  final PackContents contents;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      // The info sizes to its content; it only scrolls when it would
+      // take more than half the window from the tabs.
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: math.max(300, MediaQuery.sizeOf(context).height * 0.5),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 400,
+              height: 300,
+              child: _Carousel(
+                pack: pack,
+                images: contents.carousel(pack.preview),
+                sizes: contents.sizes,
               ),
             ),
-          ),
-          if (tabs.isEmpty)
-            const Expanded(child: Center(child: Text('No files')))
-          else ...[
-            TabBar(
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              tabs: [for (final (label, _) in tabs) Tab(text: label)],
-            ),
+            const SizedBox(width: 24),
             Expanded(
-              child: TabBarView(children: [for (final (_, t) in tabs) t]),
+              child: _Info(pack: pack, contents: contents),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The unpinned header: one line of facts; hover shows the full header.
+class _SlimHeader extends StatelessWidget {
+  const _SlimHeader({required this.pack, required this.contents});
+
+  final PackRow pack;
+  final PackContents contents;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Row(
+        children: [
+          Icon(iconForTypes(pack.types), size: 18),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              [
+                pack.author ?? 'Unknown author',
+                if (pack.types.isNotEmpty) pack.types.join(', '),
+                '${formatCount(pack.fileCount)} files',
+                formatBytes(pack.totalBytes),
+              ].join(' · '),
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Icon(Icons.unfold_more, size: 16, color: muted?.color),
+          const SizedBox(width: 4),
+          Text('Hover for details', style: muted),
         ],
       ),
     );
@@ -514,49 +655,76 @@ class _ChipRow extends StatelessWidget {
   }
 }
 
-class _ImagesTab extends ConsumerWidget {
+class _ImagesTab extends ConsumerStatefulWidget {
   const _ImagesTab({required this.pack, required this.contents});
 
   final PackRow pack;
   final PackContents contents;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ImagesTab> createState() => _ImagesTabState();
+}
+
+class _ImagesTabState extends ConsumerState<_ImagesTab> {
+  /// Folders folded away in the "By folder" view, for this visit.
+  final _collapsed = <String>{};
+
+  PackRow get pack => widget.pack;
+  PackContents get contents => widget.contents;
+
+  @override
+  Widget build(BuildContext context) {
     final images = contents.images;
     final size = imageThumbRange.clamp(
       ref.watch(settingsProvider.select((s) => s.imageThumbSize)),
     );
+    final view = ref.watch(settingsProvider.select((s) => s.imagesView));
     final settings = ref.read(settingsProvider.notifier);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: ThumbSizeSlider(
-              range: imageThumbRange,
-              value: size,
-              onChanged: settings.setImageThumbSize,
-            ),
+          child: Row(
+            children: [
+              ItemsViewToggle(view: view, onChanged: settings.setImagesView),
+              const Spacer(),
+              ThumbSizeSlider(
+                range: imageThumbRange,
+                value: size,
+                onChanged: settings.setImageThumbSize,
+              ),
+            ],
           ),
         ),
         Expanded(
           child: CtrlWheelResize(
             onSteps: (n) =>
                 settings.setImageThumbSize(imageThumbRange.nudge(size, n)),
-            child: _imageGrid(context, images, size),
+            child: _imageGrid(context, images, size, view),
           ),
         ),
       ],
     );
   }
 
-  Widget _imageGrid(BuildContext context, List<String> images, double size) {
-    return GridView.builder(
+  Widget _imageGrid(
+    BuildContext context,
+    List<String> images,
+    double size,
+    ItemsView view,
+  ) {
+    // The viewer steps through images in the order they're shown.
+    final order = visibleOrder(images, view, _collapsed);
+    return GroupedGrid(
       key: PageStorageKey('images:${pack.id}'),
+      rels: images,
+      view: view,
+      collapsed: _collapsed,
+      onToggleFolder: (f) => setState(
+        () => _collapsed.contains(f) ? _collapsed.remove(f) : _collapsed.add(f),
+      ),
       physics: const CtrlWheelPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       // A square image over a one-line file name.
       gridDelegate: ThumbGridDelegate(
         maxTileWidth: size,
@@ -564,7 +732,6 @@ class _ImagesTab extends ConsumerWidget {
         footer: (_) => 26,
         spacing: 8,
       ),
-      itemCount: images.length,
       itemBuilder: (context, i) {
         final rel = images[i];
         final file = File(p.join(pack.path, rel));
@@ -578,8 +745,8 @@ class _ImagesTab extends ConsumerWidget {
               onTap: () => showImageViewer(
                 context,
                 packPath: pack.path,
-                images: images,
-                index: i,
+                images: [for (final j in order) images[j]],
+                index: order.indexOf(i),
                 sizes: contents.sizes,
               ),
               child: Column(

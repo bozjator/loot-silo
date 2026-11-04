@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import '../core/animation_detector.dart';
 import '../state/providers.dart';
 import 'cursors.dart';
+import 'folder_groups.dart';
 import 'format.dart';
 import 'reveal.dart';
 import 'widgets/animated_sprite.dart';
@@ -46,6 +47,9 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
   final _keys = FocusNode(debugLabel: 'animations');
   int? _focused;
 
+  /// Folders folded away in the "By folder" view, for this visit.
+  final _collapsed = <String>{};
+
   @override
   void dispose() {
     _keys.dispose();
@@ -62,14 +66,20 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     final focused = _focused;
     if (event is KeyUpEvent || focused == null) return KeyEventResult.ignored;
-    final last = widget.animations.length - 1;
+    // Arrows step through the cards in on-screen order.
+    final order = visibleOrder(
+      [for (final a in widget.animations) a.path],
+      ref.read(settingsProvider).animationsView,
+      _collapsed,
+    );
+    final at = order.indexOf(focused);
     switch (event.logicalKey) {
       case LogicalKeyboardKey.escape:
         _focus(null);
-      case LogicalKeyboardKey.arrowLeft:
-        _focus(math.max(0, focused - 1));
-      case LogicalKeyboardKey.arrowRight:
-        _focus(math.min(last, focused + 1));
+      case LogicalKeyboardKey.arrowLeft when at >= 0:
+        _focus(order[math.max(0, at - 1)]);
+      case LogicalKeyboardKey.arrowRight when at >= 0:
+        _focus(order[math.min(order.length - 1, at + 1)]);
       default:
         return KeyEventResult.ignored;
     }
@@ -82,6 +92,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
     final size = animationThumbRange.clamp(
       ref.watch(settingsProvider.select((s) => s.animationThumbSize)),
     );
+    final view = ref.watch(settingsProvider.select((s) => s.animationsView));
     final settings = ref.read(settingsProvider.notifier);
     return Focus(
       focusNode: _keys,
@@ -91,13 +102,19 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: ThumbSizeSlider(
-                range: animationThumbRange,
-                value: size,
-                onChanged: settings.setAnimationThumbSize,
-              ),
+            child: Row(
+              children: [
+                ItemsViewToggle(
+                  view: view,
+                  onChanged: settings.setAnimationsView,
+                ),
+                const Spacer(),
+                ThumbSizeSlider(
+                  range: animationThumbRange,
+                  value: size,
+                  onChanged: settings.setAnimationThumbSize,
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -109,8 +126,21 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => _focus(null),
-                child: GridView.builder(
+                child: GroupedGrid(
                   key: PageStorageKey('animations:${widget.gridId}'),
+                  rels: [for (final a in anims) a.path],
+                  view: view,
+                  collapsed: _collapsed,
+                  onToggleFolder: (f) => setState(() {
+                    if (!_collapsed.remove(f)) _collapsed.add(f);
+                    // A card folded out of sight can't stay focused.
+                    final i = _focused;
+                    final paths = [for (final a in anims) a.path];
+                    if (i != null &&
+                        !visibleOrder(paths, view, _collapsed).contains(i)) {
+                      _focused = null;
+                    }
+                  }),
                   physics: const CtrlWheelPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   // A square stage over a title and a details line.
@@ -119,7 +149,6 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                     imageAspect: 1,
                     footer: (_) => 64,
                   ),
-                  itemCount: anims.length,
                   // Only built (so only playing) while on screen.
                   itemBuilder: (context, i) => _AnimationTile(
                     key: ValueKey(anims[i].path),

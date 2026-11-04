@@ -4,6 +4,9 @@ import 'dart:io';
 /// Light, dark or follow the system.
 enum ThemeChoice { system, light, dark }
 
+/// How a pack's Images and Animations tabs list their files.
+enum ItemsView { flat, folders }
+
 /// User settings, stored as JSON in the app support folder.
 class AppSettings {
   const AppSettings({
@@ -15,6 +18,9 @@ class AppSettings {
     this.dashboardTileSize = 240,
     this.imageThumbSize = 160,
     this.animationThumbSize = 200,
+    this.detailHeaderPinned = true,
+    this.imagesView = ItemsView.flat,
+    this.animationsView = ItemsView.flat,
   });
 
   /// The managed library folder; null until the user picks one.
@@ -40,6 +46,13 @@ class AppSettings {
   /// Widest an animation card in a pack's Animations tab may get.
   final double animationThumbSize;
 
+  /// The pack detail header (previews + info) stays above the tabs; when
+  /// off it shrinks to a slim bar that shows the header on hover.
+  final bool detailHeaderPinned;
+
+  final ItemsView imagesView;
+  final ItemsView animationsView;
+
   factory AppSettings.fromJson(Map<String, Object?> json) => AppSettings(
     libraryPath: json['library_path'] as String?,
     theme: ThemeChoice.values.asNameMap()[json['theme']] ?? ThemeChoice.system,
@@ -50,6 +63,11 @@ class AppSettings {
     imageThumbSize: (json['image_thumb_size'] as num?)?.toDouble() ?? 160,
     animationThumbSize:
         (json['animation_thumb_size'] as num?)?.toDouble() ?? 200,
+    detailHeaderPinned: json['detail_header_pinned'] != false,
+    imagesView:
+        ItemsView.values.asNameMap()[json['images_view']] ?? ItemsView.flat,
+    animationsView:
+        ItemsView.values.asNameMap()[json['animations_view']] ?? ItemsView.flat,
   );
 
   Map<String, Object?> toJson() => {
@@ -61,6 +79,9 @@ class AppSettings {
     'dashboard_tile_size': dashboardTileSize,
     'image_thumb_size': imageThumbSize,
     'animation_thumb_size': animationThumbSize,
+    'detail_header_pinned': detailHeaderPinned,
+    'images_view': imagesView.name,
+    'animations_view': animationsView.name,
   };
 
   AppSettings copyWith({
@@ -72,6 +93,9 @@ class AppSettings {
     double? dashboardTileSize,
     double? imageThumbSize,
     double? animationThumbSize,
+    bool? detailHeaderPinned,
+    ItemsView? imagesView,
+    ItemsView? animationsView,
   }) => AppSettings(
     libraryPath: libraryPath ?? this.libraryPath,
     theme: theme ?? this.theme,
@@ -81,6 +105,9 @@ class AppSettings {
     dashboardTileSize: dashboardTileSize ?? this.dashboardTileSize,
     imageThumbSize: imageThumbSize ?? this.imageThumbSize,
     animationThumbSize: animationThumbSize ?? this.animationThumbSize,
+    detailHeaderPinned: detailHeaderPinned ?? this.detailHeaderPinned,
+    imagesView: imagesView ?? this.imagesView,
+    animationsView: animationsView ?? this.animationsView,
   );
 }
 

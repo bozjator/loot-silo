@@ -83,6 +83,14 @@ class SettingsNotifier extends Notifier<AppSettings> {
     }
   }
 
+  void setDetailHeaderPinned(bool on) =>
+      _save(state.copyWith(detailHeaderPinned: on));
+
+  void setImagesView(ItemsView view) => _save(state.copyWith(imagesView: view));
+
+  void setAnimationsView(ItemsView view) =>
+      _save(state.copyWith(animationsView: view));
+
   void setAnimationThumbSize(double size) {
     if (size != state.animationThumbSize) {
       _save(state.copyWith(animationThumbSize: size));

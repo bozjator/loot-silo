@@ -59,11 +59,17 @@ void main() {
         animateAll: true,
         audioLoop: true,
         viewerPixelPerfect: true,
+        detailHeaderPinned: false,
+        imagesView: ItemsView.folders,
+        animationsView: ItemsView.folders,
       ),
     );
     final back = store.load();
     expect(back.audioLoop, isTrue);
     expect(back.viewerPixelPerfect, isTrue);
+    expect(back.detailHeaderPinned, isFalse);
+    expect(back.imagesView, ItemsView.folders);
+    expect(back.animationsView, ItemsView.folders);
     expect(back.libraryPath, '/lib');
     expect(back.theme, ThemeChoice.dark);
     expect(back.animateAll, isTrue);
@@ -72,6 +78,8 @@ void main() {
     expect(store.load().animateAll, isFalse);
     expect(store.load().audioLoop, isFalse);
     expect(store.load().viewerPixelPerfect, isFalse);
+    expect(store.load().detailHeaderPinned, isTrue);
+    expect(store.load().imagesView, ItemsView.flat);
   });
 
   testWidgets('settings screen saves theme and animation, Esc closes it', (

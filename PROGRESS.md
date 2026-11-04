@@ -36,7 +36,9 @@ Round 2 (plan: `FIXES_PLAN.md`):
   (80–400, `image_thumb_size`), Ctrl + wheel over either grid, `ThumbGridDelegate` (fixed footer, no clipping)
 - [x] 15. Animations grid + focus mode — responsive grid (`animation_thumb_size`, slider + Ctrl + wheel), editor
   in an Edit dialog (saving unchanged), focus dims/pauses others, Esc/click/←→; 60 animations scroll at ~2 ms/frame
-- [ ] 16. Pinnable detail header + folder grouping
+- [x] 16. Pinnable detail header + folder grouping — pin button / `H` (`detail_header_pinned`), slim bar with
+  floating header on hover; Flat | By folder for images and animations (`images_view`, `animations_view`) with
+  collapsible sections at an adaptive folder depth; viewer and ←/→ follow the on-screen order
 - [ ] 17. Dashboard sub-folder view + tag sort
 
 ## How to verify
@@ -48,9 +50,9 @@ xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.da
 Screenshots land in `screenshots/` (gitignored).
 
 ## Last iteration
-- Done: milestone 15. `ui/animation_grid.dart` (`AnimationGrid`, `_AnimationTile`), `_AnimationEditorDialog` in the
-  detail screen, `RevealButton` in `ui/reveal.dart`. 156 unit/widget tests + 19 integration.
-- Next: milestone 16 (pinnable detail header + folder grouping).
+- Done: milestone 16. `ui/folder_groups.dart` (`groupByFolder`, `visibleOrder`, `GroupedGrid`, `ItemsViewToggle`),
+  `_Header` / `_SlimHeader` in the detail screen. 163 unit/widget tests + 20 integration.
+- Next: milestone 17 (dashboard sub-folder view + tag sort) — the last one.
 
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.
