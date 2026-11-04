@@ -41,6 +41,12 @@ class PackDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(pack.title),
         actions: [
+          if (pack.itchUrl case final url?)
+            IconButton(
+              tooltip: 'itch.io page',
+              icon: const Icon(Icons.storefront_outlined),
+              onPressed: () => launchUrl(Uri.parse(url)),
+            ),
           IconButton(
             tooltip: 'Open folder',
             icon: const Icon(Icons.folder_open),

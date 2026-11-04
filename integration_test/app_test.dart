@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
 import 'package:assets_explorer/core/library_index.dart';
+import 'package:assets_explorer/itch/itch_api.dart';
+import 'package:assets_explorer/itch/itch_key.dart';
+import 'package:assets_explorer/state/itch.dart';
 import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
@@ -11,11 +15,26 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path/path.dart' as p;
 
 import '../test/helpers/fs.dart';
 import 'screenshot_helper.dart';
+
+class MemoryKeyStore implements KeyStore {
+  String? key;
+
+  @override
+  Future<String?> read() async => key;
+
+  @override
+  Future<void> write(String k) async => key = k;
+
+  @override
+  Future<void> delete() async => key = null;
+}
 
 /// Pumps until [finder] matches; real isolates need real time.
 Future<void> pumpUntil(
@@ -57,12 +76,24 @@ void main() {
 
   late Directory tmp;
   late String lib;
+  final keyStore = MemoryKeyStore();
   setUp(() {
+    keyStore.key = null;
     tmp = Directory.systemTemp.createTempSync('it');
     lib = p.join(tmp.path, 'library');
     Directory(lib).createSync();
   });
   tearDown(() => tmp.deleteSync(recursive: true));
+
+  /// itch.io as seen by the app in tests; null = the real API.
+  http.Client? itchClient;
+
+  /// The developer's real key file, for the read-only live screenshots.
+  final liveEnvFile = p.join(
+    Platform.environment['HOME'] ?? '',
+    '.config/my-dev-claude/assets-explorer-app.env',
+  );
+  var useLiveKey = false;
 
   /// Archives the "Import archive" button picks.
   var pickedArchives = <String>[];
@@ -80,6 +111,17 @@ void main() {
           directoryPickerProvider.overrideWithValue((_) async => source),
           archivePickerProvider.overrideWithValue(() async => pickedArchives),
           extractRootProvider.overrideWithValue(p.join(tmp.path, 'extract')),
+          keyStoreProvider.overrideWithValue(keyStore),
+          if (itchClient == null && useLiveKey)
+            envKeyProvider.overrideWithValue(
+              () => readKeyFromEnvFile(liveEnvFile),
+            ),
+          if (itchClient case final client?) ...[
+            itchApiFactoryProvider.overrideWithValue(
+              (key) => ItchApi(key, client: client),
+            ),
+            envKeyProvider.overrideWithValue(() => null),
+          ],
           saveLocationProvider.overrideWithValue(
             (name) async => p.join(tmp.path, name),
           ),
@@ -444,5 +486,145 @@ void main() {
       reason: 'temporary extraction removed',
     );
     expect(File(zipPath).existsSync(), isTrue, reason: 'archive kept');
+  });
+
+  testWidgets('itch: connect, link a matching pack, download a missing one', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final zip = ZipEncoder().encodeBytes(
+      Archive()..add(
+        ArchiveFile.bytes(
+          'Orc Pack/orc.png',
+          File('test/fixtures/images/hero.png').readAsBytesSync(),
+        ),
+      ),
+    );
+    final cover = File('test/fixtures/images/hero.png').readAsBytesSync();
+    Map<String, Object?> game(int id, String title, String user) => {
+      'id': id,
+      'title': title,
+      'url': 'https://$user.itch.io/g$id',
+      'classification': 'assets',
+      'cover_url': 'https://img.example/c$id.png',
+      'user': {'id': id, 'username': user, 'url': 'https://$user.itch.io'},
+    };
+    itchClient = MockClient((r) async {
+      final path = '${r.url.host}${r.url.path}';
+      if (r.url.host == 'api.itch.io' &&
+          r.headers['Authorization'] != 'Bearer test-key') {
+        return http.Response('{"errors":["invalid key"]}', 401);
+      }
+      return switch (path) {
+        'api.itch.io/profile' => http.Response(
+          '{"user":{"id":1,"username":"tester"}}',
+          200,
+        ),
+        'api.itch.io/profile/owned-keys' => http.Response(
+          jsonEncode(
+            r.url.queryParameters['page'] == '1'
+                ? {
+                    'owned_keys': [
+                      {'id': 10, 'game': game(1, 'Knight Pack', 'heromaker')},
+                      {'id': 20, 'game': game(2, 'Orc Pack', 'orcmaker')},
+                    ],
+                    'per_page': 50,
+                  }
+                : {'owned_keys': {}},
+          ),
+          200,
+        ),
+        'api.itch.io/games/2/uploads' => http.Response(
+          jsonEncode({
+            'uploads': [
+              {'id': 5, 'filename': 'orc.zip', 'size': zip.length},
+            ],
+          }),
+          200,
+        ),
+        'api.itch.io/uploads/5/download' => http.Response(
+          '',
+          302,
+          headers: {'location': 'https://cdn.example/orc.zip'},
+        ),
+        'cdn.example/orc.zip' => http.Response.bytes(zip, 200),
+        'img.example/c1.png' ||
+        'img.example/c2.png' => http.Response.bytes(cover, 200),
+        _ => http.Response('<html></html>', 200),
+      };
+    });
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Slimes'));
+    await tester.tap(find.byTooltip('itch.io'));
+    await pumpUntil(tester, find.text('Connect itch.io'));
+    await captureScreenshot(tester, 'm9_connect');
+    await tester.enterText(find.byType(TextField), 'wrong');
+    await tester.tap(find.text('Connect'));
+    await pumpUntil(tester, find.textContaining('rejected the API key'));
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'test-key');
+    await tester.pump();
+    await tester.tap(find.text('Connect'));
+    await pumpUntil(tester, find.textContaining('Signed in as tester'));
+    expect(keyStore.key, 'test-key');
+    await pumpUntil(tester, find.text('Orc Pack'));
+    await captureScreenshot(tester, 'm9_missing');
+
+    await tester.tap(find.text('Download'));
+    // Once installed, the game moves from Missing to In library.
+    await pumpUntil(
+      tester,
+      find.text('Every owned asset is in the library.'),
+      seconds: 90,
+    );
+    expect(
+      File(p.join(lib, 'orcmaker', 'Orc Pack', 'asset_pack.json'))
+          .readAsStringSync(),
+      contains('"itch_game_id": 2'),
+    );
+
+    await tester.tap(find.text('To link'));
+    await pumpUntil(tester, find.text('Link'));
+    await settleImages(tester);
+    await tester.tap(find.text('Link'));
+    await pumpUntil(tester, find.text('Nothing left to link.'));
+    expect(
+      File(p.join(lib, 'HeroMaker', 'Knight Pack', '_itch', 'c1.png'))
+              .existsSync() ||
+          File(p.join(lib, 'HeroMaker', 'Knight Pack', '_itch', 'cover.png'))
+              .existsSync(),
+      isTrue,
+    );
+    await tester.tap(find.text('In library'));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await pumpUntil(tester, find.text('Orc Pack'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm9_in_library');
+  });
+
+  testWidgets('itch on the real account and library (read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync() || !File(liveEnvFile).existsSync()) {
+      return;
+    }
+    itchClient = null;
+    useLiveKey = true;
+    addTearDown(() => useLiveKey = false);
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+    await tester.tap(find.byTooltip('itch.io'));
+    await pumpUntil(tester, find.textContaining('Signed in as'), seconds: 90);
+    await pumpUntil(tester, find.text('Download all missing (3)'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm9_real_missing');
+    await tester.tap(find.text('To link'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm9_real_to_link');
+    expect(keyStore.key, isNull, reason: 'env key is never saved');
   });
 }

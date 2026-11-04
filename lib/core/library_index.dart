@@ -44,6 +44,10 @@ class Packs extends Table {
   TextColumn get tags => text().map(const StringListConverter())();
   TextColumn get source => text().nullable()();
 
+  /// itch.io game this pack came from or was linked to.
+  IntColumn get itchGameId => integer().nullable()();
+  TextColumn get itchUrl => text().nullable()();
+
   /// Games this pack is credited in (sidecar `used_in`).
   TextColumn get usedIn => text().map(const StringListConverter())();
 
@@ -88,7 +92,7 @@ class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("
@@ -135,6 +139,8 @@ class LibraryIndex extends _$LibraryIndex {
             tags: pk.tags,
             source: Value(pk.source?.name),
             usedIn: pk.sidecar?.usedIn ?? const [],
+            itchGameId: Value(pk.sidecar?.itchGameId),
+            itchUrl: Value(pk.sidecar?.itchUrl),
             preview: Value(pk.preview),
             previewAnim: Value(pk.previewAnim),
             fileCount: pk.files.length,
@@ -201,6 +207,25 @@ class LibraryIndex extends _$LibraryIndex {
       ..where((f) => f.packId.equals(packId))
       ..orderBy([(f) => OrderingTerm.asc(f.relPath)]);
     return q.map((f) => (f.relPath, f.size)).get();
+  }
+
+  /// Folder names inside each pack (two levels deep), for spotting itch
+  /// games that were merged into a bigger folder.
+  Future<Map<String, Set<String>>> folderNames() async {
+    final out = <String, Set<String>>{};
+    final rows = await (selectOnly(
+      packFiles,
+    )..addColumns([packFiles.packId, packFiles.relPath])).get();
+    for (final r in rows) {
+      final String rel = r.read(packFiles.relPath)!;
+      final String id = r.read(packFiles.packId)!;
+      final parts = rel.split('/');
+      if (parts.length < 2) continue;
+      (out[id] ??= <String>{}).addAll(
+        parts.sublist(0, parts.length - 1).take(2),
+      );
+    }
+    return out;
   }
 
   /// Pack ids matching [query], best match first. Every word must match

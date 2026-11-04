@@ -17,13 +17,13 @@ Decision log: `../REPORT_APP_CREATION.md`
   copy, save), author info dialog (URL, license, credit wording, attribution); licenses prefilled from OLD INDEX.md
 - [x] 8. Archive import — zip/tar/tar.gz via `archive` (zip-slip safe), 7z/rar via 7zz → 7z → unrar; root
   normalised; drop zone + "Import archive" button feed the folder-import review; source_path = the archive
-- [ ] 9. itch sync
-  - [ ] API key from secure storage / env file (never logged); settings field
-  - [ ] client: owned keys (paginated), game + uploads, download URL; live smoke test with the env key
-  - [ ] matching owned games ↔ library packs (itch_game_id, url, normalised title + author)
-  - [ ] itch screen: matched / missing list, "Download all missing", per-item download → archive installer
-  - [ ] covers + screenshots into `<Pack>/_itch/`; app fully usable without a key
+- [x] 9. itch sync — key from keychain (or ITCH_API_KEY / .env / ITCH_ENV_FILE, never logged), owned keys
+  paginated, IDF title matcher + author check (real account: 53 to link, 12 inside Pixel-Banner, 5 missing),
+  link/download queue through the import pipeline, covers + screenshots in `<Pack>/_itch/`
 - [ ] 10. Polish
+  - [ ] settings screen: library path, theme, animate-all, itch key
+  - [ ] keyboard shortcuts (Ctrl+F search, Ctrl+I import, Ctrl+R rescan, Esc back)
+  - [ ] empty / error states reviewed; final screenshots; report finalised
 
 ## How to verify
 ```
@@ -34,10 +34,10 @@ xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.da
 Screenshots land in `screenshots/` (gitignored).
 
 ## Last iteration
-- Done: milestone 8. `install/archive_extractor.dart`, `ui/archive_import.dart`, `DropZone` on the home screen,
-  `planFolderImport(origins:)` so archive imports record the archive as `source_path` and re-imports are flagged.
-  107 tests + 8 integration (m8_* screenshots).
-- Next: milestone 9 — itch sync.
+- Done: milestone 9. `itch/` (api, matcher, page scraper, key, sync), `state/itch.dart`, `ui/itch_screen.dart`.
+  "Download all" leaves out tools and bundles from authors already in the library. 117 unit tests (+1 live, opt-in
+  with `-t live`) and 10 integration tests, including read-only screenshots of the real account.
+- Next: milestone 10 — polish.
 
 ## Open questions
 - Pixel-Banner's 13 character folders are one pack ("Pixel-Banner") — they have no license/preview each.
@@ -48,3 +48,6 @@ Screenshots land in `screenshots/` (gitignored).
 - None blocking. `7zz` isn't installed but `7z` is; the extractor tries `7zz`, `7z`, `7za`, then `unrar`.
 - No `.rar` test fixture: nothing on this machine can create one (`rar` isn't installed). 7z goes through the
   same CLI path and is tested; drag-and-drop itself can't be driven under xvfb (the drop handler is plain code).
+- itch: the 12 Pixel-Banner enemies show as "inside a pack" (folders of the big Pixel-Banner pack). Bundle items
+  must be claimed on itch.io before they show up as owned — that's a website action for you. Nothing was downloaded
+  from the real account; the 3 "Download all" candidates are waiting for you to press the button.

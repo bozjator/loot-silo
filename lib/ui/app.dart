@@ -10,6 +10,7 @@ import 'archive_import.dart';
 import 'credits_screen.dart';
 import 'dashboard.dart';
 import 'folder_import_screen.dart';
+import 'itch_screen.dart';
 
 /// Root widget of Asset Explorer.
 class AssetsExplorerApp extends StatelessWidget {
@@ -138,6 +139,13 @@ class HomeScreen extends ConsumerWidget {
               )
             : null,
         actions: [
+          IconButton(
+            tooltip: 'itch.io',
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => const ItchScreen())),
+            icon: const Icon(Icons.storefront_outlined),
+          ),
           IconButton(
             tooltip: 'Credits',
             onPressed: () => Navigator.of(context).push(

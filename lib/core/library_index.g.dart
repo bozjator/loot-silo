@@ -107,6 +107,28 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _itchGameIdMeta = const VerificationMeta(
+    'itchGameId',
+  );
+  @override
+  late final GeneratedColumn<int> itchGameId = GeneratedColumn<int>(
+    'itch_game_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _itchUrlMeta = const VerificationMeta(
+    'itchUrl',
+  );
+  @override
+  late final GeneratedColumn<String> itchUrl = GeneratedColumn<String>(
+    'itch_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   late final GeneratedColumnWithTypeConverter<List<String>, String> usedIn =
       GeneratedColumn<String>(
@@ -170,6 +192,8 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     types,
     tags,
     source,
+    itchGameId,
+    itchUrl,
     usedIn,
     preview,
     previewAnim,
@@ -242,6 +266,21 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
       context.handle(
         _sourceMeta,
         source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    }
+    if (data.containsKey('itch_game_id')) {
+      context.handle(
+        _itchGameIdMeta,
+        itchGameId.isAcceptableOrUnknown(
+          data['itch_game_id']!,
+          _itchGameIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('itch_url')) {
+      context.handle(
+        _itchUrlMeta,
+        itchUrl.isAcceptableOrUnknown(data['itch_url']!, _itchUrlMeta),
       );
     }
     if (data.containsKey('preview')) {
@@ -319,6 +358,14 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
         DriftSqlType.string,
         data['${effectivePrefix}source'],
       ),
+      itchGameId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}itch_game_id'],
+      ),
+      itchUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}itch_url'],
+      ),
       usedIn: $PacksTable.$converterusedIn.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.string,
@@ -375,6 +422,10 @@ class PackRow extends DataClass implements Insertable<PackRow> {
   final List<String> tags;
   final String? source;
 
+  /// itch.io game this pack came from or was linked to.
+  final int? itchGameId;
+  final String? itchUrl;
+
   /// Games this pack is credited in (sidecar `used_in`).
   final List<String> usedIn;
 
@@ -396,6 +447,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     required this.types,
     required this.tags,
     this.source,
+    this.itchGameId,
+    this.itchUrl,
     required this.usedIn,
     this.preview,
     this.previewAnim,
@@ -426,6 +479,12 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     }
     if (!nullToAbsent || source != null) {
       map['source'] = Variable<String>(source);
+    }
+    if (!nullToAbsent || itchGameId != null) {
+      map['itch_game_id'] = Variable<int>(itchGameId);
+    }
+    if (!nullToAbsent || itchUrl != null) {
+      map['itch_url'] = Variable<String>(itchUrl);
     }
     {
       map['used_in'] = Variable<String>(
@@ -465,6 +524,12 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       source: source == null && nullToAbsent
           ? const Value.absent()
           : Value(source),
+      itchGameId: itchGameId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(itchGameId),
+      itchUrl: itchUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(itchUrl),
       usedIn: Value(usedIn),
       preview: preview == null && nullToAbsent
           ? const Value.absent()
@@ -493,6 +558,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       types: serializer.fromJson<List<String>>(json['types']),
       tags: serializer.fromJson<List<String>>(json['tags']),
       source: serializer.fromJson<String?>(json['source']),
+      itchGameId: serializer.fromJson<int?>(json['itchGameId']),
+      itchUrl: serializer.fromJson<String?>(json['itchUrl']),
       usedIn: serializer.fromJson<List<String>>(json['usedIn']),
       preview: serializer.fromJson<String?>(json['preview']),
       previewAnim: serializer.fromJson<SpriteAnim?>(json['previewAnim']),
@@ -514,6 +581,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       'types': serializer.toJson<List<String>>(types),
       'tags': serializer.toJson<List<String>>(tags),
       'source': serializer.toJson<String?>(source),
+      'itchGameId': serializer.toJson<int?>(itchGameId),
+      'itchUrl': serializer.toJson<String?>(itchUrl),
       'usedIn': serializer.toJson<List<String>>(usedIn),
       'preview': serializer.toJson<String?>(preview),
       'previewAnim': serializer.toJson<SpriteAnim?>(previewAnim),
@@ -533,6 +602,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     List<String>? types,
     List<String>? tags,
     Value<String?> source = const Value.absent(),
+    Value<int?> itchGameId = const Value.absent(),
+    Value<String?> itchUrl = const Value.absent(),
     List<String>? usedIn,
     Value<String?> preview = const Value.absent(),
     Value<SpriteAnim?> previewAnim = const Value.absent(),
@@ -549,6 +620,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     types: types ?? this.types,
     tags: tags ?? this.tags,
     source: source.present ? source.value : this.source,
+    itchGameId: itchGameId.present ? itchGameId.value : this.itchGameId,
+    itchUrl: itchUrl.present ? itchUrl.value : this.itchUrl,
     usedIn: usedIn ?? this.usedIn,
     preview: preview.present ? preview.value : this.preview,
     previewAnim: previewAnim.present ? previewAnim.value : this.previewAnim,
@@ -569,6 +642,10 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       types: data.types.present ? data.types.value : this.types,
       tags: data.tags.present ? data.tags.value : this.tags,
       source: data.source.present ? data.source.value : this.source,
+      itchGameId: data.itchGameId.present
+          ? data.itchGameId.value
+          : this.itchGameId,
+      itchUrl: data.itchUrl.present ? data.itchUrl.value : this.itchUrl,
       usedIn: data.usedIn.present ? data.usedIn.value : this.usedIn,
       preview: data.preview.present ? data.preview.value : this.preview,
       previewAnim: data.previewAnim.present
@@ -594,6 +671,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           ..write('types: $types, ')
           ..write('tags: $tags, ')
           ..write('source: $source, ')
+          ..write('itchGameId: $itchGameId, ')
+          ..write('itchUrl: $itchUrl, ')
           ..write('usedIn: $usedIn, ')
           ..write('preview: $preview, ')
           ..write('previewAnim: $previewAnim, ')
@@ -615,6 +694,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     types,
     tags,
     source,
+    itchGameId,
+    itchUrl,
     usedIn,
     preview,
     previewAnim,
@@ -635,6 +716,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           other.types == this.types &&
           other.tags == this.tags &&
           other.source == this.source &&
+          other.itchGameId == this.itchGameId &&
+          other.itchUrl == this.itchUrl &&
           other.usedIn == this.usedIn &&
           other.preview == this.preview &&
           other.previewAnim == this.previewAnim &&
@@ -653,6 +736,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
   final Value<List<String>> types;
   final Value<List<String>> tags;
   final Value<String?> source;
+  final Value<int?> itchGameId;
+  final Value<String?> itchUrl;
   final Value<List<String>> usedIn;
   final Value<String?> preview;
   final Value<SpriteAnim?> previewAnim;
@@ -670,6 +755,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     this.types = const Value.absent(),
     this.tags = const Value.absent(),
     this.source = const Value.absent(),
+    this.itchGameId = const Value.absent(),
+    this.itchUrl = const Value.absent(),
     this.usedIn = const Value.absent(),
     this.preview = const Value.absent(),
     this.previewAnim = const Value.absent(),
@@ -688,6 +775,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     required List<String> types,
     required List<String> tags,
     this.source = const Value.absent(),
+    this.itchGameId = const Value.absent(),
+    this.itchUrl = const Value.absent(),
     required List<String> usedIn,
     this.preview = const Value.absent(),
     this.previewAnim = const Value.absent(),
@@ -714,6 +803,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Expression<String>? types,
     Expression<String>? tags,
     Expression<String>? source,
+    Expression<int>? itchGameId,
+    Expression<String>? itchUrl,
     Expression<String>? usedIn,
     Expression<String>? preview,
     Expression<String>? previewAnim,
@@ -732,6 +823,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       if (types != null) 'types': types,
       if (tags != null) 'tags': tags,
       if (source != null) 'source': source,
+      if (itchGameId != null) 'itch_game_id': itchGameId,
+      if (itchUrl != null) 'itch_url': itchUrl,
       if (usedIn != null) 'used_in': usedIn,
       if (preview != null) 'preview': preview,
       if (previewAnim != null) 'preview_anim': previewAnim,
@@ -752,6 +845,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Value<List<String>>? types,
     Value<List<String>>? tags,
     Value<String?>? source,
+    Value<int?>? itchGameId,
+    Value<String?>? itchUrl,
     Value<List<String>>? usedIn,
     Value<String?>? preview,
     Value<SpriteAnim?>? previewAnim,
@@ -770,6 +865,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       types: types ?? this.types,
       tags: tags ?? this.tags,
       source: source ?? this.source,
+      itchGameId: itchGameId ?? this.itchGameId,
+      itchUrl: itchUrl ?? this.itchUrl,
       usedIn: usedIn ?? this.usedIn,
       preview: preview ?? this.preview,
       previewAnim: previewAnim ?? this.previewAnim,
@@ -816,6 +913,12 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     if (source.present) {
       map['source'] = Variable<String>(source.value);
     }
+    if (itchGameId.present) {
+      map['itch_game_id'] = Variable<int>(itchGameId.value);
+    }
+    if (itchUrl.present) {
+      map['itch_url'] = Variable<String>(itchUrl.value);
+    }
     if (usedIn.present) {
       map['used_in'] = Variable<String>(
         $PacksTable.$converterusedIn.toSql(usedIn.value),
@@ -854,6 +957,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
           ..write('types: $types, ')
           ..write('tags: $tags, ')
           ..write('source: $source, ')
+          ..write('itchGameId: $itchGameId, ')
+          ..write('itchUrl: $itchUrl, ')
           ..write('usedIn: $usedIn, ')
           ..write('preview: $preview, ')
           ..write('previewAnim: $previewAnim, ')
@@ -1426,6 +1531,8 @@ typedef $$PacksTableCreateCompanionBuilder = PacksCompanion Function({
   required List<String> types,
   required List<String> tags,
   Value<String?> source,
+  Value<int?> itchGameId,
+  Value<String?> itchUrl,
   required List<String> usedIn,
   Value<String?> preview,
   Value<SpriteAnim?> previewAnim,
@@ -1444,6 +1551,8 @@ typedef $$PacksTableUpdateCompanionBuilder = PacksCompanion Function({
   Value<List<String>> types,
   Value<List<String>> tags,
   Value<String?> source,
+  Value<int?> itchGameId,
+  Value<String?> itchUrl,
   Value<List<String>> usedIn,
   Value<String?> preview,
   Value<SpriteAnim?> previewAnim,
@@ -1509,6 +1618,16 @@ class $$PacksTableFilterComposer extends Composer<_$LibraryIndex, $PacksTable> {
 
   ColumnFilters<String> get source => $composableBuilder(
     column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get itchGameId => $composableBuilder(
+    column: $table.itchGameId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get itchUrl => $composableBuilder(
+    column: $table.itchUrl,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1599,6 +1718,16 @@ class $$PacksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get itchGameId => $composableBuilder(
+    column: $table.itchGameId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get itchUrl => $composableBuilder(
+    column: $table.itchUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get usedIn => $composableBuilder(
     column: $table.usedIn,
     builder: (column) => ColumnOrderings(column),
@@ -1666,6 +1795,14 @@ class $$PacksTableAnnotationComposer
   GeneratedColumn<String> get source =>
       $composableBuilder(column: $table.source, builder: (column) => column);
 
+  GeneratedColumn<int> get itchGameId => $composableBuilder(
+    column: $table.itchGameId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get itchUrl =>
+      $composableBuilder(column: $table.itchUrl, builder: (column) => column);
+
   GeneratedColumnWithTypeConverter<List<String>, String> get usedIn =>
       $composableBuilder(column: $table.usedIn, builder: (column) => column);
 
@@ -1725,6 +1862,8 @@ class $$PacksTableTableManager
                 Value<List<String>> types = const Value.absent(),
                 Value<List<String>> tags = const Value.absent(),
                 Value<String?> source = const Value.absent(),
+                Value<int?> itchGameId = const Value.absent(),
+                Value<String?> itchUrl = const Value.absent(),
                 Value<List<String>> usedIn = const Value.absent(),
                 Value<String?> preview = const Value.absent(),
                 Value<SpriteAnim?> previewAnim = const Value.absent(),
@@ -1742,6 +1881,8 @@ class $$PacksTableTableManager
                 types: types,
                 tags: tags,
                 source: source,
+                itchGameId: itchGameId,
+                itchUrl: itchUrl,
                 usedIn: usedIn,
                 preview: preview,
                 previewAnim: previewAnim,
@@ -1761,6 +1902,8 @@ class $$PacksTableTableManager
                 required List<String> types,
                 required List<String> tags,
                 Value<String?> source = const Value.absent(),
+                Value<int?> itchGameId = const Value.absent(),
+                Value<String?> itchUrl = const Value.absent(),
                 required List<String> usedIn,
                 Value<String?> preview = const Value.absent(),
                 Value<SpriteAnim?> previewAnim = const Value.absent(),
@@ -1778,6 +1921,8 @@ class $$PacksTableTableManager
                 types: types,
                 tags: tags,
                 source: source,
+                itchGameId: itchGameId,
+                itchUrl: itchUrl,
                 usedIn: usedIn,
                 preview: preview,
                 previewAnim: previewAnim,
