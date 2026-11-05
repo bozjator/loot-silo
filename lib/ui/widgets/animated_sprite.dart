@@ -139,11 +139,14 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
     final fw = anim.frameW.toDouble();
     final fh = anim.frameH.toDouble();
     final row = widget.row;
+    // A total-frames override leaves the last row partly filled.
+    final total = anim.frameTotal ?? cols * rows;
     return [
       for (var r = 0; r < rows; r++)
         if (row == null || r == row.clamp(0, rows - 1))
           for (var c = 0; c < cols; c++)
-            (0, Rect.fromLTWH(c * fw, r * fh, fw, fh)),
+            if (r * cols + c < total)
+              (0, Rect.fromLTWH(c * fw, r * fh, fw, fh)),
     ];
   }
 

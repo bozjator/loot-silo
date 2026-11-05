@@ -101,6 +101,43 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('a total-frames override stops before the remaining cells', (
+    tester,
+  ) async {
+    await pumpSprite(tester, playing: true, anim: anim.withFrameCount(2)!);
+    final seen = <double>{};
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      seen.add(src(tester).left);
+    }
+    // 2 frames of 16 px, each holding two of the 8 px blobs.
+    expect(seen, hasLength(2));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('cells past the frame total are never shown', (tester) async {
+    // Four 8 px cells capped at 2 frames: cells 3 and 4 are skipped.
+    await pumpSprite(
+      tester,
+      playing: true,
+      anim: const SpriteAnim(
+        path: 'run.png',
+        kind: AnimKind.sheet,
+        frameW: 8,
+        frameH: 8,
+        cols: 4,
+        frameTotal: 2,
+      ),
+    );
+    final seen = <double>{};
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      seen.add(src(tester).left);
+    }
+    expect(seen, {1, 9});
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('frames larger than the sheet do not read past the image', (
     tester,
   ) async {

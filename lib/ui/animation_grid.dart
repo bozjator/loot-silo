@@ -259,7 +259,7 @@ class _AnimationTile extends StatelessWidget {
                                 switch (a.kind) {
                                   AnimKind.sheet =>
                                     '${a.frameW}×${a.frameH} · '
-                                        '${a.cols}×${a.rows} · '
+                                        '${a.frameCount} frames · '
                                         '${a.fps.round()} fps',
                                   AnimKind.sequence =>
                                     '${a.frames.length} files · '

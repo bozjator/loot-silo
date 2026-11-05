@@ -935,6 +935,10 @@ class _AnimationEditorState extends State<_AnimationEditor> {
   int? _row = 0;
   late final _w = TextEditingController(text: '${widget.current.frameW}');
   late final _h = TextEditingController(text: '${widget.current.frameH}');
+  late final _n = TextEditingController(text: '${widget.current.frameCount}');
+
+  /// Shown under the Frames field when the count doesn't fit the sheet.
+  String? _framesError;
 
   @override
   void didUpdateWidget(_AnimationEditor old) {
@@ -948,6 +952,8 @@ class _AnimationEditorState extends State<_AnimationEditor> {
       _row = 0;
       _w.text = '${a.frameW}';
       _h.text = '${a.frameH}';
+      _n.text = '${a.frameCount}';
+      _framesError = null;
     });
   }
 
@@ -959,6 +965,26 @@ class _AnimationEditorState extends State<_AnimationEditor> {
     setState(() {
       _anim = widget.detected.copyWith(frameW: w, frameH: h, fps: _anim.fps);
       _row = 0;
+      _n.text = '${_anim.frameCount}';
+      _framesError = null;
+    });
+  }
+
+  /// Re-slices the sheet into the typed total frame count; the frame width
+  /// follows. A count that doesn't fit keeps the old slicing.
+  void _applyFrames() {
+    if (_n.text.trim().isEmpty) return;
+    final n = int.tryParse(_n.text.trim());
+    final next = n == null ? null : _anim.withFrameCount(n);
+    setState(() {
+      if (next == null) {
+        _framesError = 'Doesn\'t fit ${_anim.frameW * _anim.cols} px';
+        return;
+      }
+      _framesError = null;
+      _anim = next;
+      _row = 0;
+      _w.text = '${next.frameW}';
     });
   }
 
@@ -966,6 +992,7 @@ class _AnimationEditorState extends State<_AnimationEditor> {
   void dispose() {
     _w.dispose();
     _h.dispose();
+    _n.dispose();
     super.dispose();
   }
 
@@ -1028,7 +1055,7 @@ class _AnimationEditorState extends State<_AnimationEditor> {
                   Text(switch (a.kind) {
                     AnimKind.sheet =>
                       'Sheet · ${a.frameW}×${a.frameH} frames · '
-                          '${a.cols} × ${a.rows}',
+                          '${a.cols} × ${a.rows} · ${a.frameCount} frames',
                     AnimKind.sequence =>
                       'Sequence · ${a.frames.length} files · '
                           '${a.frameW}×${a.frameH}',
@@ -1069,6 +1096,13 @@ class _AnimationEditorState extends State<_AnimationEditor> {
                           label: 'Frame height',
                           controller: _h,
                           onSubmit: _applySize,
+                        ),
+                        _NumberField(
+                          label: 'Frames',
+                          controller: _n,
+                          onSubmit: _applyFrames,
+                          onChanged: _applyFrames,
+                          errorText: _framesError,
                         ),
                         OutlinedButton(
                           onPressed: _applySize,
@@ -1129,11 +1163,17 @@ class _NumberField extends StatelessWidget {
     required this.label,
     required this.controller,
     required this.onSubmit,
+    this.onChanged,
+    this.errorText,
   });
 
   final String label;
   final TextEditingController controller;
   final VoidCallback onSubmit;
+
+  /// Applies while typing (the Frames field updates the width live).
+  final VoidCallback? onChanged;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -1141,8 +1181,14 @@ class _NumberField extends StatelessWidget {
     child: TextField(
       controller: controller,
       keyboardType: TextInputType.number,
-      decoration: InputDecoration(labelText: label, isDense: true),
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        errorText: errorText,
+        errorMaxLines: 2,
+      ),
       onSubmitted: (_) => onSubmit(),
+      onChanged: onChanged == null ? null : (_) => onChanged!(),
     ),
   );
 }

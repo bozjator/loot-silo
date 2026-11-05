@@ -59,6 +59,7 @@ void main() {
       'z_root.png',
     ],
     bool open = true,
+    Map<String, img.Image> images = const {},
   }) async {
     final lib = p.join(tmp.path, 'library');
     copyTree('test/fixtures/managed', lib);
@@ -67,6 +68,11 @@ void main() {
       File(p.join(pack, rel))
         ..parent.createSync(recursive: true)
         ..writeAsBytesSync(img.encodePng(img.Image(width: 8, height: 8)));
+    }
+    for (final MapEntry(key: rel, value: image) in images.entries) {
+      File(p.join(pack, rel))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(img.encodePng(image));
     }
     store = SettingsStore(File(p.join(tmp.path, 'settings.json')))
       ..save(AppSettings(libraryPath: lib));
@@ -218,5 +224,57 @@ void main() {
     );
     final shown = tags.data!.split(', ');
     expect(shown, sortedTags(shown));
+  });
+
+  testWidgets('Frames field re-slices a strip; numbered props are images', (
+    tester,
+  ) async {
+    // A 24-cell strip that really holds 16 frames of 24 px, plus numbered
+    // props without an animation word.
+    final strip = img.Image(width: 384, height: 16, numChannels: 4);
+    img.fill(strip, color: img.ColorRgba8(200, 80, 40, 255));
+    await openKnight(
+      tester,
+      files: [for (var i = 0; i < 4; i++) 'props/barrels_$i.png'],
+      images: {'Animated stuff/chimney-smoke.png': strip},
+    );
+    expect(find.textContaining('Animations (1)'), findsOneWidget);
+    await tester.tap(find.textContaining('Animations ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.byTooltip('Edit animation'));
+    await pumpUntil(tester, find.text('Apply size'));
+    expect(find.text('Sheet · 16×16 frames · 24 × 1 · 24 frames'), findsOne);
+
+    final frames = find.widgetWithText(TextField, 'Frames');
+    await tester.enterText(frames, '7');
+    await tester.pump();
+    expect(find.text("Doesn't fit 384 px"), findsOneWidget);
+    expect(find.text('Sheet · 16×16 frames · 24 × 1 · 24 frames'), findsOne);
+
+    await tester.enterText(frames, '16');
+    await tester.pump();
+    expect(find.text("Doesn't fit 384 px"), findsNothing);
+    expect(find.text('Sheet · 24×16 frames · 16 × 1 · 16 frames'), findsOne);
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Frame width'))
+          .controller!
+          .text,
+      '24',
+    );
+
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.text('Reset to detected'));
+    final sidecar = File(
+      p.join(
+        tmp.path,
+        'library',
+        'HeroMaker',
+        'Knight Pack',
+        'asset_pack.json',
+      ),
+    ).readAsStringSync();
+    expect(sidecar, contains('"frames": 16'));
+    expect(sidecar, isNot(contains('frame_w')));
   });
 }

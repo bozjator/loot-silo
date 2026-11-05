@@ -116,6 +116,15 @@ void main() {
     expect(c.animations.single.frameW, 64);
     expect(c.animations.single.cols, 2);
 
+    // A total frame count is stored as `frames`; the width follows.
+    saveAnimationOverride(tmp.path, detected, detected.withFrameCount(2));
+    expect(sidecarJson()['animations'], {
+      'Hero/Idle.png': {'frames': 2},
+    });
+    final f = loadPackContents(tmp.path, [('Hero/Idle.png', 1)]);
+    expect(f.animations.single.frameW, 64);
+    expect(f.animations.single.frameCount, 2);
+
     saveAnimationOverride(tmp.path, detected, null);
     expect(sidecarJson().containsKey('animations'), isFalse);
   });

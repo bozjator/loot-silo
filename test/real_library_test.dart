@@ -2,9 +2,11 @@
 // Skipped automatically where that folder does not exist.
 import 'dart:io';
 
+import 'package:assets_explorer/core/animation_detector.dart';
 import 'package:assets_explorer/core/library_index.dart';
 import 'package:assets_explorer/core/library_scanner.dart';
 import 'package:assets_explorer/core/library_service.dart';
+import 'package:assets_explorer/core/pack_editor.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -83,6 +85,38 @@ void main() {
       expect(banner.subFolders, hasLength(12));
       expect(banner.subFolders.map((s) => s.folder), contains('SkeletonMage'));
       expect(banner.subFolders.every((s) => s.preview != null), isTrue);
+    },
+  );
+
+  test(
+    'animation detection: props are images, Vol.03 has 5 grids (read-only)',
+    skip: Directory(managed).existsSync() ? false : 'no $managed',
+    () {
+      final packs = scanLibrary(managed).packs;
+      List<SpriteAnim> animsOf(String id) {
+        final pack = packs.firstWhere((p) => p.id == id);
+        return loadPackContents(pack.path, [
+          for (final f in pack.files) (f, 0),
+        ]).detected;
+      }
+
+      final village = animsOf('RafaelMatos/Epic RPG World - The Village V2.2');
+      expect(
+        village.where(
+          (a) => a.path.contains('barrels') || a.path.contains('chimney-h_'),
+        ),
+        isEmpty,
+      );
+      // The real chimney smoke strips are still found.
+      expect(
+        village.where((a) => a.path.contains('chimney-smoke')),
+        hasLength(4),
+      );
+      final fx = animsOf('ashishlko11/Special Effects Vol.03')
+          .where((a) => a.path.startsWith('png/'))
+          .toList();
+      expect(fx, hasLength(5));
+      expect(fx.every((a) => (a.cols, a.rows) == (4, 4)), isTrue);
     },
   );
 }

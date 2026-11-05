@@ -153,9 +153,12 @@ PackSidecar saveAnimationOverride(
   final animations = {...old.animations}..remove(detected.path);
   if (anim != null) {
     final o = <String, Object?>{
-      if (anim.frameW != detected.frameW) 'frame_w': anim.frameW,
+      // With a total frame count, the frame width follows from it.
+      if (anim.frameTotal == null && anim.frameW != detected.frameW)
+        'frame_w': anim.frameW,
       if (anim.frameH != detected.frameH) 'frame_h': anim.frameH,
       if (anim.fps != SpriteAnim.defaultFps) 'fps': anim.fps,
+      'frames': ?anim.frameTotal,
     };
     if (o.isNotEmpty) animations[detected.path] = o;
   }

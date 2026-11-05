@@ -128,6 +128,46 @@ void main() {
     expect(seqs.single.frameCount, 4);
   });
 
+  group('sequence word rule', () {
+    List<String> listed() => [
+      for (final f in tmp.listSync(recursive: true).whereType<File>())
+        p.relative(f.path, from: tmp.path),
+    ];
+
+    test('numbered props without an animation word are images', () {
+      for (var i = 0; i < 6; i++) {
+        png('props-sprites/barrels_$i.png', 16, 16);
+        png('Decorations_sprites/chimney-h_$i.png', 8, 32);
+      }
+      expect(detectSequences(tmp.path, listed()), isEmpty);
+      expect(animationCandidates(listed()), isEmpty);
+    });
+
+    test('a word in the prefix or any folder keeps the sequence', () {
+      for (var i = 1; i <= 3; i++) {
+        png('props/torch_fire_$i.png', 16, 16);
+        png('Effects/Hit/$i.png', 16, 16);
+        png('Animated stuff/flag/flag$i.png', 16, 16);
+        png('Projectiles/Fireball$i.png', 8, 8);
+      }
+      final seqs = detectSequences(tmp.path, listed());
+      expect(seqs.map((s) => s.path).toSet(), {
+        'props/torch_fire_1.png',
+        'Effects/Hit/1.png',
+        'Animated stuff/flag/flag1.png',
+        'Projectiles/Fireball1.png',
+      });
+      expect(animationCandidates(listed()), hasLength(12));
+    });
+
+    test('hasAnimationWord matches plurals and ignores the pack root', () {
+      expect(hasAnimationWord('fx/explosions', 'boom'), isTrue);
+      expect(hasAnimationWord('.', 'walk_'), isTrue);
+      expect(hasAnimationWord('.', 'barrels_'), isFalse);
+      expect(hasAnimationWord('furniture', 'decor_animals_'), isFalse);
+    });
+  });
+
   test('transparency gaps reveal a grid', () {
     final alpha = Uint8List(8 * 8);
     void blob(int x0, int y0) {
@@ -159,6 +199,69 @@ void main() {
     );
     final s = detectSheetByPixels(tmp.path, 'fx/3.png')!;
     expect((s.frameW, s.cols, s.rows), (64, 2, 2));
+  });
+
+  group('transparency grid fallback', () {
+    /// A [w]×[h] alpha buffer with opaque rectangles.
+    Uint8List alphaOf(int w, int h, List<(int, int, int, int)> rects) {
+      final a = Uint8List(w * h);
+      for (final (x0, y0, rw, rh) in rects) {
+        for (var y = y0; y < y0 + rh; y++) {
+          for (var x = x0; x < x0 + rw; x++) {
+            a[y * w + x] = 255;
+          }
+        }
+      }
+      return a;
+    }
+
+    test('clean grid is found by the run rule', () {
+      final a = alphaOf(64, 64, [
+        for (var y = 0; y < 4; y++)
+          for (var x = 0; x < 4; x++) (x * 16 + 4, y * 16 + 4, 8, 8),
+      ]);
+      expect(gridFromTransparency(a, 64, 64), (16, 16));
+    });
+
+    test('particles inside cells break runs but not boundaries', () {
+      // 4×4 grid of 16 px cells. Each cell holds a blob plus loose
+      // particles near its edges, so gaps between runs don't line up with
+      // cells, yet the cell boundaries stay transparent.
+      final a = alphaOf(64, 64, [
+        for (var y = 0; y < 4; y++)
+          for (var x = 0; x < 4; x++) ...[
+            (x * 16 + 6, y * 16 + 6, 4, 4),
+            (x * 16 + 1 + (x + y) % 3, y * 16 + 13, 1, 1),
+            (x * 16 + 13, y * 16 + 1 + (x * y) % 4, 1, 1),
+          ],
+      ]);
+      expect(gridFromTransparency(a, 64, 64), (16, 16));
+    });
+
+    test('a single sprite with a transparent middle line is not split', () {
+      // Fragmented columns (3 runs) and one row run: only x has a fallback.
+      final a = alphaOf(64, 32, [
+        (2, 4, 8, 24),
+        (12, 4, 19, 24),
+        (33, 4, 28, 24),
+      ]);
+      expect(gridFromTransparency(a, 64, 32), isNull);
+    });
+
+    test('square cells win when both axes allow several counts', () {
+      // 64×32 with blobs every 16 px: x allows 2 and 4, y allows 2.
+      final a = alphaOf(64, 32, [
+        for (var y = 0; y < 2; y++)
+          for (var x = 0; x < 4; x++) ...[
+            (x * 16 + 3, y * 16 + 3, 10, 10),
+            (x * 16 + 7, y * 16 + 1, 1, 1),
+          ],
+        (31, 20, 2, 1), // crosses x = 32: rules out 2 columns there
+      ]);
+      // The particle at x = 31..32 still leaves x = 33 clear (±1 px), so
+      // both 2 and 4 columns fit; 4 gives square 16 px cells.
+      expect(gridFromTransparency(a, 64, 32), (16, 16));
+    });
   });
 
   test('detectAnimations combines kinds, consensus and overrides', () {
@@ -276,5 +379,59 @@ void main() {
       frames: ['a_1.png', 'a_2.png'],
     );
     expect(SpriteAnim.fromJson(seq.toJson()).frames, seq.frames);
+  });
+
+  group('total frame count override', () {
+    const strip = SpriteAnim(
+      path: 'chimney-smoke.png',
+      kind: AnimKind.sheet,
+      frameW: 64,
+      frameH: 64,
+      cols: 24,
+    );
+
+    test('one row: frame width follows the count', () {
+      final s = strip.withFrameCount(16)!;
+      expect((s.frameW, s.frameH, s.cols, s.rows), (96, 64, 16, 1));
+      expect(s.frameCount, 16);
+      expect(strip.withFrameCount(7), isNull, reason: '1536 / 7 is uneven');
+      expect(strip.withFrameCount(0), isNull);
+    });
+
+    test('multi-row: cols = ceil(n / rows), last row partly filled', () {
+      const grid = SpriteAnim(
+        path: 'g.png',
+        kind: AnimKind.sheet,
+        frameW: 32,
+        frameH: 32,
+        cols: 4,
+        rows: 3,
+      );
+      final s = grid.withFrameCount(11)!;
+      expect((s.cols, s.rows, s.frameW, s.frameCount), (4, 3, 32, 11));
+      final t = grid.withFrameCount(6)!;
+      expect((t.cols, t.frameW, t.frameCount), (2, 64, 6));
+      // 4 frames in 3 rows (2 per row) would leave the last row empty.
+      expect(grid.withFrameCount(4), isNull);
+      expect(grid.withFrameCount(5)!.frameCount, 5);
+    });
+
+    test('frame size edits clear it, fps edits keep it', () {
+      final s = strip.withFrameCount(16)!;
+      expect(s.copyWith(fps: 8).frameTotal, 16);
+      final r = s.copyWith(frameW: 48);
+      expect((r.frameTotal, r.cols, r.frameCount), (null, 32, 32));
+    });
+
+    test('JSON round trip and sidecar override', () {
+      final s = strip.withFrameCount(16)!;
+      expect(s.toJson()['frames_total'], 16);
+      expect(SpriteAnim.fromJson(s.toJson()), s);
+      expect(SpriteAnim.fromJson(strip.toJson()).frameTotal, isNull);
+      expect(applyOverride(strip, {'frames': 16}), s);
+      expect(applyOverride(strip, {'frames': 7}), strip);
+      final g = applyOverride(strip, {'frames': 16, 'fps': 12});
+      expect((g.frameW, g.fps, g.frameCount), (96, 12.0, 16));
+    });
   });
 }

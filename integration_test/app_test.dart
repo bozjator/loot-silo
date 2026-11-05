@@ -1030,6 +1030,98 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m18: total frames in the Edit dialog; props stay images', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final pack = Directory(p.join(lib, 'HeroMaker', 'Village Bits'))
+      ..createSync(recursive: true);
+    File(p.join(pack.path, 'asset_pack.json'))
+        .writeAsStringSync('{"title": "Village Bits", "types": ["environment"]}');
+    // A 1536×64 smoke strip: 24 cells of 64 px by size, but really 16
+    // frames of 96 px with a puff rising and growing.
+    final strip = img.Image(width: 1536, height: 64, numChannels: 4);
+    for (var f = 0; f < 16; f++) {
+      final r = 8 + f;
+      img.fillCircle(
+        strip,
+        x: f * 96 + 48,
+        y: 56 - f * 3,
+        radius: r,
+        color: img.ColorRgba8(200 - f * 6, 200 - f * 6, 210, 255 - f * 8),
+      );
+    }
+    File(p.join(pack.path, 'Animated stuff', 'chimney-smoke.png'))
+      ..parent.createSync(recursive: true)
+      ..writeAsBytesSync(img.encodePng(strip));
+    // Numbered barrels: separate props, not frames.
+    for (var i = 0; i < 4; i++) {
+      final barrel = img.Image(width: 32, height: 32, numChannels: 4);
+      img.fillRect(
+        barrel,
+        x1: 8,
+        y1: 4 + i,
+        x2: 24,
+        y2: 28,
+        color: img.ColorRgba8(120 + i * 20, 70, 30, 255),
+      );
+      File(p.join(pack.path, 'props', 'barrels_$i.png'))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(img.encodePng(barrel));
+    }
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Village Bits'));
+    await tester.tap(find.text('Village Bits'));
+    await pumpUntil(tester, find.textContaining('Animations ('));
+    expect(find.textContaining('Animations (1)'), findsOneWidget);
+    await tester.tap(find.textContaining('Animations ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.byTooltip('Edit animation'));
+    await pumpUntil(tester, find.text('Apply size'));
+    expect(find.text('Sheet · 64×64 frames · 24 × 1 · 24 frames'), findsOne);
+    final frames = find.widgetWithText(TextField, 'Frames');
+    await tester.enterText(frames, '7');
+    await tester.pump();
+    expect(find.text("Doesn't fit 1536 px"), findsOneWidget);
+    await tester.enterText(frames, '16');
+    await tester.pump();
+    expect(find.text('Sheet · 96×64 frames · 16 × 1 · 16 frames'), findsOne);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm18_frames_dialog', settle: false);
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.text('Reset to detected'));
+    expect(
+      File(p.join(pack.path, 'asset_pack.json')).readAsStringSync(),
+      contains('"frames": 16'),
+    );
+    await tester.tap(find.text('Close'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('96×64 · 16 frames · 10 fps'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm18_card_16_frames', settle: false);
+  });
+
+  testWidgets('m18: Special Effects Vol.03 shows 5 grids (read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+    await tester.enterText(find.byType(TextField), 'special effects vol');
+    await pumpUntil(tester, find.text('Special Effects Vol.03'));
+    await tester.tap(find.text('Special Effects Vol.03'));
+    await pumpUntil(tester, find.textContaining('Animations ('));
+    expect(find.textContaining('Animations (5)'), findsOneWidget);
+    await tester.tap(find.textContaining('Animations ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm18_real_vol03', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('archive import: zip and tar.gz through the review screen', (
     tester,
   ) async {
