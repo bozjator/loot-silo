@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:assets_explorer/core/library_scanner.dart';
 import 'package:assets_explorer/core/sidecar.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   group('fixture source tree', () {
@@ -130,5 +133,28 @@ void main() {
       expect(slimes.source, PackSource.manual);
       expect(slimes.types, isNotEmpty);
     });
+  });
+
+  test("sub-packs take the bundle's source unless they have their own", () {
+    final tmp = Directory.systemTemp.createTempSync('scan_source');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final src = Directory('test/fixtures/library_src/bundles/Mega Bundle v3');
+    final bundle = p.join(tmp.path, 'BigCo', 'Mega Bundle v3');
+    for (final f in src.listSync(recursive: true).whereType<File>()) {
+      final to = File(p.join(bundle, p.relative(f.path, from: src.path)));
+      to.parent.createSync(recursive: true);
+      f.copySync(to.path);
+    }
+    File(p.join(bundle, 'asset_pack.json'))
+        .writeAsStringSync('{"source": "imported", "is_container": true}');
+    File(p.join(bundle, '2D assets', 'Planes Pack', 'asset_pack.json'))
+        .writeAsStringSync('{"source": "itch"}');
+
+    final byId = {for (final pk in scanLibrary(tmp.path).packs) pk.id: pk};
+    const id = 'BigCo/Mega Bundle v3';
+    expect(byId[id]!.source, PackSource.imported);
+    expect(byId['$id/2D assets/Tanks Pack']!.source, PackSource.imported);
+    expect(byId['$id/Audio/Clicks (3 sounds)']!.source, PackSource.imported);
+    expect(byId['$id/2D assets/Planes Pack']!.source, PackSource.itch);
   });
 }

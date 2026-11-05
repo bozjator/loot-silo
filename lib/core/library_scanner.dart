@@ -94,14 +94,17 @@ ScanResult scanLibrary(String root) {
 
   String idOf(DirNode d) => p.split(p.relative(d.path, from: root)).join('/');
 
-  List<String> add(DetectedPack dp, String? parentId) {
+  // A sub-pack without a source of its own takes its bundle's: imports and
+  // itch downloads write one sidecar, at the bundle.
+  List<String> add(DetectedPack dp, String? parentId, PackSource? inherited) {
+    final source = dp.sidecar?.source ?? inherited;
     final id = idOf(dp.dir);
     final slot = packs.length;
     // Sub-packs go first so a bundle's types can be the union of theirs;
     // the bundle is then inserted ahead of them.
     final subTypes = <String, int>{};
     for (final s in dp.subPacks) {
-      for (final t in add(s, id)) {
+      for (final t in add(s, id, source)) {
         subTypes[t] = (subTypes[t] ?? 0) + 1;
       }
     }
@@ -157,7 +160,7 @@ ScanResult scanLibrary(String root) {
         isContainer: dp.isContainer,
         types: types,
         tags: sc != null && sc.tags.isNotEmpty ? sc.tags : suggestTags(id),
-        source: sc?.source,
+        source: source,
         files: [for (final (rel, _) in files) rel],
         sizes: [for (final (_, f) in files) f.size],
         preview: preview,
@@ -177,7 +180,7 @@ ScanResult scanLibrary(String root) {
   }
 
   for (final dp in PackDetector().detect(tree)) {
-    add(dp, null);
+    add(dp, null, null);
   }
   return ScanResult(
     root: root,

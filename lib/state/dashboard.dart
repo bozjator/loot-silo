@@ -21,8 +21,9 @@ enum PackSort {
   final String label;
 }
 
-/// Source facet value for packs without a sidecar source.
-const noSource = 'other';
+/// Source facet value for packs with no recorded source (folders put into
+/// the library by hand); sub-packs take their bundle's.
+const noSource = 'unknown';
 
 /// Search text, facet filters, sort and the bundle being browsed.
 class DashboardQuery {
