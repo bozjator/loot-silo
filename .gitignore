@@ -53,3 +53,4 @@ app.*.map.json
 
 # Generated screenshots from integration runs
 /screenshots/
+test/**/failures/

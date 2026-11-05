@@ -128,3 +128,15 @@ String? fileMatchLine(int count, List<String> examples) {
   final names = examples.take(2).map(p.basename).join(', ');
   return '$count $noun: $names${count > 2 ? '…' : ''}';
 }
+
+/// The tooltip of [fileMatchLine]: the count, then every example name (one
+/// per line) and how many more there are.
+String fileMatchTooltip(int count, List<String> examples) {
+  final noun = count == 1 ? 'file matches' : 'files match';
+  final more = count - examples.length;
+  return [
+    '$count $noun:',
+    for (final e in examples) p.basename(e),
+    if (more > 0) '… and $more more',
+  ].join('\n');
+}

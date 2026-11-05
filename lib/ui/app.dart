@@ -28,6 +28,46 @@ class AssetsExplorerApp extends ConsumerStatefulWidget {
 
 class _AppState extends ConsumerState<AssetsExplorerApp> {
   final _navigator = GlobalKey<NavigatorState>();
+  final _top = _TopRoute();
+
+  /// Runs an app-wide shortcut on any page, but not over a dialog or a
+  /// popup menu, and only once a library is set up.
+  void Function() _shortcut(
+    void Function(BuildContext context) action, {
+    bool needsLibrary = true,
+    String? notOn,
+  }) => () {
+    final context = _navigator.currentContext;
+    final top = _top.top;
+    if (context == null || top is! PageRoute) return;
+    if (notOn != null && top.settings.name == notOn) return;
+    if (needsLibrary && ref.read(settingsProvider).libraryPath == null) return;
+    action(context);
+  };
+
+  /// Ctrl+I/O import, Ctrl+R/F5 rescan, Ctrl+, settings. They live above the
+  /// navigator, so they work wherever focus is (also when it fell back to a
+  /// page's focus scope after a click on empty space or a page closing).
+  Map<ShortcutActivator, VoidCallback> get _appShortcuts {
+    final rescan = _shortcut((_) => rescanLibrary(ref));
+    return {
+      const SingleActivator(LogicalKeyboardKey.keyI, control: true): _shortcut(
+        (c) => importFolder(c, ref),
+        notOn: FolderImportScreen.routeName,
+      ),
+      const SingleActivator(LogicalKeyboardKey.keyO, control: true): _shortcut(
+        (c) => importArchive(c, ref),
+        notOn: FolderImportScreen.routeName,
+      ),
+      const SingleActivator(LogicalKeyboardKey.keyR, control: true): rescan,
+      const SingleActivator(LogicalKeyboardKey.f5): rescan,
+      const SingleActivator(LogicalKeyboardKey.comma, control: true): _shortcut(
+        openSettings,
+        needsLibrary: false,
+        notOn: SettingsScreen.routeName,
+      ),
+    };
+  }
 
   /// Closes the top page or dialog; on the dashboard, leaves an open bundle.
   Future<void> _back() async {
@@ -45,6 +85,7 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
       title: 'Asset Explorer',
       debugShowCheckedModeBanner: false,
       navigatorKey: _navigator,
+      navigatorObservers: [_top],
       themeMode: switch (theme) {
         ThemeChoice.system => ThemeMode.system,
         ThemeChoice.light => ThemeMode.light,
@@ -57,7 +98,10 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
           if (event.buttons & kBackMouseButton != 0) _back();
         },
         child: CallbackShortcuts(
-          bindings: {const SingleActivator(LogicalKeyboardKey.escape): _back},
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.escape): _back,
+            ..._appShortcuts,
+          },
           child: child!,
         ),
       ),
@@ -72,6 +116,65 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
   }
 }
 
+/// Tracks the top route, so app-wide shortcuts can skip dialogs and menus.
+class _TopRoute extends NavigatorObserver {
+  Route<dynamic>? top;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      top = route;
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      top = previousRoute;
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route == top) top = previousRoute;
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    if (oldRoute == top) top = newRoute;
+  }
+}
+
+/// Picks a folder and opens the import review; rescans after an import.
+Future<void> importFolder(BuildContext context, WidgetRef ref) async {
+  final source = await ref.read(directoryPickerProvider)('Import folder');
+  if (source == null || !context.mounted) return;
+  final imported = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      settings: const RouteSettings(name: FolderImportScreen.routeName),
+      builder: (_) => FolderImportScreen(sourcePath: source),
+    ),
+  );
+  if (imported == true) await ref.read(libraryProvider.notifier).rescan();
+}
+
+/// Picks archives and imports them; rescans after an import.
+Future<void> importArchive(BuildContext context, WidgetRef ref) async {
+  final paths = await ref.read(archivePickerProvider)();
+  if (paths.isEmpty || !context.mounted) return;
+  if (await importArchives(context, ref, paths)) {
+    await ref.read(libraryProvider.notifier).rescan();
+  }
+}
+
+/// Rescans the library unless a scan is already running.
+void rescanLibrary(WidgetRef ref) {
+  if (!ref.read(libraryProvider).isLoading) {
+    ref.read(libraryProvider.notifier).rescan();
+  }
+}
+
+void openSettings(BuildContext context) => Navigator.of(context).push(
+  MaterialPageRoute<void>(
+    settings: const RouteSettings(name: SettingsScreen.routeName),
+    builder: (_) => const SettingsScreen(),
+  ),
+);
+
 /// Library overview: the dashboard plus import, itch.io, credits and
 /// settings.
 class HomeScreen extends ConsumerWidget {
@@ -80,23 +183,6 @@ class HomeScreen extends ConsumerWidget {
   Future<void> _chooseLibrary(BuildContext context, WidgetRef ref) async {
     final path = await ref.read(directoryPickerProvider)('Use as library');
     if (path != null) ref.read(settingsProvider.notifier).setLibraryPath(path);
-  }
-
-  Future<void> _importFolder(BuildContext context, WidgetRef ref) async {
-    final source = await ref.read(directoryPickerProvider)('Import folder');
-    if (source == null || !context.mounted) return;
-    final imported = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => FolderImportScreen(sourcePath: source)),
-    );
-    if (imported == true) await ref.read(libraryProvider.notifier).rescan();
-  }
-
-  Future<void> _importArchive(BuildContext context, WidgetRef ref) async {
-    final paths = await ref.read(archivePickerProvider)();
-    if (paths.isEmpty || !context.mounted) return;
-    if (await importArchives(context, ref, paths)) {
-      await ref.read(libraryProvider.notifier).rescan();
-    }
   }
 
   /// Dropped folders go through the folder import, archives through the
@@ -135,6 +221,7 @@ class HomeScreen extends ConsumerWidget {
       imported |=
           await Navigator.of(context).push<bool>(
             MaterialPageRoute(
+              settings: const RouteSettings(name: FolderImportScreen.routeName),
               builder: (_) => FolderImportScreen(sourcePath: folder),
             ),
           ) ??
@@ -142,9 +229,6 @@ class HomeScreen extends ConsumerWidget {
     }
     if (imported) await ref.read(libraryProvider.notifier).rescan();
   }
-
-  void _openSettings(BuildContext context) => Navigator.of(context)
-      .push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -171,113 +255,93 @@ class HomeScreen extends ConsumerWidget {
 
     final library = ref.watch(libraryProvider);
     final scanning = library.isLoading;
-    void rescan() {
-      if (!scanning) ref.read(libraryProvider.notifier).rescan();
-    }
+    void rescan() => rescanLibrary(ref);
 
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyI, control: true): () =>
-            _importFolder(context, ref),
-        const SingleActivator(LogicalKeyboardKey.keyO, control: true): () =>
-            _importArchive(context, ref),
-        const SingleActivator(LogicalKeyboardKey.keyR, control: true): rescan,
-        const SingleActivator(LogicalKeyboardKey.f5): rescan,
-        const SingleActivator(LogicalKeyboardKey.comma, control: true): () =>
-            _openSettings(context),
-      },
-      // Keeps the shortcuts working when nothing inside has focus (e.g.
-      // the empty-library message); the dashboard's own focus wins.
-      child: Focus(
-        autofocus: true,
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('Asset Explorer'),
-            bottom: scanning
-                ? const PreferredSize(
-                    preferredSize: Size.fromHeight(4),
-                    child: LinearProgressIndicator(),
-                  )
-                : null,
-            actions: [
-              IconButton(
-                tooltip: 'itch.io',
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const ItchScreen()),
-                ),
-                icon: const Icon(Icons.storefront_outlined),
-              ),
-              IconButton(
-                tooltip: 'Credits',
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const CreditsScreen(),
-                  ),
-                ),
-                icon: const Icon(Icons.receipt_long_outlined),
-              ),
-              IconButton(
-                tooltip: 'Rescan library (F5)',
-                onPressed: scanning ? null : rescan,
-                icon: const Icon(Icons.refresh),
-              ),
-              IconButton(
-                tooltip: 'Settings (Ctrl+,)',
-                onPressed: () => _openSettings(context),
-                icon: const Icon(Icons.settings_outlined),
-              ),
-              const SizedBox(width: 4),
-              OutlinedButton.icon(
-                onPressed: () => _importArchive(context, ref),
-                icon: const Icon(Icons.archive_outlined),
-                label: const Text('Import archive'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.tonalIcon(
-                onPressed: () => _importFolder(context, ref),
-                icon: const Icon(Icons.drive_folder_upload_outlined),
-                label: const Text('Import folder'),
-              ),
-              const SizedBox(width: 12),
-            ],
+    // Ctrl+I/O/R, F5 and Ctrl+, are bound app-wide (AssetsExplorerApp).
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Asset Explorer'),
+        bottom: scanning
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(4),
+                child: LinearProgressIndicator(),
+              )
+            : null,
+        actions: [
+          IconButton(
+            tooltip: 'itch.io',
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => const ItchScreen())),
+            icon: const Icon(Icons.storefront_outlined),
           ),
-          body: DropZone(
-            onDrop: (paths) => _onDrop(context, ref, paths),
-            child: switch (library) {
-              AsyncValue(:final value?) when value.packs.isNotEmpty =>
-                const Dashboard(),
-              AsyncValue(:final error?) => _Message(
-                icon: Icons.error_outline,
-                title: 'Could not read the library',
-                body: '$error',
-                action: Wrap(
-                  spacing: 8,
-                  children: [
-                    OutlinedButton(
-                      onPressed: rescan,
-                      child: const Text('Try again'),
-                    ),
-                    FilledButton(
-                      onPressed: () => _chooseLibrary(context, ref),
-                      child: const Text('Choose another folder'),
-                    ),
-                  ],
-                ),
-              ),
-              AsyncValue(hasValue: true) => _Message(
-                icon: Icons.inventory_2_outlined,
-                title: 'Your library is empty',
-                body: 'Import a folder or drop an archive to get started.',
-                action: FilledButton.icon(
-                  onPressed: () => _importFolder(context, ref),
-                  icon: const Icon(Icons.drive_folder_upload_outlined),
-                  label: const Text('Import folder'),
-                ),
-              ),
-              _ => const Center(child: Text('Scanning library…')),
-            },
+          IconButton(
+            tooltip: 'Credits',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const CreditsScreen()),
+            ),
+            icon: const Icon(Icons.receipt_long_outlined),
           ),
-        ),
+          IconButton(
+            tooltip: 'Rescan library (F5)',
+            onPressed: scanning ? null : rescan,
+            icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: 'Settings (Ctrl+,)',
+            onPressed: () => openSettings(context),
+            icon: const Icon(Icons.settings_outlined),
+          ),
+          const SizedBox(width: 4),
+          OutlinedButton.icon(
+            onPressed: () => importArchive(context, ref),
+            icon: const Icon(Icons.archive_outlined),
+            label: const Text('Import archive'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.tonalIcon(
+            onPressed: () => importFolder(context, ref),
+            icon: const Icon(Icons.drive_folder_upload_outlined),
+            label: const Text('Import folder'),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
+      body: DropZone(
+        onDrop: (paths) => _onDrop(context, ref, paths),
+        child: switch (library) {
+          AsyncValue(:final value?) when value.packs.isNotEmpty =>
+            const Dashboard(),
+          AsyncValue(:final error?) => _Message(
+            icon: Icons.error_outline,
+            title: 'Could not read the library',
+            body: '$error',
+            action: Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton(
+                  onPressed: rescan,
+                  child: const Text('Try again'),
+                ),
+                FilledButton(
+                  onPressed: () => _chooseLibrary(context, ref),
+                  child: const Text('Choose another folder'),
+                ),
+              ],
+            ),
+          ),
+          AsyncValue(hasValue: true) => _Message(
+            icon: Icons.inventory_2_outlined,
+            title: 'Your library is empty',
+            body: 'Import a folder or drop an archive to get started.',
+            action: FilledButton.icon(
+              onPressed: () => importFolder(context, ref),
+              icon: const Icon(Icons.drive_folder_upload_outlined),
+              label: const Text('Import folder'),
+            ),
+          ),
+          _ => const Center(child: Text('Scanning library…')),
+        },
       ),
     );
   }

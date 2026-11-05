@@ -20,9 +20,18 @@ class Dashboard extends ConsumerStatefulWidget {
   ConsumerState<Dashboard> createState() => _DashboardState();
 }
 
+/// How many matching file names a pack tile's tooltip lists.
+const fileMatchExamples = 10;
+
 class _DashboardState extends ConsumerState<Dashboard> {
   final _search = TextEditingController();
   final _searchFocus = FocusNode(debugLabel: 'search');
+
+  /// Holds focus when the search doesn't, so `/` and Ctrl+F keep working:
+  /// leaving the search (Esc, a click elsewhere) and opening a pack move
+  /// focus here instead of up to the page's focus scope, which is outside
+  /// this widget's key handler.
+  final _gridFocus = FocusNode(debugLabel: 'dashboard');
 
   @override
   void initState() {
@@ -34,6 +43,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
   void dispose() {
     _search.dispose();
     _searchFocus.dispose();
+    _gridFocus.dispose();
     super.dispose();
   }
 
@@ -51,7 +61,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
     }
     if (event.logicalKey == LogicalKeyboardKey.escape &&
         _searchFocus.hasFocus) {
-      _searchFocus.unfocus();
+      _gridFocus.requestFocus();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -85,8 +95,13 @@ class _DashboardState extends ConsumerState<Dashboard> {
         key: const PageStorageKey('files'),
         files: files,
         tileSize: size,
-        onOpen: (f) =>
-            openPackDetail(context, f.pack.id, search: search, file: f.relPath),
+        onOpen: (f) => openPackDetail(
+          context,
+          f.pack.id,
+          search: search,
+          file: f.relPath,
+          returnFocus: _gridFocus,
+        ),
       ),
     );
   }
@@ -114,11 +129,12 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final filesView = view == DashboardView.files;
     final visibleFiles = filesView ? ref.watch(visibleFilesProvider) : null;
     final files = visibleFiles?.value ?? const <FileTile>[];
-    // A pack's first matching files, for its "N files match" line.
+    // A pack's first matching files, for its "N files match" line and its
+    // tooltip.
     final examples = <String, List<String>>{};
     for (final h in fileSearch?.hits ?? const []) {
       final l = examples[h.packId] ??= [];
-      if (l.length < 2) l.add(h.relPath);
+      if (l.length < fileMatchExamples) l.add(h.relPath);
     }
     final imageSize = imageThumbRange.clamp(
       ref.watch(settingsProvider.select((s) => s.imageThumbSize)),
@@ -132,6 +148,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final settings = ref.read(settingsProvider.notifier);
 
     return Focus(
+      focusNode: _gridFocus,
       autofocus: true,
       onKeyEvent: _onKey,
       child: Column(
@@ -148,6 +165,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
             },
             searchController: _search,
             searchFocus: _searchFocus,
+            onLeaveSearch: _gridFocus.requestFocus,
             onText: notifier.setText,
             onToggleType: notifier.toggleType,
             onToggleAuthor: notifier.toggleAuthor,
@@ -199,7 +217,11 @@ class _DashboardState extends ConsumerState<Dashboard> {
                     ),
                   ),
                   TextButton.icon(
-                    onPressed: () => openPackDetail(context, bundle.id),
+                    onPressed: () => openPackDetail(
+                      context,
+                      bundle.id,
+                      returnFocus: _gridFocus,
+                    ),
                     icon: const Icon(Icons.info_outline, size: 18),
                     label: const Text('Bundle details'),
                   ),
@@ -270,14 +292,23 @@ class _DashboardState extends ConsumerState<Dashboard> {
                                   examples[pack.id] ?? const [],
                                 )
                               : null,
-                          onFileMatchesTap: () =>
-                              openPackDetail(context, pack.id, search: search),
+                          fileMatchesTooltip: fileMatchTooltip(
+                            fileSearch?.counts[pack.id] ?? 0,
+                            examples[pack.id] ?? const [],
+                          ),
+                          onFileMatchesTap: () => openPackDetail(
+                            context,
+                            pack.id,
+                            search: search,
+                            returnFocus: _gridFocus,
+                          ),
                           onTap: pack.isContainer
                               ? () => notifier.openBundle(pack.id)
                               : () => openPackDetail(
                                   context,
                                   pack.id,
                                   folder: folder,
+                                  returnFocus: _gridFocus,
                                 ),
                         );
                       },
@@ -331,17 +362,23 @@ class _ViewToggle extends StatelessWidget {
 
 /// Opens a pack; with [folder], its Images and Animations tabs start at
 /// that first-level folder; with [search], only matching files are listed
-/// and [file] (a clicked result) is shown.
+/// and [file] (a clicked result) opens on its tab. [returnFocus] gets the
+/// focus back when the page closes.
 void openPackDetail(
   BuildContext context,
   String packId, {
   String? folder,
   SearchFilter? search,
   String? file,
+  FocusNode? returnFocus,
 }) {
   // Leaving search focused would restore it on return without a live text
   // input connection; start from the grid instead (`/` refocuses).
-  FocusManager.instance.primaryFocus?.unfocus();
+  if (returnFocus != null) {
+    returnFocus.requestFocus();
+  } else {
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
   Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => PackDetailScreen(

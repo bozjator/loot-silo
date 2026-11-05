@@ -150,6 +150,94 @@ void main() {
     expect(f.sources.first, (noSource, 3));
   });
 
+  group('faceted counts', () {
+    final lib = [
+      pack('r/a', author: 'Rafael', tags: ['pixel'], types: ['character']),
+      pack(
+        'r/b',
+        author: 'Rafael',
+        tags: ['ui'],
+        types: ['ui'],
+        source: 'itch',
+      ),
+      pack('k/c', author: 'Kenney', tags: ['pixel', '3d'], types: ['ui']),
+      pack('k/d', author: 'Kenney', tags: ['pixel'], parent: 'k/b'),
+    ];
+
+    test('no filters: every pack counts, sub-packs too', () {
+      final f = Facets.forQuery(lib, const DashboardQuery(), null);
+      expect(f.tags, [('pixel', 3), ('3d', 1), ('ui', 1)]);
+      expect(f.authors, [('Kenney', 2), ('Rafael', 2)]);
+      expect(f.types.first, ('ui', 2));
+    });
+
+    test('an author narrows the other facets, not its own', () {
+      final f = Facets.forQuery(
+        lib,
+        const DashboardQuery(authors: {'Rafael'}),
+        null,
+      );
+      expect(f.tags, [('pixel', 1), ('ui', 1)]);
+      expect(f.sources, [('itch', 1), (noSource, 1)]);
+      expect(f.types, [('character', 1), ('ui', 1)]);
+      // Its own menu still offers the other authors.
+      expect(f.authors, [('Kenney', 2), ('Rafael', 2)]);
+    });
+
+    test('search hits and an open bundle limit the counts', () {
+      final f = Facets.forQuery(lib, const DashboardQuery(), ['r/a', 'k/c']);
+      expect(f.tags, [('pixel', 2), ('3d', 1)]);
+      final b = Facets.forQuery(
+        lib,
+        const DashboardQuery(bundleId: 'k/b'),
+        null,
+      );
+      expect(b.authors, [('Kenney', 1)]);
+    });
+
+    test('a selected value nothing matches stays, at 0', () {
+      final f = Facets.forQuery(
+        lib,
+        const DashboardQuery(authors: {'Rafael'}, tags: {'3d'}),
+        null,
+      );
+      // Tags ignore the tag selection: Rafael has no 3d pack.
+      expect(f.tags, [('pixel', 1), ('ui', 1), ('3d', 0)]);
+      // Authors with the 3d filter: only Kenney; Rafael kept at 0.
+      expect(f.authors, [('Kenney', 1), ('Rafael', 0)]);
+    });
+  });
+
+  testWidgets('search text is debounced; clearing applies at once', (
+    tester,
+  ) async {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final texts = <String>[];
+    c.listen(
+      dashboardQueryProvider.select((q) => q.text),
+      (_, t) => texts.add(t),
+    );
+    final n = c.read(dashboardQueryProvider.notifier);
+    for (final t in ['b', 'ba', 'bar', 'barr']) {
+      n.setText(t);
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(texts, isEmpty);
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
+    expect(texts, ['barr']);
+    n.setText('barre');
+    n.setText('');
+    expect(texts, ['barr', '']);
+    // The pending 'barre' never lands.
+    await tester.pump(const Duration(seconds: 1));
+    expect(texts, ['barr', '']);
+    n.setText('x');
+    n.clearFilters();
+    await tester.pump(const Duration(seconds: 1));
+    expect(texts, ['barr', '']);
+  });
+
   test('copyWith can clear the bundle', () {
     const q = DashboardQuery(bundleId: 'x');
     expect(q.copyWith(bundleId: () => null).bundleId, isNull);
@@ -348,6 +436,8 @@ void main() {
         expect(await keys(), ['Heroes', 'Other']);
 
         c.read(dashboardQueryProvider.notifier).setText('mage');
+        // Typing is debounced.
+        await Future<void>.delayed(DashboardQueryNotifier.searchDebounce * 2);
         c
             .read(settingsProvider.notifier)
             .setDashboardView(DashboardView.expanded);

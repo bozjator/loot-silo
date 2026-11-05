@@ -23,6 +23,9 @@ enum _Phase { planning, review, importing, done }
 ///
 /// Pops with `true` when anything was imported.
 class FolderImportScreen extends ConsumerStatefulWidget {
+  /// Its route's name, so app-wide shortcuts can tell it is open.
+  static const routeName = 'folder-import';
+
   const FolderImportScreen({
     super.key,
     required this.sourcePath,

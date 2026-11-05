@@ -14,6 +14,7 @@ class FilterBar extends StatelessWidget {
     this.resultUnit = 'pack',
     required this.searchController,
     required this.searchFocus,
+    this.onLeaveSearch,
     required this.onText,
     required this.onToggleType,
     required this.onToggleAuthor,
@@ -32,6 +33,9 @@ class FilterBar extends StatelessWidget {
   final String resultUnit;
   final TextEditingController searchController;
   final FocusNode searchFocus;
+
+  /// A click outside the search field; unfocuses it when null.
+  final VoidCallback? onLeaveSearch;
   final ValueChanged<String> onText;
   final ValueChanged<String> onToggleType;
   final ValueChanged<String> onToggleAuthor;
@@ -46,6 +50,8 @@ class FilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final dim = theme.colorScheme.onSurface.withValues(alpha: 0.45);
+    final typeCounts = {for (final (t, n) in facets.types) t: n};
     final active = [
       for (final a in query.authors) (a, onToggleAuthor, Icons.person_outline),
       for (final t in query.tags) (t, onToggleTag, Icons.sell_outlined),
@@ -63,21 +69,29 @@ class FilterBar extends StatelessWidget {
                   controller: searchController,
                   focusNode: searchFocus,
                   onChanged: onText,
+                  onTapOutside: (_) {
+                    if (!searchFocus.hasFocus) return;
+                    (onLeaveSearch ?? searchFocus.unfocus)();
+                  },
                   decoration: InputDecoration(
                     isDense: true,
                     prefixIcon: const Icon(Icons.search),
                     hintText: 'Search packs, authors, tags, file names   ( / )',
                     border: const OutlineInputBorder(),
-                    suffixIcon: query.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Clear search',
-                            icon: const Icon(Icons.close),
-                            onPressed: () {
-                              searchController.clear();
-                              onText('');
-                            },
-                          ),
+                    // Follows the field, not the (debounced) query.
+                    suffixIcon: ValueListenableBuilder(
+                      valueListenable: searchController,
+                      builder: (context, value, _) => value.text.isEmpty
+                          ? const SizedBox.shrink()
+                          : IconButton(
+                              tooltip: 'Clear search',
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                searchController.clear();
+                                onText('');
+                              },
+                            ),
+                    ),
                   ),
                 ),
               ),
@@ -130,14 +144,35 @@ class FilterBar extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
+                    // Types no pack in view has are hidden, unless
+                    // selected (then dimmed, at 0).
                     for (final t in AssetType.values)
-                      FilterChip(
-                        mouseCursor: clickCursor,
-                        label: Text(t.id),
-                        visualDensity: VisualDensity.compact,
-                        selected: query.types.contains(t.id),
-                        onSelected: (_) => onToggleType(t.id),
-                      ),
+                      if (typeCounts[t.id] ?? 0 case final count
+                          when count > 0 || query.types.contains(t.id))
+                        FilterChip(
+                          mouseCursor: clickCursor,
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                t.id,
+                                style: count == 0
+                                    ? TextStyle(color: dim)
+                                    : null,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$count',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: dim,
+                                ),
+                              ),
+                            ],
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          selected: query.types.contains(t.id),
+                          onSelected: (_) => onToggleType(t.id),
+                        ),
                     for (final (value, toggle, icon) in active)
                       InputChip(
                         avatar: Icon(icon, size: 16),
@@ -191,7 +226,16 @@ class _FacetMenu extends StatelessWidget {
             value: selected.contains(value),
             closeOnActivate: false,
             onChanged: (_) => onToggle(value),
-            child: Text('$value  ($count)'),
+            // Selected, but nothing in view matches any more.
+            child: Text(
+              '$value  ($count)',
+              style: count == 0
+                  ? TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface
+                          .withValues(alpha: 0.45),
+                    )
+                  : null,
+            ),
           ),
       ],
       builder: (context, controller, _) => TextButton.icon(

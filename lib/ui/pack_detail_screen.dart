@@ -16,7 +16,6 @@ import '../core/library_index.dart';
 import '../core/pack_editor.dart';
 import '../core/sidecar.dart';
 import '../core/text_preview.dart';
-import '../core/preview_picker.dart' show previewExts;
 import '../core/type_classifier.dart' show AssetType;
 import '../state/dashboard.dart' show sortedTags;
 import '../state/providers.dart';
@@ -55,8 +54,7 @@ class PackDetailScreen extends ConsumerWidget {
   /// result or a "files match" line).
   final SearchFilter? search;
 
-  /// The file result that was clicked: its tab opens first, and an image
-  /// opens in the viewer.
+  /// The file result that was clicked: its tab opens first.
   final String? file;
 
   @override
@@ -127,7 +125,6 @@ class PackDetailScreen extends ConsumerWidget {
             folder: folder,
             search: search,
             file: file,
-            imagesView: ref.read(settingsProvider).imagesView,
           ),
           AsyncError(:final error) => Center(
             child: Text('Could not read: $error'),
@@ -147,7 +144,6 @@ class _Body extends StatefulWidget {
     this.folder,
     this.search,
     this.file,
-    this.imagesView = ItemsView.flat,
   });
 
   final PackRow pack;
@@ -155,9 +151,6 @@ class _Body extends StatefulWidget {
   final String? folder;
   final SearchFilter? search;
   final String? file;
-
-  /// For the viewer's order when [file] is an image.
-  final ItemsView imagesView;
 
   /// False: a slim bar replaces the header; hovering it shows the header
   /// floating over the tabs, so nothing below moves.
@@ -171,40 +164,6 @@ class _BodyState extends State<_Body> {
   var _peek = false;
   late String? _folder = widget.folder;
   late SearchFilter? _search = widget.search;
-
-  @override
-  void initState() {
-    super.initState();
-    final file = widget.file;
-    final search = _search;
-    if (file == null || !previewExts.contains(_ext(file))) return;
-    // Show the clicked image, stepping through the filtered images.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      var images = widget.contents.images;
-      if (search != null) {
-        images = widget.contents
-            .matching(search.words, infix: search.infix)
-            .images;
-      }
-      final order = [
-        for (final i in visibleOrder(images, widget.imagesView, const {}))
-          images[i],
-      ];
-      final at = order.indexOf(file);
-      if (at < 0) return;
-      showImageViewer(
-        context,
-        packPath: widget.pack.path,
-        images: order,
-        index: at,
-        sizes: widget.contents.sizes,
-      );
-    });
-  }
-
-  static String _ext(String rel) =>
-      p.extension(rel).toLowerCase().replaceFirst('.', '');
 
   @override
   void didUpdateWidget(_Body old) {

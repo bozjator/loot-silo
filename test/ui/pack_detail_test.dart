@@ -9,6 +9,7 @@ import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
+import 'package:assets_explorer/ui/settings_screen.dart';
 import 'package:assets_explorer/ui/track_player.dart';
 import 'package:assets_explorer/ui/widgets/pack_tile.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
@@ -593,6 +594,8 @@ void main() {
 
     Future<void> search(WidgetTester tester, String text) async {
       await tester.enterText(find.byType(TextField).first, text);
+      // The query runs once typing pauses.
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
       // Let the pack and file searches land.
       for (var i = 0; i < 5; i++) {
         await tester.runAsync(
@@ -642,7 +645,7 @@ void main() {
       expect(find.textContaining('Audio (1)'), findsOneWidget);
     });
 
-    testWidgets('a file result opens the detail filtered, image in viewer', (
+    testWidgets('a file result opens the detail filtered, not the viewer', (
       tester,
     ) async {
       await openKnight(
@@ -655,11 +658,7 @@ void main() {
       await search(tester, 'barrel');
       await pumpUntil(tester, find.text('Barrels 1'));
       await tester.tap(find.text('Barrels 1'));
-      await pumpUntil(tester, find.byType(ImageViewer));
-      final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
-      expect(viewer.images, barrels);
-      expect(viewer.initialIndex, 1);
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await pumpUntil(tester, find.text('Show all files'));
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
@@ -680,6 +679,29 @@ void main() {
       expect(find.textContaining('Images (5)'), findsOneWidget);
     });
 
+    testWidgets('a sound result opens the detail on the Audio tab', (
+      tester,
+    ) async {
+      await openKnight(
+        tester,
+        open: false,
+        files: [...barrels, 'sfx/barrel_roll.wav'],
+      );
+      await tester.tap(find.text('Files'));
+      await tester.pump();
+      await search(tester, 'roll');
+      await pumpUntil(tester, find.text('Barrel roll'));
+      await tester.tap(find.text('Barrel roll'));
+      await pumpUntil(tester, find.text('Show all files'));
+      await tester.pump(const Duration(milliseconds: 500));
+      final tabs = tester.widget<TabBar>(find.byType(TabBar)).tabs;
+      final selected = DefaultTabController.of(
+        tester.element(find.byType(TabBar)),
+      ).index;
+      expect((tabs[selected] as Tab).text, startsWith('Audio'));
+      expect(find.byType(ImageViewer), findsNothing);
+    });
+
     testWidgets('infix fallback: "arrel" still finds the barrels', (
       tester,
     ) async {
@@ -689,11 +711,179 @@ void main() {
       await search(tester, 'arrel');
       await pumpUntil(tester, find.text('Barrels 2'));
       await tester.tap(find.text('Barrels 2'));
+      await pumpUntil(tester, find.text('Show all files'));
+      await tester.pump(const Duration(milliseconds: 500));
+      // The detail lists the barrels; clicking one opens them in order.
+      await tester.tap(find.text('barrels_2.png'));
       await pumpUntil(tester, find.byType(ImageViewer));
-      expect(
-        tester.widget<ImageViewer>(find.byType(ImageViewer)).images,
-        barrels,
+      final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
+      expect(viewer.images, barrels);
+      expect(viewer.initialIndex, 2);
+    });
+  });
+
+  testWidgets('the "files match" line shows every example in a tooltip', (
+    tester,
+  ) async {
+    await openKnight(
+      tester,
+      open: false,
+      files: [for (var i = 0; i < 4; i++) 'props/barrels_$i.png'],
+    );
+    await tester.enterText(find.byType(TextField).first, 'barrels');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
+    final line = find.byKey(const ValueKey('file-matches'));
+    await pumpUntil(tester, line);
+    final tip = tester.widget<Tooltip>(
+      find.ancestor(of: line, matching: find.byType(Tooltip)).first,
+    );
+    expect(
+      tip.message,
+      '4 files match:\nbarrels_0.png\nbarrels_1.png\nbarrels_2.png\n'
+      'barrels_3.png',
+    );
+  });
+
+  group('app shortcuts', () {
+    late List<String> picked;
+    late int scans;
+    late ProviderContainer container;
+
+    Future<void> start(WidgetTester tester) async {
+      picked = [];
+      await openKnight(
+        tester,
+        open: false,
+        overrides: [
+          directoryPickerProvider.overrideWithValue((title) async {
+            picked.add(title);
+            return null;
+          }),
+          archivePickerProvider.overrideWithValue(() async {
+            picked.add('archive');
+            return const <String>[];
+          }),
+        ],
       );
+      scans = 0;
+      container = ProviderScope.containerOf(
+        tester.element(find.byType(HomeScreen)),
+      );
+      final sub = container.listen(libraryProvider, (_, next) {
+        if (next.isLoading) scans++;
+      });
+      addTearDown(sub.close);
+    }
+
+    Future<void> press(
+      WidgetTester tester,
+      LogicalKeyboardKey key, {
+      bool ctrl = true,
+    }) async {
+      if (ctrl) await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(key);
+      if (ctrl) await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+    }
+
+    Future<void> scanDone(WidgetTester tester) async {
+      for (
+        var i = 0;
+        i < 200 && container.read(libraryProvider).isLoading;
+        i++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+      }
+      await pumpUntil(tester, find.text('Knight Pack'));
+    }
+
+    /// Each app-wide shortcut, then `/` (dashboard only).
+    Future<void> expectAllWork(WidgetTester tester) async {
+      await press(tester, LogicalKeyboardKey.keyI);
+      expect(picked, ['Import folder']);
+      await press(tester, LogicalKeyboardKey.keyO);
+      expect(picked, ['Import folder', 'archive']);
+      await press(tester, LogicalKeyboardKey.keyR);
+      expect(scans, 1);
+      await scanDone(tester);
+      await press(tester, LogicalKeyboardKey.f5, ctrl: false);
+      expect(scans, 2);
+      await scanDone(tester);
+      await press(tester, LogicalKeyboardKey.comma);
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsScreen), findsOneWidget);
+      // Not twice.
+      await press(tester, LogicalKeyboardKey.comma);
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsScreen), findsOneWidget);
+      // Rescan works on other pages too.
+      await press(tester, LogicalKeyboardKey.keyR);
+      expect(scans, 3);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      // The scan's progress bar never settles.
+      await scanDone(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(SettingsScreen), findsNothing);
+      // `/` still reaches the dashboard after the settings page closed.
+      await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+      await tester.pump();
+      final field = tester.widget<TextField>(find.byType(TextField).first);
+      expect(field.focusNode!.hasFocus, isTrue);
+    }
+
+    testWidgets('work after a click on empty space', (tester) async {
+      await start(tester);
+      // Focus the search, then click on empty grid space.
+      await tester.tap(find.byType(TextField).first);
+      await tester.pump();
+      await tester.tapAt(const Offset(1300, 860));
+      await tester.pump();
+      final field = tester.widget<TextField>(find.byType(TextField).first);
+      expect(field.focusNode!.hasFocus, isFalse);
+      await expectAllWork(tester);
+    });
+
+    testWidgets('work after returning from a pack page', (tester) async {
+      await start(tester);
+      await tester.tap(find.text('Knight Pack'));
+      await pumpUntil(tester, find.byType(TabBar));
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byType(TabBar), findsNothing);
+      await expectAllWork(tester);
+    });
+
+    testWidgets('Ctrl+F works after leaving the search with Esc', (
+      tester,
+    ) async {
+      await start(tester);
+      final focus = tester
+          .widget<TextField>(find.byType(TextField).first)
+          .focusNode!;
+      await press(tester, LogicalKeyboardKey.keyF);
+      expect(focus.hasFocus, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(focus.hasFocus, isFalse);
+      await press(tester, LogicalKeyboardKey.keyF);
+      expect(focus.hasFocus, isTrue);
+    });
+
+    testWidgets('import shortcuts skip an open dialog', (tester) async {
+      await start(tester);
+      // The sort menu is a popup route.
+      await tester.tap(find.byType(DropdownButton<PackSort>));
+      await tester.pumpAndSettle();
+      await press(tester, LogicalKeyboardKey.keyI);
+      await press(tester, LogicalKeyboardKey.comma);
+      await tester.pump();
+      expect(picked, isEmpty);
+      expect(find.byType(SettingsScreen), findsNothing);
     });
   });
 }

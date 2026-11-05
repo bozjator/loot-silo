@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -81,10 +83,30 @@ final dashboardQueryProvider =
     );
 
 class DashboardQueryNotifier extends Notifier<DashboardQuery> {
-  @override
-  DashboardQuery build() => const DashboardQuery();
+  /// How long typing must pause before the search runs.
+  static const searchDebounce = Duration(milliseconds: 150);
 
-  void setText(String text) => state = state.copyWith(text: text);
+  Timer? _debounce;
+
+  @override
+  DashboardQuery build() {
+    ref.onDispose(() => _debounce?.cancel());
+    return const DashboardQuery();
+  }
+
+  /// Search text from the field: applied once typing pauses for
+  /// [searchDebounce]; clearing it applies at once.
+  void setText(String text) {
+    _debounce?.cancel();
+    if (text.trim().isEmpty) {
+      if (state.text != text) state = state.copyWith(text: text);
+      return;
+    }
+    _debounce = Timer(searchDebounce, () {
+      if (state.text != text) state = state.copyWith(text: text);
+    });
+  }
+
   void setSort(PackSort sort) => state = state.copyWith(sort: sort);
   void openBundle(String? id) => state = state.copyWith(bundleId: () => id);
 
@@ -100,7 +122,10 @@ class DashboardQueryNotifier extends Notifier<DashboardQuery> {
   void toggleSource(String v) =>
       state = state.copyWith(sources: _toggle(state.sources, v));
 
-  void clearFilters() => state = DashboardQuery(sort: state.sort);
+  void clearFilters() {
+    _debounce?.cancel();
+    state = DashboardQuery(sort: state.sort);
+  }
 }
 
 /// FTS hits in rank order, or null when there is no search text.
@@ -182,6 +207,21 @@ final visibleFilesProvider = Provider<AsyncValue<List<FileTile>>>((ref) {
   };
 });
 
+/// The dashboard's filter menus and chips.
+enum Facet { type, author, tag, source }
+
+/// Whether [p] passes [q]'s type / author / tag / source filters, leaving
+/// out [skip] (a facet's own counts ignore its own selection).
+bool passesFacets(PackRow p, DashboardQuery q, {Facet? skip}) =>
+    (skip == Facet.type || q.types.isEmpty || p.types.any(q.types.contains)) &&
+    (skip == Facet.author ||
+        q.authors.isEmpty ||
+        q.authors.contains(p.author ?? '')) &&
+    (skip == Facet.tag || q.tags.isEmpty || p.tags.any(q.tags.contains)) &&
+    (skip == Facet.source ||
+        q.sources.isEmpty ||
+        q.sources.contains(p.source ?? noSource));
+
 /// Applies [q] to [packs]; pure so it can be unit tested.
 List<PackRow> applyQuery(
   List<PackRow> packs,
@@ -203,14 +243,7 @@ List<PackRow> applyQuery(
     final hitSet = hits.toSet();
     out = out.where((p) => hitSet.contains(p.id));
   }
-  if (q.types.isNotEmpty) out = out.where((p) => p.types.any(q.types.contains));
-  if (q.authors.isNotEmpty) {
-    out = out.where((p) => q.authors.contains(p.author ?? ''));
-  }
-  if (q.tags.isNotEmpty) out = out.where((p) => p.tags.any(q.tags.contains));
-  if (q.sources.isNotEmpty) {
-    out = out.where((p) => q.sources.contains(p.source ?? noSource));
-  }
+  out = out.where((p) => passesFacets(p, q));
 
   final list = out.toList();
   int byTitle(PackRow a, PackRow b) =>
@@ -373,33 +406,86 @@ final visiblePacksProvider = Provider<AsyncValue<List<PackRow>>>((ref) {
 /// Value → number of packs, most common first.
 class Facets {
   const Facets({
+    this.types = const [],
     required this.authors,
     required this.tags,
     required this.sources,
   });
 
+  final List<(String, int)> types;
   final List<(String, int)> authors;
   final List<(String, int)> tags;
   final List<(String, int)> sources;
 
-  static List<(String, int)> _count(Iterable<String> values) {
+  static List<(String, int)> _count(
+    Iterable<String> values, [
+    Set<String> selected = const {},
+  ]) {
     final m = <String, int>{};
     for (final v in values) {
       m[v] = (m[v] ?? 0) + 1;
     }
-    return m.entries.map((e) => (e.key, e.value)).toList()..sort(
-      (a, b) => b.$2 != a.$2 ? b.$2.compareTo(a.$2) : a.$1.compareTo(b.$1),
-    );
+    final out = m.entries.map((e) => (e.key, e.value)).toList()
+      ..sort(
+        (a, b) => b.$2 != a.$2 ? b.$2.compareTo(a.$2) : a.$1.compareTo(b.$1),
+      );
+    // A selected value nothing matches any more stays listed (at 0), so it
+    // can be unticked.
+    final zero = [
+      for (final v in selected)
+        if (!m.containsKey(v)) v,
+    ]..sort();
+    return [...out, for (final v in zero) (v, 0)];
   }
 
+  static List<String> _authors(Iterable<PackRow> l) => [
+    for (final p in l) ?p.author,
+  ];
+  static List<String> _sources(Iterable<PackRow> l) => [
+    for (final p in l) p.source ?? noSource,
+  ];
+
   factory Facets.of(List<PackRow> packs) => Facets(
-    authors: _count([for (final p in packs) ?p.author]),
+    types: _count(packs.expand((p) => p.types)),
+    authors: _count(_authors(packs)),
     tags: _count(packs.expand((p) => p.tags)),
-    sources: _count([for (final p in packs) p.source ?? noSource]),
+    sources: _count(_sources(packs)),
   );
+
+  /// Faceted counts: each facet counts the packs (in the open bundle, and
+  /// among the search [hits] when searching) that pass the *other* active
+  /// filters. Sub-packs count, since any filter lists them.
+  factory Facets.forQuery(
+    List<PackRow> packs,
+    DashboardQuery q,
+    List<String>? hits,
+  ) {
+    Iterable<PackRow> base = packs;
+    if (q.bundleId != null) {
+      base = base.where((p) => p.parentId == q.bundleId);
+    }
+    if (hits != null) {
+      final hitSet = hits.toSet();
+      base = base.where((p) => hitSet.contains(p.id));
+    }
+    final list = base.toList();
+    Iterable<PackRow> without(Facet f) =>
+        list.where((p) => passesFacets(p, q, skip: f));
+    return Facets(
+      types: _count(without(Facet.type).expand((p) => p.types), q.types),
+      authors: _count(_authors(without(Facet.author)), q.authors),
+      tags: _count(without(Facet.tag).expand((p) => p.tags), q.tags),
+      sources: _count(_sources(without(Facet.source)), q.sources),
+    );
+  }
 }
 
 final facetsProvider = Provider<Facets>((ref) {
   final packs = ref.watch(libraryProvider).value?.packs ?? const [];
-  return Facets.of(packs);
+  final q = ref.watch(dashboardQueryProvider);
+  // While a new search runs, the last hits keep the counts steady.
+  final hits = q.text.trim().isEmpty
+      ? null
+      : ref.watch(searchHitsProvider).value;
+  return Facets.forQuery(packs, q, hits);
 });

@@ -49,6 +49,25 @@ class MemoryKeyStore implements KeyStore {
 
 /// Pumps until [finder] matches (or, with [gone], stops matching); real
 /// isolates need real time.
+/// The real library's pack count at the root ("72 packs"). Importing into
+/// the library changes it, so the first test to load the library reads it
+/// (no search or filter is active then); later calls match that exact text,
+/// so a filtered count ("17 packs") doesn't pass for the root.
+Finder realPacks() {
+  if (_realPacksText case final text?) return find.text(text);
+  return find.byWidgetPredicate((w) {
+    if (w is! Text) return false;
+    final text = w.data;
+    if (text == null || !RegExp(r'^[1-9]\d+ packs$').hasMatch(text)) {
+      return false;
+    }
+    _realPacksText = text;
+    return true;
+  });
+}
+
+String? _realPacksText;
+
 Future<void> pumpUntil(
   WidgetTester tester,
   Finder finder, {
@@ -220,7 +239,7 @@ void main() {
     final real = p.canonicalize('../assets_library');
     if (!Directory(real).existsSync()) return;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await settleImages(tester);
     await captureScreenshot(tester, 'm4_dashboard');
 
@@ -230,13 +249,15 @@ void main() {
     await captureScreenshot(tester, 'm4_search_slime');
 
     await tester.enterText(find.byType(TextField), '');
+    // Type chips follow the search (M23): 3d shows again once it's cleared.
+    await pumpUntil(tester, find.widgetWithText(FilterChip, '3d'));
     await tester.tap(find.widgetWithText(FilterChip, '3d'));
     await pumpUntil(tester, find.text('Clear'));
     await settleImages(tester);
     await captureScreenshot(tester, 'm4_filter_3d');
 
     await tester.tap(find.text('Clear'));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     final kenney = find.text('Kenney Game Assets 1 version 42');
     await tester.scrollUntilVisible(
       kenney,
@@ -258,7 +279,7 @@ void main() {
     final real = p.canonicalize('../assets_library');
     if (!Directory(real).existsSync()) return;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
 
     for (final (query, name) in [
       ('zerie', 'm5_zerie'),
@@ -382,7 +403,7 @@ void main() {
     if (!Directory(real).existsSync()) return;
     final before = Directory(real).statSync().modified;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
 
     await tester.enterText(find.byType(TextField), 'monster sound effects 3');
     await tester.pump(const Duration(milliseconds: 500));
@@ -609,7 +630,7 @@ void main() {
     if (!Directory(real).existsSync()) return;
     final before = Directory(real).statSync().modified;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'ashishlko11');
     await pumpUntil(tester, find.text('Special Effects Vol.03'));
     await tester.tap(find.text('Special Effects Vol.03'));
@@ -730,7 +751,7 @@ A **16×16** knight with *walk* and *idle* animations.
     if (!Directory(real).existsSync()) return;
     final before = Directory(real).statSync().modified;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'craftpix');
     await pumpUntil(tester, find.text('Free-Basic-Pixel-Art-UI-for-RPG'));
     await tester.tap(find.text('Free-Basic-Pixel-Art-UI-for-RPG'));
@@ -752,7 +773,7 @@ A **16×16** knight with *walk* and *idle* animations.
     final before = Directory(real).statSync().modified;
     final settings = File(p.join(tmp.path, 'settings.json'));
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
 
     // Slider to the far left, then the far right.
     for (final (dx, size, shot) in [
@@ -922,7 +943,7 @@ A **16×16** knight with *walk* and *idle* animations.
     if (!Directory(real).existsSync()) return;
     final before = Directory(real).statSync().modified;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'oboropixel');
     await pumpUntil(tester, find.text('CharactersAnimationsAssetPack'));
     await tester.tap(find.text('CharactersAnimationsAssetPack'));
@@ -943,7 +964,7 @@ A **16×16** knight with *walk* and *idle* animations.
     if (!Directory(real).existsSync()) return;
     final before = Directory(real).statSync().modified;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'pixel banner');
     await pumpUntil(tester, find.text('Pixel-Banner'));
     await tester.tap(find.text('Pixel-Banner'));
@@ -1010,7 +1031,7 @@ A **16×16** knight with *walk* and *idle* animations.
     if (!Directory(real).existsSync()) return;
     final before = Directory(real).statSync().modified;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
 
     await tester.tap(find.text('Expanded'));
     await pumpUntil(tester, find.textContaining(' tiles'));
@@ -1152,7 +1173,7 @@ A **16×16** knight with *walk* and *idle* animations.
     if (!Directory(real).existsSync()) return;
     final before = Directory(real).statSync().modified;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'special effects vol');
     await pumpUntil(tester, find.text('Special Effects Vol.03'));
     await tester.tap(find.text('Special Effects Vol.03'));
@@ -1172,7 +1193,7 @@ A **16×16** knight with *walk* and *idle* animations.
     if (!Directory(real).existsSync()) return;
     final before = Directory(real).statSync().modified;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'oboropixel');
     await pumpUntil(tester, find.text('CharactersAnimationsAssetPack'));
     await tester.tap(find.text('CharactersAnimationsAssetPack'));
@@ -1247,7 +1268,7 @@ A **16×16** knight with *walk* and *idle* animations.
     fakePlayer = () => fake;
     addTearDown(() => fakePlayer = null);
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'chiptune');
     await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
     await tester.tap(find.text('music-loop-bundle-chiptune'));
@@ -1278,7 +1299,7 @@ A **16×16** knight with *walk* and *idle* animations.
     if (!Directory(real).existsSync()) return;
     final before = Directory(real).statSync().modified;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await tester.tap(find.byType(DropdownButton<PackSort>));
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.text('Type').last);
@@ -1301,7 +1322,7 @@ A **16×16** knight with *walk* and *idle* animations.
     if (!Directory(real).existsSync()) return;
     final before = Directory(real).statSync().modified;
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await tester.tap(find.text('Files'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Type to search file names'), findsOneWidget);
@@ -1323,27 +1344,100 @@ A **16×16** knight with *walk* and *idle* animations.
 
     await tester.tap(find.text('Files'));
     await pumpUntil(tester, village);
-    final name = tester.widget<Text>(
-      find.descendant(
-        of: find.ancestor(of: village.first, matching: find.byType(Card)),
-        matching: find.textContaining('Barrels'),
-      ),
-    );
     await tester.ensureVisible(village.first);
     await tester.pump(const Duration(milliseconds: 300));
+    // M23: a file result opens the filtered detail only, not the viewer.
     await tester.tap(village.first);
-    await pumpUntil(tester, find.byType(ImageViewer));
-    await settleImages(tester);
-    expect(find.textContaining(name.data!), findsWidgets);
-    await captureScreenshot(tester, 'm22_viewer', settle: false);
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await pumpUntil(tester, find.byType(ImageViewer), seconds: 5, gone: true);
-    expect(find.text('Matching “barrels”'), findsOneWidget);
+    await pumpUntil(tester, find.text('Matching “barrels”'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(ImageViewer), findsNothing);
     await settleImages(tester);
     await captureScreenshot(tester, 'm22_detail_filtered', settle: false);
     await tester.tap(find.text('Show all files'));
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Matching “barrels”'), findsNothing);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m23: debounce, tooltip, facet counts, shortcuts (real)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    final all = find.text(
+      tester.widget<Text>(realPacks()).data!,
+    ); // e.g. "72 packs"
+
+    // Typing doesn't search until it pauses.
+    await tester.enterText(find.byType(TextField), 'barrels');
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(all, findsOneWidget);
+    final line = find.byKey(const ValueKey('file-matches'));
+    await pumpUntil(tester, line);
+
+    // The match line's tooltip lists the names.
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(line.first));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining('barrels_0'), findsWidgets);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm23_match_tooltip', settle: false);
+    await mouse.moveTo(Offset.zero);
+    await tester.pump(const Duration(seconds: 1));
+
+    // Clearing applies at once.
+    await tester.tap(find.byTooltip('Clear search'));
+    await tester.pump();
+    expect(all, findsOneWidget);
+
+    // Facet counts: the Tag menu within one author's packs.
+    List<String> menuItems() => [
+      for (final e in find.byType(CheckboxMenuButton).evaluate())
+        ((e.widget as CheckboxMenuButton).child! as Text).data!,
+    ];
+    await tester.tap(find.widgetWithText(TextButton, 'Tag'));
+    await tester.pump(const Duration(milliseconds: 400));
+    final allTags = menuItems();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.widgetWithText(TextButton, 'Author'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.textContaining('RafaelMatos  ('));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.widgetWithText(TextButton, 'Tag'));
+    await tester.pump(const Duration(milliseconds: 400));
+    final rafaelTags = menuItems();
+    expect(rafaelTags, isNotEmpty);
+    expect(rafaelTags, isNot(allTags));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm23_tag_counts_one_author', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // Ctrl+, after a click on empty space opens the settings.
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.tapAt(const Offset(720, 880));
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await pumpUntil(
+      tester,
+      find.text('Animate all sprite previews on dashboard'),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await captureScreenshot(tester, 'm23_settings_label', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 500));
     expect(Directory(real).statSync().modified, before);
   });
 
@@ -1535,7 +1629,7 @@ A **16×16** knight with *walk* and *idle* animations.
     useLiveKey = true;
     addTearDown(() => useLiveKey = false);
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await tester.tap(find.byTooltip('itch.io'));
     await pumpUntil(tester, find.textContaining('Signed in as'), seconds: 90);
     await pumpUntil(tester, find.text('Download all missing (3)'));
@@ -1564,18 +1658,18 @@ A **16×16** knight with *walk* and *idle* animations.
     if (!Directory(real).existsSync()) return;
     await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(app(real, library: real));
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
     await pumpUntil(tester, find.text('Keyboard shortcuts'));
     await captureScreenshot(tester, 'm10_settings');
 
     await tester.tap(find.text('Dark'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Animate all sprite previews'));
+    await tester.tap(find.text('Animate all sprite previews on dashboard'));
     await tester.pumpAndSettle();
     await captureScreenshot(tester, 'm10_settings_dark');
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await pumpUntil(tester, find.text('71 packs'));
+    await pumpUntil(tester, realPacks());
     await settleImages(tester);
     await tester.pump(const Duration(milliseconds: 400));
     await captureScreenshot(tester, 'm10_dashboard_dark', settle: false);

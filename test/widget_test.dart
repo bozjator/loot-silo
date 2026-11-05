@@ -122,7 +122,7 @@ void main() {
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.themeMode, ThemeMode.dark);
 
-    await tester.tap(find.text('Animate all sprite previews'));
+    await tester.tap(find.text('Animate all sprite previews on dashboard'));
     await tester.pumpAndSettle();
     expect(store.load().animateAll, isTrue);
 

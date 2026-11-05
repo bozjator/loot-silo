@@ -72,6 +72,7 @@ Future<bool> importArchives(
     }
     final imported = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
+        settings: const RouteSettings(name: FolderImportScreen.routeName),
         builder: (_) => FolderImportScreen(
           sourcePath: temp.path,
           title: archives.length == 1 ? 'Import archive' : 'Import archives',

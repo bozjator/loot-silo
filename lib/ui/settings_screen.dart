@@ -17,6 +17,9 @@ const shortcutHelp = [
 ];
 
 class SettingsScreen extends ConsumerWidget {
+  /// Its route's name, so Ctrl+, doesn't open it twice.
+  static const routeName = 'settings';
+
   const SettingsScreen({super.key});
 
   Future<void> _changeLibrary(BuildContext context, WidgetRef ref) async {
@@ -113,9 +116,10 @@ class SettingsScreen extends ConsumerWidget {
               ),
               SwitchListTile(
                 secondary: const Icon(Icons.animation),
-                title: const Text('Animate all sprite previews'),
+                title: const Text('Animate all sprite previews on dashboard'),
                 subtitle: const Text(
-                  'Off: a sprite plays while the pointer is over its tile.',
+                  'Off: a sprite plays while the pointer is over its tile. '
+                  'The Animations tab has its own All / Hover toggle.',
                 ),
                 value: settings.animateAll,
                 onChanged: notifier.setAnimateAll,

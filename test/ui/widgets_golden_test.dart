@@ -170,6 +170,7 @@ void main() {
             tags: {'pixel-art'},
           ),
           facets: const Facets(
+            types: [('character', 3), ('sfx', 2), ('tileset', 1)],
             authors: [('Zerie', 1), ('Kenney', 130)],
             tags: [('pixel-art', 9)],
             sources: [('imported', 71)],
@@ -190,6 +191,9 @@ void main() {
     );
     expect(find.text('3 packs'), findsOneWidget);
     expect(find.text('Author · 1'), findsOneWidget);
+    // Type chips show their count; types nothing has are hidden.
+    expect(find.widgetWithText(FilterChip, '3'), findsOneWidget);
+    expect(find.widgetWithText(FilterChip, 'music'), findsNothing);
     await expectLater(
       find.byType(FilterBar),
       matchesGoldenFile('goldens/filter_bar.png'),
