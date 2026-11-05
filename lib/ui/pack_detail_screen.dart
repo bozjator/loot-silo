@@ -1,7 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,11 +9,13 @@ import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/animation_detector.dart';
+import '../core/audio_duration.dart';
 import '../core/credits.dart';
 import '../core/library_index.dart';
 import '../core/pack_editor.dart';
 import '../core/sidecar.dart';
 import '../core/text_preview.dart';
+import '../core/type_classifier.dart' show AssetType;
 import '../state/dashboard.dart' show sortedTags;
 import '../state/providers.dart';
 import '../state/settings.dart';
@@ -23,6 +25,7 @@ import 'folder_groups.dart';
 import 'image_viewer.dart';
 import 'reveal.dart';
 import 'text_preview_dialog.dart';
+import 'track_player.dart';
 import 'widgets/animated_sprite.dart';
 import 'widgets/meta_dialogs.dart';
 import 'widgets/pack_tile.dart' show iconForTypes;
@@ -194,11 +197,14 @@ class _BodyState extends State<_Body> {
         Expanded(child: TabBarView(children: [for (final (_, t) in tabs) t])),
       ],
     ];
+    // Music / sfx packs open on their Audio tab.
+    final audioTab = tabs.indexWhere((t) => t.$2 is _AudioTab);
     return DefaultTabController(
       // A new controller when the folder is cleared and the tab count
       // changes.
       key: ValueKey(folder),
       length: tabs.length,
+      initialIndex: isAudioPack(pack.types) && audioTab >= 0 ? audioTab : 0,
       child: widget.pinned
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -235,6 +241,12 @@ class _BodyState extends State<_Body> {
     );
   }
 }
+
+/// Every type is music or sfx (mixed packs such as characters + sfx keep
+/// their first tab).
+bool isAudioPack(List<String> types) =>
+    types.isNotEmpty &&
+    types.every((t) => t == AssetType.music.id || t == AssetType.sfx.id);
 
 /// Says the tabs show one folder of the pack, with a way back to all of it.
 class _FolderBar extends StatelessWidget {
@@ -1261,33 +1273,72 @@ class _AudioTab extends ConsumerStatefulWidget {
   ConsumerState<_AudioTab> createState() => _AudioTabState();
 }
 
+/// Tracks at least this long get a seek bar; shorter sounds show only the
+/// elapsed time.
+const seekBarMinLength = Duration(seconds: 10);
+
 class _AudioTabState extends ConsumerState<_AudioTab> {
   // Created on first play so tests and silent browsing never touch audio.
-  AudioPlayer? _player;
+  TrackPlayer? _player;
+  final _subs = <StreamSubscription<Object?>>[];
   String? _playing;
 
-  static ReleaseMode _modeFor(bool loop) =>
-      loop ? ReleaseMode.loop : ReleaseMode.release;
+  /// The last row played or clicked; Space toggles it.
+  String? _selected;
+  Duration _position = Duration.zero;
+  Duration? _length;
+  final _keys = FocusNode(debugLabel: 'audio');
+
+  /// Header lengths by relative path, requested as rows are built, and
+  /// those already read.
+  final _lengths = <String, Future<Duration?>>{};
+  final _known = <String, Duration>{};
+
+  TrackPlayer _ensurePlayer() {
+    final existing = _player;
+    if (existing != null) return existing;
+    final player = ref.read(trackPlayerFactoryProvider)();
+    _subs
+      ..add(
+        player.onComplete.listen((_) {
+          // Looping players report each pass as complete; they keep playing.
+          if (_player?.looping ?? false) return;
+          if (mounted) setState(() => _playing = null);
+        }),
+      )
+      ..add(
+        player.onPosition.listen((d) {
+          if (mounted && _playing != null) setState(() => _position = d);
+        }),
+      )
+      ..add(
+        player.onDuration.listen((d) {
+          if (mounted && _playing != null && d > Duration.zero) {
+            setState(() => _length = d);
+          }
+        }),
+      );
+    return _player = player;
+  }
 
   Future<void> _toggle(String rel) async {
-    final player = _player ??= AudioPlayer()
-      ..onPlayerComplete.listen((_) {
-        // Looping players report each pass as complete; they keep playing.
-        if (_player?.releaseMode == ReleaseMode.loop) return;
-        if (mounted) setState(() => _playing = null);
-      });
+    final player = _ensurePlayer();
+    _keys.requestFocus();
+    _selected = rel;
     if (_playing == rel) {
       await player.stop();
       setState(() => _playing = null);
       return;
     }
-    setState(() => _playing = rel);
+    setState(() {
+      _playing = rel;
+      _position = Duration.zero;
+      _length = null;
+    });
     try {
       await player.stop();
-      await player.setReleaseMode(
-        _modeFor(ref.read(settingsProvider).audioLoop),
-      );
-      await player.play(DeviceFileSource(p.join(widget.pack.path, rel)));
+      await player.setLoop(ref.read(settingsProvider).audioLoop);
+      await player.play(p.join(widget.pack.path, rel));
     } on Object catch (e) {
       if (!mounted) return;
       setState(() => _playing = null);
@@ -1296,15 +1347,53 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     }
   }
 
+  Future<void> _seek(Duration to) async {
+    final length = _length;
+    final clamped = to < Duration.zero
+        ? Duration.zero
+        : length != null && to > length
+        ? length
+        : to;
+    setState(() => _position = clamped);
+    await _player?.seek(clamped);
+  }
+
+  /// Space plays / stops the selected row; ←/→ seek 5 s while playing.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.space && event is KeyDownEvent) {
+      final rel = _selected ?? _playing;
+      if (rel == null) return KeyEventResult.ignored;
+      _toggle(rel);
+      return KeyEventResult.handled;
+    }
+    if (_playing == null) return KeyEventResult.ignored;
+    const step = Duration(seconds: 5);
+    if (key == LogicalKeyboardKey.arrowRight) {
+      _seek(_position + step);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowLeft) {
+      _seek(_position - step);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   /// Turning loop off lets the current sound finish its pass.
   void _setLoop(bool on) {
     ref.read(settingsProvider.notifier).setAudioLoop(on);
-    _player?.setReleaseMode(_modeFor(on));
+    _player?.setLoop(on);
   }
 
   @override
   void dispose() {
+    for (final s in _subs) {
+      s.cancel();
+    }
     _player?.dispose();
+    _keys.dispose();
     super.dispose();
   }
 
@@ -1312,53 +1401,183 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   Widget build(BuildContext context) {
     final audio = widget.contents.audio;
     final loop = ref.watch(settingsProvider.select((s) => s.audioLoop));
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: FilterChip(
-              mouseCursor: clickCursor,
-              avatar: const Icon(Icons.repeat, size: 18),
-              label: const Text('Loop'),
-              tooltip: 'Repeat the playing sound',
-              selected: loop,
-              showCheckmark: false,
-              onSelected: _setLoop,
+    final read = ref.watch(audioDurationProvider);
+    Future<Duration?> readLength(String rel) => _lengths.putIfAbsent(
+      rel,
+      () => read(p.join(widget.pack.path, rel)).then((d) {
+        if (d != null) _known[rel] = d;
+        return d;
+      }),
+    );
+    return Focus(
+      focusNode: _keys,
+      onKeyEvent: _onKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FilterChip(
+                mouseCursor: clickCursor,
+                avatar: const Icon(Icons.repeat, size: 18),
+                label: const Text('Loop'),
+                tooltip: 'Repeat the playing sound',
+                selected: loop,
+                showCheckmark: false,
+                onSelected: _setLoop,
+              ),
             ),
           ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: audio.length,
-            itemBuilder: (context, i) {
-              final rel = audio[i];
-              final playing = _playing == rel;
-              return ListTile(
-                dense: true,
-                leading: IconButton(
-                  tooltip: playing ? 'Stop' : 'Play',
-                  icon: Icon(playing ? Icons.stop_circle : Icons.play_circle),
-                  onPressed: () => _toggle(rel),
-                ),
-                title: Text(p.basename(rel)),
-                subtitle: p.dirname(rel) == '.' ? null : Text(p.dirname(rel)),
-                trailing: Row(
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: audio.length,
+              itemBuilder: (context, i) {
+                final rel = audio[i];
+                final path = p.join(widget.pack.path, rel);
+                final playing = _playing == rel;
+                final tile = ListTile(
+                  dense: true,
+                  selected: _selected == rel,
+                  leading: IconButton(
+                    tooltip: playing ? 'Stop' : 'Play',
+                    icon: Icon(playing ? Icons.stop_circle : Icons.play_circle),
+                    onPressed: () => _toggle(rel),
+                  ),
+                  title: Text(p.basename(rel)),
+                  subtitle: p.dirname(rel) == '.' ? null : Text(p.dirname(rel)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Built only for visible rows, so only they are read.
+                      _TrackLength(future: readLength(rel)),
+                      const SizedBox(width: 16),
+                      Text(formatBytes(widget.contents.sizes[rel] ?? 0)),
+                      RevealButton(path),
+                    ],
+                  ),
+                  onTap: () => _toggle(rel),
+                );
+                if (!playing) return tile;
+                return Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(formatBytes(widget.contents.sizes[rel] ?? 0)),
-                    RevealButton(p.join(widget.pack.path, rel)),
+                    tile,
+                    _SeekBar(
+                      position: _position,
+                      // The player's own length once it reports one.
+                      length: _length ?? _known[rel],
+                      onSeek: _seek,
+                    ),
                   ],
-                ),
-                onTap: () => _toggle(rel),
-              );
-            },
+                );
+              },
+            ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// `m:ss` once the header has been read; nothing for unknown formats.
+class _TrackLength extends StatelessWidget {
+  const _TrackLength({required this.future});
+
+  final Future<Duration?> future;
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder(
+    future: future,
+    builder: (context, snap) {
+      final d = snap.data;
+      return SizedBox(
+        width: 56,
+        child: Text(
+          d == null ? '' : formatDuration(d),
+          textAlign: TextAlign.end,
+          style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
         ),
-      ],
+      );
+    },
+  );
+}
+
+/// Elapsed time, and for tracks of [seekBarMinLength] or more a slider
+/// that seeks on click or drag, plus the total.
+class _SeekBar extends StatefulWidget {
+  const _SeekBar({
+    required this.position,
+    required this.length,
+    required this.onSeek,
+  });
+
+  final Duration position;
+  final Duration? length;
+  final ValueChanged<Duration> onSeek;
+
+  @override
+  State<_SeekBar> createState() => _SeekBarState();
+}
+
+class _SeekBarState extends State<_SeekBar> {
+  /// Where the thumb is while dragging, in ms; position updates wait.
+  double? _drag;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final length = widget.length;
+    final style = theme.textTheme.bodySmall?.copyWith(
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    final long = length != null && length >= seekBarMinLength;
+    final max = (length?.inMilliseconds ?? 0).toDouble();
+    final value = (_drag ?? widget.position.inMilliseconds.toDouble()).clamp(
+      0.0,
+      max,
+    );
+    final elapsed = Duration(milliseconds: value.round());
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(72, 0, 24, 6),
+      child: Row(
+        children: [
+          Text(
+            formatDuration(long ? elapsed : widget.position),
+            key: const ValueKey('elapsed'),
+            style: style,
+          ),
+          if (long) ...[
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 2,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 6,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 12,
+                  ),
+                ),
+                child: Slider(
+                  key: const ValueKey('seek'),
+                  mouseCursor: clickCursor,
+                  max: max,
+                  value: value,
+                  onChanged: (v) => setState(() => _drag = v),
+                  onChangeEnd: (v) {
+                    setState(() => _drag = null);
+                    widget.onSeek(Duration(milliseconds: v.round()));
+                  },
+                ),
+              ),
+            ),
+            Text(formatDuration(length), style: style),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:assets_explorer/core/library_index.dart';
@@ -7,6 +9,7 @@ import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
+import 'package:assets_explorer/ui/track_player.dart';
 import 'package:assets_explorer/ui/widgets/pack_tile.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
@@ -14,6 +17,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
@@ -27,6 +31,35 @@ class _NoKey implements KeyStore {
   Future<void> write(String key) async {}
   @override
   Future<void> delete() async {}
+}
+
+/// Records calls; tests push positions, lengths and completions.
+class _FakePlayer implements TrackPlayer {
+  final played = <String>[];
+  final seeks = <Duration>[];
+  var stops = 0;
+  @override
+  var looping = false;
+  final position = StreamController<Duration>.broadcast();
+  final length = StreamController<Duration>.broadcast();
+  final complete = StreamController<void>.broadcast();
+
+  @override
+  Future<void> play(String path) async => played.add(path);
+  @override
+  Future<void> stop() async => stops++;
+  @override
+  Future<void> seek(Duration to) async => seeks.add(to);
+  @override
+  Future<void> setLoop(bool loop) async => looping = loop;
+  @override
+  Stream<Duration> get onPosition => position.stream;
+  @override
+  Stream<Duration> get onDuration => length.stream;
+  @override
+  Stream<void> get onComplete => complete.stream;
+  @override
+  Future<void> dispose() async {}
 }
 
 void main() {
@@ -60,6 +93,9 @@ void main() {
     ],
     bool open = true,
     Map<String, img.Image> images = const {},
+    Map<String, List<int>> raw = const {},
+    List<String>? types,
+    List<Override> overrides = const [],
   }) async {
     final lib = p.join(tmp.path, 'library');
     copyTree('test/fixtures/managed', lib);
@@ -68,6 +104,16 @@ void main() {
       File(p.join(pack, rel))
         ..parent.createSync(recursive: true)
         ..writeAsBytesSync(img.encodePng(img.Image(width: 8, height: 8)));
+    }
+    for (final MapEntry(key: rel, value: bytes) in raw.entries) {
+      File(p.join(pack, rel))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(bytes);
+    }
+    if (types != null) {
+      final sidecar = File(p.join(pack, 'asset_pack.json'));
+      final json = jsonDecode(sidecar.readAsStringSync()) as Map;
+      sidecar.writeAsStringSync(jsonEncode({...json, 'types': types}));
     }
     for (final MapEntry(key: rel, value: image) in images.entries) {
       File(p.join(pack, rel))
@@ -87,6 +133,7 @@ void main() {
           libraryIndexProvider.overrideWithValue(index),
           keyStoreProvider.overrideWithValue(_NoKey()),
           envKeyProvider.overrideWithValue(() => null),
+          ...overrides,
         ],
         child: const AssetsExplorerApp(),
       ),
@@ -94,7 +141,7 @@ void main() {
     await pumpUntil(tester, find.text('Knight Pack'));
     if (!open) return;
     await tester.tap(find.text('Knight Pack'));
-    await pumpUntil(tester, find.textContaining('Images ('));
+    await pumpUntil(tester, find.byType(TabBar));
     // Let the page finish sliding in.
     await tester.pump(const Duration(seconds: 1));
   }
@@ -365,5 +412,146 @@ void main() {
     }
     expect(find.text('Apply size'), findsNothing);
     expect(find.textContaining('Animations ('), findsOneWidget);
+  });
+
+  group('Audio tab', () {
+    final tone = File('test/fixtures/audio/tone.wav').readAsBytesSync();
+
+    int tabIndex(WidgetTester tester) =>
+        DefaultTabController.of(tester.element(find.byType(TabBar))).index;
+
+    testWidgets('music / sfx packs open on Audio; mixed packs do not', (
+      tester,
+    ) async {
+      await openKnight(
+        tester,
+        files: const [],
+        raw: {'theme.wav': tone},
+        types: ['music', 'sfx'],
+      );
+      expect(find.textContaining('Audio ('), findsOneWidget);
+      // Images (knight.png) is first, Audio second.
+      expect(tabIndex(tester), 1);
+      expect(find.text('Loop'), findsOneWidget);
+      // The header length is read off the UI thread.
+      await pumpUntil(tester, find.text('0:01'));
+    });
+
+    testWidgets('a mixed pack keeps its first tab', (tester) async {
+      await openKnight(
+        tester,
+        files: const [],
+        raw: {'hit.wav': tone},
+        types: ['character', 'sfx'],
+      );
+      expect(tabIndex(tester), 0);
+    });
+
+    testWidgets('seek bar: long tracks seek, short ones show elapsed time', (
+      tester,
+    ) async {
+      final fake = _FakePlayer();
+      final lengths = {
+        'long.ogg': const Duration(minutes: 2, seconds: 30),
+        'short.wav': const Duration(seconds: 3),
+      };
+      await openKnight(
+        tester,
+        files: const ['long.ogg', 'short.wav'],
+        types: ['music'],
+        overrides: [
+          trackPlayerFactoryProvider.overrideWithValue(() => fake),
+          audioDurationProvider.overrideWithValue(
+            (path) async => lengths[p.basename(path)],
+          ),
+        ],
+      );
+      await tester.pump();
+      expect(find.text('2:30'), findsOneWidget);
+      expect(find.text('0:03'), findsOneWidget);
+
+      await tester.tap(find.text('long.ogg'));
+      await tester.pump();
+      expect(p.basename(fake.played.single), 'long.ogg');
+      final seek = find.byKey(const ValueKey('seek'));
+      expect(seek, findsOneWidget);
+      fake.length.add(const Duration(minutes: 2, seconds: 30));
+      fake.position.add(const Duration(seconds: 30));
+      await tester.pump();
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('elapsed'))).data,
+        '0:30',
+      );
+
+      // Click in the middle of the bar seeks there.
+      await tester.tapAt(tester.getCenter(seek));
+      await tester.pump();
+      expect(fake.seeks.last.inSeconds, closeTo(75, 3));
+
+      // Drag: position updates wait until the drag ends.
+      final box = tester.getRect(seek);
+      final drag = await tester.startGesture(
+        Offset(box.left + box.width / 2, box.center.dy),
+      );
+      await drag.moveTo(Offset(box.left + box.width * 0.8, box.center.dy));
+      await tester.pump();
+      fake.position.add(const Duration(seconds: 76));
+      await tester.pump();
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('elapsed'))).data,
+        isNot('1:16'),
+      );
+      await drag.up();
+      await tester.pump();
+      expect(fake.seeks.last.inSeconds, greaterThan(100));
+
+      // Keys: → seeks 5 s on; Space stops the selected row.
+      fake.position.add(const Duration(seconds: 40));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(fake.seeks.last, const Duration(seconds: 45));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      expect(fake.seeks.last, const Duration(seconds: 40));
+
+      // Loop on: each pass completes, the position restarts, it keeps going.
+      fake.looping = true;
+      fake.complete.add(null);
+      fake.position.add(Duration.zero);
+      await tester.pump();
+      expect(find.byTooltip('Stop'), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('elapsed'))).data,
+        '0:00',
+      );
+      fake.looping = false;
+
+      // Another file stops this one; short sounds get no slider.
+      final stopsBefore = fake.stops;
+      await tester.tap(find.text('short.wav'));
+      await tester.pump();
+      expect(fake.stops, greaterThan(stopsBefore));
+      expect(p.basename(fake.played.last), 'short.wav');
+      expect(seek, findsNothing);
+      fake.position.add(const Duration(seconds: 2));
+      await tester.pump();
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('elapsed'))).data,
+        '0:02',
+      );
+      fake.complete.add(null);
+      // The event lands after the first frame; the second shows it.
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('elapsed')), findsNothing);
+
+      // Space replays the selected row, and stops it again.
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(find.byTooltip('Stop'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(find.byTooltip('Stop'), findsNothing);
+    });
   });
 }

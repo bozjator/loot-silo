@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,7 @@ import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
+import 'package:assets_explorer/ui/track_player.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
 import 'package:assets_explorer/ui/reveal.dart';
 import 'package:assets_explorer/ui/text_preview_dialog.dart';
@@ -120,6 +122,9 @@ void main() {
   /// Paths "Show in file manager" was asked for; no file manager opens.
   final revealed = <String>[];
 
+  /// Stands in for the audio player where a test drives playback itself.
+  TrackPlayer Function()? fakePlayer;
+
   Widget app(String source, {String? library}) {
     final store = SettingsStore(File(p.join(tmp.path, 'settings.json')))
       ..save(AppSettings(libraryPath: library ?? lib));
@@ -135,6 +140,8 @@ void main() {
           extractRootProvider.overrideWithValue(p.join(tmp.path, 'extract')),
           keyStoreProvider.overrideWithValue(keyStore),
           revealProvider.overrideWithValue((path) async => revealed.add(path)),
+          if (fakePlayer case final make?)
+            trackPlayerFactoryProvider.overrideWithValue(make),
           if (itchClient == null && useLiveKey)
             envKeyProvider.overrideWithValue(
               () => readKeyFromEnvFile(liveEnvFile),
@@ -1229,6 +1236,42 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m20: music pack opens on Audio, lengths, seek bar (real)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    final fake = _FakeTrackPlayer();
+    fakePlayer = () => fake;
+    addTearDown(() => fakePlayer = null);
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+    await tester.enterText(find.byType(TextField), 'chiptune');
+    await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
+    await tester.tap(find.text('music-loop-bundle-chiptune'));
+    // Opens straight on Audio: the Loop chip shows without a tab tap.
+    await pumpUntil(tester, find.widgetWithText(FilterChip, 'Loop'));
+    final length = find.textContaining(RegExp(r'^\d+:\d\d$'));
+    await pumpUntil(tester, length);
+    await tester.pump(const Duration(milliseconds: 500));
+    await captureScreenshot(tester, 'm20_audio_lengths', settle: false);
+
+    await tester.tap(find.byTooltip('Play').first);
+    await pumpUntil(tester, find.byKey(const ValueKey('seek')));
+    fake.position.add(const Duration(seconds: 42));
+    await tester.pump();
+    await tester.pump();
+    await captureScreenshot(tester, 'm20_seek_bar', settle: false);
+    await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('seek'))));
+    await tester.pump();
+    expect(fake.seeks, isNotEmpty);
+    await tester.tap(find.byTooltip('Stop'));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('seek')), findsNothing);
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('archive import: zip and tar.gz through the review screen', (
     tester,
   ) async {
@@ -1472,4 +1515,29 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump(const Duration(milliseconds: 400));
     await captureScreenshot(tester, 'm10_search_dark', settle: false);
   });
+}
+
+/// Records seeks; the test pushes positions.
+class _FakeTrackPlayer implements TrackPlayer {
+  final seeks = <Duration>[];
+  @override
+  var looping = false;
+  final position = StreamController<Duration>.broadcast();
+
+  @override
+  Future<void> play(String path) async {}
+  @override
+  Future<void> stop() async {}
+  @override
+  Future<void> seek(Duration to) async => seeks.add(to);
+  @override
+  Future<void> setLoop(bool loop) async => looping = loop;
+  @override
+  Stream<Duration> get onPosition => position.stream;
+  @override
+  Stream<Duration> get onDuration => const Stream.empty();
+  @override
+  Stream<void> get onComplete => const Stream.empty();
+  @override
+  Future<void> dispose() async {}
 }
