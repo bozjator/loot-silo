@@ -70,9 +70,26 @@ class PackContents {
     );
   }
 
-  /// [detected] with the sidecar's overrides applied.
+  bool _hidden(SpriteAnim a) => isNotAnimation(sidecar?.animations[a.path]);
+
+  /// [detected] minus the files marked "Not an animation"; parallel to
+  /// [animations].
+  List<SpriteAnim> get shownDetected => [
+    for (final a in detected)
+      if (!_hidden(a)) a,
+  ];
+
+  /// Detected animations the user marked "Not an animation"; they show in
+  /// the Images tab only.
+  List<SpriteAnim> get hiddenAnimations => [
+    for (final a in detected)
+      if (_hidden(a)) a,
+  ];
+
+  /// [shownDetected] with the sidecar's overrides applied.
   List<SpriteAnim> get animations => [
-    for (final a in detected) applyOverride(a, sidecar?.animations[a.path]),
+    for (final a in shownDetected)
+      applyOverride(a, sidecar?.animations[a.path]),
   ];
 
   /// Images worth flipping through at the top of the page: the tile
@@ -181,9 +198,22 @@ PackSidecar saveAnimationOverride(
       if (anim.frameH != detected.frameH) 'frame_h': anim.frameH,
       if (anim.fps != SpriteAnim.defaultFps) 'fps': anim.fps,
       'frames': ?anim.frameTotal,
+      if (anim.playRow != detected.playRow)
+        'rows': anim.playRow < 0 ? 'all' : anim.playRow + 1,
     };
     if (o.isNotEmpty) animations[detected.path] = o;
   }
+  final next = old.copyWith(animations: animations);
+  next.write(packPath);
+  return next;
+}
+
+/// Marks [rel] as not an animation (`animations: {"<rel>": false}`), or
+/// with [hidden] false removes that mark (like "Reset to detected").
+PackSidecar setNotAnimation(String packPath, String rel, {bool hidden = true}) {
+  final old = PackSidecar.read(packPath) ?? const PackSidecar();
+  final animations = {...old.animations}..remove(rel);
+  if (hidden) animations[rel] = false;
   final next = old.copyWith(animations: animations);
   next.write(packPath);
   return next;

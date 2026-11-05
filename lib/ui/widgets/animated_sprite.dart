@@ -13,8 +13,8 @@ import 'pixel_image.dart';
 /// Plays a [SpriteAnim]: slices sheet cells (or loads sequence frames) and
 /// draws them crisp, scaled up in whole steps.
 ///
-/// Shows frame 0 while [playing] is false. For grids, [row] picks the row
-/// to play; `null` plays every cell. Fully transparent cells (common at
+/// Shows frame 0 while [playing] is false. For grids, the animation's
+/// [SpriteAnim.rowToPlay] picks the row to play; `null` plays every cell. Fully transparent cells (common at
 /// the end of grid rows) are skipped once the image has been inspected.
 class AnimatedSprite extends StatefulWidget {
   const AnimatedSprite({
@@ -22,14 +22,12 @@ class AnimatedSprite extends StatefulWidget {
     required this.packPath,
     required this.anim,
     this.playing = true,
-    this.row = 0,
     this.fps,
   });
 
   final String packPath;
   final SpriteAnim anim;
   final bool playing;
-  final int? row;
 
   /// Overrides [SpriteAnim.fps].
   final double? fps;
@@ -62,10 +60,13 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
   @override
   void didUpdateWidget(AnimatedSprite old) {
     super.didUpdateWidget(old);
-    if (old.anim != widget.anim || old.packPath != widget.packPath) {
+    // Only the row changed: re-slice the loaded image, no reload.
+    final sameSheet =
+        old.anim.copyWith(playRow: widget.anim.playRow) == widget.anim;
+    if (!sameSheet || old.packPath != widget.packPath) {
       _release();
       _load();
-    } else if (old.row != widget.row) {
+    } else if (old.anim.playRow != widget.anim.playRow) {
       _frames = _computeFrames();
       _frame = 0;
       _trimEmpty();
@@ -138,7 +139,7 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
     final rows = math.max(1, image.height ~/ math.max(1, anim.frameH));
     final fw = anim.frameW.toDouble();
     final fh = anim.frameH.toDouble();
-    final row = widget.row;
+    final row = anim.rowToPlay;
     // A total-frames override leaves the last row partly filled.
     final total = anim.frameTotal ?? cols * rows;
     return [

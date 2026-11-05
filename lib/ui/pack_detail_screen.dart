@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -810,6 +811,49 @@ class _ChipRow extends StatelessWidget {
   }
 }
 
+/// Files marked "Not an animation", each with Restore (back to detected).
+class _HiddenAnimationsDialog extends ConsumerWidget {
+  const _HiddenAnimationsDialog({required this.pack, required this.hidden});
+
+  final PackRow pack;
+  final List<SpriteAnim> hidden;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => AlertDialog(
+    title: const Text('Not animations'),
+    content: SizedBox(
+      width: 420,
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          for (final a in hidden)
+            ListTile(
+              dense: true,
+              title: Text(prettyName(a.label, isFile: false)),
+              subtitle: Text(a.path),
+              trailing: TextButton(
+                onPressed: () async {
+                  if (!packExists(pack.path)) return;
+                  setNotAnimation(pack.path, a.path, hidden: false);
+                  final library = ref.read(libraryProvider.notifier);
+                  Navigator.of(context).pop();
+                  await library.reload();
+                },
+                child: const Text('Restore'),
+              ),
+            ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Close'),
+      ),
+    ],
+  );
+}
+
 class _ImagesTab extends ConsumerStatefulWidget {
   const _ImagesTab({required this.pack, required this.contents});
 
@@ -843,6 +887,19 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
           child: Row(
             children: [
               ItemsViewToggle(view: view, onChanged: settings.setImagesView),
+              if (contents.hiddenAnimations case final hidden
+                  when hidden.isNotEmpty) ...[
+                const SizedBox(width: 12),
+                TextButton.icon(
+                  icon: const Icon(Icons.motion_photos_off_outlined, size: 18),
+                  label: Text('${hidden.length} marked not an animation'),
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) =>
+                        _HiddenAnimationsDialog(pack: pack, hidden: hidden),
+                  ),
+                ),
+              ],
               const Spacer(),
               ThumbSizeSlider(
                 range: imageThumbRange,
@@ -946,7 +1003,7 @@ class _AnimationsTab extends StatelessWidget {
     gridId: pack.id,
     packPath: pack.path,
     animations: contents.animations,
-    detected: contents.detected,
+    detected: contents.shownDetected,
     sizes: contents.sizes,
     onEdit: (anim) => showDialog<void>(
       context: context,
@@ -998,6 +1055,8 @@ class _AnimationEditorDialog extends ConsumerWidget {
                         // override up.
                         await ref.read(libraryProvider.notifier).reload();
                       },
+                      onNotAnimation: () =>
+                          markNotAnimation(context, ref, pack, path),
                     ),
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
@@ -1011,6 +1070,37 @@ class _AnimationEditorDialog extends ConsumerWidget {
   }
 }
 
+/// Marks [rel] as not an animation, closes the editor and offers Undo.
+///
+/// The editor's own `ref` is gone once it closes, so the reloads go
+/// through the provider container.
+Future<void> markNotAnimation(
+  BuildContext context,
+  WidgetRef ref,
+  PackRow pack,
+  String rel,
+) async {
+  if (!packExists(pack.path)) return;
+  setNotAnimation(pack.path, rel);
+  final container = ProviderScope.containerOf(context, listen: false);
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (context.mounted) Navigator.of(context).pop();
+  messenger?.showSnackBar(
+    SnackBar(
+      content: Text('${p.basename(rel)} is now listed as an image only'),
+      action: SnackBarAction(
+        label: 'Undo',
+        onPressed: () {
+          if (!packExists(pack.path)) return;
+          setNotAnimation(pack.path, rel, hidden: false);
+          container.read(libraryProvider.notifier).reload();
+        },
+      ),
+    ),
+  );
+  await container.read(libraryProvider.notifier).reload();
+}
+
 /// Plays one animation with live fps / frame-size / row controls; Save
 /// writes the override into the pack sidecar. Shown in the Edit dialog.
 class _AnimationEditor extends StatefulWidget {
@@ -1020,6 +1110,7 @@ class _AnimationEditor extends StatefulWidget {
     required this.detected,
     required this.current,
     required this.onSave,
+    required this.onNotAnimation,
   });
 
   final String packPath;
@@ -1029,13 +1120,15 @@ class _AnimationEditor extends StatefulWidget {
   /// Null resets to the detected values.
   final Future<void> Function(SpriteAnim? anim) onSave;
 
+  /// "Not an animation": the file then only shows in the Images tab.
+  final Future<void> Function() onNotAnimation;
+
   @override
   State<_AnimationEditor> createState() => _AnimationEditorState();
 }
 
 class _AnimationEditorState extends State<_AnimationEditor> {
   late SpriteAnim _anim = widget.current;
-  int? _row = 0;
   late final _w = TextEditingController(text: '${widget.current.frameW}');
   late final _h = TextEditingController(text: '${widget.current.frameH}');
   late final _n = TextEditingController(text: '${widget.current.frameCount}');
@@ -1052,7 +1145,6 @@ class _AnimationEditorState extends State<_AnimationEditor> {
   void _reset(SpriteAnim a) {
     setState(() {
       _anim = a;
-      _row = 0;
       _w.text = '${a.frameW}';
       _h.text = '${a.frameH}';
       _n.text = '${a.frameCount}';
@@ -1066,29 +1158,45 @@ class _AnimationEditorState extends State<_AnimationEditor> {
     if (w == null || h == null || w < 1 || h < 1) return;
     // Re-slice from the detected sheet so repeated edits don't drift.
     setState(() {
-      _anim = widget.detected.copyWith(frameW: w, frameH: h, fps: _anim.fps);
-      _row = 0;
+      _anim = widget.detected.copyWith(
+        frameW: w,
+        frameH: h,
+        fps: _anim.fps,
+        playRow: _anim.playRow,
+      );
       _n.text = '${_anim.frameCount}';
       _framesError = null;
     });
   }
 
-  /// Re-slices the sheet into the typed total frame count; the frame width
-  /// follows. A count that doesn't fit keeps the old slicing.
+  /// Re-slices the sheet into the typed total frame count on the best grid
+  /// that fits; frame width and height follow. A count with no fitting grid
+  /// keeps the old slicing.
   void _applyFrames() {
     if (_n.text.trim().isEmpty) return;
     final n = int.tryParse(_n.text.trim());
     final next = n == null ? null : _anim.withFrameCount(n);
     setState(() {
       if (next == null) {
-        _framesError = 'Doesn\'t fit ${_anim.frameW * _anim.cols} px';
+        _framesError =
+            'Doesn\'t fit ${_anim.frameW * _anim.cols}'
+            '×${_anim.frameH * _anim.rows} px';
         return;
       }
       _framesError = null;
       _anim = next;
-      _row = 0;
       _w.text = '${next.frameW}';
+      _h.text = '${next.frameH}';
     });
+  }
+
+  /// −/+, Up/Down and the wheel: the next count with a fitting grid.
+  void _stepFrames(int step) {
+    final from = int.tryParse(_n.text.trim()) ?? _anim.frameCount;
+    final next = _anim.nextFrameCount(from, step);
+    if (next == null) return;
+    _n.text = '$next';
+    _applyFrames();
   }
 
   @override
@@ -1106,180 +1214,196 @@ class _AnimationEditorState extends State<_AnimationEditor> {
     final isSheet = a.kind == AnimKind.sheet;
     final dirty = a != widget.current;
     final overridden = widget.current != widget.detected;
+    // The preview box is as tall as the controls (at least 240 px); the
+    // whole editor scrolls when the window is too short.
     return Material(
       type: MaterialType.transparency,
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 240,
-              height: 240,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 240,
+                constraints: const BoxConstraints(minHeight: 240),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.all(8),
+                child: a.kind == AnimKind.gif
+                    ? PixelImage(
+                        File(p.join(widget.packPath, a.path)),
+                        animate: true,
+                      )
+                    : AnimatedSprite(packPath: widget.packPath, anim: a),
               ),
-              padding: const EdgeInsets.all(8),
-              child: a.kind == AnimKind.gif
-                  ? PixelImage(
-                      File(p.join(widget.packPath, a.path)),
-                      animate: true,
-                    )
-                  : AnimatedSprite(
-                      packPath: widget.packPath,
-                      anim: a,
-                      row: _row,
-                    ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SelectableText(
-                          prettyName(a.label, isFile: false),
-                          style: theme.textTheme.titleMedium,
-                        ),
-                      ),
-                      // Opens on top of this dialog; Esc closes it first.
-                      OpenImageButton(
-                        onPressed: () => showImageViewer(
-                          context,
-                          packPath: widget.packPath,
-                          images: [a.path],
-                          index: 0,
-                        ),
-                      ),
-                      RevealButton(p.join(widget.packPath, a.path)),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: SelectableText(
-                          a.path,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                      _CopyButton(
-                        tooltip: 'Copy relative path',
-                        text: a.path,
-                        icon: Icons.content_copy,
-                      ),
-                      _CopyButton(
-                        tooltip: 'Copy full path',
-                        text: p.join(widget.packPath, a.path),
-                        icon: Icons.copy_all,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(switch (a.kind) {
-                    AnimKind.sheet =>
-                      'Sheet · ${a.frameW}×${a.frameH} frames · '
-                          '${a.cols} × ${a.rows} · ${a.frameCount} frames',
-                    AnimKind.sequence =>
-                      'Sequence · ${a.frames.length} files · '
-                          '${a.frameW}×${a.frameH}',
-                    AnimKind.gif => 'Animated GIF',
-                  }),
-                  if (a.kind != AnimKind.gif)
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
                       children: [
-                        const Text('FPS'),
-                        SizedBox(
-                          width: 240,
-                          child: Slider(
-                            min: 1,
-                            max: 30,
-                            divisions: 29,
-                            value: a.fps.clamp(1, 30),
-                            label: a.fps.round().toString(),
-                            onChanged: (v) => setState(
-                              () => _anim = a.copyWith(fps: v.roundToDouble()),
+                        Expanded(
+                          child: SelectableText(
+                            prettyName(a.label, isFile: false),
+                            style: theme.textTheme.titleMedium,
+                          ),
+                        ),
+                        // Opens on top of this dialog; Esc closes it first.
+                        OpenImageButton(
+                          onPressed: () => showImageViewer(
+                            context,
+                            packPath: widget.packPath,
+                            images: [a.path],
+                            index: 0,
+                          ),
+                        ),
+                        RevealButton(p.join(widget.packPath, a.path)),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: SelectableText(
+                            a.path,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
-                        Text('${a.fps.round()}'),
+                        _CopyButton(
+                          tooltip: 'Copy relative path',
+                          text: a.path,
+                          icon: Icons.content_copy,
+                        ),
+                        _CopyButton(
+                          tooltip: 'Copy full path',
+                          text: p.join(widget.packPath, a.path),
+                          icon: Icons.copy_all,
+                        ),
                       ],
                     ),
-                  if (isSheet)
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        _NumberField(
-                          label: 'Frame width',
-                          controller: _w,
-                          onSubmit: _applySize,
-                        ),
-                        _NumberField(
-                          label: 'Frame height',
-                          controller: _h,
-                          onSubmit: _applySize,
-                        ),
-                        _NumberField(
-                          label: 'Frames',
-                          controller: _n,
-                          onSubmit: _applyFrames,
-                          onChanged: _applyFrames,
-                          errorText: _framesError,
-                        ),
-                        OutlinedButton(
-                          onPressed: _applySize,
-                          child: const Text('Apply size'),
-                        ),
-                        if (a.rows > 1)
-                          DropdownButton<int?>(
-                            mouseCursor: clickCursor,
-                            dropdownMenuItemMouseCursor: clickCursor,
-                            value: _row,
-                            items: [
-                              const DropdownMenuItem(
-                                value: null,
-                                child: Text('All rows'),
-                              ),
-                              for (var r = 0; r < a.rows; r++)
-                                DropdownMenuItem(
-                                  value: r,
-                                  child: Text('Row ${r + 1}'),
+                    const SizedBox(height: 4),
+                    Text(switch (a.kind) {
+                      AnimKind.sheet =>
+                        'Sheet · ${a.frameW}×${a.frameH} frames · '
+                            '${a.cols} × ${a.rows} · ${a.frameCount} frames',
+                      AnimKind.sequence =>
+                        'Sequence · ${a.frames.length} files · '
+                            '${a.frameW}×${a.frameH}',
+                      AnimKind.gif => 'Animated GIF',
+                    }),
+                    if (a.kind != AnimKind.gif)
+                      Row(
+                        children: [
+                          const Text('FPS'),
+                          Flexible(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 240),
+                              child: Slider(
+                                min: 1,
+                                max: 30,
+                                divisions: 29,
+                                value: a.fps.clamp(1, 30),
+                                label: a.fps.round().toString(),
+                                onChanged: (v) => setState(
+                                  () => _anim = a.copyWith(
+                                    fps: v.roundToDouble(),
+                                  ),
                                 ),
-                            ],
-                            onChanged: (r) => setState(() => _row = r),
+                              ),
+                            ),
                           ),
+                          Text('${a.fps.round()}'),
+                        ],
+                      ),
+                    if (isSheet)
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          _NumberField(
+                            label: 'Frame width',
+                            controller: _w,
+                            onSubmit: _applySize,
+                          ),
+                          _NumberField(
+                            label: 'Frame height',
+                            controller: _h,
+                            onSubmit: _applySize,
+                          ),
+                          _FramesField(
+                            controller: _n,
+                            onSubmit: _applyFrames,
+                            onChanged: _applyFrames,
+                            onStep: _stepFrames,
+                            errorText: _framesError,
+                          ),
+                          OutlinedButton(
+                            onPressed: _applySize,
+                            child: const Text('Apply size'),
+                          ),
+                          if (a.rows > 1)
+                            DropdownButton<int?>(
+                              mouseCursor: clickCursor,
+                              dropdownMenuItemMouseCursor: clickCursor,
+                              value: a.rowToPlay,
+                              items: [
+                                const DropdownMenuItem(
+                                  value: null,
+                                  child: Text('All rows'),
+                                ),
+                                for (var r = 0; r < a.rows; r++)
+                                  DropdownMenuItem(
+                                    value: r,
+                                    child: Text('Row ${r + 1}'),
+                                  ),
+                              ],
+                              // Saved with the animation; cards play it.
+                              onChanged: (r) => setState(
+                                () => _anim = a.copyWith(
+                                  playRow: r ?? SpriteAnim.allRows,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    const Spacer(),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton(
+                          onPressed: dirty ? () => widget.onSave(a) : null,
+                          child: const Text('Save'),
+                        ),
+                        if (overridden)
+                          TextButton(
+                            onPressed: () => widget.onSave(null),
+                            child: const Text('Reset to detected'),
+                          )
+                        else if (dirty)
+                          TextButton(
+                            onPressed: () => _reset(widget.current),
+                            child: const Text('Undo'),
+                          ),
+                        TextButton.icon(
+                          onPressed: widget.onNotAnimation,
+                          icon: const Icon(Icons.image_outlined, size: 18),
+                          label: const Text('Not an animation'),
+                        ),
                       ],
                     ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      FilledButton(
-                        onPressed: dirty ? () => widget.onSave(a) : null,
-                        child: const Text('Save'),
-                      ),
-                      const SizedBox(width: 8),
-                      if (overridden)
-                        TextButton(
-                          onPressed: () => widget.onSave(null),
-                          child: const Text('Reset to detected'),
-                        )
-                      else if (dirty)
-                        TextButton(
-                          onPressed: () => _reset(widget.current),
-                          child: const Text('Undo'),
-                        ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1314,6 +1438,77 @@ class _CopyButton extends StatelessWidget {
         ),
       );
     },
+  );
+}
+
+/// The Frames field: −/+ buttons, Up/Down and the mouse wheel step to the
+/// next count that has a fitting grid ([onStep] with +1 / −1).
+class _FramesField extends StatelessWidget {
+  const _FramesField({
+    required this.controller,
+    required this.onSubmit,
+    required this.onChanged,
+    required this.onStep,
+    this.errorText,
+  });
+
+  final TextEditingController controller;
+  final VoidCallback onSubmit;
+  final VoidCallback onChanged;
+  final ValueChanged<int> onStep;
+  final String? errorText;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      IconButton(
+        tooltip: 'Fewer frames',
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.remove),
+        onPressed: () => onStep(-1),
+      ),
+      Listener(
+        onPointerSignal: (e) {
+          if (e is PointerScrollEvent && e.scrollDelta.dy != 0) {
+            GestureBinding.instance.pointerSignalResolver.register(
+              e,
+              (_) => onStep(e.scrollDelta.dy < 0 ? 1 : -1),
+            );
+          }
+        },
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onKeyEvent: (node, event) {
+            if (event is KeyUpEvent) return KeyEventResult.ignored;
+            if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+              onStep(1);
+              return KeyEventResult.handled;
+            }
+            if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+              onStep(-1);
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
+          child: _NumberField(
+            label: 'Frames',
+            controller: controller,
+            onSubmit: onSubmit,
+            onChanged: onChanged,
+            errorText: errorText,
+          ),
+        ),
+      ),
+      IconButton(
+        tooltip: 'More frames',
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.add),
+        onPressed: () => onStep(1),
+      ),
+    ],
   );
 }
 

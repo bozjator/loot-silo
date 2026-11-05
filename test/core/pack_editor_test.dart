@@ -162,4 +162,89 @@ void main() {
     expect(c.matching(['arrel'], infix: true).images, ['props/barrels_0.png']);
     expect(c.matching(['arrel']).images, isEmpty);
   });
+
+  test('the row choice is saved as rows: all or a 1-based number', () {
+    png('fx/Explosion(32x32).png', 64, 64);
+    final detected = loadPackContents(tmp.path, [
+      ('fx/Explosion(32x32).png', 1),
+    ]).detected.single;
+    expect(detected.rows, greaterThan(1));
+    saveAnimationOverride(
+      tmp.path,
+      detected,
+      detected.copyWith(playRow: SpriteAnim.allRows),
+    );
+    expect(sidecarJson()['animations'], {
+      'fx/Explosion(32x32).png': {'rows': 'all'},
+    });
+    final c = loadPackContents(tmp.path, [('fx/Explosion(32x32).png', 1)]);
+    expect(c.animations.single.rowToPlay, isNull);
+    saveAnimationOverride(tmp.path, detected, detected.copyWith(playRow: 1));
+    expect(sidecarJson()['animations'], {
+      'fx/Explosion(32x32).png': {'rows': 2},
+    });
+    // Row 0 is the default, so it isn't written.
+    saveAnimationOverride(tmp.path, detected, detected.copyWith(playRow: 0));
+    expect(sidecarJson().containsKey('animations'), isFalse);
+  });
+
+  test('"Not an animation" moves a file to the images only and back', () {
+    png('Hero/Idle.png', 128, 32);
+    for (var i = 1; i <= 3; i++) {
+      png('fx/smoke_$i.png', 16, 16);
+    }
+    final files = [
+      ('Hero/Idle.png', 1),
+      for (var i = 1; i <= 3; i++) ('fx/smoke_$i.png', 1),
+    ];
+    final before = loadPackContents(tmp.path, files);
+    expect(before.animations.map((a) => a.path).toSet(), {
+      'Hero/Idle.png',
+      'fx/smoke_1.png',
+    });
+    // A sheet and a numbered sequence.
+    setNotAnimation(tmp.path, 'Hero/Idle.png');
+    setNotAnimation(tmp.path, 'fx/smoke_1.png');
+    expect(sidecarJson()['animations'], {
+      'Hero/Idle.png': false,
+      'fx/smoke_1.png': false,
+    });
+    final hidden = loadPackContents(tmp.path, files);
+    expect(hidden.animations, isEmpty);
+    expect(hidden.shownDetected, isEmpty);
+    expect(hidden.hiddenAnimations.map((a) => a.path).toSet(), {
+      'Hero/Idle.png',
+      'fx/smoke_1.png',
+    });
+    expect(hidden.images, contains('Hero/Idle.png'));
+    expect(hidden.images, contains('fx/smoke_2.png'));
+
+    // Restore drops the override entirely.
+    setNotAnimation(tmp.path, 'Hero/Idle.png', hidden: false);
+    setNotAnimation(tmp.path, 'fx/smoke_1.png', hidden: false);
+    expect(sidecarJson().containsKey('animations'), isFalse);
+    final back = loadPackContents(tmp.path, files);
+    expect(back.animations.length, 2);
+    expect(back.hiddenAnimations, isEmpty);
+  });
+
+  test('detectAnimations and the preview skip files marked false', () {
+    png('Hero/Idle.png', 128, 32);
+    final all = detectAnimations(tmp.path, ['Hero/Idle.png']);
+    expect(all, isNotEmpty);
+    final none = detectAnimations(
+      tmp.path,
+      ['Hero/Idle.png'],
+      overrides: {'Hero/Idle.png': false},
+    );
+    expect(none, isEmpty);
+    final chosen = choosePreviewAnimation(
+      tmp.path,
+      ['Hero/Idle.png'],
+      preview: 'Hero/Idle.png',
+      rank: 6,
+      overrides: {'Hero/Idle.png': false},
+    );
+    expect(chosen.anim, isNull);
+  });
 }

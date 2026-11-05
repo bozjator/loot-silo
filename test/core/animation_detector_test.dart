@@ -382,6 +382,12 @@ void main() {
   });
 
   group('total frame count override', () {
+    const tinyStrip = SpriteAnim(
+      path: 't.png',
+      kind: AnimKind.sheet,
+      frameW: 5,
+      frameH: 5,
+    );
     const strip = SpriteAnim(
       path: 'chimney-smoke.png',
       kind: AnimKind.sheet,
@@ -394,8 +400,21 @@ void main() {
       final s = strip.withFrameCount(16)!;
       expect((s.frameW, s.frameH, s.cols, s.rows), (96, 64, 16, 1));
       expect(s.frameCount, 16);
-      expect(strip.withFrameCount(7), isNull, reason: '1536 / 7 is uneven');
+      // 1536 / 7 is uneven on one row; two rows of 4 fit.
+      final seven = strip.withFrameCount(7)!;
+      expect(
+        (seven.cols, seven.rows, seven.frameW, seven.frameH),
+        (4, 2, 384, 32),
+      );
       expect(strip.withFrameCount(0), isNull);
+      expect(strip.withFrameCount(SpriteAnim.maxFrameCount + 1), isNull);
+      const tiny = SpriteAnim(
+        path: 't.png',
+        kind: AnimKind.sheet,
+        frameW: 7,
+        frameH: 7,
+      );
+      expect(tiny.withFrameCount(2), isNull, reason: '7 px splits no way');
     });
 
     test('multi-row: cols = ceil(n / rows), last row partly filled', () {
@@ -411,8 +430,9 @@ void main() {
       expect((s.cols, s.rows, s.frameW, s.frameCount), (4, 3, 32, 11));
       final t = grid.withFrameCount(6)!;
       expect((t.cols, t.frameW, t.frameCount), (2, 64, 6));
-      // 4 frames in 3 rows (2 per row) would leave the last row empty.
-      expect(grid.withFrameCount(4), isNull);
+      // 4 frames: 3 rows would leave the last one empty; 2×2 fits.
+      final four = grid.withFrameCount(4)!;
+      expect((four.cols, four.rows, four.frameW, four.frameH), (2, 2, 64, 48));
       expect(grid.withFrameCount(5)!.frameCount, 5);
     });
 
@@ -429,9 +449,90 @@ void main() {
       expect(SpriteAnim.fromJson(s.toJson()), s);
       expect(SpriteAnim.fromJson(strip.toJson()).frameTotal, isNull);
       expect(applyOverride(strip, {'frames': 16}), s);
-      expect(applyOverride(strip, {'frames': 7}), strip);
+      expect(applyOverride(tinyStrip, {'frames': 7}), tinyStrip);
       final g = applyOverride(strip, {'frames': 16, 'fps': 12});
       expect((g.frameW, g.fps, g.frameCount), (96, 12.0, 16));
+    });
+  });
+
+  group('frame grid search', () {
+    // islands-grass-tower-vfx.png: 640×640, detected as 5×5 of 128 px.
+    const islands = SpriteAnim(
+      path: 'props/islands-update/islands-grass-tower-vfx.png',
+      kind: AnimKind.sheet,
+      frameW: 128,
+      frameH: 128,
+      cols: 5,
+      rows: 5,
+    );
+
+    test('16 frames on a 640 px sheet is a 4×4 grid of 160 px', () {
+      final s = islands.withFrameCount(16)!;
+      expect((s.cols, s.rows, s.frameW, s.frameH), (4, 4, 160, 160));
+      expect(s.frameCount, 16);
+    });
+
+    test('square cells win, then the detected rows, then fewer empty', () {
+      // 8 on 640×640: 4×2 (160×320) or 2×4 (320×160) are not square;
+      // 3×3 (213 px) doesn't divide. 8 rows of 1 (640×80) neither.
+      final eight = islands.withFrameCount(8)!;
+      expect(eight.cols * eight.rows, greaterThanOrEqualTo(8));
+      // 25 stays the detected grid.
+      final all = islands.withFrameCount(25)!;
+      expect((all.cols, all.rows, all.frameW), (5, 5, 128));
+      // 4: 2×2 squares of 320.
+      final four = islands.withFrameCount(4)!;
+      expect((four.cols, four.rows, four.frameW), (2, 2, 320));
+    });
+
+    test('−/+ steps skip counts with no fitting grid', () {
+      const tiny = SpriteAnim(
+        path: 't.png',
+        kind: AnimKind.sheet,
+        frameW: 6,
+        frameH: 6,
+      );
+      // 6×6 px: 1, 2, 3, 4 (2×2 of 3), 6 fit; 5 → 3×2 cells 2×3 fits too,
+      // so check against withFrameCount itself.
+      for (final from in [1, 2, 3, 4, 5, 6, 9]) {
+        final up = tiny.nextFrameCount(from, 1);
+        if (up == null) continue;
+        expect(up, greaterThan(from));
+        expect(tiny.withFrameCount(up), isNotNull);
+        for (var n = from + 1; n < up; n++) {
+          expect(tiny.withFrameCount(n), isNull, reason: '$n skipped');
+        }
+      }
+      expect(tiny.nextFrameCount(1, -1), isNull);
+      const prime = SpriteAnim(
+        path: 'p.png',
+        kind: AnimKind.sheet,
+        frameW: 7,
+        frameH: 7,
+      );
+      expect(prime.nextFrameCount(1, 1), isNot(2));
+    });
+
+    test('play row: JSON, copyWith and sidecar rows', () {
+      expect(islands.playRow, 0);
+      expect(islands.rowToPlay, 0);
+      final all = islands.copyWith(playRow: SpriteAnim.allRows);
+      expect(all.rowToPlay, isNull);
+      expect(all.toJson()['play_row'], SpriteAnim.allRows);
+      expect(SpriteAnim.fromJson(all.toJson()), all);
+      expect(SpriteAnim.fromJson(islands.toJson()).playRow, 0);
+      expect(all == islands, isFalse);
+      // Size edits keep the row choice.
+      expect(all.copyWith(frameW: 64).playRow, SpriteAnim.allRows);
+      expect(applyOverride(islands, {'rows': 'all'}).rowToPlay, isNull);
+      expect(applyOverride(islands, {'rows': 3}).rowToPlay, 2);
+      expect(applyOverride(islands, {'rows': 'x'}), islands);
+    });
+
+    test('false marks a file as not an animation', () {
+      expect(isNotAnimation(false), isTrue);
+      expect(isNotAnimation({'fps': 8}), isFalse);
+      expect(isNotAnimation(null), isFalse);
     });
   });
 }

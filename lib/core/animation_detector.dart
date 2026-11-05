@@ -21,9 +21,16 @@ class SpriteAnim {
     this.frames = const [],
     this.fps = defaultFps,
     this.frameTotal,
+    this.playRow = 0,
   });
 
   static const defaultFps = 10.0;
+
+  /// [playRow] value meaning every row of a grid plays in turn.
+  static const allRows = -1;
+
+  /// Most frames the Frames field steps to.
+  static const maxFrameCount = 512;
 
   /// Sheet / GIF / first frame, relative to the pack.
   final String path;
@@ -41,6 +48,13 @@ class SpriteAnim {
   /// set, frames past it in the last row are skipped.
   final int? frameTotal;
 
+  /// The grid row that plays (0-based), or [allRows]. Row 0 by default, as
+  /// before; sidecar key `rows` (`"all"` or a 1-based row number).
+  final int playRow;
+
+  /// The row for [AnimatedSprite]: null plays every row.
+  int? get rowToPlay => playRow < 0 ? null : playRow.clamp(0, rows - 1);
+
   int get frameCount => switch (kind) {
     AnimKind.sequence => frames.length,
     AnimKind.sheet => frameTotal ?? cols * rows,
@@ -57,43 +71,86 @@ class SpriteAnim {
 
   /// Changing the frame size drops a [frameTotal] override, since cols and
   /// rows are recomputed from it.
-  SpriteAnim copyWith({int? frameW, int? frameH, double? fps}) {
+  SpriteAnim copyWith({int? frameW, int? frameH, double? fps, int? playRow}) {
     final fw = frameW ?? this.frameW;
     final fh = frameH ?? this.frameH;
     final sheetW = this.frameW * cols;
     final sheetH = this.frameH * rows;
+    final newRows = kind == AnimKind.sheet && fh > 0 ? sheetH ~/ fh : rows;
     return SpriteAnim(
       path: path,
       kind: kind,
       frameW: fw,
       frameH: fh,
       cols: kind == AnimKind.sheet && fw > 0 ? sheetW ~/ fw : cols,
-      rows: kind == AnimKind.sheet && fh > 0 ? sheetH ~/ fh : rows,
+      rows: newRows,
       frames: frames,
       fps: fps ?? this.fps,
       frameTotal: frameW == null && frameH == null ? frameTotal : null,
+      playRow: _keepRow(playRow ?? this.playRow, newRows),
     );
   }
 
-  /// This sheet re-sliced into [n] frames, keeping its rows:
-  /// `cols = ceil(n / rows)` and `frameW = sheetW / cols`. Null when [n]
-  /// doesn't fit (cols must divide the sheet width, and [n] must reach the
-  /// last row) or this isn't a sheet.
+  /// A row that no longer exists falls back to row 0.
+  static int _keepRow(int row, int rows) => row < rows ? row : 0;
+
+  /// This sheet re-sliced into [n] frames on the best grid that fits:
+  /// `cols × rows` with `cols * rows >= n > (rows - 1) * cols` (the last
+  /// row is used), both cell sizes dividing the sheet. Square cells win,
+  /// then this sheet's row count, then fewer empty cells. Null when no grid
+  /// fits or this isn't a sheet.
   SpriteAnim? withFrameCount(int n) {
-    if (kind != AnimKind.sheet || n < 1) return null;
+    if (kind != AnimKind.sheet || n < 1 || n > maxFrameCount) return null;
     final sheetW = frameW * cols;
-    final c = (n + rows - 1) ~/ rows;
-    if (c < 1 || sheetW % c != 0 || n <= (rows - 1) * c) return null;
+    final sheetH = frameH * rows;
+    (int, int)? best;
+    List<num>? bestKey;
+    for (var r = 1; r <= n && r <= sheetH; r++) {
+      final c = (n + r - 1) ~/ r;
+      if (c > sheetW || sheetW % c != 0 || sheetH % r != 0) continue;
+      if (n <= (r - 1) * c) continue;
+      final fw = sheetW ~/ c, fh = sheetH ~/ r;
+      final key = <num>[
+        fw == fh ? 0 : 1,
+        r == rows ? 0 : 1,
+        c * r - n,
+        (fw / fh - 1).abs() + (fh / fw - 1).abs(),
+        r,
+      ];
+      if (bestKey == null || _lexLess(key, bestKey)) {
+        best = (c, r);
+        bestKey = key;
+      }
+    }
+    if (best == null) return null;
+    final (c, r) = best;
     return SpriteAnim(
       path: path,
       kind: kind,
       frameW: sheetW ~/ c,
-      frameH: frameH,
+      frameH: sheetH ~/ r,
       cols: c,
-      rows: rows,
+      rows: r,
       fps: fps,
       frameTotal: n,
+      playRow: _keepRow(playRow, r),
     );
+  }
+
+  static bool _lexLess(List<num> a, List<num> b) {
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return a[i] < b[i];
+    }
+    return false;
+  }
+
+  /// The next frame count from [from] in direction [step] (+1 / −1) that
+  /// has a fitting grid ([withFrameCount]), or null when there is none.
+  int? nextFrameCount(int from, int step) {
+    for (var n = from + step; n >= 1 && n <= maxFrameCount; n += step) {
+      if (withFrameCount(n) != null) return n;
+    }
+    return null;
   }
 
   Map<String, Object?> toJson() => {
@@ -106,6 +163,7 @@ class SpriteAnim {
     if (frames.isNotEmpty) 'frames': frames,
     if (fps != defaultFps) 'fps': fps,
     if (frameTotal != null) 'frames_total': frameTotal,
+    if (playRow != 0) 'play_row': playRow,
   };
 
   factory SpriteAnim.fromJson(Map<String, Object?> j) => SpriteAnim(
@@ -118,6 +176,7 @@ class SpriteAnim {
     frames: (j['frames'] as List?)?.cast<String>() ?? const [],
     fps: (j['fps'] as num?)?.toDouble() ?? defaultFps,
     frameTotal: (j['frames_total'] as num?)?.toInt(),
+    playRow: (j['play_row'] as num?)?.toInt() ?? 0,
   );
 
   @override
@@ -131,11 +190,21 @@ class SpriteAnim {
       other.rows == rows &&
       other.fps == fps &&
       other.frameTotal == frameTotal &&
+      other.playRow == playRow &&
       other.frames.length == frames.length;
 
   @override
-  int get hashCode =>
-      Object.hash(path, kind, frameW, frameH, cols, rows, fps, frameTotal);
+  int get hashCode => Object.hash(
+    path,
+    kind,
+    frameW,
+    frameH,
+    cols,
+    rows,
+    fps,
+    frameTotal,
+    playRow,
+  );
 
   @override
   String toString() =>
@@ -381,8 +450,11 @@ List<SpriteAnim> detectAnimations(
     }
     if (s != null) out.add(s);
   }
-  final result = [for (final a in out) applyOverride(a, overrides[a.path])]
-    ..sort((a, b) => a.path.compareTo(b.path));
+  final result = [
+    for (final a in out)
+      if (!isNotAnimation(overrides[a.path]))
+        applyOverride(a, overrides[a.path]),
+  ]..sort((a, b) => a.path.compareTo(b.path));
   return result;
 }
 
@@ -400,18 +472,29 @@ int? _consensus(Iterable<SpriteAnim> sheets) {
       .key;
 }
 
-/// Applies a sidecar override `{frame_w, frame_h, fps, frames}` to [a].
-/// `frames` (total frame count, sheets only) is applied last; a count that
-/// doesn't fit the sheet is ignored.
+/// The sidecar override that marks a file as not an animation
+/// (`animations: {"<path>": false}`): it then only shows as an image.
+bool isNotAnimation(Object? override) => override == false;
+
+/// Applies a sidecar override `{frame_w, frame_h, fps, frames, rows}` to
+/// [a]. `frames` (total frame count, sheets only) is applied after the
+/// size; a count that doesn't fit the sheet is ignored. `rows` is `"all"`
+/// or a 1-based row number.
 SpriteAnim applyOverride(SpriteAnim a, Object? override) {
   if (override is! Map) return a;
+  final rows = override['rows'];
   final sized = a.copyWith(
     frameW: (override['frame_w'] as num?)?.toInt(),
     frameH: (override['frame_h'] as num?)?.toInt(),
     fps: (override['fps'] as num?)?.toDouble(),
   );
   final n = (override['frames'] as num?)?.toInt();
-  return n == null ? sized : sized.withFrameCount(n) ?? sized;
+  final sliced = n == null ? sized : sized.withFrameCount(n) ?? sized;
+  return switch (rows) {
+    'all' => sliced.copyWith(playRow: SpriteAnim.allRows),
+    num r when r >= 1 => sliced.copyWith(playRow: r.toInt() - 1),
+    _ => sliced,
+  };
 }
 
 /// The animation a tile should show: idle first, then walk/run, then any
@@ -501,7 +584,9 @@ List<String> animationCandidates(Iterable<String> files, {int limit = 400}) {
         if (sheet != null) {
           return (
             preview: preview,
-            anim: applyOverride(sheet, overrides[preview]),
+            anim: isNotAnimation(overrides[preview])
+                ? null
+                : applyOverride(sheet, overrides[preview]),
           );
         }
       }
@@ -526,7 +611,9 @@ List<String> animationCandidates(Iterable<String> files, {int limit = 400}) {
   }
   return (
     preview: preview,
-    anim: sheet == null ? null : applyOverride(sheet, overrides[preview]),
+    anim: sheet == null || isNotAnimation(overrides[preview])
+        ? null
+        : applyOverride(sheet, overrides[preview]),
   );
 }
 

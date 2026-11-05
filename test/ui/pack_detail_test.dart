@@ -11,6 +11,7 @@ import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:assets_explorer/ui/settings_screen.dart';
 import 'package:assets_explorer/ui/track_player.dart';
+import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
 import 'package:assets_explorer/ui/widgets/pack_tile.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
@@ -343,14 +344,15 @@ void main() {
     expect(find.text('Sheet · 16×16 frames · 24 × 1 · 24 frames'), findsOne);
 
     final frames = find.widgetWithText(TextField, 'Frames');
-    await tester.enterText(frames, '7');
+    // More frames than pixels allow: no grid fits.
+    await tester.enterText(frames, '600');
     await tester.pump();
-    expect(find.text("Doesn't fit 384 px"), findsOneWidget);
+    expect(find.text("Doesn't fit 384×16 px"), findsOneWidget);
     expect(find.text('Sheet · 16×16 frames · 24 × 1 · 24 frames'), findsOne);
 
     await tester.enterText(frames, '16');
     await tester.pump();
-    expect(find.text("Doesn't fit 384 px"), findsNothing);
+    expect(find.text("Doesn't fit 384×16 px"), findsNothing);
     expect(find.text('Sheet · 24×16 frames · 16 × 1 · 16 frames'), findsOne);
     expect(
       tester
@@ -985,5 +987,160 @@ void main() {
       expect(picked, isEmpty);
       expect(find.byType(SettingsScreen), findsNothing);
     });
+  });
+
+  group('Animation editor (M26)', () {
+    /// A 4×2 grid of 16 px cells, opened in the Edit dialog.
+    Future<void> openGrid(
+      WidgetTester tester, {
+      Size size = const Size(1400, 900),
+    }) async {
+      final sheet = img.Image(width: 64, height: 32, numChannels: 4);
+      img.fill(sheet, color: img.ColorRgba8(220, 120, 40, 255));
+      await openKnight(
+        tester,
+        size: size,
+        files: const [],
+        images: {'fx/Explosion(16x16).png': sheet},
+      );
+      // Narrow test windows overflow the dashboard's filter bar (Ahem
+      // glyphs are wide); only the editor is checked here.
+      tester.takeException();
+      await tester.tap(find.textContaining('Animations ('));
+      await tester.pump(const Duration(milliseconds: 500));
+      // Short windows leave the card at the bottom edge: hover the
+      // (hidden) button itself.
+      final edit = find.byTooltip('Edit animation');
+      await tester.ensureVisible(edit);
+      await tester.pump();
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(edit));
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      await tester.tap(find.byTooltip('Edit animation'));
+      await pumpUntil(tester, find.text('Apply size'));
+    }
+
+    String sidecar() => File(
+      p.join(
+        tmp.path,
+        'library',
+        'HeroMaker',
+        'Knight Pack',
+        'asset_pack.json',
+      ),
+    ).readAsStringSync();
+
+    testWidgets('All rows can be saved and the card plays every row', (
+      tester,
+    ) async {
+      await openGrid(tester);
+      FilledButton save() => tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Save'),
+      );
+      expect(save().onPressed, isNull);
+      await tester.tap(find.text('Row 1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('All rows').last);
+      await tester.pumpAndSettle();
+      expect(save().onPressed, isNotNull, reason: 'the row choice is dirty');
+      await tester.tap(find.text('Save'));
+      await pumpUntil(tester, find.text('Reset to detected'));
+      expect(sidecar(), contains('"rows": "all"'));
+      // Every sprite of this sheet (dialog preview and card) plays all rows.
+      final sprites = tester.widgetList<AnimatedSprite>(
+        find.byType(AnimatedSprite),
+      );
+      expect(sprites, isNotEmpty);
+      for (final s in sprites) {
+        expect(s.anim.rowToPlay, isNull);
+      }
+    });
+
+    testWidgets('Not an animation moves the file to Images and back', (
+      tester,
+    ) async {
+      await openGrid(tester);
+      await tester.tap(find.text('Not an animation'));
+      await pumpUntil(tester, find.textContaining('listed as an image only'));
+      await pumpUntil(tester, find.textContaining('Images ('));
+      expect(find.textContaining('Animations ('), findsNothing);
+      expect(sidecar(), contains('"fx/Explosion(16x16).png": false'));
+      expect(find.text('1 marked not an animation'), findsOneWidget);
+
+      await tester.tap(find.text('1 marked not an animation'));
+      await tester.pumpAndSettle();
+      expect(find.text('fx/Explosion(16x16).png'), findsOneWidget);
+      await tester.tap(find.text('Restore'));
+      await pumpUntil(tester, find.textContaining('Animations ('));
+      expect(sidecar(), isNot(contains('animations')));
+    });
+
+    testWidgets('Undo on the snackbar restores the animation', (tester) async {
+      await openGrid(tester);
+      await tester.tap(find.text('Not an animation'));
+      final undo = find.widgetWithText(SnackBarAction, 'Undo');
+      await pumpUntil(tester, undo);
+      // Let the snackbar slide in before tapping it.
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(undo);
+      await pumpUntil(tester, find.textContaining('Animations ('));
+      expect(sidecar(), isNot(contains('animations')));
+    });
+
+    testWidgets('−/+ step the frame count to counts that fit', (tester) async {
+      await openGrid(tester);
+      final frames = find.widgetWithText(TextField, 'Frames');
+      String count() => tester.widget<TextField>(frames).controller!.text;
+      expect(count(), '8');
+      await tester.tap(find.byTooltip('Fewer frames'));
+      await tester.pump();
+      expect(count(), '7');
+      expect(find.textContaining("Doesn't fit"), findsNothing);
+      await tester.tap(find.byTooltip('More frames'));
+      await tester.tap(find.byTooltip('More frames'));
+      await tester.pump();
+      final n = int.parse(count());
+      expect(n, greaterThan(8));
+      expect(find.textContaining("Doesn't fit"), findsNothing);
+      // Arrow keys in the field do the same.
+      await tester.tap(frames);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(int.parse(count()), lessThan(n));
+      // And the wheel.
+      final before = int.parse(count());
+      final mouse = TestPointer(1, PointerDeviceKind.mouse);
+      await tester.sendEventToBinding(mouse.hover(tester.getCenter(frames)));
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, -20)));
+      await tester.pump();
+      expect(int.parse(count()), greaterThan(before));
+    });
+
+    for (final size in const [
+      Size(1024, 600),
+      Size(1280, 720),
+      Size(1920, 1200),
+    ]) {
+      testWidgets(
+        'dialog fits at ${size.width.toInt()}×${size.height.toInt()}',
+        (tester) async {
+          await openGrid(tester, size: size);
+          expect(tester.takeException(), isNull);
+          final preview = tester.getRect(
+            find
+                .ancestor(
+                  of: find.byType(AnimatedSprite).last,
+                  matching: find.byType(Container),
+                )
+                .first,
+          );
+          expect(preview.height, greaterThanOrEqualTo(240));
+          final dialog = tester.getRect(find.byType(Dialog));
+          expect(dialog.bottom, lessThanOrEqualTo(size.height));
+          expect(find.text('Not an animation'), findsOneWidget);
+        },
+      );
+    }
   });
 }

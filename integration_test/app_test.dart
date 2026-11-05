@@ -1202,9 +1202,10 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, find.text('Apply size'));
     expect(find.text('Sheet · 64×64 frames · 24 × 1 · 24 frames'), findsOne);
     final frames = find.widgetWithText(TextField, 'Frames');
-    await tester.enterText(frames, '7');
+    // Since M26 a count only fails when no grid fits at all.
+    await tester.enterText(frames, '600');
     await tester.pump();
-    expect(find.text("Doesn't fit 1536 px"), findsOneWidget);
+    expect(find.text("Doesn't fit 1536×64 px"), findsOneWidget);
     await tester.enterText(frames, '16');
     await tester.pump();
     expect(find.text('Sheet · 96×64 frames · 16 × 1 · 16 frames'), findsOne);
@@ -1385,6 +1386,120 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.text('Rows'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m26: frame grid, saved rows, editor layout (real, unsaved)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final sea = File(
+      p.join(
+        real,
+        'RafaelMatos',
+        'ERW - Sea Adventures (GL 2.0 expansion) V1.5',
+        'asset_pack.json',
+      ),
+    );
+    final vfx = File(
+      p.join(real, 'ashishlko11', 'Special Effects Vol.03', 'asset_pack.json'),
+    );
+    if (!sea.existsSync() || !vfx.existsSync()) return;
+    final seaBefore = sea.readAsStringSync();
+    final vfxBefore = vfx.readAsStringSync();
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+
+    // One mouse for the whole test; card icons need a hover.
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+
+    /// Opens [title]'s Animations tab and the editor of the card whose
+    /// name matches [card].
+    Future<void> openEditor(String search, String title, Pattern card) async {
+      await tester.enterText(find.byType(TextField), search);
+      await pumpUntil(tester, find.text(title));
+      await tester.tap(find.text(title));
+      final tab = find.descendant(
+        of: find.byType(TabBar),
+        matching: find.textContaining('Animations ('),
+      );
+      await pumpUntil(tester, tab);
+      // The old page may still be fading out; let the route settle.
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(tab.last);
+      await tester.pump(const Duration(milliseconds: 500));
+      // Names show on the card title and in tooltips; the card title is
+      // the one inside a Card.
+      final name = find.descendant(
+        of: find.byType(Card),
+        matching: find.textContaining(card),
+      );
+      for (var i = 0; i < 40 && name.evaluate().isEmpty; i++) {
+        await tester.drag(find.byType(Scrollable).last, const Offset(0, -300));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.ensureVisible(name.first);
+      await tester.pump(const Duration(milliseconds: 300));
+      final edit = find.descendant(
+        of: find.ancestor(of: name.first, matching: find.byType(Card)).first,
+        matching: find.byIcon(Icons.tune),
+      );
+      await mouse.moveTo(tester.getCenter(edit));
+      await tester.pump();
+      await tester.tap(edit);
+      await pumpUntil(tester, find.text('Apply size'));
+      await settleImages(tester);
+    }
+
+    // islands-grass-tower-vfx: 640×640, really 4×4 frames of 160 px.
+    await openEditor(
+      'Sea Adventures',
+      'ERW - Sea Adventures (GL 2.0 expansion) V1.5',
+      RegExp('grass tower vfx', caseSensitive: false),
+    );
+    final frames = find.widgetWithText(TextField, 'Frames');
+    await tester.enterText(frames, '16');
+    await tester.pump();
+    expect(find.textContaining("Doesn't fit"), findsNothing);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm26_islands_16_frames', settle: false);
+    expect(find.textContaining('160×160 frames · 4 × 4 · 16 frames'), findsOne);
+    // − skips counts with no grid; the result always fits.
+    await tester.tap(find.byTooltip('Fewer frames'));
+    await tester.pump();
+    expect(find.textContaining("Doesn't fit"), findsNothing);
+    // Close without saving.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Apply size'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    // Back on the dashboard, still filtered by the search.
+    await pumpUntil(tester, find.text('1 pack'));
+
+    // Special Effects Vol.03: All rows makes the dialog savable.
+    await openEditor(
+      'Special Effects Vol',
+      'Special Effects Vol.03',
+      RegExp(r'^1$'),
+    );
+    FilledButton save() =>
+        tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'));
+    expect(save().onPressed, isNull);
+    await tester.tap(find.text('Row 1'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('All rows').last);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(save().onPressed, isNotNull);
+    expect(find.text('Not an animation'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm26_all_rows', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(sea.readAsStringSync(), seaBefore);
+    expect(vfx.readAsStringSync(), vfxBefore);
   });
 
   testWidgets('m21: sort by type (real library, read-only)', (tester) async {

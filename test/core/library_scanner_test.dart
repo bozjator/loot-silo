@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:assets_explorer/core/library_scanner.dart';
 import 'package:assets_explorer/core/sidecar.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
 void main() {
@@ -156,5 +158,29 @@ void main() {
     expect(byId['$id/2D assets/Tanks Pack']!.source, PackSource.imported);
     expect(byId['$id/Audio/Clicks (3 sounds)']!.source, PackSource.imported);
     expect(byId['$id/2D assets/Planes Pack']!.source, PackSource.itch);
+  });
+
+  test('a file marked "not an animation" gets no animated preview', () {
+    final tmp = Directory.systemTemp.createTempSync('scan_hidden');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final pack = p.join(tmp.path, 'Author', 'Fx Pack');
+    File(p.join(pack, 'fx', 'Explosion-sheet.png'))
+      ..parent.createSync(recursive: true)
+      ..writeAsBytesSync(img.encodePng(img.Image(width: 128, height: 32)));
+    // A sidecar makes the folder a pack either way.
+    final sidecar = File(p.join(pack, 'asset_pack.json'))
+      ..writeAsStringSync('{}');
+    ScannedPack scan() =>
+        scanLibrary(tmp.path).packs
+            .singleWhere((x) => x.id == 'Author/Fx Pack');
+    expect(scan().previewAnim, isNotNull);
+    sidecar.writeAsStringSync(
+      jsonEncode({
+        'animations': {'fx/Explosion-sheet.png': false},
+      }),
+    );
+    final hidden = scan();
+    expect(hidden.preview, 'fx/Explosion-sheet.png');
+    expect(hidden.previewAnim, isNull);
   });
 }
