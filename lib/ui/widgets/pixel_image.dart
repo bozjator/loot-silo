@@ -53,6 +53,10 @@ class PixelImage extends StatefulWidget {
 
 class _PixelImageState extends State<PixelImage> {
   ImageStream? _stream;
+
+  /// Whether [_listener] is on [_stream]. A stream with no listeners can be
+  /// disposed by the image cache, and removing from it then throws.
+  var _listening = false;
   ImageInfo? _info;
   Object? _error;
   late final _listener = ImageStreamListener(_onImage, onError: _onError);
@@ -82,8 +86,14 @@ class _PixelImageState extends State<PixelImage> {
         : PixelImage.providerFor(widget.file);
     final stream = provider.resolve(createLocalImageConfiguration(context));
     if (!force && stream.key == _stream?.key) return;
-    _stream?.removeListener(_listener);
+    _unlisten();
     _stream = stream..addListener(_listener);
+    _listening = true;
+  }
+
+  void _unlisten() {
+    if (_listening) _stream?.removeListener(_listener);
+    _listening = false;
   }
 
   void _onImage(ImageInfo info, bool sync) {
@@ -93,16 +103,17 @@ class _PixelImageState extends State<PixelImage> {
       _info = info;
     });
     // Holding no listener pauses multi-frame codecs on their first frame.
-    if (!widget.animate) _stream?.removeListener(_listener);
+    if (!widget.animate) _unlisten();
   }
 
   void _onError(Object error, StackTrace? stack) {
-    if (mounted) setState(() => _error = error);
+    // A later frame of a GIF that fails to decode keeps the last good one.
+    if (mounted && _info == null) setState(() => _error = error);
   }
 
   @override
   void dispose() {
-    _stream?.removeListener(_listener);
+    _unlisten();
     _info?.dispose();
     super.dispose();
   }
