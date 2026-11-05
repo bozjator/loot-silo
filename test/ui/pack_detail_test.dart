@@ -99,6 +99,21 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   }
 
+  /// Hovers the first animation card: its icons take clicks only then.
+  Future<void> hoverCard(WidgetTester tester) async {
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(
+      location: tester.getCenter(
+        find.ancestor(
+          of: find.byTooltip('Edit animation'),
+          matching: find.byType(Card),
+        ),
+      ),
+    );
+    addTearDown(mouse.removePointer);
+    await tester.pump();
+  }
+
   testWidgets('unpinned header is a slim bar; hover shows it floating', (
     tester,
   ) async {
@@ -241,6 +256,7 @@ void main() {
     expect(find.textContaining('Animations (1)'), findsOneWidget);
     await tester.tap(find.textContaining('Animations ('));
     await tester.pump(const Duration(milliseconds: 500));
+    await hoverCard(tester);
     await tester.tap(find.byTooltip('Edit animation'));
     await pumpUntil(tester, find.text('Apply size'));
     expect(find.text('Sheet · 16×16 frames · 24 × 1 · 24 frames'), findsOne);
@@ -276,5 +292,78 @@ void main() {
     ).readAsStringSync();
     expect(sidecar, contains('"frames": 16'));
     expect(sidecar, isNot(contains('frame_w')));
+  });
+
+  testWidgets('Edit dialog: selectable title/path, copy, open image on top', (
+    tester,
+  ) async {
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    final strip = img.Image(width: 64, height: 16, numChannels: 4);
+    img.fill(strip, color: img.ColorRgba8(40, 120, 200, 255));
+    await openKnight(
+      tester,
+      files: const [],
+      images: {'fx/smoke_strip.png': strip},
+    );
+    await tester.tap(find.textContaining('Animations ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await hoverCard(tester);
+    await tester.tap(find.byTooltip('Edit animation'));
+    await pumpUntil(tester, find.text('Apply size'));
+    final dialog = find.byType(Dialog);
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.widgetWithText(SelectableText, 'Smoke strip'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.widgetWithText(SelectableText, 'fx/smoke_strip.png'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('Copy relative path'));
+    await tester.pump();
+    expect(copied, 'fx/smoke_strip.png');
+    await tester.tap(find.byTooltip('Copy full path'));
+    await tester.pump();
+    expect(copied, endsWith('Knight Pack/fx/smoke_strip.png'));
+    expect(p.isAbsolute(copied!), isTrue);
+
+    await tester.tap(
+      find.descendant(of: dialog, matching: find.byTooltip('Open image')),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(ImageViewer), findsOneWidget);
+    // Esc closes the viewer first, then the dialog.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(ImageViewer), findsNothing);
+    expect(find.text('Apply size'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Apply size'), findsNothing);
+    expect(find.textContaining('Animations ('), findsOneWidget);
   });
 }

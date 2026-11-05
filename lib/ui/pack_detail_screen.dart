@@ -845,6 +845,7 @@ class _AnimationsTab extends StatelessWidget {
     packPath: pack.path,
     animations: contents.animations,
     detected: contents.detected,
+    sizes: contents.sizes,
     onEdit: (anim) => showDialog<void>(
       context: context,
       builder: (_) => _AnimationEditorDialog(pack: pack, path: anim.path),
@@ -1037,19 +1038,44 @@ class _AnimationEditorState extends State<_AnimationEditor> {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
+                        child: SelectableText(
                           prettyName(a.label, isFile: false),
                           style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      // Opens on top of this dialog; Esc closes it first.
+                      OpenImageButton(
+                        onPressed: () => showImageViewer(
+                          context,
+                          packPath: widget.packPath,
+                          images: [a.path],
+                          index: 0,
                         ),
                       ),
                       RevealButton(p.join(widget.packPath, a.path)),
                     ],
                   ),
-                  Text(
-                    a.path,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: SelectableText(
+                          a.path,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      _CopyButton(
+                        tooltip: 'Copy relative path',
+                        text: a.path,
+                        icon: Icons.content_copy,
+                      ),
+                      _CopyButton(
+                        tooltip: 'Copy full path',
+                        text: p.join(widget.packPath, a.path),
+                        icon: Icons.copy_all,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(switch (a.kind) {
@@ -1156,6 +1182,37 @@ class _AnimationEditorState extends State<_AnimationEditor> {
       ),
     );
   }
+}
+
+/// Copies [text] to the clipboard and says so in a snack bar.
+class _CopyButton extends StatelessWidget {
+  const _CopyButton({
+    required this.tooltip,
+    required this.text,
+    required this.icon,
+  });
+
+  final String tooltip;
+  final String text;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: tooltip,
+    iconSize: 16,
+    visualDensity: VisualDensity.compact,
+    icon: Icon(icon),
+    onPressed: () async {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (!context.mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text('Copied $text'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    },
+  );
 }
 
 class _NumberField extends StatelessWidget {

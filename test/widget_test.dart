@@ -62,9 +62,12 @@ void main() {
         detailHeaderPinned: false,
         imagesView: ItemsView.folders,
         animationsView: ItemsView.folders,
+        detailAnimateMode: AnimateMode.all,
       ),
     );
     final back = store.load();
+    expect(back.detailAnimateMode, AnimateMode.all);
+    expect(f.readAsStringSync(), contains('"detail_animate_mode": "all"'));
     expect(back.audioLoop, isTrue);
     expect(back.viewerPixelPerfect, isTrue);
     expect(back.detailHeaderPinned, isFalse);
@@ -80,6 +83,10 @@ void main() {
     expect(store.load().viewerPixelPerfect, isFalse);
     expect(store.load().detailHeaderPinned, isTrue);
     expect(store.load().imagesView, ItemsView.flat);
+    // Hover is the default; unknown values fall back to it.
+    expect(store.load().detailAnimateMode, AnimateMode.hover);
+    f.writeAsStringSync('{"detail_animate_mode": "bogus"}');
+    expect(store.load().detailAnimateMode, AnimateMode.hover);
   });
 
   testWidgets('settings screen saves theme and animation, Esc closes it', (

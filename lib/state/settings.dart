@@ -11,6 +11,10 @@ enum ItemsView { flat, folders }
 /// collections (one tile per character folder, say).
 enum DashboardView { packs, expanded }
 
+/// Which cards in a pack's Animations tab play: all of them, or only the
+/// one under the mouse.
+enum AnimateMode { all, hover }
+
 /// User settings, stored as JSON in the app support folder.
 class AppSettings {
   const AppSettings({
@@ -26,6 +30,7 @@ class AppSettings {
     this.imagesView = ItemsView.flat,
     this.animationsView = ItemsView.flat,
     this.dashboardView = DashboardView.packs,
+    this.detailAnimateMode = AnimateMode.hover,
   });
 
   /// The managed library folder; null until the user picks one.
@@ -59,6 +64,10 @@ class AppSettings {
   final ItemsView animationsView;
   final DashboardView dashboardView;
 
+  /// Animations tab play mode. Hover by default (a deliberate change from
+  /// the earlier always-playing cards).
+  final AnimateMode detailAnimateMode;
+
   factory AppSettings.fromJson(Map<String, Object?> json) => AppSettings(
     libraryPath: json['library_path'] as String?,
     theme: ThemeChoice.values.asNameMap()[json['theme']] ?? ThemeChoice.system,
@@ -77,6 +86,9 @@ class AppSettings {
     dashboardView:
         DashboardView.values.asNameMap()[json['dashboard_view']] ??
         DashboardView.packs,
+    detailAnimateMode:
+        AnimateMode.values.asNameMap()[json['detail_animate_mode']] ??
+        AnimateMode.hover,
   );
 
   Map<String, Object?> toJson() => {
@@ -92,6 +104,7 @@ class AppSettings {
     'images_view': imagesView.name,
     'animations_view': animationsView.name,
     'dashboard_view': dashboardView.name,
+    'detail_animate_mode': detailAnimateMode.name,
   };
 
   AppSettings copyWith({
@@ -107,6 +120,7 @@ class AppSettings {
     ItemsView? imagesView,
     ItemsView? animationsView,
     DashboardView? dashboardView,
+    AnimateMode? detailAnimateMode,
   }) => AppSettings(
     libraryPath: libraryPath ?? this.libraryPath,
     theme: theme ?? this.theme,
@@ -120,6 +134,7 @@ class AppSettings {
     imagesView: imagesView ?? this.imagesView,
     animationsView: animationsView ?? this.animationsView,
     dashboardView: dashboardView ?? this.dashboardView,
+    detailAnimateMode: detailAnimateMode ?? this.detailAnimateMode,
   );
 }
 

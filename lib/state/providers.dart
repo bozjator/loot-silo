@@ -91,6 +91,9 @@ class SettingsNotifier extends Notifier<AppSettings> {
   void setAnimationsView(ItemsView view) =>
       _save(state.copyWith(animationsView: view));
 
+  void setDetailAnimateMode(AnimateMode mode) =>
+      _save(state.copyWith(detailAnimateMode: mode));
+
   void setDashboardView(DashboardView view) =>
       _save(state.copyWith(dashboardView: view));
 

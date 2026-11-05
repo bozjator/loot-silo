@@ -11,6 +11,7 @@ import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
+import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
 import 'package:assets_explorer/ui/reveal.dart';
 import 'package:assets_explorer/ui/text_preview_dialog.dart';
 import 'package:assets_explorer/ui/widgets/thumb_size.dart';
@@ -70,6 +71,15 @@ Future<void> pumpUntil(
 }
 
 /// Gives file images time to decode on real threads.
+/// Moves a mouse over [finder] (card icons only take clicks while hovered)
+/// and leaves it there until the test ends.
+Future<void> hoverOver(WidgetTester tester, Finder finder) async {
+  final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  await mouse.addPointer(location: tester.getCenter(finder));
+  addTearDown(mouse.removePointer);
+  await tester.pump();
+}
+
 Future<void> settleImages(WidgetTester tester) async {
   for (var i = 0; i < 20; i++) {
     await tester.runAsync(
@@ -308,6 +318,13 @@ void main() {
     await captureScreenshot(tester, 'm6_detail_zerie', settle: false);
 
     // Fps / frame size / row are edited in a dialog from the grid card.
+    await hoverOver(
+      tester,
+      find.ancestor(
+        of: find.byTooltip('Edit animation').first,
+        matching: find.byType(Card),
+      ),
+    );
     await tester.tap(find.byTooltip('Edit animation').first);
     await pumpUntil(tester, find.text('Apply size'));
     final card = find.byType(Dialog);
@@ -808,6 +825,16 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, find.text('Animations (60)'));
     await settleImages(tester);
     expect(find.text('Monster 01 walk'), findsOneWidget);
+    // M19: Hover mode (the default) keeps the whole grid idle (the header
+    // preview above it still plays).
+    final gridSprites = find.descendant(
+      of: find.byType(CustomScrollView),
+      matching: find.byType(AnimatedSprite),
+    );
+    expect(
+      tester.widgetList<AnimatedSprite>(gridSprites).where((s) => s.playing),
+      isEmpty,
+    );
     await captureScreenshot(tester, 'm15_grid', settle: false);
 
     await tester.tap(find.text('Monster 03 walk'));
@@ -835,6 +862,12 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(walk3.opacity, 1);
 
     // Scroll the whole grid while every visible card plays.
+    await tester.tap(find.text('All'));
+    await tester.pump();
+    expect(
+      tester.widgetList<AnimatedSprite>(gridSprites).every((s) => s.playing),
+      isTrue,
+    );
     final binding = IntegrationTestWidgetsFlutterBinding.instance;
     await binding.watchPerformance(() async {
       for (var i = 0; i < 6; i++) {
@@ -1036,8 +1069,9 @@ A **16×16** knight with *walk* and *idle* animations.
     copyTree('test/fixtures/managed', lib);
     final pack = Directory(p.join(lib, 'HeroMaker', 'Village Bits'))
       ..createSync(recursive: true);
-    File(p.join(pack.path, 'asset_pack.json'))
-        .writeAsStringSync('{"title": "Village Bits", "types": ["environment"]}');
+    File(
+      p.join(pack.path, 'asset_pack.json'),
+    ).writeAsStringSync('{"title": "Village Bits", "types": ["environment"]}');
     // A 1536×64 smoke strip: 24 cells of 64 px by size, but really 16
     // frames of 96 px with a puff rising and growing.
     final strip = img.Image(width: 1536, height: 64, numChannels: 4);
@@ -1077,6 +1111,7 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(find.textContaining('Animations (1)'), findsOneWidget);
     await tester.tap(find.textContaining('Animations ('));
     await tester.pump(const Duration(milliseconds: 500));
+    await hoverOver(tester, find.text('Chimney smoke'));
     await tester.tap(find.byTooltip('Edit animation'));
     await pumpUntil(tester, find.text('Apply size'));
     expect(find.text('Sheet · 64×64 frames · 24 × 1 · 24 frames'), findsOne);
@@ -1119,6 +1154,78 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump(const Duration(milliseconds: 500));
     await settleImages(tester);
     await captureScreenshot(tester, 'm18_real_vol03', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m19: hover play, card icons, open image (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+    await tester.enterText(find.byType(TextField), 'oboropixel');
+    await pumpUntil(tester, find.text('CharactersAnimationsAssetPack'));
+    await tester.tap(find.text('CharactersAnimationsAssetPack'));
+    await pumpUntil(tester, find.textContaining('Animations ('));
+    await tester.tap(find.textContaining('Animations ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    // Unpinned header: the card footers fit in the window.
+    await tester.tap(find.byTooltip('Unpin header — show it on hover (H)'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await settleImages(tester);
+    bool anyPlaying() => tester
+        .widgetList<AnimatedSprite>(
+          find.descendant(
+            of: find.byType(Card),
+            matching: find.byType(AnimatedSprite),
+          ),
+        )
+        .any((s) => s.playing);
+    expect(anyPlaying(), isFalse);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(5, 895));
+    addTearDown(mouse.removePointer);
+    final second = find.byType(Card).at(1);
+    await mouse.moveTo(tester.getCenter(second));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(anyPlaying(), isTrue);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm19_hover_card', settle: false);
+
+    await tester.tap(
+      find.descendant(of: second, matching: find.byTooltip('Open image')),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(ImageViewer), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm19_open_image', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.byType(ImageViewer), seconds: 5, gone: true);
+
+    await mouse.moveTo(tester.getCenter(second));
+    await tester.pump();
+    await tester.tap(
+      // The tooltip says "(edited)" when the sidecar has an override.
+      find.descendant(of: second, matching: find.byIcon(Icons.tune)),
+    );
+    await pumpUntil(tester, find.text('Apply size'));
+    expect(find.byType(SelectableText), findsWidgets);
+    expect(find.byTooltip('Copy relative path'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm19_edit_dialog', settle: false);
+    await tester.tap(find.text('Close'));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.tap(find.text('All'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await mouse.moveTo(const Offset(5, 895));
+    await tester.pump();
+    expect(anyPlaying(), isTrue);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm19_all_mode', settle: false);
     expect(Directory(real).statSync().modified, before);
   });
 

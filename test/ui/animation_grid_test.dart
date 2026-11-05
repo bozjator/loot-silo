@@ -4,8 +4,10 @@ import 'package:assets_explorer/core/animation_detector.dart';
 import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/animation_grid.dart';
+import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:assets_explorer/ui/reveal.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,9 +33,12 @@ void main() {
   ];
 
   final edited = <SpriteAnim>[];
+  late SettingsStore store;
+  var detected = <SpriteAnim>[];
   var escapedToApp = 0;
 
   Future<void> pumpGrid(WidgetTester tester) async {
+    detected = [];
     for (final n in names) {
       File(p.join(tmp.path, '$n.png'))
           .writeAsBytesSync(img.encodePng(img.Image(width: 64, height: 16)));
@@ -44,7 +49,7 @@ void main() {
       ProviderScope(
         overrides: [
           settingsStoreProvider.overrideWithValue(
-            SettingsStore(File(p.join(tmp.path, 'settings.json'))),
+            store = SettingsStore(File(p.join(tmp.path, 'settings.json'))),
           ),
           revealProvider.overrideWithValue((_) async {}),
         ],
@@ -60,7 +65,7 @@ void main() {
                 gridId: 'pack',
                 packPath: tmp.path,
                 animations: anims,
-                detected: anims,
+                detected: detected.isEmpty ? anims : detected,
                 onEdit: edited.add,
               ),
             ),
@@ -98,11 +103,20 @@ void main() {
       )
       .playing;
 
+  /// Card icons take clicks only while the card is hovered.
+  Future<void> hover(WidgetTester tester, String title) async {
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(find.text(title)));
+    addTearDown(mouse.removePointer);
+    await tester.pump();
+  }
+
   testWidgets('a click focuses a card; others dim and pause', (tester) async {
     await pumpGrid(tester);
     expect(find.text('Knight idle'), findsOneWidget);
     expect(opacityOf(tester, 'Knight walk'), 1);
-    expect(playing(tester, 'Knight walk'), isTrue);
+    // Hover mode (the default): nothing plays until hovered or focused.
+    expect(playing(tester, 'Knight walk'), isFalse);
 
     await tester.tap(find.text('Knight idle'));
     await tester.pump(const Duration(milliseconds: 300));
@@ -158,7 +172,130 @@ void main() {
     await tester.pump();
     expect(opacityOf(tester, 'Knight idle'), 1);
 
+    await hover(tester, 'Knight attack');
     await tester.tap(find.byTooltip('Edit animation').at(2));
     expect(edited.single.path, 'knight_attack.png');
+  });
+
+  double iconsOpacity(WidgetTester tester, String title) => tester
+      .widget<AnimatedOpacity>(
+        find.descendant(
+          of: find.ancestor(of: find.text(title), matching: find.byType(Card)),
+          matching: find.byKey(const ValueKey('card-icons')),
+        ),
+      )
+      .opacity;
+
+  testWidgets('hover mode plays the hovered card; All plays every card', (
+    tester,
+  ) async {
+    await pumpGrid(tester);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(990, 690));
+    addTearDown(mouse.removePointer);
+    await tester.pump();
+    for (final n in ['Knight idle', 'Knight walk', 'Knight attack']) {
+      expect(playing(tester, n), isFalse, reason: n);
+      expect(iconsOpacity(tester, n), 0, reason: n);
+    }
+
+    await mouse.moveTo(tester.getCenter(find.text('Knight walk')));
+    await tester.pump();
+    expect(playing(tester, 'Knight walk'), isTrue);
+    expect(playing(tester, 'Knight idle'), isFalse);
+    expect(iconsOpacity(tester, 'Knight walk'), 1);
+    expect(iconsOpacity(tester, 'Knight idle'), 0);
+    // Hidden icons ignore clicks.
+    expect(
+      tester
+          .widget<IgnorePointer>(
+            find
+                .ancestor(
+                  of: find.byKey(const ValueKey('card-icons')).first,
+                  matching: find.byType(IgnorePointer),
+                )
+                .first,
+          )
+          .ignoring,
+      isTrue,
+    );
+    await mouse.moveTo(const Offset(990, 690));
+    await tester.pump();
+    expect(playing(tester, 'Knight walk'), isFalse);
+
+    await tester.tap(find.text('All'));
+    await tester.pump();
+    expect(store.load().detailAnimateMode, AnimateMode.all);
+    for (final n in ['Knight idle', 'Knight walk', 'Knight attack']) {
+      expect(playing(tester, n), isTrue, reason: n);
+    }
+    // Focus still pauses the others.
+    await tester.tap(find.text('Knight idle'));
+    await tester.pump();
+    expect(playing(tester, 'Knight walk'), isFalse);
+    expect(playing(tester, 'Knight idle'), isTrue);
+  });
+
+  testWidgets('edited cards keep a badge without hover', (tester) async {
+    await pumpGrid(tester);
+    detected = [anims[0], anims[1].copyWith(fps: 4), anims[2]];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settingsStoreProvider.overrideWithValue(store),
+          revealProvider.overrideWithValue((_) async {}),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: AnimationGrid(
+              gridId: 'pack',
+              packPath: tmp.path,
+              animations: anims,
+              detected: detected,
+              onEdit: edited.add,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final badge = find.byKey(const ValueKey('edited-badge'));
+    expect(badge, findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.ancestor(
+          of: find.text('Knight walk'),
+          matching: find.byType(Card),
+        ),
+        matching: badge,
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the open icon shows the sheet in the viewer, in grid order', (
+    tester,
+  ) async {
+    await pumpGrid(tester);
+    await hover(tester, 'Knight walk');
+    await tester.tap(find.byTooltip('Open image').at(1));
+    await tester.pump(const Duration(milliseconds: 300));
+    final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
+    expect(viewer.images, [
+      'knight_idle.png',
+      'knight_walk.png',
+      'knight_attack.png',
+    ]);
+    expect(viewer.initialIndex, 1);
+    // Esc closes the viewer, not the page.
+    escapedToApp = 0;
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(ImageViewer), findsNothing);
+    expect(escapedToApp, 0);
+    // The card itself still focuses.
+    await tester.tap(find.text('Knight walk'));
+    await tester.pump();
+    expect(opacityOf(tester, 'Knight idle'), 0.35);
   });
 }
