@@ -7,9 +7,10 @@ enum ThemeChoice { system, light, dark }
 /// How a pack's Images and Animations tabs list their files.
 enum ItemsView { flat, folders }
 
-/// The dashboard shows one tile per pack, or splits packs that are
-/// collections (one tile per character folder, say).
-enum DashboardView { packs, expanded }
+/// The dashboard shows one tile per pack, splits packs that are
+/// collections (one tile per character folder, say), or lists the files
+/// matching the search.
+enum DashboardView { packs, expanded, files }
 
 /// Which cards in a pack's Animations tab play: all of them, or only the
 /// one under the mouse.

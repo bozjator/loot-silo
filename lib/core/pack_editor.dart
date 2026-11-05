@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'animation_detector.dart';
+import 'file_search.dart';
 import 'preview_picker.dart';
 import 'sidecar.dart';
 import 'type_classifier.dart';
@@ -42,6 +43,27 @@ class PackContents {
       detected: [
         for (final a in detected)
           if (a.path.startsWith(prefix)) a,
+      ],
+      sizes: sizes,
+      sidecar: sidecar,
+    );
+  }
+
+  /// Only files matching a search ([fileMatches]); an animation stays when
+  /// its sheet or any of its frames matches.
+  PackContents matching(List<String> words, {bool infix = false}) {
+    bool hit(String rel) => fileMatches(rel, words, infix: infix);
+    List<String> keep(List<String> l) => [
+      for (final f in l)
+        if (hit(f)) f,
+    ];
+    return PackContents(
+      images: keep(images),
+      audio: keep(audio),
+      other: keep(other),
+      detected: [
+        for (final a in detected)
+          if (hit(a.path) || a.frames.any(hit)) a,
       ],
       sizes: sizes,
       sidecar: sidecar,

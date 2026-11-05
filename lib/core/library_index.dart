@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import 'animation_detector.dart';
+import 'file_search.dart';
 import 'library_scanner.dart';
 import 'type_classifier.dart';
 
@@ -109,26 +110,47 @@ class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("
       "id UNINDEXED, title, author, tags, types, files, "
       "tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3')";
 
+  /// One row per file, for the dashboard's Files view.
+  static const _fileFtsDdl =
+      "CREATE VIRTUAL TABLE IF NOT EXISTS file_fts USING fts5("
+      "pack_id UNINDEXED, rel_path UNINDEXED, words, "
+      "tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3')";
+
+  /// The same files with a trigram tokenizer, for infix matches
+  /// (`arrel` → `barrels_0.png`) when the prefix search finds nothing.
+  static const _fileTriDdl =
+      "CREATE VIRTUAL TABLE IF NOT EXISTS file_tri USING fts5("
+      "pack_id UNINDEXED, rel_path UNINDEXED, path, tokenize = 'trigram')";
+
+  /// Most file hits [searchFiles] returns.
+  static const fileHitLimit = 500;
+
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
       await customStatement(_ftsDdl);
+      await customStatement(_fileFtsDdl);
+      await customStatement(_fileTriDdl);
     },
     onUpgrade: (m, from, to) async {
       for (final t in allTables) {
         await m.deleteTable(t.actualTableName);
       }
       await customStatement('DROP TABLE IF EXISTS pack_fts');
+      await customStatement('DROP TABLE IF EXISTS file_fts');
+      await customStatement('DROP TABLE IF EXISTS file_tri');
       await m.createAll();
       await customStatement(_ftsDdl);
+      await customStatement(_fileFtsDdl);
+      await customStatement(_fileTriDdl);
     },
   );
 
@@ -141,6 +163,8 @@ class LibraryIndex extends _$LibraryIndex {
     await delete(packFiles).go();
     await delete(packSubFolders).go();
     await customStatement('DELETE FROM pack_fts');
+    await customStatement('DELETE FROM file_fts');
+    await customStatement('DELETE FROM file_tri');
     await batch((b) {
       for (final pk in result.packs) {
         b.insert(
@@ -173,6 +197,12 @@ class LibraryIndex extends _$LibraryIndex {
               size: pk.sizes[i],
             ),
         ]);
+        for (final rel in pk.files) {
+          b.customStatement(
+            'INSERT INTO file_fts (pack_id, rel_path, words) VALUES (?, ?, ?)',
+            [pk.id, rel, fileSearchText(rel)],
+          );
+        }
         b.insertAll(packSubFolders, [
           for (final sf in pk.subFolders)
             PackSubFoldersCompanion.insert(
@@ -200,6 +230,10 @@ class LibraryIndex extends _$LibraryIndex {
         ],
       );
     }
+    await customStatement(
+      'INSERT INTO file_tri (pack_id, rel_path, path) '
+      'SELECT pack_id, rel_path, rel_path FROM file_fts',
+    );
     await into(scanStates).insertOnConflictUpdate(
       ScanStatesCompanion.insert(
         root: result.root,
@@ -282,6 +316,83 @@ class LibraryIndex extends _$LibraryIndex {
     ).get();
     return [for (final r in rows) r.read<String>('id')];
   }
+
+  /// The table and MATCH expression for a file search: prefix words in
+  /// `file_fts`, or substrings in `file_tri` when [infix] (every word must
+  /// then have 3+ characters, the trigram minimum).
+  (String, String)? _fileQuery(String query, {required bool infix}) {
+    if (!infix) {
+      final fts = ftsQuery(query);
+      return fts == null ? null : ('file_fts', fts);
+    }
+    final words = queryWords(query);
+    if (words.isEmpty || words.any((w) => w.length < 3)) return null;
+    return ('file_tri', words.map((w) => '"$w"').join(' AND '));
+  }
+
+  /// Files whose path words match every word of [query] as a prefix, best
+  /// match first, then by path; at most [limit]. When nothing matches that
+  /// way, words of 3+ characters are tried as substrings of the path
+  /// ([FileSearch.infix]).
+  Future<FileSearch> searchFiles(
+    String query, {
+    int limit = fileHitLimit,
+  }) async {
+    for (final infix in [false, true]) {
+      final q = _fileQuery(query, infix: infix);
+      if (q == null) continue;
+      final (table, match) = q;
+      final rows = await customSelect(
+        'SELECT pack_id, rel_path FROM $table WHERE $table MATCH ? '
+        'ORDER BY rank, rel_path LIMIT ?',
+        variables: [Variable.withString(match), Variable.withInt(limit)],
+      ).get();
+      if (rows.isEmpty) continue;
+      final counts = await customSelect(
+        'SELECT pack_id, count(*) AS n FROM $table WHERE $table MATCH ? '
+        'GROUP BY pack_id',
+        variables: [Variable.withString(match)],
+      ).get();
+      return FileSearch(
+        hits: [
+          for (final r in rows)
+            (
+              packId: r.read<String>('pack_id'),
+              relPath: r.read<String>('rel_path'),
+            ),
+        ],
+        counts: {
+          for (final r in counts) r.read<String>('pack_id'): r.read<int>('n'),
+        },
+        infix: infix,
+      );
+    }
+    return const FileSearch(hits: [], counts: {}, infix: false);
+  }
+}
+
+/// One file found by [LibraryIndex.searchFiles].
+typedef FileHit = ({String packId, String relPath});
+
+/// Result of [LibraryIndex.searchFiles].
+class FileSearch {
+  const FileSearch({
+    required this.hits,
+    required this.counts,
+    required this.infix,
+  });
+
+  /// Best match first, capped at [LibraryIndex.fileHitLimit].
+  final List<FileHit> hits;
+
+  /// Matching files per pack id, uncapped.
+  final Map<String, int> counts;
+
+  /// Found by substring rather than word prefix (see [fileMatches]).
+  final bool infix;
+
+  int get total => counts.values.fold(0, (a, b) => a + b);
+  bool get capped => total > hits.length;
 }
 
 /// Turns free text into a safe FTS5 query: each word quoted and

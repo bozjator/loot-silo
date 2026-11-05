@@ -10,11 +10,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/animation_detector.dart';
 import '../core/audio_duration.dart';
+import '../core/file_search.dart';
 import '../core/credits.dart';
 import '../core/library_index.dart';
 import '../core/pack_editor.dart';
 import '../core/sidecar.dart';
 import '../core/text_preview.dart';
+import '../core/preview_picker.dart' show previewExts;
 import '../core/type_classifier.dart' show AssetType;
 import '../state/dashboard.dart' show sortedTags;
 import '../state/providers.dart';
@@ -35,13 +37,27 @@ import 'cursors.dart';
 
 /// Everything about one pack: previews, files, animations, metadata.
 class PackDetailScreen extends ConsumerWidget {
-  const PackDetailScreen({super.key, required this.packId, this.folder});
+  const PackDetailScreen({
+    super.key,
+    required this.packId,
+    this.folder,
+    this.search,
+    this.file,
+  });
 
   final String packId;
 
   /// First-level folder the Images and Animations tabs start at (from an
   /// Expanded dashboard tile).
   final String? folder;
+
+  /// Lists only the files matching this dashboard search (from a file
+  /// result or a "files match" line).
+  final SearchFilter? search;
+
+  /// The file result that was clicked: its tab opens first, and an image
+  /// opens in the viewer.
+  final String? file;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -109,6 +125,9 @@ class PackDetailScreen extends ConsumerWidget {
             contents: value,
             pinned: pinned,
             folder: folder,
+            search: search,
+            file: file,
+            imagesView: ref.read(settingsProvider).imagesView,
           ),
           AsyncError(:final error) => Center(
             child: Text('Could not read: $error'),
@@ -126,11 +145,19 @@ class _Body extends StatefulWidget {
     required this.contents,
     required this.pinned,
     this.folder,
+    this.search,
+    this.file,
+    this.imagesView = ItemsView.flat,
   });
 
   final PackRow pack;
   final PackContents contents;
   final String? folder;
+  final SearchFilter? search;
+  final String? file;
+
+  /// For the viewer's order when [file] is an image.
+  final ItemsView imagesView;
 
   /// False: a slim bar replaces the header; hovering it shows the header
   /// floating over the tabs, so nothing below moves.
@@ -143,6 +170,41 @@ class _Body extends StatefulWidget {
 class _BodyState extends State<_Body> {
   var _peek = false;
   late String? _folder = widget.folder;
+  late SearchFilter? _search = widget.search;
+
+  @override
+  void initState() {
+    super.initState();
+    final file = widget.file;
+    final search = _search;
+    if (file == null || !previewExts.contains(_ext(file))) return;
+    // Show the clicked image, stepping through the filtered images.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      var images = widget.contents.images;
+      if (search != null) {
+        images = widget.contents
+            .matching(search.words, infix: search.infix)
+            .images;
+      }
+      final order = [
+        for (final i in visibleOrder(images, widget.imagesView, const {}))
+          images[i],
+      ];
+      final at = order.indexOf(file);
+      if (at < 0) return;
+      showImageViewer(
+        context,
+        packPath: widget.pack.path,
+        images: order,
+        index: at,
+        sizes: widget.contents.sizes,
+      );
+    });
+  }
+
+  static String _ext(String rel) =>
+      p.extension(rel).toLowerCase().replaceFirst('.', '');
 
   @override
   void didUpdateWidget(_Body old) {
@@ -154,9 +216,13 @@ class _BodyState extends State<_Body> {
   Widget build(BuildContext context) {
     final pack = widget.pack;
     final folder = _folder;
-    final contents = folder == null
+    final search = _search;
+    var contents = folder == null
         ? widget.contents
         : widget.contents.within(folder);
+    if (search != null) {
+      contents = contents.matching(search.words, infix: search.infix);
+    }
     final tabs = <(String, Widget)>[
       if (contents.animations.isNotEmpty)
         (
@@ -186,6 +252,11 @@ class _BodyState extends State<_Body> {
           folder: folder,
           onShowAll: () => setState(() => _folder = null),
         ),
+      if (search != null)
+        _SearchFilterBar(
+          search: search,
+          onShowAll: () => setState(() => _search = null),
+        ),
       if (tabs.isEmpty)
         const Expanded(child: Center(child: Text('No files')))
       else ...[
@@ -197,14 +268,27 @@ class _BodyState extends State<_Body> {
         Expanded(child: TabBarView(children: [for (final (_, t) in tabs) t])),
       ],
     ];
-    // Music / sfx packs open on their Audio tab.
+    // Music / sfx packs open on their Audio tab; a clicked file result on
+    // the tab that lists it.
     final audioTab = tabs.indexWhere((t) => t.$2 is _AudioTab);
+    var initial = isAudioPack(pack.types) && audioTab >= 0 ? audioTab : 0;
+    if (widget.file case final file? when search != null) {
+      final at = tabs.indexWhere(
+        (t) => switch (t.$2) {
+          _ImagesTab() => contents.images.contains(file),
+          _AudioTab() => contents.audio.contains(file),
+          _FilesTab() => contents.other.contains(file),
+          _ => false,
+        },
+      );
+      if (at >= 0) initial = at;
+    }
     return DefaultTabController(
-      // A new controller when the folder is cleared and the tab count
-      // changes.
-      key: ValueKey(folder),
+      // A new controller when the folder or search filter is cleared and
+      // the tab count changes.
+      key: ValueKey((folder, search)),
       length: tabs.length,
-      initialIndex: isAudioPack(pack.types) && audioTab >= 0 ? audioTab : 0,
+      initialIndex: initial,
       child: widget.pinned
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -247,6 +331,52 @@ class _BodyState extends State<_Body> {
 bool isAudioPack(List<String> types) =>
     types.isNotEmpty &&
     types.every((t) => t == AssetType.music.id || t == AssetType.sfx.id);
+
+/// A dashboard search the detail page is filtered by.
+class SearchFilter {
+  const SearchFilter(this.text, {this.infix = false});
+
+  final String text;
+
+  /// The search matched by substring (see [fileMatches]).
+  final bool infix;
+
+  List<String> get words => queryWords(text);
+}
+
+/// Says the tabs list only the files matching a search, with a way back to
+/// all of them.
+class _SearchFilterBar extends StatelessWidget {
+  const _SearchFilterBar({required this.search, required this.onShowAll});
+
+  final SearchFilter search;
+  final VoidCallback onShowAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: Row(
+        children: [
+          InputChip(
+            avatar: const Icon(Icons.search, size: 18),
+            label: Text('Matching “${search.text.trim()}”'),
+            tooltip: 'Showing only files that match the search',
+            mouseCursor: clickCursor,
+            onDeleted: onShowAll,
+            deleteButtonTooltipMessage: 'Show all files',
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onShowAll,
+            child: Text('Show all files', style: theme.textTheme.labelLarge),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 /// Says the tabs show one folder of the pack, with a way back to all of it.
 class _FolderBar extends StatelessWidget {

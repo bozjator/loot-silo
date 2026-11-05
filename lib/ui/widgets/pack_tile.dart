@@ -35,6 +35,8 @@ class PackTile extends StatefulWidget {
     this.onTap,
     this.alwaysAnimate = false,
     this.showTags = false,
+    this.fileMatches,
+    this.onFileMatchesTap,
   });
 
   final PackRow pack;
@@ -45,6 +47,11 @@ class PackTile extends StatefulWidget {
   /// Adds a line with the pack's tags, sorted, under the type chips (when
   /// the dashboard sorts by tag).
   final bool showTags;
+
+  /// "12 files match: barrels_0.png, …" while searching, when file names
+  /// match; clicking it calls [onFileMatchesTap].
+  final String? fileMatches;
+  final VoidCallback? onFileMatchesTap;
 
   @override
   State<PackTile> createState() => _PackTileState();
@@ -140,6 +147,36 @@ class _PackTileState extends State<PackTile> {
                         _TypeChip('+${pack.types.length - 3}'),
                     ],
                   ),
+                  if (widget.fileMatches case final line?) ...[
+                    const SizedBox(height: 6),
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        key: const ValueKey('file-matches'),
+                        onTap: widget.onFileMatchesTap,
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.manage_search,
+                              size: 14,
+                              color: scheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                line,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   if (widget.showTags) ...[
                     const SizedBox(height: 6),
                     Row(

@@ -587,4 +587,113 @@ void main() {
       expect(find.byTooltip('Stop'), findsNothing);
     });
   });
+
+  group('file search', () {
+    final barrels = [for (var i = 0; i < 3; i++) 'props/barrels_$i.png'];
+
+    Future<void> search(WidgetTester tester, String text) async {
+      await tester.enterText(find.byType(TextField).first, text);
+      // Let the pack and file searches land.
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+      }
+    }
+
+    testWidgets('Files view: hint, results, and a pack tile match line', (
+      tester,
+    ) async {
+      await openKnight(
+        tester,
+        open: false,
+        files: [...barrels, 'sfx/barrel_roll.wav', 'heroes/a.png'],
+      );
+      await tester.tap(find.text('Files'));
+      await tester.pump();
+      expect(store.load().dashboardView, DashboardView.files);
+      expect(find.text('Type to search file names'), findsOneWidget);
+
+      await search(tester, 'barrel');
+      await pumpUntil(tester, find.text('Barrels 0'));
+      expect(find.text('Barrels 1'), findsOneWidget);
+      expect(find.text('Barrel roll'), findsOneWidget);
+      expect(find.text('Knight Pack · props'), findsNWidgets(3));
+      expect(find.text('4 files'), findsOneWidget);
+      expect(find.text('A'), findsNothing);
+
+      await tester.tap(find.text('Packs'));
+      await tester.pump();
+      final line = find.byKey(const ValueKey('file-matches'));
+      expect(line, findsOneWidget);
+      expect(
+        find.descendant(
+          of: line,
+          matching: find.textContaining('4 files match'),
+        ),
+        findsOneWidget,
+      );
+      // The line opens the pack filtered to the search.
+      await tester.tap(line);
+      await pumpUntil(tester, find.text('Show all files'));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.textContaining('Images (3)'), findsOneWidget);
+      expect(find.textContaining('Audio (1)'), findsOneWidget);
+    });
+
+    testWidgets('a file result opens the detail filtered, image in viewer', (
+      tester,
+    ) async {
+      await openKnight(
+        tester,
+        open: false,
+        files: [...barrels, 'sfx/barrel_roll.wav', 'heroes/a.png'],
+      );
+      await tester.tap(find.text('Files'));
+      await tester.pump();
+      await search(tester, 'barrel');
+      await pumpUntil(tester, find.text('Barrels 1'));
+      await tester.tap(find.text('Barrels 1'));
+      await pumpUntil(tester, find.byType(ImageViewer));
+      final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
+      expect(viewer.images, barrels);
+      expect(viewer.initialIndex, 1);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byType(ImageViewer), findsNothing);
+
+      // Filtered: the Images tab shows only the barrels, and is selected.
+      expect(find.text('Matching “barrel”'), findsOneWidget);
+      expect(find.textContaining('Images (3)'), findsOneWidget);
+      expect(find.textContaining('Audio (1)'), findsOneWidget);
+      expect(
+        DefaultTabController.of(tester.element(find.byType(TabBar))).index,
+        0,
+      );
+      await tester.tap(find.text('Show all files'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Matching “barrel”'), findsNothing);
+      // knight.png + 3 barrels + heroes/a.png.
+      expect(find.textContaining('Images (5)'), findsOneWidget);
+    });
+
+    testWidgets('infix fallback: "arrel" still finds the barrels', (
+      tester,
+    ) async {
+      await openKnight(tester, open: false, files: barrels);
+      await tester.tap(find.text('Files'));
+      await tester.pump();
+      await search(tester, 'arrel');
+      await pumpUntil(tester, find.text('Barrels 2'));
+      await tester.tap(find.text('Barrels 2'));
+      await pumpUntil(tester, find.byType(ImageViewer));
+      expect(
+        tester.widget<ImageViewer>(find.byType(ImageViewer)).images,
+        barrels,
+      );
+    });
+  });
 }

@@ -1294,6 +1294,59 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m22: file search results (real library, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+    await tester.tap(find.text('Files'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Type to search file names'), findsOneWidget);
+    await captureScreenshot(tester, 'm22_files_hint', settle: false);
+
+    await tester.enterText(find.byType(TextField), 'barrels');
+    // The first result on screen (the grid builds lazily).
+    final village = find.textContaining('Village(interiors) V1.3 · ');
+    await pumpUntil(tester, village);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm22_files_barrels', settle: false);
+
+    // Packs view: the pack says which files matched.
+    await tester.tap(find.text('Packs'));
+    await pumpUntil(tester, find.byKey(const ValueKey('file-matches')));
+    expect(find.textContaining('files match: barrels'), findsWidgets);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm22_packs_match_line', settle: false);
+
+    await tester.tap(find.text('Files'));
+    await pumpUntil(tester, village);
+    final name = tester.widget<Text>(
+      find.descendant(
+        of: find.ancestor(of: village.first, matching: find.byType(Card)),
+        matching: find.textContaining('Barrels'),
+      ),
+    );
+    await tester.ensureVisible(village.first);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(village.first);
+    await pumpUntil(tester, find.byType(ImageViewer));
+    await settleImages(tester);
+    expect(find.textContaining(name.data!), findsWidgets);
+    await captureScreenshot(tester, 'm22_viewer', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.byType(ImageViewer), seconds: 5, gone: true);
+    expect(find.text('Matching “barrels”'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm22_detail_filtered', settle: false);
+    await tester.tap(find.text('Show all files'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Matching “barrels”'), findsNothing);
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('archive import: zip and tar.gz through the review screen', (
     tester,
   ) async {

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/dashboard.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
+import '../core/library_index.dart' show LibraryIndex;
+import 'file_results.dart';
 import 'pack_detail_screen.dart';
 import 'widgets/filter_bar.dart';
 import 'widgets/thumb_size.dart';
@@ -55,6 +57,40 @@ class _DashboardState extends ConsumerState<Dashboard> {
     return KeyEventResult.ignored;
   }
 
+  /// The Files view: a hint without search text, else the matching files.
+  Widget _filesBody({
+    required bool searching,
+    required bool loaded,
+    required List<FileTile> files,
+    required double size,
+    required SearchFilter search,
+  }) {
+    if (!searching || (loaded && files.isEmpty)) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(searching ? Icons.search_off : Icons.manage_search, size: 48),
+            const SizedBox(height: 8),
+            Text(searching ? 'No files match' : 'Type to search file names'),
+          ],
+        ),
+      );
+    }
+    final settings = ref.read(settingsProvider.notifier);
+    return CtrlWheelResize(
+      onSteps: (n) =>
+          settings.setImageThumbSize(imageThumbRange.nudge(size, n)),
+      child: FileResultsGrid(
+        key: const PageStorageKey('files'),
+        files: files,
+        tileSize: size,
+        onOpen: (f) =>
+            openPackDetail(context, f.pack.id, search: search, file: f.relPath),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final query = ref.watch(dashboardQueryProvider);
@@ -73,6 +109,21 @@ class _DashboardState extends ConsumerState<Dashboard> {
         : allPacks.where((p) => p.id == query.bundleId).firstOrNull;
     final tiles = visible.value ?? const [];
     final view = ref.watch(settingsProvider.select((s) => s.dashboardView));
+    final searching = query.text.trim().isNotEmpty;
+    final fileSearch = searching ? ref.watch(fileSearchProvider).value : null;
+    final filesView = view == DashboardView.files;
+    final visibleFiles = filesView ? ref.watch(visibleFilesProvider) : null;
+    final files = visibleFiles?.value ?? const <FileTile>[];
+    // A pack's first matching files, for its "N files match" line.
+    final examples = <String, List<String>>{};
+    for (final h in fileSearch?.hits ?? const []) {
+      final l = examples[h.packId] ??= [];
+      if (l.length < 2) l.add(h.relPath);
+    }
+    final imageSize = imageThumbRange.clamp(
+      ref.watch(settingsProvider.select((s) => s.imageThumbSize)),
+    );
+    final search = SearchFilter(query.text, infix: fileSearch?.infix ?? false);
     final theme = Theme.of(context);
     final animateAll = ref.watch(settingsProvider.select((s) => s.animateAll));
     final tileSize = dashboardTileRange.clamp(
@@ -89,8 +140,12 @@ class _DashboardState extends ConsumerState<Dashboard> {
           FilterBar(
             query: query,
             facets: ref.watch(facetsProvider),
-            resultCount: tiles.length,
-            resultUnit: view == DashboardView.expanded ? 'tile' : 'pack',
+            resultCount: filesView ? files.length : tiles.length,
+            resultUnit: switch (view) {
+              DashboardView.packs => 'pack',
+              DashboardView.expanded => 'tile',
+              DashboardView.files => 'file',
+            },
             searchController: _search,
             searchFocus: _searchFocus,
             onText: notifier.setText,
@@ -108,11 +163,19 @@ class _DashboardState extends ConsumerState<Dashboard> {
               children: [
                 _ViewToggle(view: view, onChanged: settings.setDashboardView),
                 const SizedBox(width: 12),
-                ThumbSizeSlider(
-                  range: dashboardTileRange,
-                  value: tileSize,
-                  onChanged: settings.setDashboardTileSize,
-                ),
+                // File results use the image card size.
+                if (filesView)
+                  ThumbSizeSlider(
+                    range: imageThumbRange,
+                    value: imageSize,
+                    onChanged: settings.setImageThumbSize,
+                  )
+                else
+                  ThumbSizeSlider(
+                    range: dashboardTileRange,
+                    value: tileSize,
+                    onChanged: settings.setDashboardTileSize,
+                  ),
               ],
             ),
           ),
@@ -143,8 +206,26 @@ class _DashboardState extends ConsumerState<Dashboard> {
                 ],
               ),
             ),
+          if (filesView && (fileSearch?.capped ?? false))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Text(
+                'Showing the first ${LibraryIndex.fileHitLimit} of '
+                '${fileSearch!.total} matching files — refine the search '
+                'to see the rest',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
           Expanded(
-            child: tiles.isEmpty && visible.hasValue
+            child: filesView
+                ? _filesBody(
+                    searching: searching,
+                    loaded: visibleFiles?.hasValue ?? false,
+                    files: files,
+                    size: imageSize,
+                    search: search,
+                  )
+                : tiles.isEmpty && visible.hasValue
                 ? Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -183,6 +264,14 @@ class _DashboardState extends ConsumerState<Dashboard> {
                           subPackCount: subCounts[pack.id] ?? 0,
                           alwaysAnimate: animateAll,
                           showTags: query.sort == PackSort.tags,
+                          fileMatches: folder == null
+                              ? fileMatchLine(
+                                  fileSearch?.counts[pack.id] ?? 0,
+                                  examples[pack.id] ?? const [],
+                                )
+                              : null,
+                          onFileMatchesTap: () =>
+                              openPackDetail(context, pack.id, search: search),
                           onTap: pack.isContainer
                               ? () => notifier.openBundle(pack.id)
                               : () => openPackDetail(
@@ -228,6 +317,12 @@ class _ViewToggle extends StatelessWidget {
         label: Text('Expanded'),
         tooltip: 'One tile per sub-folder of packs that are collections',
       ),
+      ButtonSegment(
+        value: DashboardView.files,
+        icon: Icon(Icons.insert_drive_file_outlined, size: 18),
+        label: Text('Files'),
+        tooltip: 'Files whose names match the search',
+      ),
     ],
     selected: {view},
     onSelectionChanged: (s) => onChanged(s.first),
@@ -235,14 +330,26 @@ class _ViewToggle extends StatelessWidget {
 }
 
 /// Opens a pack; with [folder], its Images and Animations tabs start at
-/// that first-level folder.
-void openPackDetail(BuildContext context, String packId, {String? folder}) {
+/// that first-level folder; with [search], only matching files are listed
+/// and [file] (a clicked result) is shown.
+void openPackDetail(
+  BuildContext context,
+  String packId, {
+  String? folder,
+  SearchFilter? search,
+  String? file,
+}) {
   // Leaving search focused would restore it on return without a live text
   // input connection; start from the grid instead (`/` refocuses).
   FocusManager.instance.primaryFocus?.unfocus();
   Navigator.of(context).push(
     MaterialPageRoute<void>(
-      builder: (_) => PackDetailScreen(packId: packId, folder: folder),
+      builder: (_) => PackDetailScreen(
+        packId: packId,
+        folder: folder,
+        search: search,
+        file: file,
+      ),
     ),
   );
 }

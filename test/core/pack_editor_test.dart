@@ -128,4 +128,38 @@ void main() {
     saveAnimationOverride(tmp.path, detected, null);
     expect(sidecarJson().containsKey('animations'), isFalse);
   });
+
+  test('PackContents.matching keeps only matching files and animations', () {
+    const seq = SpriteAnim(
+      path: 'fx/smoke_1.png',
+      kind: AnimKind.sequence,
+      frameW: 8,
+      frameH: 8,
+      frames: ['fx/smoke_1.png', 'fx/smoke_2.png'],
+    );
+    const sheet = SpriteAnim(
+      path: 'hero/idle.png',
+      kind: AnimKind.sheet,
+      frameW: 8,
+      frameH: 8,
+      cols: 4,
+    );
+    const c = PackContents(
+      images: ['fx/smoke_1.png', 'hero/idle.png', 'props/barrels_0.png'],
+      audio: ['sfx/barrel_roll.wav', 'sfx/hit.wav'],
+      other: ['README.txt'],
+      detected: [seq, sheet],
+      sizes: {},
+      sidecar: null,
+    );
+    final m = c.matching(['barrel']);
+    expect(m.images, ['props/barrels_0.png']);
+    expect(m.audio, ['sfx/barrel_roll.wav']);
+    expect(m.other, isEmpty);
+    expect(m.detected, isEmpty);
+    expect(c.matching(['smoke']).detected, [seq]);
+    expect(c.matching(['idle']).detected, [sheet]);
+    expect(c.matching(['arrel'], infix: true).images, ['props/barrels_0.png']);
+    expect(c.matching(['arrel']).images, isEmpty);
+  });
 }

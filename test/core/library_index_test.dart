@@ -1,3 +1,4 @@
+import 'package:assets_explorer/core/file_search.dart';
 import 'package:assets_explorer/core/library_index.dart';
 import 'package:assets_explorer/core/library_scanner.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
@@ -74,5 +75,62 @@ void main() {
     expect(ftsQuery('  '), isNull);
     expect(ftsQuery('a "b" OR c*'), '"a"* AND "b"* AND "OR"* AND "c"*');
     expect(await index.search('"knight" (*'), hasLength(1));
+  });
+
+  group('searchFiles', () {
+    List<String> paths(FileSearch r) => [for (final h in r.hits) h.relPath];
+
+    test('prefix words, camelCase split, with the owning pack', () async {
+      final r = await index.searchFiles('barr');
+      expect(r.hits, [
+        (
+          packId: 'bundles/Mega Bundle v3/2D assets/Tanks Pack',
+          relPath: 'PNG/tankBarrel.png',
+        ),
+      ]);
+      expect(r.infix, isFalse);
+      expect(r.counts, {'bundles/Mega Bundle v3/2D assets/Tanks Pack': 1});
+      expect(paths(await index.searchFiles('idle')), [
+        'Knight/idle_0.png',
+        'Knight/idle_1.png',
+      ]);
+    });
+
+    test('every word must match the same file (AND)', () async {
+      expect(paths(await index.searchFiles('read water')), [
+        'Tilesets/Water/Read me.txt',
+      ]);
+      expect(paths(await index.searchFiles('idle tank')), isEmpty);
+    });
+
+    test('caps hits but counts all of them', () async {
+      final r = await index.searchFiles('click', limit: 2);
+      expect(r.hits, hasLength(2));
+      expect(r.total, 3);
+      expect(r.capped, isTrue);
+      expect((await index.searchFiles('click')).capped, isFalse);
+    });
+
+    test('falls back to substrings for 3+ letter words', () async {
+      final r = await index.searchFiles('arrel');
+      expect(paths(r), ['PNG/tankBarrel.png']);
+      expect(r.infix, isTrue);
+      // Too short for trigrams, and no prefix match: nothing.
+      expect((await index.searchFiles('rr')).hits, isEmpty);
+      expect((await index.searchFiles('')).hits, isEmpty);
+    });
+
+    test('fileMatches agrees with the index', () async {
+      final files = [for (final p in scan.packs) ...p.files];
+      for (final q in ['barr', 'idle', 'read water', 'kn', 'arrel']) {
+        final r = await index.searchFiles(q);
+        final words = queryWords(q);
+        expect(
+          files.where((f) => fileMatches(f, words, infix: r.infix)).toSet(),
+          paths(r).toSet(),
+          reason: q,
+        );
+      }
+    });
   });
 }

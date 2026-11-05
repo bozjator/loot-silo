@@ -373,7 +373,68 @@ void main() {
     store.save(const AppSettings(dashboardView: DashboardView.expanded));
     expect(f.readAsStringSync(), contains('"dashboard_view": "expanded"'));
     expect(store.load().dashboardView, DashboardView.expanded);
+    store.save(const AppSettings(dashboardView: DashboardView.files));
+    expect(f.readAsStringSync(), contains('"dashboard_view": "files"'));
+    expect(store.load().dashboardView, DashboardView.files);
     f.writeAsStringSync('{"dashboard_view": "bogus"}');
     expect(store.load().dashboardView, DashboardView.packs);
+  });
+
+  group('file hits', () {
+    final packs = [
+      pack('v/village', title: 'Village', types: ['environment']),
+      pack('k/kenney', title: 'Tanks', types: ['vfx']),
+      pack('o/other', title: 'Other', types: ['ui']),
+    ];
+    const hits = <FileHit>[
+      (packId: 'k/kenney', relPath: 'PNG/barrelRed.png'),
+      (packId: 'v/village', relPath: 'props/barrels_1.png'),
+      (packId: 'gone/pack', relPath: 'barrel.png'),
+      (packId: 'v/village', relPath: 'props/barrels_0.png'),
+      (packId: 'k/kenney', relPath: 'PNG/barrelBlue.png'),
+    ];
+    List<String> names(List<FileTile> l) => [for (final t in l) t.relPath];
+
+    test('best match keeps the index order; unknown packs are dropped', () {
+      expect(names(filterFileHits(hits, packs, PackSort.relevance)), [
+        'PNG/barrelRed.png',
+        'props/barrels_1.png',
+        'props/barrels_0.png',
+        'PNG/barrelBlue.png',
+      ]);
+    });
+
+    test('Name sorts by file name; others follow the pack order', () {
+      expect(names(filterFileHits(hits, packs, PackSort.title)), [
+        'PNG/barrelBlue.png',
+        'PNG/barrelRed.png',
+        'props/barrels_0.png',
+        'props/barrels_1.png',
+      ]);
+      // The pack list arrives sorted by type: environment before vfx.
+      final byType = applyQuery(
+        packs,
+        const DashboardQuery(text: 'barrel', sort: PackSort.type),
+        null,
+      );
+      expect(names(filterFileHits(hits, byType, PackSort.type)), [
+        'props/barrels_0.png',
+        'props/barrels_1.png',
+        'PNG/barrelBlue.png',
+        'PNG/barrelRed.png',
+      ]);
+    });
+
+    test('pack filters apply through the file\'s pack', () {
+      final vfxOnly = applyQuery(
+        packs,
+        const DashboardQuery(text: 'barrel', types: {'vfx'}),
+        null,
+      );
+      expect(
+        filterFileHits(hits, vfxOnly, PackSort.relevance).map((t) => t.pack.id),
+        everyElement('k/kenney'),
+      );
+    });
   });
 }

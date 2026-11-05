@@ -111,6 +111,76 @@ final searchHitsProvider = FutureProvider<List<String>?>((ref) async {
   return ref.read(libraryIndexProvider).search(text);
 });
 
+/// Files matching the search text, or null when there is none.
+final fileSearchProvider = FutureProvider<FileSearch?>((ref) async {
+  final text = ref.watch(dashboardQueryProvider.select((q) => q.text.trim()));
+  await ref.watch(libraryProvider.future);
+  if (text.isEmpty) return null;
+  return ref.read(libraryIndexProvider).searchFiles(text);
+});
+
+/// One tile of the Files view: a matching file and its pack.
+typedef FileTile = ({PackRow pack, String relPath});
+
+/// Keeps the [hits] whose pack is in [packs] (the packs the filters let
+/// through, already sorted by [sort]) and orders them: best match keeps
+/// the index order, Name sorts by file name, other sorts follow their
+/// pack's place, then file name.
+List<FileTile> filterFileHits(
+  List<FileHit> hits,
+  List<PackRow> packs,
+  PackSort sort,
+) {
+  final place = {for (var i = 0; i < packs.length; i++) packs[i].id: i};
+  final byId = {for (final pk in packs) pk.id: pk};
+  final out = [
+    for (final h in hits)
+      if (byId[h.packId] case final pack?) (pack: pack, relPath: h.relPath),
+  ];
+  String name(FileTile t) => p.basename(t.relPath).toLowerCase();
+  switch (sort) {
+    case PackSort.relevance:
+      break;
+    case PackSort.title:
+      out.sort((a, b) {
+        final c = name(a).compareTo(name(b));
+        return c != 0 ? c : a.relPath.compareTo(b.relPath);
+      });
+    default:
+      out.sort((a, b) {
+        final c = place[a.pack.id]!.compareTo(place[b.pack.id]!);
+        return c != 0 ? c : name(a).compareTo(name(b));
+      });
+  }
+  return out;
+}
+
+/// The Files view's tiles: file hits within the packs the filters (and an
+/// open bundle) allow, in the chosen order.
+final visibleFilesProvider = Provider<AsyncValue<List<FileTile>>>((ref) {
+  final library = ref.watch(libraryProvider);
+  final files = ref.watch(fileSearchProvider);
+  final q = ref.watch(dashboardQueryProvider);
+  return switch ((library, files)) {
+    (AsyncValue(:final error?, :final stackTrace), _) ||
+    (
+      _,
+      AsyncValue(:final error?, :final stackTrace),
+    ) => AsyncError(error, stackTrace ?? StackTrace.current),
+    (AsyncValue(value: final lib?), AsyncValue(hasValue: true, :final value)) =>
+      AsyncData(
+        value == null
+            ? const []
+            : filterFileHits(
+                value.hits,
+                applyQuery(lib.packs, q, null),
+                q.sort,
+              ),
+      ),
+    _ => const AsyncLoading(),
+  };
+});
+
 /// Applies [q] to [packs]; pure so it can be unit tested.
 List<PackRow> applyQuery(
   List<PackRow> packs,
@@ -264,7 +334,8 @@ List<SubFolderRow> _matchingOrAll(
 final visibleTilesProvider = Provider<AsyncValue<List<DashboardTile>>>((ref) {
   final packs = ref.watch(visiblePacksProvider);
   final view = ref.watch(settingsProvider.select((s) => s.dashboardView));
-  if (view == DashboardView.packs) {
+  // The Files view lists files instead; pack tiles stay as in Packs.
+  if (view != DashboardView.expanded) {
     return packs.whenData((l) => [for (final p in l) DashboardTile(p, p)]);
   }
   final subs = ref.watch(subFoldersProvider);
