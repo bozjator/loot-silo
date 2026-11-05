@@ -17,7 +17,7 @@ import '../core/pack_editor.dart';
 import '../core/sidecar.dart';
 import '../core/text_preview.dart';
 import '../core/type_classifier.dart' show AssetType;
-import '../state/dashboard.dart' show sortedTags;
+import '../state/dashboard.dart' show knownTags, sortedTags;
 import '../state/providers.dart';
 import '../state/settings.dart';
 import 'format.dart';
@@ -702,7 +702,8 @@ class _Info extends ConsumerWidget {
             onEdit: () async {
               final tags = await showDialog<List<String>>(
                 context: context,
-                builder: (_) => TagsDialog(initial: pack.tags),
+                builder: (_) =>
+                    TagsDialog(initial: pack.tags, known: knownTags(ref)),
               );
               if (tags != null) await _save(ref, tags: tags);
             },

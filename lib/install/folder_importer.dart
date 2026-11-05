@@ -104,13 +104,43 @@ class ImportPlan {
 bool _isWithin(String parent, String child) =>
     p.equals(parent, child) || p.isWithin(parent, child);
 
+/// The picked folder and the library overlap (see [checkRoots]).
+class OverlappingFoldersError implements Exception {
+  const OverlappingFoldersError({
+    required this.source,
+    required this.library,
+    required this.sourceInLibrary,
+  });
+
+  final String source;
+  final String library;
+
+  /// True when [source] is (inside) the library; false when it contains the
+  /// library.
+  final bool sourceInLibrary;
+
+  /// A plain explanation for the import screens.
+  String get message => sourceInLibrary
+      ? 'This folder is inside your library ($library). Pick a folder '
+            'outside the library, or move it out first.'
+      : 'This folder contains your library ($library). Pick a folder that '
+            "doesn't contain the library, or move the library out first.";
+
+  @override
+  String toString() => 'OverlappingFoldersError: $source, $library';
+}
+
 /// Refuses imports where source and library overlap, which could make the
 /// importer read its own output or write into the source.
 void checkRoots(String sourceRoot, String libraryRoot) {
   final s = p.canonicalize(sourceRoot);
   final l = p.canonicalize(libraryRoot);
-  if (_isWithin(s, l) || _isWithin(l, s)) {
-    throw ArgumentError('Source and library folders must not overlap: $s, $l');
+  if (_isWithin(l, s) || _isWithin(s, l)) {
+    throw OverlappingFoldersError(
+      source: s,
+      library: l,
+      sourceInLibrary: _isWithin(l, s),
+    );
   }
 }
 

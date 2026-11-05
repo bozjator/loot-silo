@@ -90,12 +90,27 @@ void main() {
     });
 
     test('overlapping source and library are refused', () {
+      Matcher overlap({required bool inLibrary}) => throwsA(
+        isA<OverlappingFoldersError>().having(
+          (e) => e.sourceInLibrary,
+          'sourceInLibrary',
+          inLibrary,
+        ),
+      );
+      // The library lies inside the picked folder.
       expect(
         () => planFolderImport(src, p.join(src, 'lib')),
-        throwsArgumentError,
+        overlap(inLibrary: false),
       );
-      expect(() => planFolderImport(src, src), throwsArgumentError);
-      expect(() => planFolderImport(src, tmp.path), throwsArgumentError);
+      expect(() => planFolderImport(src, src), overlap(inLibrary: true));
+      // The picked folder lies inside the library.
+      expect(() => planFolderImport(src, tmp.path), overlap(inLibrary: true));
+      try {
+        planFolderImport(src, tmp.path);
+      } on OverlappingFoldersError catch (e) {
+        expect(e.message, startsWith('This folder is inside your library ('));
+        expect(e.message, contains(p.canonicalize(tmp.path)));
+      }
     });
   });
 

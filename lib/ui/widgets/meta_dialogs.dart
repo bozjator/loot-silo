@@ -146,30 +146,39 @@ class _TypesDialogState extends State<TypesDialog> {
   }
 }
 
+/// Edits tags as chips: remove with ×, add by typing (Enter or a comma) or
+/// by picking one of the [known] tags.
 class TagsDialog extends StatefulWidget {
-  const TagsDialog({super.key, required this.initial});
+  const TagsDialog({super.key, required this.initial, this.known = const []});
 
   final List<String> initial;
+
+  /// Tags already in the library, most used first, offered as suggestions.
+  final List<String> known;
 
   @override
   State<TagsDialog> createState() => _TagsDialogState();
 }
 
 class _TagsDialogState extends State<TagsDialog> {
-  late final _text = TextEditingController(text: widget.initial.join(', '));
+  late final _tags = <String>{for (final t in widget.initial) _norm(t)};
+  TextEditingController? _field;
 
-  @override
-  void dispose() {
-    _text.dispose();
-    super.dispose();
+  static String _norm(String t) => t.trim().toLowerCase();
+
+  /// Adds every comma-separated tag in [text].
+  void _add(String text) {
+    final added = [
+      for (final t in text.split(','))
+        if (_norm(t).isNotEmpty) _norm(t),
+    ];
+    if (added.isEmpty) return;
+    setState(() => _tags.addAll(added));
   }
 
   void _submit() {
-    final tags = <String>{
-      for (final t in _text.text.split(','))
-        if (t.trim().isNotEmpty) t.trim().toLowerCase(),
-    }.toList()..sort();
-    Navigator.of(context).pop(tags);
+    _add(_field?.text ?? '');
+    Navigator.of(context).pop(_tags.toList()..sort());
   }
 
   @override
@@ -178,11 +187,66 @@ class _TagsDialogState extends State<TagsDialog> {
       title: const Text('Tags'),
       content: SizedBox(
         width: 400,
-        child: TextField(
-          controller: _text,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Comma-separated tags'),
-          onSubmitted: (_) => _submit(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_tags.isNotEmpty) ...[
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final t in _tags.toList()..sort())
+                    InputChip(
+                      label: Text(t),
+                      visualDensity: VisualDensity.compact,
+                      deleteIcon: deleteIcon,
+                      deleteButtonTooltipMessage: 'Remove $t',
+                      onDeleted: () => setState(() => _tags.remove(t)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+            Autocomplete<String>(
+              optionsBuilder: (v) {
+                // Only once something is typed: an open list would cover
+                // the Save button.
+                final q = _norm(v.text);
+                if (q.isEmpty) return const <String>[];
+                return widget.known
+                    .where((t) => !_tags.contains(t) && t.contains(q))
+                    .take(20);
+              },
+              onSelected: (t) {
+                _add(t);
+                _field?.clear();
+              },
+              fieldViewBuilder: (context, controller, focus, onSubmit) {
+                _field = controller;
+                return TextField(
+                  controller: controller,
+                  focusNode: focus,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Add a tag',
+                    helperText: 'Enter or a comma adds it',
+                  ),
+                  onChanged: (v) {
+                    if (!v.contains(',')) return;
+                    _add(v);
+                    controller.clear();
+                  },
+                  onSubmitted: (v) {
+                    if (v.trim().isEmpty) return _submit();
+                    _add(v);
+                    controller.clear();
+                    focus.requestFocus();
+                  },
+                );
+              },
+            ),
+          ],
         ),
       ),
       actions: [

@@ -139,6 +139,9 @@ void main() {
   /// Archives the "Import archive" button picks.
   var pickedArchives = <String>[];
 
+  /// Overrides the folder [app] was given, for a second pick.
+  String? pickedFolder;
+
   /// Paths "Show in file manager" was asked for; no file manager opens.
   final revealed = <String>[];
 
@@ -155,7 +158,9 @@ void main() {
           libraryIndexProvider.overrideWithValue(
             LibraryIndex(NativeDatabase.memory()),
           ),
-          directoryPickerProvider.overrideWithValue((_) async => source),
+          directoryPickerProvider.overrideWithValue(
+            (_) async => pickedFolder ?? source,
+          ),
           archivePickerProvider.overrideWithValue(() async => pickedArchives),
           extractRootProvider.overrideWithValue(p.join(tmp.path, 'extract')),
           keyStoreProvider.overrideWithValue(keyStore),
@@ -196,10 +201,13 @@ void main() {
       await tester.pumpAndSettle();
       await captureScreenshot(tester, 'm3_review');
 
-      await tester.tap(find.text('Unknown — set author'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Me');
-      await tester.tap(find.text('Save'));
+      // M24: the author cell is an inline picker.
+      final unknown = find.widgetWithText(TextField, 'Unknown — set author');
+      await tester.tap(unknown);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.enterText(unknown, 'Me');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Add new author “Me”'));
       await tester.pumpAndSettle();
       expect(find.text('Me/misc'), findsOneWidget);
 
@@ -221,6 +229,55 @@ void main() {
       );
     },
   );
+
+  testWidgets('m24: import review — author picker, tag chips, overlap', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final src = p.join(tmp.path, 'src');
+    copyTree('test/fixtures/library_src', src);
+    await tester.pumpWidget(app(src));
+    await pumpUntil(tester, find.text('Slimes'));
+    await tester.tap(find.text('Import folder').first);
+    await pumpUntil(tester, find.text('Import 7 packs'));
+    await tester.pump(const Duration(milliseconds: 500));
+    // One line per pack unless the path adds something.
+    expect(find.text('.'), findsNothing);
+    await captureScreenshot(tester, 'm24_review', settle: false);
+
+    final unknown = find.widgetWithText(TextField, 'Unknown — set author');
+    await tester.tap(unknown);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Add new author…'), findsOneWidget);
+    expect(find.text('2 packs'), findsOneWidget);
+    await captureScreenshot(tester, 'm24_author_suggestions', settle: false);
+    await tester.enterText(unknown, 'hero');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('HeroMaker').last);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('HeroMaker/misc'), findsOneWidget);
+
+    await tester.tap(find.text('—').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'retro, top-down,');
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm24_tag_chips', settle: false);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('retro'), findsOneWidget);
+    await captureScreenshot(tester, 'm24_review_edited', settle: false);
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    // A folder inside the library: a plain explanation.
+    pickedFolder = p.join(lib, 'HeroMaker');
+    addTearDown(() => pickedFolder = null);
+    await tester.tap(find.text('Import folder').first);
+    await pumpUntil(tester, find.textContaining('This folder is inside'));
+    expect(find.textContaining('Invalid argument'), findsNothing);
+    await tester.pump(const Duration(seconds: 1));
+    await captureScreenshot(tester, 'm24_overlap', settle: false);
+  });
 
   testWidgets('review of the real assets_library_OLD (read-only, no import)', (
     tester,

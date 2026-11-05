@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/sidecar.dart';
 import '../install/folder_importer.dart';
+import '../state/dashboard.dart' show knownAuthors, knownTags;
 import '../state/providers.dart';
 import 'format.dart';
 import 'widgets/meta_dialogs.dart';
@@ -85,6 +86,24 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
     if (mounted) setState(() => _phase = _Phase.done);
   }
 
+  /// Author picker entries: the library's authors with their pack counts,
+  /// then authors only found in this import (count 0).
+  List<AuthorChoice> _authorChoices() {
+    final packs = ref.read(libraryProvider).value?.packs ?? const [];
+    final urls = {for (final a in _knownAuthors()) a.user: a.url};
+    final out = [
+      for (final (name, n) in knownAuthors(packs))
+        AuthorChoice(name, packs: n, url: urls[name]),
+    ];
+    final seen = {for (final c in out) c.name.toLowerCase()};
+    for (final a in _knownAuthors()) {
+      if (seen.add(a.user.toLowerCase())) {
+        out.add(AuthorChoice(a.user, url: a.url));
+      }
+    }
+    return out;
+  }
+
   /// Authors already in the library plus those found in this import.
   List<AuthorInfo> _knownAuthors() {
     final byName = <String, AuthorInfo>{};
@@ -107,7 +126,7 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
         automaticallyImplyLeading: _phase != _Phase.importing,
       ),
       body: switch (_phase) {
-        _ when _error != null => Center(child: Text('Cannot import: $_error')),
+        _ when _error != null => _ErrorMessage(importErrorMessage(_error!)),
         _Phase.planning => const Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -204,6 +223,8 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
                 target: targets[item],
                 onChanged: () => setState(() {}),
                 knownAuthors: _knownAuthors,
+                authorChoices: _authorChoices,
+                knownTags: () => knownTags(ref),
               );
             },
           ),
@@ -213,13 +234,16 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              if (unknown > 0)
-                Text(
-                  '$unknown selected packs have no author; '
-                  'they go to "$unknownAuthor".',
-                  style: TextStyle(color: theme.colorScheme.error),
-                ),
-              const Spacer(),
+              Expanded(
+                child: unknown > 0
+                    ? Text(
+                        '$unknown selected packs have no author; '
+                        'they go to "$unknownAuthor".',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: theme.colorScheme.error),
+                      )
+                    : const SizedBox(),
+              ),
               Text(
                 '${formatCount(files)} files · ${formatBytes(bytes)}',
                 style: theme.textTheme.bodyMedium,
@@ -302,8 +326,8 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
   }
 }
 
-const _colPack = 5;
-const _colAuthor = 3;
+const _colPack = 4;
+const _colAuthor = 4;
 const _colTypes = 3;
 const _colTags = 3;
 const _colSize = 2;
@@ -345,12 +369,16 @@ class _ItemRow extends StatelessWidget {
     required this.target,
     required this.onChanged,
     required this.knownAuthors,
+    required this.authorChoices,
+    required this.knownTags,
   });
 
   final ImportItem item;
   final String? target;
   final VoidCallback onChanged;
   final List<AuthorInfo> Function() knownAuthors;
+  final List<AuthorChoice> Function() authorChoices;
+  final List<String> Function() knownTags;
 
   @override
   Widget build(BuildContext context) {
@@ -409,34 +437,53 @@ class _ItemRow extends StatelessWidget {
                       ],
                     ],
                   ),
-                  Text(
-                    item.sourceRel,
-                    overflow: TextOverflow.ellipsis,
-                    style: muted,
-                  ),
+                  // The source path, when it says more than the title.
+                  if (item.sourceRel != '.' && item.sourceRel != item.title)
+                    Text(
+                      item.sourceRel,
+                      overflow: TextOverflow.ellipsis,
+                      style: muted,
+                    ),
                 ],
               ),
             ),
-            editable(
-              _colAuthor,
-              item.author == null
-                  ? Text(
-                      'Unknown — set author',
-                      style: small?.copyWith(color: theme.colorScheme.error),
-                    )
-                  : Text(
-                      item.author!.user,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium,
+            Expanded(
+              flex: _colAuthor,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: AuthorPicker(
+                      // A new field when the author changes from elsewhere.
+                      key: ValueKey(item.author?.user),
+                      author: item.author,
+                      choices: authorChoices,
+                      onChanged: (a) {
+                        item.author = a;
+                        onChanged();
+                      },
                     ),
-              () async {
-                final a = await showDialog<AuthorInfo>(
-                  context: context,
-                  builder: (_) =>
-                      AuthorDialog(initial: item.author, known: knownAuthors()),
-                );
-                if (a != null) item.author = a;
-              },
+                  ),
+                  IconButton(
+                    tooltip: 'Edit author and profile URL',
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 16,
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: () async {
+                      final a = await showDialog<AuthorInfo>(
+                        context: context,
+                        builder: (_) => AuthorDialog(
+                          initial: item.author,
+                          known: knownAuthors(),
+                        ),
+                      );
+                      if (a != null) {
+                        item.author = a;
+                        onChanged();
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
             editable(
               _colTypes,
@@ -455,16 +502,18 @@ class _ItemRow extends StatelessWidget {
             ),
             editable(
               _colTags,
-              Text(
-                item.tags.isEmpty ? '—' : item.tags.join(', '),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: small,
-              ),
+              item.tags.isEmpty
+                  ? Text('—', style: small)
+                  : Wrap(
+                      spacing: 4,
+                      runSpacing: 2,
+                      children: [for (final t in item.tags) _Badge(t)],
+                    ),
               () async {
                 final t = await showDialog<List<String>>(
                   context: context,
-                  builder: (_) => TagsDialog(initial: item.tags),
+                  builder: (_) =>
+                      TagsDialog(initial: item.tags, known: knownTags()),
                 );
                 if (t != null) item.tags = t;
               },
@@ -528,6 +577,257 @@ class _Badge extends StatelessWidget {
         text,
         style: Theme.of(context).textTheme.labelSmall
             ?.copyWith(color: scheme.onSecondaryContainer),
+      ),
+    );
+  }
+}
+
+/// What the import screens say about [error]: a plain explanation for
+/// known problems, the error itself otherwise.
+String importErrorMessage(Object error) => switch (error) {
+  OverlappingFoldersError(:final message) => message,
+  _ => 'Cannot import: $error',
+};
+
+class _ErrorMessage extends StatelessWidget {
+  const _ErrorMessage(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.block, size: 48, color: theme.colorScheme.error),
+            const SizedBox(height: 12),
+            Text(text, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              child: const Text('Back'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One entry of the [AuthorPicker]: an author and how many packs the
+/// library has from them (0: only in this import).
+class AuthorChoice {
+  const AuthorChoice(this.name, {this.packs = 0, this.url, this.isNew = false});
+
+  final String name;
+  final int packs;
+  final String? url;
+
+  /// The "Add new author …" entry.
+  final bool isNew;
+}
+
+/// The author cell of the import review: type to filter the library's
+/// authors, pick one, or add a new one. An unknown author starts empty, and
+/// the suggestions open as soon as the field gets focus.
+class AuthorPicker extends StatefulWidget {
+  const AuthorPicker({
+    super.key,
+    required this.author,
+    required this.choices,
+    required this.onChanged,
+  });
+
+  final AuthorInfo? author;
+  final List<AuthorChoice> Function() choices;
+
+  /// The chosen author, or null when the field was cleared.
+  final ValueChanged<AuthorInfo?> onChanged;
+
+  @override
+  State<AuthorPicker> createState() => _AuthorPickerState();
+}
+
+class _AuthorPickerState extends State<AuthorPicker> {
+  late final _controller = TextEditingController(
+    text: widget.author?.user ?? '',
+  );
+  final _focus = FocusNode(debugLabel: 'author');
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_onFocus);
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocus);
+    _focus.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onFocus() {
+    if (_focus.hasFocus) {
+      // Selecting the text also makes the autocomplete list its options,
+      // so they show on focus, even for an empty field.
+      _controller.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _controller.text.length,
+      );
+    } else {
+      _commit(_controller.text);
+    }
+  }
+
+  /// Takes typed text as the author: a known one (any case) or a new name.
+  void _commit(String text, {String? url}) {
+    final name = text.trim();
+    final current = widget.author;
+    if (name.isEmpty) {
+      if (current != null) widget.onChanged(null);
+      return;
+    }
+    if (name == current?.user) return;
+    final known = widget
+        .choices()
+        .where((c) => c.name.toLowerCase() == name.toLowerCase())
+        .firstOrNull;
+    widget.onChanged(
+      AuthorInfo(user: known?.name ?? name, url: url ?? known?.url),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return RawAutocomplete<AuthorChoice>(
+      textEditingController: _controller,
+      focusNode: _focus,
+      displayStringForOption: (c) => c.name,
+      optionsBuilder: (value) {
+        final q = value.text.trim().toLowerCase();
+        final all = widget.choices();
+        final hits = [
+          for (final c in all)
+            if (q.isEmpty || c.name.toLowerCase().contains(q)) c,
+        ];
+        final exact = all.any((c) => c.name.toLowerCase() == q);
+        return [
+          ...hits,
+          if (!exact) AuthorChoice(value.text.trim(), isNew: true),
+        ];
+      },
+      onSelected: (c) {
+        if (c.isNew && c.name.isEmpty) {
+          // "Add new author…" with nothing typed yet: type the name.
+          _controller.clear();
+          _focus.requestFocus();
+          return;
+        }
+        _commit(c.name, url: c.url);
+        _focus.unfocus();
+      },
+      fieldViewBuilder: (context, controller, focus, onSubmit) => TextField(
+        controller: controller,
+        focusNode: focus,
+        style: theme.textTheme.bodyMedium,
+        decoration: InputDecoration(
+          isDense: true,
+          border: InputBorder.none,
+          // Only built while unknown (a hint is laid out even when hidden).
+          hintText: widget.author == null ? 'Unknown — set author' : null,
+          hintStyle: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.error,
+          ),
+        ),
+        onSubmitted: (_) => onSubmit(),
+      ),
+      optionsViewBuilder: (context, onSelected, options) => Align(
+        alignment: Alignment.topLeft,
+        child: Material(
+          elevation: 4,
+          borderRadius: BorderRadius.circular(8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 320),
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              shrinkWrap: true,
+              children: [
+                for (final (i, c) in options.indexed)
+                  _AuthorOption(
+                    choice: c,
+                    highlighted: AutocompleteHighlightedOption.of(context) == i,
+                    onTap: () => onSelected(c),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthorOption extends StatelessWidget {
+  const _AuthorOption({
+    required this.choice,
+    required this.highlighted,
+    required this.onTap,
+  });
+
+  final AuthorChoice choice;
+  final bool highlighted;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final c = choice;
+    final color = highlighted ? theme.colorScheme.primary : null;
+    return InkWell(
+      mouseCursor: clickCursor,
+      onTap: onTap,
+      child: Container(
+        color: highlighted
+            ? theme.colorScheme.primary.withValues(alpha: 0.08)
+            : null,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          children: [
+            Icon(
+              c.isNew ? Icons.person_add_alt : Icons.person_outline,
+              size: 16,
+              color: color,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                c.isNew
+                    ? (c.name.isEmpty
+                          ? 'Add new author…'
+                          : 'Add new author “${c.name}”')
+                    : c.name,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(color: color),
+              ),
+            ),
+            if (!c.isNew) ...[
+              const SizedBox(width: 8),
+              Text(
+                c.packs == 0
+                    ? 'new'
+                    : '${c.packs} ${c.packs == 1 ? 'pack' : 'packs'}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

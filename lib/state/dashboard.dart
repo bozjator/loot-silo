@@ -480,6 +480,27 @@ class Facets {
   }
 }
 
+/// Every tag in the library, most used first (tag editor suggestions).
+List<String> knownTags(WidgetRef ref) => [
+  for (final (t, _) in Facets.of(
+    ref.read(libraryProvider).value?.packs ?? const [],
+  ).tags)
+    t,
+];
+
+/// Authors in the library (their folders under the library root) with how
+/// many packs each has, by name.
+List<(String, int)> knownAuthors(List<PackRow> packs) {
+  final m = <String, int>{};
+  for (final p in packs) {
+    if (p.parentId == null && p.author != null) {
+      m[p.author!] = (m[p.author!] ?? 0) + 1;
+    }
+  }
+  return [for (final e in m.entries) (e.key, e.value)]
+    ..sort((a, b) => a.$1.toLowerCase().compareTo(b.$1.toLowerCase()));
+}
+
 final facetsProvider = Provider<Facets>((ref) {
   final packs = ref.watch(libraryProvider).value?.packs ?? const [];
   final q = ref.watch(dashboardQueryProvider);
