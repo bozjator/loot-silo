@@ -14,7 +14,8 @@ enum PackSort {
   author('Author'),
   size('Size'),
   files('File count'),
-  tags('Tags');
+  tags('Tags'),
+  type('Type');
 
   const PackSort(this.label);
   final String label;
@@ -160,8 +161,13 @@ List<PackRow> applyQuery(
       list.sort((a, b) => b.totalBytes.compareTo(a.totalBytes));
     case PackSort.files:
       list.sort((a, b) => b.fileCount.compareTo(a.fileCount));
-    case PackSort.tags:
-      final keys = {for (final p in list) p.id: tagSortKey(p.tags)};
+    case PackSort.tags || PackSort.type:
+      final keys = {
+        for (final p in list)
+          p.id: q.sort == PackSort.tags
+              ? tagSortKey(p.tags)
+              : typeSortKey(p.types),
+      };
       list.sort((a, b) {
         final ka = keys[a.id], kb = keys[b.id];
         if (ka == null || kb == null) {
@@ -184,6 +190,15 @@ List<String> sortedTags(List<String> tags) =>
 /// (lowercase), or null for an untagged pack, which goes last.
 String? tagSortKey(List<String> tags) =>
     tags.isEmpty ? null : sortedTags(tags).join(', ').toLowerCase();
+
+/// [types] sorted by their label (the type id, as the chips show it).
+List<String> sortedTypes(List<String> types) =>
+    [...types]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+/// What the Type sort orders by: the sorted types joined with `, `, or null
+/// for a pack without types, which goes last.
+String? typeSortKey(List<String> types) =>
+    types.isEmpty ? null : sortedTypes(types).join(', ').toLowerCase();
 
 /// One dashboard tile: a pack, or in the Expanded view one of its
 /// first-level folders.

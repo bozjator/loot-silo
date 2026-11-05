@@ -194,6 +194,82 @@ void main() {
     });
   });
 
+  group('type sort', () {
+    final typed = [
+      pack('p/one', title: 'Zeta', types: ['vfx', 'character']),
+      pack('p/two', title: 'Alpha', types: ['character', 'vfx']),
+      pack('p/three', title: 'Beta', types: const []),
+      pack('p/four', title: 'Gamma', types: ['ui']),
+      pack('p/five', title: 'Aardvark', types: ['sfx']),
+      pack('p/six', title: 'Delta', types: const []),
+    ];
+    List<String> sorted(
+      List<PackRow> l, [
+      DashboardQuery q = const DashboardQuery(sort: PackSort.type),
+    ]) => [for (final x in applyQuery(l, q, null)) x.title];
+
+    test('orders by sorted types, ties by title, untyped last', () {
+      expect(sorted(typed), [
+        'Alpha',
+        'Zeta',
+        'Aardvark',
+        'Gamma',
+        'Beta',
+        'Delta',
+      ]);
+    });
+
+    test('is stable whatever the input order', () {
+      expect(sorted(typed.reversed.toList()), sorted(typed));
+      expect(sorted([...typed]..shuffle()), sorted(typed));
+    });
+
+    test('works with the type filter', () {
+      expect(
+        sorted(
+          typed,
+          const DashboardQuery(sort: PackSort.type, types: {'vfx', 'sfx'}),
+        ),
+        ['Alpha', 'Zeta', 'Aardvark'],
+      );
+    });
+
+    test('folder tiles keep their pack\'s place in the Expanded view', () {
+      final subs = {
+        'p/one': [
+          for (final f in ['Hero', 'Slime'])
+            SubFolderRow(
+              packId: 'p/one',
+              folder: f,
+              preview: null,
+              fileCount: 1,
+              totalBytes: 1,
+            ),
+        ],
+      };
+      final tiles = expandPacks(
+        applyQuery(typed, const DashboardQuery(sort: PackSort.type), null),
+        subs,
+      );
+      expect(
+        [for (final t in tiles.take(3)) t.key],
+        ['p/two', 'p/one/Hero', 'p/one/Slime'],
+      );
+      expect(tiles[1].pack.types, ['vfx', 'character']);
+    });
+
+    test('keys are the alphabetically sorted types', () {
+      expect(sortedTypes(['vfx', 'Character', 'sfx']), [
+        'Character',
+        'sfx',
+        'vfx',
+      ]);
+      expect(typeSortKey(['vfx', 'character']), 'character, vfx');
+      expect(typeSortKey(const []), isNull);
+      expect(PackSort.type.label, 'Type');
+    });
+  });
+
   group('expanded view', () {
     SubFolderRow sub(String packId, String folder) => SubFolderRow(
       packId: packId,

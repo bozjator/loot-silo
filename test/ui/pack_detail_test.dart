@@ -288,6 +288,39 @@ void main() {
     expect(shown, sortedTags(shown));
   });
 
+  testWidgets('Type sort orders tiles; chips show sorted types', (
+    tester,
+  ) async {
+    await openKnight(
+      tester,
+      open: false,
+      files: const [],
+      types: ['vfx', 'character', 'environment'],
+    );
+    await tester.tap(find.byType(DropdownButton<PackSort>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Type').last);
+    await tester.pumpAndSettle();
+    final knight = find.ancestor(
+      of: find.text('Knight Pack'),
+      matching: find.byType(PackTile),
+    );
+    final chips = [
+      for (final t in ['character', 'environment', 'vfx'])
+        tester
+            .getTopLeft(find.descendant(of: knight, matching: find.text(t)))
+            .dx,
+    ];
+    expect(chips, orderedEquals([...chips]..sort()));
+    // Tiles follow the type keys.
+    final titles = [
+      for (final e in find.byType(PackTile).evaluate())
+        (e.widget as PackTile).pack,
+    ];
+    final keys = [for (final p in titles) typeSortKey(p.types) ?? '\uffff'];
+    expect(keys, orderedEquals([...keys]..sort()));
+  });
+
   testWidgets('Frames field re-slices a strip; numbered props are images', (
     tester,
   ) async {

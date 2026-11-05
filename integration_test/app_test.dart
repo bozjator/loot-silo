@@ -13,6 +13,7 @@ import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:assets_explorer/ui/track_player.dart';
+import 'package:assets_explorer/ui/widgets/pack_tile.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
 import 'package:assets_explorer/ui/reveal.dart';
 import 'package:assets_explorer/ui/text_preview_dialog.dart';
@@ -1269,6 +1270,27 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.byTooltip('Stop'));
     await tester.pump();
     expect(find.byKey(const ValueKey('seek')), findsNothing);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m21: sort by type (real library, read-only)', (tester) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, find.text('71 packs'));
+    await tester.tap(find.byType(DropdownButton<PackSort>));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Type').last);
+    await tester.pump(const Duration(milliseconds: 500));
+    final keys = [
+      for (final e in find.byType(PackTile).evaluate())
+        typeSortKey((e.widget as PackTile).pack.types) ?? '\uffff',
+    ];
+    expect(keys, isNotEmpty);
+    expect(keys, orderedEquals([...keys]..sort()));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm21_type_sort', settle: false);
     expect(Directory(real).statSync().modified, before);
   });
 

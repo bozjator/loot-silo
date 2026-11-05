@@ -133,7 +133,9 @@ class _PackTileState extends State<PackTile> {
                     spacing: 4,
                     runSpacing: 4,
                     children: [
-                      for (final t in pack.types.take(3)) _TypeChip(t),
+                      // Sorted, matching the Type sort's order.
+                      for (final t in sortedTypes(pack.types).take(3))
+                        _TypeChip(t),
                       if (pack.types.length > 3)
                         _TypeChip('+${pack.types.length - 3}'),
                     ],
