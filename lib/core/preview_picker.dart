@@ -1,6 +1,7 @@
 import 'package:path/path.dart' as p;
 
 import 'fs_tree.dart';
+import 'natural_order.dart';
 import 'sidecar.dart';
 
 /// Formats Flutter can decode for a tile preview.
@@ -122,4 +123,34 @@ PreviewPick? pickPreviewRanked(
     ..sort(largestFirst);
   if (shallow.isNotEmpty) return (path: shallow.first.$1, rank: 6);
   return (path: (images..sort(largestFirst)).first.$1, rank: 6);
+}
+
+/// The images that can stand for a pack, best first: itch files, then
+/// files named, or inside folders named, preview / mockup / cover / … (the
+/// same words and ranking as [pickPreview], so `mockups/mockup2.png`
+/// counts), then `all*` sheets. Promo images are left out. Ties go to
+/// shallower paths, then natural order.
+List<String> previewCandidates(Iterable<String> images) {
+  bool candidate(String rel) {
+    final stem = p.basenameWithoutExtension(rel);
+    if (_promo.hasMatch(stem)) return false;
+    final dirs = p.dirname(rel);
+    return rel.startsWith('_itch/') ||
+        _previewWord.hasMatch(stem) ||
+        _allStem.hasMatch(stem) ||
+        (dirs != '.' && _previewWord.hasMatch(dirs));
+  }
+
+  int depth(String rel) => '/'.allMatches(rel).length;
+  final out = images.where(candidate).toList()
+    ..sort((a, b) {
+      final ia = a.startsWith('_itch/') ? 0 : 1;
+      final ib = b.startsWith('_itch/') ? 0 : 1;
+      if (ia != ib) return ia.compareTo(ib);
+      final r = _rank(a).compareTo(_rank(b));
+      if (r != 0) return r;
+      final d = depth(a).compareTo(depth(b));
+      return d != 0 ? d : naturalCompare(a, b);
+    });
+  return out;
 }

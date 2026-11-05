@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -405,27 +406,113 @@ class _Header extends StatelessWidget {
         constraints: BoxConstraints(
           maxHeight: math.max(300, MediaQuery.sizeOf(context).height * 0.5),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 400,
-              height: 300,
-              child: _Carousel(
-                pack: pack,
-                images: contents.carousel(pack.preview),
-                sizes: contents.sizes,
-              ),
-            ),
-            const SizedBox(width: 24),
-            Expanded(
-              child: _Info(pack: pack, contents: contents),
-            ),
-          ],
+        // The preview box is as tall as the info column (at least
+        // [previewBoxMinHeightFor] the window), so neither sticks out
+        // below the other.
+        child: _HeaderRow(
+          minBoxHeight: previewBoxMinHeightFor(MediaQuery.sizeOf(context)),
+          box: _Carousel(
+            key: const ValueKey('header-preview'),
+            pack: pack,
+            images: contents.carousel(pack.preview),
+            sizes: contents.sizes,
+          ),
+          info: KeyedSubtree(
+            key: const ValueKey('header-info'),
+            child: _Info(pack: pack, contents: contents),
+          ),
         ),
       ),
     );
   }
+}
+
+/// Header preview box: width, and height when the info column is shorter.
+const previewBoxWidth = 440.0;
+const previewBoxMinHeight = 320.0;
+
+/// The box's least height in a window of [window]: [previewBoxMinHeight],
+/// down to 240 in short windows (40% of the height) so the grid's first
+/// row stays in view.
+double previewBoxMinHeightFor(Size window) =>
+    (window.height * 0.4).clamp(240.0, previewBoxMinHeight);
+
+/// [box] (the preview, [previewBoxWidth] wide) beside [info]: the info is
+/// laid out first and the box takes its height, at least [minBoxHeight],
+/// never more than the space given.
+class _HeaderRow extends MultiChildRenderObjectWidget {
+  _HeaderRow({
+    required this.minBoxHeight,
+    required Widget box,
+    required Widget info,
+  }) : super(children: [box, info]);
+
+  final double minBoxHeight;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderHeaderRow()..minBoxHeight = minBoxHeight;
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderHeaderRow render) =>
+      render.minBoxHeight = minBoxHeight;
+}
+
+class _HeaderRowParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderHeaderRow extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _HeaderRowParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _HeaderRowParentData> {
+  static const _gap = 24.0;
+
+  double get minBoxHeight => _minBoxHeight;
+  var _minBoxHeight = previewBoxMinHeight;
+  set minBoxHeight(double v) {
+    if (v == _minBoxHeight) return;
+    _minBoxHeight = v;
+    markNeedsLayout();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _HeaderRowParentData) {
+      child.parentData = _HeaderRowParentData();
+    }
+  }
+
+  @override
+  void performLayout() {
+    final box = firstChild!;
+    final info = childAfter(box)!;
+    final width = constraints.maxWidth;
+    final infoWidth = math.max(0.0, width - previewBoxWidth - _gap);
+    info.layout(
+      BoxConstraints(
+        minWidth: infoWidth,
+        maxWidth: infoWidth,
+        maxHeight: constraints.maxHeight,
+      ),
+      parentUsesSize: true,
+    );
+    final height = constraints.constrainHeight(
+      math.max(info.size.height, _minBoxHeight),
+    );
+    box.layout(BoxConstraints.tightFor(width: previewBoxWidth, height: height));
+    (info.parentData! as _HeaderRowParentData).offset = const Offset(
+      previewBoxWidth + _gap,
+      0,
+    );
+    size = constraints.constrain(Size(width, height));
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) =>
+      defaultPaint(context, offset);
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
+      defaultHitTestChildren(result, position: position);
 }
 
 /// The unpinned header: one line of facts; hover shows the full header.
@@ -475,6 +562,7 @@ class _SlimHeader extends StatelessWidget {
 /// previews, one at a time.
 class _Carousel extends StatefulWidget {
   const _Carousel({
+    super.key,
     required this.pack,
     required this.images,
     this.sizes = const {},
@@ -490,6 +578,7 @@ class _Carousel extends StatefulWidget {
 
 class _CarouselState extends State<_Carousel> {
   var _index = 0;
+  var _hover = false;
 
   @override
   Widget build(BuildContext context) {
@@ -507,79 +596,203 @@ class _CarouselState extends State<_Carousel> {
     } else {
       view = PixelImage(File(p.join(pack.path, images[i])), animate: true);
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: ColoredBox(
-        color: scheme.surfaceContainerHighest,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (images.isEmpty)
-              Padding(padding: const EdgeInsets.all(8), child: view)
-            else
-              // Click to enlarge, on the same list at the same image.
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: () => showImageViewer(
-                    context,
-                    packPath: pack.path,
-                    images: images,
-                    index: i,
-                    sizes: widget.sizes,
-                  ),
-                  child: Tooltip(
-                    message: 'Enlarge',
-                    waitDuration: const Duration(milliseconds: 600),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: view,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: ColoredBox(
+          color: scheme.surfaceContainerHighest,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (images.isEmpty)
+                Padding(padding: const EdgeInsets.all(8), child: view)
+              else
+                // Click to enlarge, on the same list at the same image.
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => showImageViewer(
+                      context,
+                      packPath: pack.path,
+                      images: images,
+                      index: i,
+                      sizes: widget.sizes,
+                    ),
+                    child: Tooltip(
+                      message: 'Enlarge',
+                      waitDuration: const Duration(milliseconds: 600),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: view,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            if (images.length > 1) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton.filledTonal(
-                  tooltip: 'Previous image',
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: () => setState(
-                    () => _index = (i - 1 + images.length) % images.length,
-                  ),
-                ),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton.filledTonal(
-                  tooltip: 'Next image',
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () =>
-                      setState(() => _index = (i + 1) % images.length),
-                ),
-              ),
-              Positioned(
-                bottom: 8,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: scheme.surface.withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '${i + 1} / ${images.length} · ${p.basename(images[i])}',
-                      style: Theme.of(context).textTheme.labelSmall,
+              if (images.length > 1) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton.filledTonal(
+                    tooltip: 'Previous image',
+                    icon: const Icon(Icons.chevron_left),
+                    onPressed: () => setState(
+                      () => _index = (i - 1 + images.length) % images.length,
                     ),
                   ),
                 ),
-              ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton.filledTonal(
+                    tooltip: 'Next image',
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed: () =>
+                        setState(() => _index = (i + 1) % images.length),
+                  ),
+                ),
+                Positioned(
+                  bottom: 8,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.surface.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${i + 1} / ${images.length} · ${p.basename(images[i])}',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ),
+                  ),
+                ),
+                if (_hover)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: IconButton.filledTonal(
+                      tooltip: 'All previews (${images.length})',
+                      mouseCursor: clickCursor,
+                      icon: const Icon(Icons.grid_view),
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (_) => PreviewGridDialog(
+                          packPath: pack.path,
+                          images: images,
+                          sizes: widget.sizes,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Every preview candidate of a pack in a grid; a click opens it in the
+/// viewer, stepping through the grid.
+class PreviewGridDialog extends StatelessWidget {
+  const PreviewGridDialog({
+    super.key,
+    required this.packPath,
+    required this.images,
+    this.sizes = const {},
+  });
+
+  final String packPath;
+  final List<String> images;
+  final Map<String, int> sizes;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1000, maxHeight: 720),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Previews (${images.length})',
+                      style: theme.textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: GridView.builder(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                gridDelegate: ThumbGridDelegate(
+                  maxTileWidth: 220,
+                  imageAspect: 4 / 3,
+                  footer: (_) => 26,
+                  spacing: 8,
+                ),
+                itemCount: images.length,
+                itemBuilder: (context, i) => Card(
+                  clipBehavior: Clip.antiAlias,
+                  margin: EdgeInsets.zero,
+                  child: InkWell(
+                    mouseCursor: clickCursor,
+                    onTap: () => showImageViewer(
+                      context,
+                      packPath: packPath,
+                      images: images,
+                      index: i,
+                      sizes: sizes,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: PixelImage(
+                              File(p.join(packPath, images[i])),
+                              animate: true,
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                          child: Tooltip(
+                            message: images[i],
+                            child: Text(
+                              p.basename(images[i]),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),

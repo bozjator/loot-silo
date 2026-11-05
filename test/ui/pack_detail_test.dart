@@ -9,6 +9,7 @@ import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
+import 'package:assets_explorer/ui/pack_detail_screen.dart';
 import 'package:assets_explorer/ui/settings_screen.dart';
 import 'package:assets_explorer/ui/track_player.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
@@ -1329,4 +1330,103 @@ void main() {
       expect(find.textContaining('selected'), findsNothing);
     });
   });
+
+  group('Header preview (M29)', () {
+    img.Image solid(int w, int h, int shade) {
+      final i = img.Image(width: w, height: h, numChannels: 4);
+      img.fill(i, color: img.ColorRgba8(shade, 120, 60, 255));
+      return i;
+    }
+
+    Map<String, img.Image> mockups(int n) => {
+      for (var i = 1; i <= n; i++)
+        'mockups/mockup$i.png': solid(40, 30, i * 20),
+    };
+
+    testWidgets('the preview box is as tall as the info column', (
+      tester,
+    ) async {
+      await openKnight(tester, files: const []);
+      final box = tester.getSize(find.byKey(const ValueKey('header-preview')));
+      final info = tester.getSize(find.byKey(const ValueKey('header-info')));
+      expect(box.width, previewBoxWidthForTest);
+      expect(box.height, info.height);
+      // At least the minimum, unless the window leaves less room.
+      expect(box.height, greaterThanOrEqualTo(300));
+      expect(tester.takeException(), isNull);
+    });
+
+    test('the box minimum shrinks in short windows', () {
+      expect(previewBoxMinHeightFor(const Size(1440, 900)), 320);
+      expect(previewBoxMinHeightFor(const Size(1280, 720)), 288);
+      expect(previewBoxMinHeightFor(const Size(800, 400)), 240);
+    });
+
+    testWidgets('the viewer from the header steps through the mockups', (
+      tester,
+    ) async {
+      await openKnight(tester, files: const [], images: mockups(10));
+      await tester.tap(find.byKey(const ValueKey('header-preview')));
+      await tester.pumpAndSettle();
+      // The mockups are the pack's preview now: mockup1 first, then the
+      // rest in natural order (mockup10 last, not after mockup1).
+      expect(find.text('1 / 10'), findsOneWidget);
+      expect(find.textContaining('mockups/mockup1.png'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(find.textContaining('mockups/mockup2.png'), findsOneWidget);
+      for (var i = 0; i < 8; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+      }
+      expect(find.text('10 / 10'), findsOneWidget);
+      expect(find.textContaining('mockups/mockup10.png'), findsOneWidget);
+    });
+
+    testWidgets('the previews grid opens one in the viewer', (tester) async {
+      await openKnight(tester, files: const [], images: mockups(3));
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(
+        location: tester.getCenter(
+          find.byKey(const ValueKey('header-preview')),
+        ),
+      );
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      await tester.tap(find.byTooltip('All previews (3)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Previews (3)'), findsOneWidget);
+      final grid = find.byType(PreviewGridDialog);
+      expect(
+        find.descendant(of: grid, matching: find.text('mockup3.png')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.descendant(of: grid, matching: find.text('mockup2.png')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('2 / 3'), findsOneWidget);
+      expect(find.textContaining('mockups/mockup2.png'), findsOneWidget);
+    });
+
+    testWidgets('one candidate: no grid button', (tester) async {
+      await openKnight(tester, files: const []);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(
+        location: tester.getCenter(
+          find.byKey(const ValueKey('header-preview')),
+        ),
+      );
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is Tooltip && (w.message ?? '').startsWith('All previews'),
+        ),
+        findsNothing,
+      );
+    });
+  });
 }
+
+const previewBoxWidthForTest = 440.0;

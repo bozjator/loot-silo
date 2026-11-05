@@ -5,6 +5,7 @@ import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:assets_explorer/ui/reveal.dart';
 import 'package:assets_explorer/ui/widgets/pixel_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -157,6 +158,70 @@ void main() {
       // to stretch the image to the whole area.
       return tester.getSize(find.byType(RawImage));
     }
+
+    double zoomShown(WidgetTester tester) => double.parse(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('zoom-label')))
+          .data!
+          .replaceAll('×', ''),
+    );
+
+    testWidgets('zoom: label, 1:1 actual pixels, wheel below fit, Fit', (
+      tester,
+    ) async {
+      png('hero.png', 32, 32);
+      await open(tester, ['hero.png']);
+      await drawn(tester);
+      await tester.pump();
+      // A 32 px sprite fills the viewer in whole steps.
+      final fit = zoomShown(tester);
+      expect(fit, greaterThan(10));
+      expect(fit, fit.roundToDouble());
+      expect(tester.getRect(find.byType(RawImage)).width, closeTo(32 * fit, 1));
+
+      await tester.tap(find.text('1:1'));
+      await tester.pump();
+      expect(find.text('1×'), findsOneWidget);
+      expect(tester.getRect(find.byType(RawImage)).width, closeTo(32, 0.5));
+
+      // The wheel zooms out below 1×, down to the floor.
+      final center = tester.getCenter(find.byType(InteractiveViewer));
+      for (var i = 0; i < 30; i++) {
+        await tester.sendEventToBinding(
+          PointerScrollEvent(
+            position: center,
+            scrollDelta: const Offset(0, 200),
+            kind: PointerDeviceKind.mouse,
+          ),
+        );
+        await tester.pump();
+      }
+      expect(zoomShown(tester), closeTo(minViewerZoom, 0.01));
+      // And back in, past the fit.
+      for (var i = 0; i < 60; i++) {
+        await tester.sendEventToBinding(
+          PointerScrollEvent(
+            position: center,
+            scrollDelta: const Offset(0, -200),
+            kind: PointerDeviceKind.mouse,
+          ),
+        );
+        await tester.pump();
+      }
+      expect(zoomShown(tester), greaterThan(fit));
+
+      await tester.tap(find.text('Fit'));
+      await tester.pump();
+      expect(zoomShown(tester), fit);
+    });
+
+    test('zoom labels', () {
+      expect(zoomLabel(4), '4×');
+      expect(zoomLabel(0.5), '0.5×');
+      expect(zoomLabel(0.25), '0.25×');
+      expect(zoomLabel(2.37), '2.4×');
+      expect(zoomLabel(23.04), '23×');
+    });
 
     testWidgets('title is prettified; details show path, size and bytes', (
       tester,

@@ -12,6 +12,7 @@ import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
+import 'package:assets_explorer/ui/pack_detail_screen.dart';
 import 'package:assets_explorer/ui/track_player.dart';
 import 'package:assets_explorer/ui/widgets/pack_tile.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
@@ -1631,6 +1632,63 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(find.text('Combine 2 images into animation'), findsOneWidget);
     await settleImages(tester);
     await captureScreenshot(tester, 'm28_selection_bar', settle: false);
+  });
+
+  testWidgets('m29: header previews and viewer zoom (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    const title = 'Epic RPG World - Village(interiors) V1.3';
+    if (!Directory(p.join(real, 'RafaelMatos', title)).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'Village(interiors)');
+    final tile = find.descendant(
+      of: find.byType(PackTile),
+      matching: find.text(title),
+    );
+    await pumpUntil(tester, tile);
+    await tester.tap(tile.first);
+    final box = find.byKey(const ValueKey('header-preview'));
+    await pumpUntil(tester, box);
+    await settleImages(tester);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(box));
+    addTearDown(mouse.removePointer);
+    await tester.pump();
+    await captureScreenshot(tester, 'm29_header', settle: false);
+
+    // All previews: the 8 mockups (plus the preview, if it is another).
+    final grid = find.byWidgetPredicate(
+      (w) => w is Tooltip && (w.message ?? '').startsWith('All previews'),
+    );
+    expect(grid, findsOneWidget);
+    await tester.tap(grid);
+    await pumpUntil(tester, find.byType(PreviewGridDialog));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm29_previews_grid', settle: false);
+    final mockup = find.descendant(
+      of: find.byType(PreviewGridDialog),
+      matching: find.text('mockup2.png'),
+    );
+    await tester.tap(mockup);
+    await pumpUntil(tester, find.byType(ImageViewer));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm29_viewer_fit', settle: false);
+    await tester.tap(find.text('1:1'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('1×'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm29_viewer_1to1', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump(const Duration(milliseconds: 300));
+    // mockup2.png is this pack's preview, so it comes first.
+    expect(find.textContaining('mockups/mockup1'), findsOneWidget);
+    expect(Directory(real).statSync().modified, before);
   });
 
   testWidgets('m21: sort by type (real library, read-only)', (tester) async {

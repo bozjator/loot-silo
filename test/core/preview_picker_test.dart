@@ -76,4 +76,27 @@ void main() {
       isNull,
     );
   });
+
+  test('preview candidates: numbered mockups count, ranked and in order', () {
+    final c = previewCandidates([
+      'mockups/mockup10.png',
+      'mockups/mockup2.png',
+      'mockups/mockup1.gif',
+      'tiles/grass.png',
+      'preview.png',
+      '_itch/screenshot1.png',
+      'promo/coupon_preview.png',
+      'All_sheet.png',
+      'samples/forest.png',
+    ]);
+    expect(c, [
+      '_itch/screenshot1.png',
+      'preview.png',
+      'mockups/mockup1.gif',
+      'mockups/mockup2.png',
+      'mockups/mockup10.png',
+      'All_sheet.png',
+      'samples/forest.png',
+    ]);
+  });
 }
