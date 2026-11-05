@@ -63,9 +63,12 @@ void main() {
         imagesView: ItemsView.folders,
         animationsView: ItemsView.folders,
         detailAnimateMode: AnimateMode.all,
+        audioView: AudioView.cards,
       ),
     );
     final back = store.load();
+    expect(back.audioView, AudioView.cards);
+    expect(f.readAsStringSync(), contains('"audio_view": "cards"'));
     expect(back.detailAnimateMode, AnimateMode.all);
     expect(f.readAsStringSync(), contains('"detail_animate_mode": "all"'));
     expect(back.audioLoop, isTrue);
@@ -83,6 +86,7 @@ void main() {
     expect(store.load().viewerPixelPerfect, isFalse);
     expect(store.load().detailHeaderPinned, isTrue);
     expect(store.load().imagesView, ItemsView.flat);
+    expect(store.load().audioView, AudioView.rows);
     // Hover is the default; unknown values fall back to it.
     expect(store.load().detailAnimateMode, AnimateMode.hover);
     f.writeAsStringSync('{"detail_animate_mode": "bogus"}');

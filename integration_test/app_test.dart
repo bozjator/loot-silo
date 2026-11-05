@@ -1351,6 +1351,42 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m25: audio cards on a real SFX pack, loop restart (real)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    final fake = _FakeTrackPlayer();
+    fakePlayer = () => fake;
+    addTearDown(() => fakePlayer = null);
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField), '16-BIT Achievements');
+    await pumpUntil(tester, find.text('16-BIT Achievements SFX Pack 1'));
+    await tester.tap(find.text('16-BIT Achievements SFX Pack 1'));
+    await pumpUntil(tester, find.widgetWithText(FilterChip, 'Loop'));
+    await tester.tap(find.text('Cards'));
+    await pumpUntil(tester, find.textContaining(RegExp(r'^\d+:\d\d$')));
+    await tester.pump(const Duration(milliseconds: 500));
+    await captureScreenshot(tester, 'm25_audio_cards', settle: false);
+
+    // A short sound: progress ring, only its length.
+    await tester.tap(find.byTooltip('Play').first);
+    await tester.pump();
+    fake.position.add(const Duration(milliseconds: 600));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('progress')), findsOneWidget);
+    expect(find.byKey(const ValueKey('elapsed')), findsNothing);
+    await captureScreenshot(tester, 'm25_card_playing', settle: false);
+    await tester.tap(find.byTooltip('Stop'));
+    await tester.pump();
+    await tester.tap(find.text('Rows'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m21: sort by type (real library, read-only)', (tester) async {
     final real = p.canonicalize('../assets_library');
     if (!Directory(real).existsSync()) return;

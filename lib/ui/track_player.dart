@@ -20,8 +20,29 @@ abstract interface class TrackPlayer {
 }
 
 /// [TrackPlayer] on top of audioplayers.
+///
+/// Looping fix: audioplayers handles every completion event by marking the
+/// player completed and stopping its position updater. The Linux plugin
+/// sends one per loop pass while the sound keeps playing, so after the
+/// first pass no position events came and the seek bar froze at the start.
+/// This player owns the updater and starts it again (and marks the player
+/// playing) after a pass ends while looping.
 class AudioplayersTrackPlayer implements TrackPlayer {
+  AudioplayersTrackPlayer() {
+    _player.positionUpdater = _updater;
+    // Subscribed after the player's own handler, so this runs after it.
+    _loopPass = _player.onPlayerComplete.listen((_) {
+      if (!looping) return;
+      _player.state = PlayerState.playing;
+      _updater.start();
+    });
+  }
+
   final _player = AudioPlayer();
+  late final _updater = FramePositionUpdater(
+    getPosition: _player.getCurrentPosition,
+  );
+  late final StreamSubscription<void> _loopPass;
 
   @override
   Future<void> play(String path) => _player.play(DeviceFileSource(path));
@@ -41,7 +62,10 @@ class AudioplayersTrackPlayer implements TrackPlayer {
   @override
   Stream<void> get onComplete => _player.onPlayerComplete;
   @override
-  Future<void> dispose() => _player.dispose();
+  Future<void> dispose() async {
+    await _loopPass.cancel();
+    await _player.dispose();
+  }
 }
 
 /// Makes the Audio tab's player, on first play.

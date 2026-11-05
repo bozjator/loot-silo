@@ -481,7 +481,7 @@ void main() {
       expect(tabIndex(tester), 0);
     });
 
-    testWidgets('seek bar: long tracks seek, short ones show elapsed time', (
+    testWidgets('seek bar: long tracks seek, short ones show only length', (
       tester,
     ) async {
       final fake = _FakePlayer();
@@ -558,6 +558,26 @@ void main() {
         tester.widget<Text>(find.byKey(const ValueKey('elapsed'))).data,
         '0:00',
       );
+      // Position events after the restart keep moving the bar.
+      fake.position.add(const Duration(seconds: 5));
+      // Stream events land after the first frame; the second shows them.
+      await tester.pump();
+      await tester.pump();
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('elapsed'))).data,
+        '0:05',
+      );
+      final slider = tester.widget<Slider>(seek);
+      expect(slider.value, 5000);
+      // And on the next pass too.
+      fake.complete.add(null);
+      fake.position.add(const Duration(seconds: 1));
+      await tester.pump();
+      await tester.pump();
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('elapsed'))).data,
+        '0:01',
+      );
       fake.looping = false;
 
       // Another file stops this one; short sounds get no slider.
@@ -567,12 +587,11 @@ void main() {
       expect(fake.stops, greaterThan(stopsBefore));
       expect(p.basename(fake.played.last), 'short.wav');
       expect(seek, findsNothing);
+      // Short sounds: only their length, no elapsed counter.
       fake.position.add(const Duration(seconds: 2));
       await tester.pump();
-      expect(
-        tester.widget<Text>(find.byKey(const ValueKey('elapsed'))).data,
-        '0:02',
-      );
+      expect(find.byKey(const ValueKey('elapsed')), findsNothing);
+      expect(find.text('0:03'), findsOneWidget);
       fake.complete.add(null);
       // The event lands after the first frame; the second shows it.
       await tester.pump();
@@ -586,6 +605,87 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       await tester.pump();
       expect(find.byTooltip('Stop'), findsNothing);
+    });
+  });
+
+  group('Audio cards', () {
+    final lengths = {
+      'music/long_theme.ogg': const Duration(minutes: 1, seconds: 40),
+      'sfx/coin_pickup.wav': const Duration(seconds: 2),
+    };
+
+    Future<_FakePlayer> openCards(WidgetTester tester) async {
+      final fake = _FakePlayer();
+      await openKnight(
+        tester,
+        files: lengths.keys.toList(),
+        types: ['music', 'sfx'],
+        overrides: [
+          trackPlayerFactoryProvider.overrideWithValue(() => fake),
+          audioDurationProvider.overrideWithValue(
+            (path) async => lengths.entries
+                .where((e) => path.endsWith(e.key))
+                .firstOrNull
+                ?.value,
+          ),
+        ],
+      );
+      await tester.tap(find.text('Cards'));
+      await tester.pump();
+      // The lengths are futures; the next frame shows them.
+      await tester.pump();
+      return fake;
+    }
+
+    testWidgets('the view is saved; cards show name, length and folder', (
+      tester,
+    ) async {
+      await openCards(tester);
+      expect(store.load().audioView, AudioView.cards);
+      expect(find.text('Long theme'), findsOneWidget);
+      expect(find.text('Coin pickup'), findsOneWidget);
+      expect(find.text('1:40'), findsOneWidget);
+      expect(find.text(' · sfx'), findsOneWidget);
+      await tester.tap(find.text('Rows'));
+      await tester.pump();
+      expect(store.load().audioView, AudioView.rows);
+      expect(find.text('coin_pickup.wav'), findsOneWidget);
+    });
+
+    testWidgets('playing: progress ring, seek bar for long, keys work', (
+      tester,
+    ) async {
+      final fake = await openCards(tester);
+      await tester.tap(find.text('Long theme'));
+      await tester.pump();
+      expect(p.basename(fake.played.single), 'long_theme.ogg');
+      fake.position.add(const Duration(seconds: 50));
+      await tester.pump();
+      final ring = tester.widget<CircularProgressIndicator>(
+        find.byKey(const ValueKey('progress')),
+      );
+      expect(ring.value, closeTo(0.5, 0.01));
+      expect(find.byKey(const ValueKey('seek')), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('elapsed'))).data,
+        '0:50',
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(fake.seeks.last, const Duration(seconds: 55));
+
+      // A short sound: ring, no seek bar or counter.
+      await tester.tap(find.text('Coin pickup'));
+      await tester.pump();
+      fake.position.add(const Duration(seconds: 1));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('progress')), findsOneWidget);
+      expect(find.byKey(const ValueKey('seek')), findsNothing);
+      expect(find.byKey(const ValueKey('elapsed')), findsNothing);
+      // Space stops it.
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('progress')), findsNothing);
     });
   });
 

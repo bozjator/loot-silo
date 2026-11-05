@@ -12,6 +12,9 @@ enum ItemsView { flat, folders }
 /// matching the search.
 enum DashboardView { packs, expanded, files }
 
+/// A pack's Audio tab as a list of rows or a grid of cards.
+enum AudioView { rows, cards }
+
 /// Which cards in a pack's Animations tab play: all of them, or only the
 /// one under the mouse.
 enum AnimateMode { all, hover }
@@ -32,6 +35,7 @@ class AppSettings {
     this.animationsView = ItemsView.flat,
     this.dashboardView = DashboardView.packs,
     this.detailAnimateMode = AnimateMode.hover,
+    this.audioView = AudioView.rows,
   });
 
   /// The managed library folder; null until the user picks one.
@@ -69,6 +73,8 @@ class AppSettings {
   /// the earlier always-playing cards).
   final AnimateMode detailAnimateMode;
 
+  final AudioView audioView;
+
   factory AppSettings.fromJson(Map<String, Object?> json) => AppSettings(
     libraryPath: json['library_path'] as String?,
     theme: ThemeChoice.values.asNameMap()[json['theme']] ?? ThemeChoice.system,
@@ -90,6 +96,8 @@ class AppSettings {
     detailAnimateMode:
         AnimateMode.values.asNameMap()[json['detail_animate_mode']] ??
         AnimateMode.hover,
+    audioView:
+        AudioView.values.asNameMap()[json['audio_view']] ?? AudioView.rows,
   );
 
   Map<String, Object?> toJson() => {
@@ -106,6 +114,7 @@ class AppSettings {
     'animations_view': animationsView.name,
     'dashboard_view': dashboardView.name,
     'detail_animate_mode': detailAnimateMode.name,
+    'audio_view': audioView.name,
   };
 
   AppSettings copyWith({
@@ -122,6 +131,7 @@ class AppSettings {
     ItemsView? animationsView,
     DashboardView? dashboardView,
     AnimateMode? detailAnimateMode,
+    AudioView? audioView,
   }) => AppSettings(
     libraryPath: libraryPath ?? this.libraryPath,
     theme: theme ?? this.theme,
@@ -136,6 +146,7 @@ class AppSettings {
     animationsView: animationsView ?? this.animationsView,
     dashboardView: dashboardView ?? this.dashboardView,
     detailAnimateMode: detailAnimateMode ?? this.detailAnimateMode,
+    audioView: audioView ?? this.audioView,
   );
 }
 
