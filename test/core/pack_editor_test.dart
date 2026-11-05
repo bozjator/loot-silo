@@ -263,4 +263,132 @@ void main() {
     saveAnimationOverride(tmp.path, detected, detected.copyWith(zoom: null));
     expect(sidecarJson().containsKey('animations'), isFalse);
   });
+
+  group('make animations from images (M28)', () {
+    /// A [w]×[h] image filled with a colour derived from [shade].
+    void solid(String rel, int w, int h, int shade) {
+      final i = img.Image(width: w, height: h, numChannels: 4);
+      img.fill(i, color: img.ColorRgba8(shade, 255 - shade, 40, 255));
+      File(p.join(tmp.path, rel))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(img.encodePng(i));
+    }
+
+    img.Image read(String rel) =>
+        img.decodePng(File(p.join(tmp.path, rel)).readAsBytesSync())!;
+
+    test('natural order: frame2 before frame10', () {
+      final names = ['f10.png', 'f2.png', 'f1.png', 'F3.png'];
+      expect(names..sort(naturalCompare), [
+        'f1.png',
+        'f2.png',
+        'F3.png',
+        'f10.png',
+      ]);
+    });
+
+    test('the strip keeps natural order and its output size', () {
+      solid('smoke/f10.png', 8, 8, 100);
+      solid('smoke/f2.png', 8, 8, 50);
+      solid('smoke/f1.png', 8, 8, 10);
+      final r = combineFrames(tmp.path, [
+        'smoke/f10.png',
+        'smoke/f2.png',
+        'smoke/f1.png',
+      ], 'smoke/smoke_animation.png');
+      expect(r, (
+        path: 'smoke/smoke_animation.png',
+        frameW: 8,
+        frameH: 8,
+        frames: 3,
+      ));
+      final strip = read('smoke/smoke_animation.png');
+      expect((strip.width, strip.height), (24, 8));
+      expect(
+        [for (var i = 0; i < 3; i++) strip.getPixel(i * 8 + 4, 4).r],
+        [10, 50, 100],
+      );
+      // The frame files stay.
+      expect(File(p.join(tmp.path, 'smoke/f1.png')).existsSync(), isTrue);
+    });
+
+    test('mixed sizes are centred in the largest frame', () {
+      solid('a/1.png', 4, 4, 10);
+      solid('a/2.png', 8, 6, 200);
+      final r = combineFrames(tmp.path, ['a/1.png', 'a/2.png'], 'a/out.png');
+      expect((r.frameW, r.frameH), (8, 6));
+      final strip = read('a/out.png');
+      expect((strip.width, strip.height), (16, 6));
+      // 4×4 centred in 8×6: x 2..5, y 1..4; the rest transparent.
+      expect(strip.getPixel(0, 0).a, 0);
+      expect(strip.getPixel(2, 1).r, 10);
+      expect(strip.getPixel(5, 4).r, 10);
+      expect(strip.getPixel(6, 1).a, 0);
+      expect(strip.getPixel(8, 0).r, 200);
+    });
+
+    test('the strip is recorded as a manual animation and detected', () {
+      solid('ui/a.png', 8, 6, 10);
+      solid('ui/b.png', 8, 6, 20);
+      combineFrames(tmp.path, ['ui/a.png', 'ui/b.png'], 'ui/ui_animation.png');
+      expect(sidecarJson()['animations'], {
+        'ui/ui_animation.png': {'manual': true, 'frame_w': 8, 'frame_h': 6},
+      });
+      final c = loadPackContents(tmp.path, [
+        ('ui/a.png', 1),
+        ('ui/b.png', 1),
+        ('ui/ui_animation.png', 1),
+      ]);
+      final a = c.animations.singleWhere(
+        (a) => a.path == 'ui/ui_animation.png',
+      );
+      expect((a.frameW, a.frameH, a.frameCount), (8, 6, 2));
+    });
+
+    test('output names: folder, root, numbered when taken', () {
+      expect(
+        combinedName(['fx/Black smoke/b2.png', 'fx/Black smoke/b1.png']),
+        'fx/Black smoke/Black smoke_animation.png',
+      );
+      expect(combinedName(['b.png', 'a.png']), 'animation.png');
+      expect(
+        combinedName(
+          ['x/1.png', 'x/2.png'],
+          taken: {'x/x_animation.png', 'x/x_animation_2.png'},
+          unique: true,
+        ),
+        'x/x_animation_3.png',
+      );
+      // Without unique the caller asks before overwriting.
+      expect(
+        combinedName(['x/1.png'], taken: {'x/x_animation.png'}),
+        'x/x_animation.png',
+      );
+    });
+
+    test('Make animation: a manual mark turns a plain image into a strip', () {
+      solid('ui/panel.png', 64, 16, 10);
+      solid('ui/button.png', 30, 16, 10);
+      List<SpriteAnim> anims() => loadPackContents(tmp.path, [
+        ('ui/panel.png', 1),
+        ('ui/button.png', 1),
+      ]).animations;
+      expect(anims(), isEmpty, reason: 'UI words are not animations');
+      final guess = guessStrip('ui/panel.png', 64, 16);
+      expect((guess.frameW, guess.cols), (16, 4));
+      expect(guessStrip('ui/button.png', 30, 16).cols, 1);
+      saveAnimationOverride(tmp.path, guess, guess, manual: true);
+      expect(sidecarJson()['animations'], {
+        'ui/panel.png': {'manual': true},
+      });
+      expect(anims().single.frameCount, 4);
+      // Later edits keep the mark; reset drops it.
+      saveAnimationOverride(tmp.path, guess, guess.copyWith(fps: 6));
+      expect(sidecarJson()['animations'], {
+        'ui/panel.png': {'manual': true, 'fps': 6.0},
+      });
+      saveAnimationOverride(tmp.path, guess, null);
+      expect(anims(), isEmpty);
+    });
+  });
 }

@@ -121,6 +121,7 @@ class GroupedGrid extends StatelessWidget {
     required this.itemBuilder,
     this.physics,
     this.padding = const EdgeInsets.fromLTRB(16, 4, 16, 16),
+    this.folderAction,
   });
 
   final List<String> rels;
@@ -131,6 +132,10 @@ class GroupedGrid extends StatelessWidget {
   final Widget Function(BuildContext context, int index) itemBuilder;
   final ScrollPhysics? physics;
   final EdgeInsets padding;
+
+  /// An extra control at the end of a folder header (By folder view), given
+  /// the folder and its item indices; null for none.
+  final Widget? Function(String folder, List<int> items)? folderAction;
 
   SliverGrid _grid(List<int> items) => SliverGrid(
     gridDelegate: gridDelegate,
@@ -180,6 +185,11 @@ class GroupedGrid extends StatelessWidget {
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
+                      if (folderAction?.call(g.folder, g.items)
+                          case final action?) ...[
+                        const SizedBox(width: 12),
+                        action,
+                      ],
                     ],
                   ),
                 ),

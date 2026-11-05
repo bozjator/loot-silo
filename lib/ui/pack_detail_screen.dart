@@ -118,8 +118,10 @@ class PackDetailScreen extends ConsumerWidget {
             const SizedBox(width: 8),
           ],
         ),
+        // While a rescan reloads the contents, the old ones stay on screen,
+        // so the open tab and its state survive.
         body: switch (contents) {
-          AsyncData(:final value) => _Body(
+          AsyncValue(hasValue: true, :final value?) => _Body(
             pack: pack,
             contents: value,
             pinned: pinned,
@@ -163,6 +165,10 @@ class _Body extends StatefulWidget {
 
 class _BodyState extends State<_Body> {
   var _peek = false;
+
+  /// The open tab, by kind, so it stays open when a tab appears or goes
+  /// (e.g. the Animations tab after "Combine into animation").
+  Type? _tab;
   late String? _folder = widget.folder;
   late SearchFilter? _search = widget.search;
 
@@ -225,6 +231,10 @@ class _BodyState extends State<_Body> {
           tabAlignment: TabAlignment.start,
           tabs: [for (final (label, _) in tabs) Tab(text: label)],
         ),
+        _TabMemory(
+          onChanged: (i) =>
+              _tab = i < tabs.length ? tabs[i].$2.runtimeType : null,
+        ),
         Expanded(child: TabBarView(children: [for (final (_, t) in tabs) t])),
       ],
     ];
@@ -243,10 +253,17 @@ class _BodyState extends State<_Body> {
       );
       if (at >= 0) initial = at;
     }
+    final kept = tabs.indexWhere((t) => t.$2.runtimeType == _tab);
+    if (kept >= 0) initial = kept;
+    if (tabs.isNotEmpty) _tab = tabs[initial].$2.runtimeType;
     return DefaultTabController(
-      // A new controller when the folder or search filter is cleared and
-      // the tab count changes.
-      key: ValueKey((folder, search)),
+      // A new controller when the folder or search filter is cleared or
+      // the set of tabs changes; the open tab is kept by kind.
+      key: ValueKey((
+        folder,
+        search,
+        [for (final (_, t) in tabs) t.runtimeType].join(','),
+      )),
       length: tabs.length,
       initialIndex: initial,
       child: widget.pinned
@@ -811,6 +828,40 @@ class _ChipRow extends StatelessWidget {
   }
 }
 
+/// Reports the [DefaultTabController]'s index whenever it changes.
+class _TabMemory extends StatefulWidget {
+  const _TabMemory({required this.onChanged});
+
+  final ValueChanged<int> onChanged;
+
+  @override
+  State<_TabMemory> createState() => _TabMemoryState();
+}
+
+class _TabMemoryState extends State<_TabMemory> {
+  TabController? _controller;
+
+  void _changed() => widget.onChanged(_controller!.index);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final c = DefaultTabController.maybeOf(context);
+    if (c == _controller) return;
+    _controller?.removeListener(_changed);
+    _controller = c?..addListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
+}
+
 /// Files marked "Not an animation", each with Restore (back to detected).
 class _HiddenAnimationsDialog extends ConsumerWidget {
   const _HiddenAnimationsDialog({required this.pack, required this.hidden});
@@ -868,8 +919,133 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
   /// Folders folded away in the "By folder" view, for this visit.
   final _collapsed = <String>{};
 
+  /// Flat view selection (Ctrl/Shift-click or the hover checkbox), for
+  /// "Combine N images into animation".
+  final _selected = <String>{};
+  String? _anchor;
+  var _busy = false;
+
   PackRow get pack => widget.pack;
   PackContents get contents => widget.contents;
+
+  /// Images that are already (part of) a shown animation.
+  late Set<String> _animated = _animatedFiles();
+
+  Set<String> _animatedFiles() => {
+    for (final a in contents.shownDetected) ...[a.path, ...a.frames],
+  };
+
+  @override
+  void didUpdateWidget(_ImagesTab old) {
+    super.didUpdateWidget(old);
+    if (!identical(old.contents, contents)) {
+      _animated = _animatedFiles();
+      _selected.retainAll(contents.images);
+    }
+  }
+
+  void _toggle(String rel) => setState(() {
+    _selected.contains(rel) ? _selected.remove(rel) : _selected.add(rel);
+    _anchor = rel;
+  });
+
+  /// Shift-click: selects from the anchor to [rel] in the shown [order].
+  void _selectRange(List<String> order, String rel) => setState(() {
+    final a = _anchor == null ? -1 : order.indexOf(_anchor!);
+    final b = order.indexOf(rel);
+    if (a < 0) {
+      _selected.add(rel);
+    } else {
+      _selected.addAll(order.sublist(math.min(a, b), math.max(a, b) + 1));
+    }
+    _anchor ??= rel;
+  });
+
+  /// "Make animation…": the Edit dialog with a one-row strip guess.
+  void _makeAnimation(String rel) {
+    final size = readImageSize(p.join(pack.path, rel));
+    if (size == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) => _AnimationEditorDialog(
+        pack: pack,
+        path: rel,
+        pending: guessStrip(rel, size.$1, size.$2),
+      ),
+    );
+  }
+
+  /// Combines [rels] into one strip ([combinedName]); [unique] picks a free
+  /// name instead of asking to overwrite. Then rescans and opens the new
+  /// animation in the Edit dialog.
+  Future<void> _combine(List<String> rels, {required bool unique}) async {
+    if (rels.length < 2 || _busy || !packExists(pack.path)) return;
+    final taken = {
+      ...contents.images,
+      ...contents.other,
+    }.where((r) => File(p.join(pack.path, r)).existsSync()).toSet();
+    final out = combinedName(rels, taken: taken, unique: unique);
+    final container = ProviderScope.containerOf(context, listen: false);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    // The tab may be rebuilt by the rescan; the dialog opens from the
+    // navigator, which stays.
+    final navigator = Navigator.of(context);
+    final exists = File(p.join(pack.path, out)).existsSync();
+    if (exists && !unique) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Replace animation?'),
+          content: Text('$out already exists. Replace it?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Replace'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    if (!mounted) return;
+    setState(() => _busy = true);
+    final CombinedStrip strip;
+    try {
+      strip = await combineFramesInBackground(pack.path, rels, out);
+    } on Object catch (e) {
+      if (mounted) setState(() => _busy = false);
+      messenger?.showSnackBar(
+        SnackBar(content: Text('Could not combine the images: $e')),
+      );
+      return;
+    }
+    await container.read(libraryProvider.notifier).reload();
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _selected.clear();
+      });
+    }
+    if (!navigator.mounted) return;
+    await showDialog<void>(
+      context: navigator.context,
+      builder: (_) => _AnimationEditorDialog(
+        pack: pack,
+        path: strip.path,
+        pending: SpriteAnim(
+          path: strip.path,
+          kind: AnimKind.sheet,
+          frameW: strip.frameW,
+          frameH: strip.frameH,
+          cols: strip.frames,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -909,6 +1085,34 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
             ],
           ),
         ),
+        if (_busy) const LinearProgressIndicator(),
+        if (_selected.isNotEmpty && view == ItemsView.flat)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: Row(
+              children: [
+                Text('${_selected.length} selected'),
+                const SizedBox(width: 12),
+                FilledButton.tonalIcon(
+                  icon: const Icon(Icons.animation, size: 18),
+                  label: Text(
+                    'Combine ${_selected.length} images into animation',
+                  ),
+                  onPressed: _selected.length >= 2 && !_busy
+                      ? () => _combine(
+                          images.where(_selected.contains).toList(),
+                          unique: true,
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => setState(_selected.clear),
+                  child: const Text('Clear selection'),
+                ),
+              ],
+            ),
+          ),
         Expanded(
           child: CtrlWheelResize(
             onSteps: (n) =>
@@ -937,6 +1141,17 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
         () => _collapsed.contains(f) ? _collapsed.remove(f) : _collapsed.add(f),
       ),
       physics: const CtrlWheelPhysics(),
+      folderAction: (folder, items) => items.length < 2
+          ? null
+          : TextButton.icon(
+              icon: const Icon(Icons.animation, size: 18),
+              label: const Text('Combine into animation'),
+              onPressed: _busy
+                  ? null
+                  : () => _combine([
+                      for (final i in items) images[i],
+                    ], unique: false),
+            ),
       // A square image over a one-line file name.
       gridDelegate: ThumbGridDelegate(
         maxTileWidth: size,
@@ -947,20 +1162,62 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
       itemBuilder: (context, i) {
         final rel = images[i];
         final file = File(p.join(pack.path, rel));
+        final flat = view == ItemsView.flat;
+        final selected = _selected.contains(rel);
+        final canAnimate =
+            !_animated.contains(rel) &&
+            p.extension(rel).toLowerCase() == '.png';
+        final shown = [for (final j in order) images[j]];
         return _HoverReveal(
           path: file.path,
+          showLeading: selected,
+          leading: flat
+              ? Checkbox(
+                  key: ValueKey('select:$rel'),
+                  mouseCursor: clickCursor,
+                  value: selected,
+                  onChanged: (_) => _toggle(rel),
+                )
+              : null,
+          actions: [
+            if (canAnimate)
+              IconButton(
+                tooltip: 'Make animation…',
+                mouseCursor: clickCursor,
+                icon: const Icon(Icons.animation, size: 18),
+                onPressed: () => _makeAnimation(rel),
+              ),
+          ],
           child: Card(
             clipBehavior: Clip.antiAlias,
             margin: EdgeInsets.zero,
+            shape: selected
+                ? RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    ),
+                  )
+                : null,
             child: InkWell(
               mouseCursor: clickCursor,
-              onTap: () => showImageViewer(
-                context,
-                packPath: pack.path,
-                images: [for (final j in order) images[j]],
-                index: order.indexOf(i),
-                sizes: contents.sizes,
-              ),
+              onTap: () {
+                final keys = HardwareKeyboard.instance;
+                if (flat && keys.isShiftPressed) {
+                  _selectRange(shown, rel);
+                } else if (flat && keys.isControlPressed) {
+                  _toggle(rel);
+                } else {
+                  showImageViewer(
+                    context,
+                    packPath: pack.path,
+                    images: shown,
+                    index: order.indexOf(i),
+                    sizes: contents.sizes,
+                  );
+                }
+              },
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1016,21 +1273,40 @@ class _AnimationsTab extends StatelessWidget {
 /// the pack, so after Save the editor shows the stored override, as the old
 /// in-list cards did.
 class _AnimationEditorDialog extends ConsumerWidget {
-  const _AnimationEditorDialog({required this.pack, required this.path});
+  const _AnimationEditorDialog({
+    required this.pack,
+    required this.path,
+    this.pending,
+  });
 
   final PackRow pack;
   final String path;
 
+  /// "Make animation…": the starting guess for an image that isn't an
+  /// animation yet. Save then marks it `manual`. Once the pack reloads with
+  /// it, the stored animation takes over.
+  final SpriteAnim? pending;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final contents = ref.watch(packContentsProvider(pack.id)).value;
-    final i = contents?.detected.indexWhere((a) => a.path == path) ?? -1;
+    // `animations` follows `shownDetected`, index for index.
+    final shown = contents?.shownDetected ?? const <SpriteAnim>[];
+    final i = shown.indexWhere((a) => a.path == path);
+    final isNew = i < 0 && pending != null;
+    final detected = i >= 0 ? shown[i] : pending;
+    final current = i >= 0 ? contents!.animations[i] : pending;
+    // Made by hand: resetting turns it back into a plain image.
+    final manual =
+        contents != null &&
+        manualAnimations(contents.sidecar?.animations ?? const {})
+            .contains(path);
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760),
         child: Padding(
           padding: const EdgeInsets.all(8),
-          child: contents == null || i < 0
+          child: contents == null || detected == null || current == null
               ? const SizedBox(
                   height: 200,
                   child: Center(child: CircularProgressIndicator()),
@@ -1042,18 +1318,26 @@ class _AnimationEditorDialog extends ConsumerWidget {
                     _AnimationEditor(
                       key: ValueKey(path),
                       packPath: pack.path,
-                      detected: contents.detected[i],
-                      current: contents.animations[i],
+                      detected: detected,
+                      current: current,
+                      isNew: isNew,
+                      manual: manual,
                       onSave: (anim) async {
                         if (!packExists(pack.path)) return;
                         saveAnimationOverride(
                           pack.path,
-                          contents.detected[i],
+                          detected,
                           anim,
+                          manual: isNew,
                         );
+                        final library = ref.read(libraryProvider.notifier);
+                        // Back to image: nothing is left to edit here.
+                        if (anim == null && manual && context.mounted) {
+                          Navigator.of(context).pop();
+                        }
                         // The tile preview may be this sheet; rescan picks the
                         // override up.
-                        await ref.read(libraryProvider.notifier).reload();
+                        await library.reload();
                       },
                       onNotAnimation: () =>
                           markNotAnimation(context, ref, pack, path),
@@ -1111,9 +1395,19 @@ class _AnimationEditor extends StatefulWidget {
     required this.current,
     required this.onSave,
     required this.onNotAnimation,
+    this.isNew = false,
+    this.manual = false,
   });
 
+  /// Made into an animation by hand ("Make animation…" / combined): Reset
+  /// is always offered and makes it a plain image again.
+  final bool manual;
+
   final String packPath;
+
+  /// Not saved as an animation yet: Save is enabled from the start and
+  /// "Not an animation" isn't offered.
+  final bool isNew;
   final SpriteAnim detected;
   final SpriteAnim current;
 
@@ -1213,8 +1507,8 @@ class _AnimationEditorState extends State<_AnimationEditor> {
     final theme = Theme.of(context);
     final a = _anim;
     final isSheet = a.kind == AnimKind.sheet;
-    final dirty = a != widget.current;
-    final overridden = widget.current != widget.detected;
+    final dirty = widget.isNew || a != widget.current;
+    final overridden = widget.manual || widget.current != widget.detected;
     // The preview box is as tall as the controls (at least 240 px); the
     // whole editor scrolls when the window is too short.
     return Material(
@@ -1407,18 +1701,23 @@ class _AnimationEditorState extends State<_AnimationEditor> {
                         if (overridden)
                           TextButton(
                             onPressed: () => widget.onSave(null),
-                            child: const Text('Reset to detected'),
+                            child: Text(
+                              widget.manual
+                                  ? 'Back to image'
+                                  : 'Reset to detected',
+                            ),
                           )
                         else if (dirty)
                           TextButton(
                             onPressed: () => _reset(widget.current),
                             child: const Text('Undo'),
                           ),
-                        TextButton.icon(
-                          onPressed: widget.onNotAnimation,
-                          icon: const Icon(Icons.image_outlined, size: 18),
-                          label: const Text('Not an animation'),
-                        ),
+                        if (!widget.isNew)
+                          TextButton.icon(
+                            onPressed: widget.onNotAnimation,
+                            icon: const Icon(Icons.image_outlined, size: 18),
+                            label: const Text('Not an animation'),
+                          ),
                       ],
                     ),
                   ],
@@ -2190,10 +2489,24 @@ class _FilesTab extends StatelessWidget {
 /// Shows a [RevealButton] in the top-right corner of [child] while the
 /// mouse is over it, so small image cards stay uncluttered.
 class _HoverReveal extends StatefulWidget {
-  const _HoverReveal({required this.path, required this.child});
+  const _HoverReveal({
+    required this.path,
+    required this.child,
+    this.actions = const [],
+    this.leading,
+    this.showLeading = false,
+  });
 
   final String path;
   final Widget child;
+
+  /// More hover buttons, before the reveal button.
+  final List<Widget> actions;
+
+  /// A top-left control (the selection checkbox): shown on hover, or always
+  /// with [showLeading].
+  final Widget? leading;
+  final bool showLeading;
 
   @override
   State<_HoverReveal> createState() => _HoverRevealState();
@@ -2210,15 +2523,36 @@ class _HoverRevealState extends State<_HoverReveal> {
       fit: StackFit.expand,
       children: [
         widget.child,
-        if (_hover)
+        if (widget.leading case final leading?
+            when _hover || widget.showLeading)
           Positioned(
             top: 2,
-            right: 2,
+            left: 2,
             child: Material(
               color: Theme.of(context).colorScheme.surface
                   .withValues(alpha: 0.85),
               shape: const CircleBorder(),
-              child: RevealButton(widget.path),
+              child: leading,
+            ),
+          ),
+        if (_hover)
+          Positioned(
+            top: 2,
+            right: 2,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final a in [...widget.actions, RevealButton(widget.path)])
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Material(
+                      color: Theme.of(context).colorScheme.surface
+                          .withValues(alpha: 0.85),
+                      shape: const CircleBorder(),
+                      child: a,
+                    ),
+                  ),
+              ],
             ),
           ),
       ],

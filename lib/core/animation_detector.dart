@@ -421,14 +421,18 @@ List<SpriteAnim> detectSequences(String packPath, Iterable<String> files) {
 /// All animations in a pack. Reads image headers, plus up to
 /// [maxPixelScans] full decodes for the transparency-gap heuristic; run in
 /// an isolate for big packs. Per-file [overrides] (the sidecar's
-/// `animations{}`) set frame size and fps.
+/// `animations{}`) set frame size and fps. Files marked `manual` there, or
+/// listed in [manual], become one-row strips ([guessStrip]) when nothing
+/// else detects them ("Make animation…").
 List<SpriteAnim> detectAnimations(
   String packPath,
   List<String> files, {
   Map<String, Object?> overrides = const {},
+  Set<String> manual = const {},
   int maxHeaders = 4000,
   int maxPixelScans = 0,
 }) {
+  final made = {...manual, ...manualAnimations(overrides)};
   final sequences = detectSequences(packPath, files);
   final inSequence = {for (final s in sequences) ...s.frames};
   final sizes = <String, (int, int)>{};
@@ -472,6 +476,7 @@ List<SpriteAnim> detectAnimations(
       pixelScans++;
       s = detectSheetByPixels(packPath, rel);
     }
+    if (s == null && made.contains(rel)) s = guessStrip(rel, w, h);
     if (s != null) out.add(s);
   }
   final result = [
@@ -480,6 +485,26 @@ List<SpriteAnim> detectAnimations(
         applyOverride(a, overrides[a.path]),
   ]..sort((a, b) => a.path.compareTo(b.path));
   return result;
+}
+
+/// Files the sidecar's `animations{}` marks `"manual": true`: made into
+/// animations by hand, not by detection.
+Set<String> manualAnimations(Map<String, Object?> overrides) => {
+  for (final MapEntry(:key, :value) in overrides.entries)
+    if (value is Map && value['manual'] == true) key,
+};
+
+/// A one-row strip guess for an image nothing detected: square frames when
+/// the width is a whole multiple of the height, otherwise one frame.
+SpriteAnim guessStrip(String rel, int w, int h) {
+  final square = h > 0 && w > h && w % h == 0;
+  return SpriteAnim(
+    path: rel,
+    kind: AnimKind.sheet,
+    frameW: square ? h : w,
+    frameH: h,
+    cols: square ? w ~/ h : 1,
+  );
 }
 
 /// Most common frame height among single-row strips, if any.

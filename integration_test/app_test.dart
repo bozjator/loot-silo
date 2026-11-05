@@ -1579,6 +1579,60 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m28: combine a real frame folder (temp copy)', (tester) async {
+    const explosion =
+        '../assets_library/Kenney/Kenney Game Assets 1 version 42/2D assets/'
+        'Smoke Particles/PNG/Explosion';
+    if (!Directory(explosion).existsSync()) return;
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    copyTree(explosion, p.join(pack, 'fx', 'Explosion'));
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('By folder'));
+    await tester.pump(const Duration(milliseconds: 500));
+    final combine = find.text('Combine into animation');
+    await tester.ensureVisible(combine);
+    await tester.pump(const Duration(milliseconds: 300));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm28_folder_header', settle: false);
+
+    await tester.tap(combine);
+    await pumpUntil(tester, find.text('Apply size'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm28_combined_editor', settle: false);
+    // The frames differ in size; the strip uses the largest.
+    expect(find.text('Sheet · 634×636 frames · 9 × 1 · 9 frames'), findsOne);
+    final out = File(
+      p.join(pack, 'fx', 'Explosion', 'Explosion_animation.png'),
+    );
+    expect(out.existsSync(), isTrue);
+    // The frame files stay.
+    expect(
+      File(p.join(pack, 'fx', 'Explosion', 'explosion00.png')).existsSync(),
+      isTrue,
+    );
+    await tester.tap(find.text('Close'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Flat view: select two frames with Ctrl-click.
+    await tester.tap(find.text('Flat'));
+    await tester.pump(const Duration(milliseconds: 500));
+    for (final name in ['explosion00.png', 'explosion01.png']) {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.tap(find.text(name));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+    }
+    expect(find.text('Combine 2 images into animation'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm28_selection_bar', settle: false);
+  });
+
   testWidgets('m21: sort by type (real library, read-only)', (tester) async {
     final real = p.canonicalize('../assets_library');
     if (!Directory(real).existsSync()) return;

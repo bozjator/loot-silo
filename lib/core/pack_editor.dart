@@ -1,4 +1,8 @@
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:math' as math;
+
+import 'package:image/image.dart' as img;
 
 import 'package:path/path.dart' as p;
 
@@ -144,6 +148,7 @@ PackContents loadPackContents(String packPath, List<(String, int)> files) {
     detected: detectAnimations(
       packPath,
       images,
+      manual: manualAnimations(sidecar?.animations ?? const {}),
       maxPixelScans: worthPixelScan(packPath) ? 24 : 0,
     ),
     sizes: {for (final (rel, size) in files) rel: size},
@@ -183,15 +188,23 @@ PackSidecar updatePackSidecar(
 
 /// Saves (or with a null [anim], removes) the animation override for one
 /// file. Only fields that differ from [detected] are stored.
+///
+/// [manual] (or an existing `manual` mark) keeps `"manual": true`, so an
+/// image made into an animation by hand stays one; resetting ([anim] null)
+/// turns it back into a plain image.
 PackSidecar saveAnimationOverride(
   String packPath,
   SpriteAnim detected,
-  SpriteAnim? anim,
-) {
+  SpriteAnim? anim, {
+  bool manual = false,
+}) {
   final old = PackSidecar.read(packPath) ?? const PackSidecar();
+  final previous = old.animations[detected.path];
+  final keepManual = manual || (previous is Map && previous['manual'] == true);
   final animations = {...old.animations}..remove(detected.path);
   if (anim != null) {
     final o = <String, Object?>{
+      if (keepManual) 'manual': true,
       // With a total frame count, the frame width follows from it.
       if (anim.frameTotal == null && anim.frameW != detected.frameW)
         'frame_w': anim.frameW,
@@ -254,3 +267,100 @@ AuthorInfo? updateAuthorInfo(
   next.write(authorDir);
   return next;
 }
+
+/// Natural order: "frame2" before "frame10".
+int naturalCompare(String a, String b) {
+  final re = RegExp(r'(\d+)|(\D+)');
+  final x = re.allMatches(a.toLowerCase()).toList();
+  final y = re.allMatches(b.toLowerCase()).toList();
+  for (var i = 0; i < x.length && i < y.length; i++) {
+    final s = x[i].group(0)!, t = y[i].group(0)!;
+    final m = int.tryParse(s), n = int.tryParse(t);
+    final c = m != null && n != null
+        ? m != n
+              ? m.compareTo(n)
+              : s.length.compareTo(t.length)
+        : s.compareTo(t);
+    if (c != 0) return c;
+  }
+  return x.length.compareTo(y.length);
+}
+
+/// The file "Combine into animation" writes for [rels]: `<folder>_animation.png`
+/// in the first file's folder, or `animation.png` at the pack root. With
+/// [unique], a number is added while the name is in [taken].
+String combinedName(
+  List<String> rels, {
+  Set<String> taken = const {},
+  bool unique = false,
+}) {
+  final first = ([...rels]..sort(naturalCompare)).first;
+  final folder = p.posix.dirname(first);
+  final stem = folder == '.'
+      ? 'animation'
+      : '${p.posix.basename(folder)}_animation';
+  String at(String name) => folder == '.' ? name : p.posix.join(folder, name);
+  var out = at('$stem.png');
+  for (var i = 2; unique && taken.contains(out); i++) {
+    out = at('${stem}_$i.png');
+  }
+  return out;
+}
+
+/// What [combineFrames] wrote.
+typedef CombinedStrip = ({String path, int frameW, int frameH, int frames});
+
+/// Stacks the images [rels] (natural order) left to right into one PNG at
+/// [outRel]. Frames of different sizes are centred in the largest frame
+/// size. The frame files stay. Records the strip in the sidecar as a
+/// `manual` animation with its frame size. Pure Dart; see
+/// [combineFramesInBackground].
+CombinedStrip combineFrames(String packPath, List<String> rels, String outRel) {
+  final ordered = [...rels]..sort(naturalCompare);
+  final frames = <img.Image>[];
+  for (final rel in ordered) {
+    final decoded = img.decodeImage(
+      File(p.join(packPath, rel)).readAsBytesSync(),
+    );
+    if (decoded == null) throw FormatException('Not an image: $rel');
+    frames.add(decoded.convert(numChannels: 4));
+  }
+  if (frames.length < 2) throw ArgumentError('Need at least 2 images');
+  final fw = frames.map((f) => f.width).reduce(math.max);
+  final fh = frames.map((f) => f.height).reduce(math.max);
+  final strip = img.Image(
+    width: fw * frames.length,
+    height: fh,
+    numChannels: 4,
+  );
+  for (var i = 0; i < frames.length; i++) {
+    final f = frames[i];
+    img.compositeImage(
+      strip,
+      f,
+      dstX: i * fw + (fw - f.width) ~/ 2,
+      dstY: (fh - f.height) ~/ 2,
+      blend: img.BlendMode.direct,
+    );
+  }
+  File(p.join(packPath, outRel))
+    ..parent.createSync(recursive: true)
+    ..writeAsBytesSync(img.encodePng(strip));
+  final old = PackSidecar.read(packPath) ?? const PackSidecar();
+  old
+      .copyWith(
+        animations: {
+          ...old.animations,
+          outRel: {'manual': true, 'frame_w': fw, 'frame_h': fh},
+        },
+      )
+      .write(packPath);
+  return (path: outRel, frameW: fw, frameH: fh, frames: frames.length);
+}
+
+/// [combineFrames] in an isolate.
+Future<CombinedStrip> combineFramesInBackground(
+  String packPath,
+  List<String> rels,
+  String outRel,
+) => Isolate.run(() => combineFrames(packPath, rels, outRel));

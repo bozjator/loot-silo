@@ -82,6 +82,17 @@ void main() {
     expect(finder, findsWidgets);
   }
 
+  /// [pumpUntil] the other way: until nothing matches [finder].
+  Future<void> pumpUntilGone(WidgetTester tester, Finder finder) async {
+    for (var i = 0; i < 200 && finder.evaluate().isNotEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(finder, findsNothing);
+  }
+
   /// Opens Knight Pack, with images in the root and two sub-folders.
   Future<void> openKnight(
     WidgetTester tester, {
@@ -761,6 +772,7 @@ void main() {
       await pumpUntil(tester, find.text('Barrels 1'));
       await tester.tap(find.text('Barrels 1'));
       await pumpUntil(tester, find.text('Show all files'));
+      // The tab slide takes several frames.
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
@@ -953,6 +965,7 @@ void main() {
       await tester.tap(find.text('Knight Pack'));
       await pumpUntil(tester, find.byType(TabBar));
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      // The tab slide takes several frames.
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
@@ -1063,8 +1076,7 @@ void main() {
       await openGrid(tester);
       await tester.tap(find.text('Not an animation'));
       await pumpUntil(tester, find.textContaining('listed as an image only'));
-      await pumpUntil(tester, find.textContaining('Images ('));
-      expect(find.textContaining('Animations ('), findsNothing);
+      await pumpUntilGone(tester, find.textContaining('Animations ('));
       expect(sidecar(), contains('"fx/Explosion(16x16).png": false'));
       expect(find.text('1 marked not an animation'), findsOneWidget);
 
@@ -1165,5 +1177,156 @@ void main() {
         },
       );
     }
+  });
+
+  group('Make animations from images (M28)', () {
+    img.Image solid(int w, int h, int shade) {
+      final i = img.Image(width: w, height: h, numChannels: 4);
+      img.fill(i, color: img.ColorRgba8(shade, 90, 200, 255));
+      return i;
+    }
+
+    String packDir() => p.join(tmp.path, 'library', 'HeroMaker', 'Knight Pack');
+    String sidecar() =>
+        File(p.join(packDir(), 'asset_pack.json')).readAsStringSync();
+
+    Future<void> openImages(
+      WidgetTester tester,
+      Map<String, img.Image> images, {
+      bool byFolder = false,
+    }) async {
+      await openKnight(tester, files: const [], images: images);
+      await tester.tap(find.textContaining('Images ('));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.text(byFolder ? 'By folder' : 'Flat').first);
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    Future<TestGesture> hover(WidgetTester tester, String name) async {
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(
+        location: tester.getCenter(
+          find.ancestor(of: find.text(name), matching: find.byType(Card)).first,
+        ),
+      );
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      return mouse;
+    }
+
+    testWidgets('Make animation… on an image card saves a strip', (
+      tester,
+    ) async {
+      await openImages(tester, {'ui/panel.png': solid(64, 16, 10)});
+      expect(find.textContaining('Animations ('), findsNothing);
+      final mouse = await hover(tester, 'panel.png');
+      await tester.tap(find.byTooltip('Make animation…'));
+      await pumpUntil(tester, find.text('Apply size'));
+      expect(find.text('Sheet · 16×16 frames · 4 × 1 · 4 frames'), findsOne);
+      expect(find.text('Not an animation'), findsNothing);
+      await tester.tap(find.text('Save'));
+      await pumpUntil(tester, find.text('Back to image'));
+      expect(sidecar(), contains('"manual": true'));
+      await tester.tap(find.text('Close'));
+      await pumpUntil(tester, find.textContaining('Animations (1)'));
+      await tester.pump(const Duration(milliseconds: 500));
+      // Still on the Images tab after the rescan.
+      expect(find.text('panel.png'), findsOneWidget);
+      await tester.tap(find.textContaining('Animations ('));
+      final edit = find.byIcon(Icons.tune);
+      // The tab slide takes several frames.
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await pumpUntil(tester, edit);
+      await tester.pump(const Duration(milliseconds: 500));
+      await mouse.moveTo(
+        tester.getCenter(
+          find.ancestor(of: edit, matching: find.byType(Card)).first,
+        ),
+      );
+      await tester.pump();
+      await tester.tap(edit);
+      await pumpUntil(tester, find.text('Back to image'));
+      await tester.tap(find.text('Back to image'));
+      await pumpUntilGone(tester, find.textContaining('Animations ('));
+      expect(sidecar(), isNot(contains('manual')));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Apply size'), findsNothing, reason: 'dialog closed');
+    });
+
+    testWidgets('a folder header combines its images into one strip', (
+      tester,
+    ) async {
+      await openImages(tester, {
+        'fx/puff/puff_c.png': solid(8, 8, 30),
+        'fx/puff/puff_a.png': solid(8, 8, 10),
+        'fx/puff/puff_b.png': solid(6, 6, 20),
+        'single/one.png': solid(8, 8, 40),
+      }, byFolder: true);
+      // Only folders with 2+ images get the button.
+      expect(find.text('Combine into animation'), findsOneWidget);
+      await tester.tap(find.text('Combine into animation'));
+      await pumpUntil(tester, find.text('Apply size'));
+      expect(find.text('Sheet · 8×8 frames · 3 × 1 · 3 frames'), findsOne);
+      final out = File(p.join(packDir(), 'fx', 'puff', 'puff_animation.png'));
+      expect(out.existsSync(), isTrue);
+      final strip = img.decodePng(out.readAsBytesSync())!;
+      expect((strip.width, strip.height), (24, 8));
+      await tester.tap(find.text('Close'));
+      await pumpUntil(tester, find.textContaining('Animations (1)'));
+
+      // Again: asks before replacing the existing strip.
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.text('Combine into animation').first);
+      await pumpUntil(tester, find.text('Replace animation?'));
+      await tester.tap(find.text('Cancel'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Apply size'), findsNothing);
+    });
+
+    testWidgets('Flat view: Ctrl/Shift-click select, then combine', (
+      tester,
+    ) async {
+      await openImages(tester, {
+        'a/k1.png': solid(8, 8, 10),
+        'a/k2.png': solid(8, 8, 20),
+        'a/k3.png': solid(8, 8, 30),
+        'b/z.png': solid(8, 8, 40),
+      });
+      Future<void> clickWith(LogicalKeyboardKey key, String name) async {
+        await tester.sendKeyDownEvent(key);
+        await tester.tap(find.text(name));
+        await tester.sendKeyUpEvent(key);
+        await tester.pump();
+      }
+
+      await clickWith(LogicalKeyboardKey.controlLeft, 'k1.png');
+      expect(find.text('1 selected'), findsOneWidget);
+      final combine = find.widgetWithText(
+        FilledButton,
+        'Combine 1 images into animation',
+      );
+      expect(tester.widget<FilledButton>(combine).onPressed, isNull);
+      await clickWith(LogicalKeyboardKey.shiftLeft, 'k3.png');
+      expect(find.text('3 selected'), findsOneWidget);
+      // The hover checkbox toggles too.
+      await hover(tester, 'z.png');
+      await tester.tap(find.byKey(const ValueKey('select:b/z.png')));
+      await tester.pump();
+      expect(find.text('4 selected'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('select:b/z.png')));
+      await tester.pump();
+      await tester.tap(find.text('Combine 3 images into animation'));
+      await pumpUntil(tester, find.text('Apply size'));
+      expect(find.text('Sheet · 8×8 frames · 3 × 1 · 3 frames'), findsOne);
+      expect(
+        File(p.join(packDir(), 'a', 'a_animation.png')).existsSync(),
+        isTrue,
+      );
+      await tester.tap(find.text('Close'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.textContaining('selected'), findsNothing);
+    });
   });
 }
