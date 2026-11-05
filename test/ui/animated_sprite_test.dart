@@ -171,4 +171,167 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     expect(tester.takeException(), isNull);
   });
+
+  group('auto-trim and zoom (M27)', () {
+    /// Two 64 px frames with a small blob each, at different places: the
+    /// union of their opaque bounds is the shared crop.
+    void paddedSheet(String name) {
+      final image = img.Image(width: 128, height: 64, numChannels: 4);
+      img.fillRect(
+        image,
+        x1: 20,
+        y1: 24,
+        x2: 27,
+        y2: 31,
+        color: img.ColorRgba8(0, 200, 0, 255),
+      );
+      img.fillRect(
+        image,
+        x1: 64 + 24,
+        y1: 28,
+        x2: 64 + 31,
+        y2: 39,
+        color: img.ColorRgba8(0, 0, 200, 255),
+      );
+      File(p.join(tmp.path, name)).writeAsBytesSync(img.encodePng(image));
+    }
+
+    const padded = SpriteAnim(
+      path: 'padded.png',
+      kind: AnimKind.sheet,
+      frameW: 64,
+      frameH: 64,
+      cols: 2,
+    );
+
+    Future<void> pumpAt(
+      WidgetTester tester,
+      SpriteAnim a, {
+      double box = 64,
+      bool settle = true,
+    }) async {
+      final provider = FileImage(File(p.join(tmp.path, a.path)));
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(
+        () => precacheImage(provider, tester.element(find.byType(SizedBox))),
+      );
+      await tester.pumpWidget(
+        Center(
+          child: SizedBox(
+            width: box,
+            height: box,
+            child: AnimatedSprite(packPath: tmp.path, anim: a, playing: false),
+          ),
+        ),
+      );
+      if (!settle) return;
+      final drawn = find.descendant(
+        of: find.byType(AnimatedSprite),
+        matching: find.byType(CustomPaint),
+      );
+      for (var i = 0; i < 50 && drawn.evaluate().isEmpty; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+      }
+    }
+
+    SpriteFramePainter painter(WidgetTester tester) =>
+        tester
+                .widget<CustomPaint>(
+                  find.descendant(
+                    of: find.byType(AnimatedSprite),
+                    matching: find.byType(CustomPaint),
+                  ),
+                )
+                .painter!
+            as SpriteFramePainter;
+
+    testWidgets('the crop is the union of every frame, the same for all', (
+      tester,
+    ) async {
+      paddedSheet('padded.png');
+      await pumpAt(tester, padded);
+      // Frame 1 blob 20..28 × 24..32, frame 2 24..32 × 28..40.
+      expect(painter(tester).src, const Rect.fromLTRB(20, 24, 32, 40));
+      final key = trimKey(tmp.path, padded, []);
+      expect(trimCache.keys.any((k) => k.startsWith(key)), isTrue);
+    });
+
+    testWidgets('a padded sheet fills the card in whole steps', (tester) async {
+      paddedSheet('padded.png');
+      await pumpAt(tester, padded, box: 200);
+      final pt = painter(tester);
+      // 12×16 crop in 200 px: 12×, so the sprite spans 192 px of height
+      // (untrimmed, 64 px frames would only get 3×).
+      expect(pt.scaleFor(const Size(200, 200)), 12);
+      expect(pt.src.height * pt.scaleFor(const Size(200, 200)), 192);
+    });
+
+    testWidgets('a cached trim draws trimmed from the first frame', (
+      tester,
+    ) async {
+      paddedSheet('padded.png');
+      await pumpAt(tester, padded, settle: false);
+      // Not trimmed yet: nothing is drawn rather than the untrimmed frame.
+      await tester.pump();
+      expect(
+        find.descendant(
+          of: find.byType(AnimatedSprite),
+          matching: find.byType(CustomPaint),
+        ),
+        findsNothing,
+      );
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+      }
+      // Shown again: the cache answers in the frame the image arrives.
+      await pumpAt(tester, padded, settle: false);
+      await tester.pump();
+      await tester.pump();
+      expect(painter(tester).src, const Rect.fromLTRB(20, 24, 32, 40));
+    });
+
+    testWidgets('sequences are trimmed across their frame files', (
+      tester,
+    ) async {
+      for (var i = 0; i < 2; i++) {
+        final image = img.Image(width: 32, height: 32, numChannels: 4);
+        img.fillRect(
+          image,
+          x1: 8 + i * 4,
+          y1: 10,
+          x2: 15 + i * 4,
+          y2: 17,
+          color: img.ColorRgba8(200, 0, 0, 255),
+        );
+        File(p.join(tmp.path, 'smoke_${i + 1}.png'))
+            .writeAsBytesSync(img.encodePng(image));
+      }
+      const seq = SpriteAnim(
+        path: 'smoke_1.png',
+        kind: AnimKind.sequence,
+        frameW: 32,
+        frameH: 32,
+        frames: ['smoke_1.png', 'smoke_2.png'],
+      );
+      await pumpAt(tester, seq);
+      expect(painter(tester).src, const Rect.fromLTRB(8, 10, 20, 18));
+    });
+
+    testWidgets('a zoom is a fixed scale, centred and clipped', (tester) async {
+      paddedSheet('padded.png');
+      await pumpAt(tester, padded.copyWith(zoom: 2), box: 200);
+      final pt = painter(tester);
+      expect(pt.zoom, 2);
+      expect(pt.scaleFor(const Size(200, 200)), 2);
+      // Larger than the box still draws (clipped), it doesn't shrink.
+      await pumpAt(tester, padded.copyWith(zoom: 8), box: 64);
+      expect(painter(tester).scaleFor(const Size(64, 64)), 8);
+    });
+  });
 }

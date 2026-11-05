@@ -1076,6 +1076,29 @@ void main() {
       expect(sidecar(), isNot(contains('animations')));
     });
 
+    testWidgets('Zoom is saved in the sidecar and drawn on the card', (
+      tester,
+    ) async {
+      await openGrid(tester);
+      await tester.tap(find.byKey(const ValueKey('zoom')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('3×').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await pumpUntil(tester, find.text('Reset to detected'));
+      expect(sidecar(), contains('"zoom": 3'));
+      for (final s in tester.widgetList<AnimatedSprite>(
+        find.byType(AnimatedSprite),
+      )) {
+        expect(s.anim.zoom, 3);
+      }
+      // Reset clears it again.
+      await tester.tap(find.text('Reset to detected'));
+      await pumpUntil(tester, find.text('Not an animation'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(sidecar(), isNot(contains('zoom')));
+    });
+
     testWidgets('Undo on the snackbar restores the animation', (tester) async {
       await openGrid(tester);
       await tester.tap(find.text('Not an animation'));

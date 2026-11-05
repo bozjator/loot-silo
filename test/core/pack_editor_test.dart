@@ -247,4 +247,20 @@ void main() {
     );
     expect(chosen.anim, isNull);
   });
+
+  test('zoom is saved as zoom and loaded back; Auto writes nothing', () {
+    png('Hero/Idle.png', 128, 32);
+    final detected = loadPackContents(tmp.path, [
+      ('Hero/Idle.png', 1),
+    ]).detected.single;
+    expect(detected.zoom, isNull);
+    saveAnimationOverride(tmp.path, detected, detected.copyWith(zoom: 3));
+    expect(sidecarJson()['animations'], {
+      'Hero/Idle.png': {'zoom': 3},
+    });
+    final c = loadPackContents(tmp.path, [('Hero/Idle.png', 1)]);
+    expect(c.animations.single.zoom, 3);
+    saveAnimationOverride(tmp.path, detected, detected.copyWith(zoom: null));
+    expect(sidecarJson().containsKey('animations'), isFalse);
+  });
 }

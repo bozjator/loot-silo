@@ -111,6 +111,9 @@ Future<void> settleImages(WidgetTester tester) async {
   }
 }
 
+/// Screenshot suffix for the m27 before/after comparison.
+const m27Phase = String.fromEnvironment('M27_PHASE', defaultValue: 'after');
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -1500,6 +1503,80 @@ A **16×16** knight with *walk* and *idle* animations.
 
     expect(sea.readAsStringSync(), seaBefore);
     expect(vfx.readAsStringSync(), vfxBefore);
+  });
+
+  testWidgets('m27: trimmed animation cards on padded packs (real)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    for (final (search, title, shot) in const [
+      (
+        'Tiny RPG',
+        'Tiny RPG Character Asset Pack 01 v2.0 -Full 22 Characters',
+        'tiny_rpg',
+      ),
+      ('Pixel Banner', 'Pixel-Banner', 'pixel_banner'),
+      ('Grass Land 2.0', 'ERW - Grass Land 2.0 v2.1', 'grass_land'),
+      (
+        'CharactersAnimationsAssetPack',
+        'CharactersAnimationsAssetPack',
+        'characters',
+      ),
+    ]) {
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), search);
+      await tester.pump(const Duration(milliseconds: 300));
+      // The search box can hold the same text; tap the tile.
+      final tile = find.descendant(
+        of: find.byType(PackTile),
+        matching: find.text(title),
+      );
+      await pumpUntil(tester, tile);
+      await tester.tap(tile.first);
+      final tab = find.descendant(
+        of: find.byType(TabBar),
+        matching: find.textContaining('Animations ('),
+      );
+      await pumpUntil(tester, tab);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(tab.last);
+      await tester.pump(const Duration(milliseconds: 500));
+      await settleImages(tester);
+      await captureScreenshot(tester, 'm27_${shot}_$m27Phase', settle: false);
+      if (shot == 'tiny_rpg' && m27Phase == 'after') {
+        // Zoom 2× in the editor (not saved).
+        final edit = find.byIcon(Icons.tune).first;
+        await mouse.moveTo(
+          tester.getCenter(
+            find.ancestor(of: edit, matching: find.byType(Card)).first,
+          ),
+        );
+        await tester.pump();
+        await tester.tap(edit);
+        await pumpUntil(tester, find.text('Apply size'));
+        await tester.tap(find.byKey(const ValueKey('zoom')));
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.tap(find.text('2×').last);
+        await tester.pump(const Duration(milliseconds: 500));
+        await settleImages(tester);
+        await captureScreenshot(tester, 'm27_zoom_2x', settle: false);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await pumpUntil(tester, find.text('Clear'));
+      await tester.tap(find.text('Clear'));
+      await pumpUntil(tester, realPacks());
+    }
+    expect(Directory(real).statSync().modified, before);
   });
 
   testWidgets('m21: sort by type (real library, read-only)', (tester) async {

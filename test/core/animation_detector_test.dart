@@ -535,4 +535,27 @@ void main() {
       expect(isNotAnimation(null), isFalse);
     });
   });
+
+  test('zoom: JSON, copyWith keeps or clears it, sidecar range', () {
+    const a = SpriteAnim(
+      path: 'a.png',
+      kind: AnimKind.sheet,
+      frameW: 16,
+      frameH: 16,
+      cols: 4,
+    );
+    final z = a.copyWith(zoom: 4);
+    expect(z.zoom, 4);
+    expect(z.copyWith(fps: 8).zoom, 4, reason: 'kept when not passed');
+    expect(z.copyWith(frameW: 32).zoom, 4);
+    expect(z.withFrameCount(2)!.zoom, 4);
+    expect(z.copyWith(zoom: null).zoom, isNull);
+    expect(z.toJson()['zoom'], 4);
+    expect(a.toJson().containsKey('zoom'), isFalse);
+    expect(SpriteAnim.fromJson(z.toJson()), z);
+    expect(z == a, isFalse);
+    expect(applyOverride(a, {'zoom': 2}).zoom, 2);
+    expect(applyOverride(a, {'zoom': 0}).zoom, isNull);
+    expect(applyOverride(a, {'zoom': 99}).zoom, isNull);
+  });
 }

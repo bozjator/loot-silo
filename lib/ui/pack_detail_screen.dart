@@ -1163,6 +1163,7 @@ class _AnimationEditorState extends State<_AnimationEditor> {
         frameH: h,
         fps: _anim.fps,
         playRow: _anim.playRow,
+        zoom: _anim.zoom,
       );
       _n.text = '${_anim.frameCount}';
       _framesError = null;
@@ -1318,6 +1319,27 @@ class _AnimationEditorState extends State<_AnimationEditor> {
                             ),
                           ),
                           Text('${a.fps.round()}'),
+                          const SizedBox(width: 16),
+                          const Text('Zoom'),
+                          const SizedBox(width: 8),
+                          // Auto fits the trimmed frame; a number is a fixed
+                          // pixel scale, centred and clipped on cards.
+                          DropdownButton<int?>(
+                            key: const ValueKey('zoom'),
+                            mouseCursor: clickCursor,
+                            dropdownMenuItemMouseCursor: clickCursor,
+                            value: a.zoom,
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('Auto'),
+                              ),
+                              for (final z in SpriteAnim.zoomSteps)
+                                DropdownMenuItem(value: z, child: Text('$z×')),
+                            ],
+                            onChanged: (z) =>
+                                setState(() => _anim = a.copyWith(zoom: z)),
+                          ),
                         ],
                       ),
                     if (isSheet)

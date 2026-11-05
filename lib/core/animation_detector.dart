@@ -22,9 +22,13 @@ class SpriteAnim {
     this.fps = defaultFps,
     this.frameTotal,
     this.playRow = 0,
+    this.zoom,
   });
 
   static const defaultFps = 10.0;
+
+  /// Choices for [zoom] in the Edit dialog (whole pixel steps).
+  static const zoomSteps = [1, 2, 3, 4, 5, 6, 7, 8];
 
   /// [playRow] value meaning every row of a grid plays in turn.
   static const allRows = -1;
@@ -52,6 +56,11 @@ class SpriteAnim {
   /// before; sidecar key `rows` (`"all"` or a 1-based row number).
   final int playRow;
 
+  /// Screen pixels per sprite pixel, or null for Auto: the trimmed frame
+  /// fitted to the box in whole steps. A set zoom is drawn centred and
+  /// clipped. Sidecar key `zoom`.
+  final int? zoom;
+
   /// The row for [AnimatedSprite]: null plays every row.
   int? get rowToPlay => playRow < 0 ? null : playRow.clamp(0, rows - 1);
 
@@ -71,7 +80,13 @@ class SpriteAnim {
 
   /// Changing the frame size drops a [frameTotal] override, since cols and
   /// rows are recomputed from it.
-  SpriteAnim copyWith({int? frameW, int? frameH, double? fps, int? playRow}) {
+  SpriteAnim copyWith({
+    int? frameW,
+    int? frameH,
+    double? fps,
+    int? playRow,
+    Object? zoom = _keep,
+  }) {
     final fw = frameW ?? this.frameW;
     final fh = frameH ?? this.frameH;
     final sheetW = this.frameW * cols;
@@ -88,8 +103,12 @@ class SpriteAnim {
       fps: fps ?? this.fps,
       frameTotal: frameW == null && frameH == null ? frameTotal : null,
       playRow: _keepRow(playRow ?? this.playRow, newRows),
+      zoom: identical(zoom, _keep) ? this.zoom : zoom as int?,
     );
   }
+
+  /// [copyWith]'s "leave [zoom] as it is"; pass null for Auto.
+  static const _keep = Object();
 
   /// A row that no longer exists falls back to row 0.
   static int _keepRow(int row, int rows) => row < rows ? row : 0;
@@ -134,6 +153,7 @@ class SpriteAnim {
       fps: fps,
       frameTotal: n,
       playRow: _keepRow(playRow, r),
+      zoom: zoom,
     );
   }
 
@@ -164,6 +184,7 @@ class SpriteAnim {
     if (fps != defaultFps) 'fps': fps,
     if (frameTotal != null) 'frames_total': frameTotal,
     if (playRow != 0) 'play_row': playRow,
+    'zoom': ?zoom,
   };
 
   factory SpriteAnim.fromJson(Map<String, Object?> j) => SpriteAnim(
@@ -177,6 +198,7 @@ class SpriteAnim {
     fps: (j['fps'] as num?)?.toDouble() ?? defaultFps,
     frameTotal: (j['frames_total'] as num?)?.toInt(),
     playRow: (j['play_row'] as num?)?.toInt() ?? 0,
+    zoom: (j['zoom'] as num?)?.toInt(),
   );
 
   @override
@@ -191,6 +213,7 @@ class SpriteAnim {
       other.fps == fps &&
       other.frameTotal == frameTotal &&
       other.playRow == playRow &&
+      other.zoom == zoom &&
       other.frames.length == frames.length;
 
   @override
@@ -204,6 +227,7 @@ class SpriteAnim {
     fps,
     frameTotal,
     playRow,
+    zoom,
   );
 
   @override
@@ -490,11 +514,15 @@ SpriteAnim applyOverride(SpriteAnim a, Object? override) {
   );
   final n = (override['frames'] as num?)?.toInt();
   final sliced = n == null ? sized : sized.withFrameCount(n) ?? sized;
-  return switch (rows) {
+  final rowed = switch (rows) {
     'all' => sliced.copyWith(playRow: SpriteAnim.allRows),
     num r when r >= 1 => sliced.copyWith(playRow: r.toInt() - 1),
     _ => sliced,
   };
+  final zoom = (override['zoom'] as num?)?.toInt();
+  return zoom != null && zoom >= 1 && zoom <= SpriteAnim.zoomSteps.last
+      ? rowed.copyWith(zoom: zoom)
+      : rowed;
 }
 
 /// The animation a tile should show: idle first, then walk/run, then any

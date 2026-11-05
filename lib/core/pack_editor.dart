@@ -200,6 +200,7 @@ PackSidecar saveAnimationOverride(
       'frames': ?anim.frameTotal,
       if (anim.playRow != detected.playRow)
         'rows': anim.playRow < 0 ? 'all' : anim.playRow + 1,
+      if (anim.zoom != detected.zoom) 'zoom': ?anim.zoom,
     };
     if (o.isNotEmpty) animations[detected.path] = o;
   }

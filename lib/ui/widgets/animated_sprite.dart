@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/scheduler.dart';
@@ -14,8 +15,14 @@ import 'pixel_image.dart';
 /// draws them crisp, scaled up in whole steps.
 ///
 /// Shows frame 0 while [playing] is false. For grids, the animation's
-/// [SpriteAnim.rowToPlay] picks the row to play; `null` plays every cell. Fully transparent cells (common at
-/// the end of grid rows) are skipped once the image has been inspected.
+/// [SpriteAnim.rowToPlay] picks the row to play; `null` plays every cell.
+///
+/// Auto-trim: fully transparent cells (common at the end of grid rows) are
+/// skipped, and every frame is cropped to the union of the frames' opaque
+/// bounds, the same rectangle for all of them so nothing jitters. The
+/// result is cached per sheet and slicing ([trimCache]), so a card shown
+/// again draws trimmed from its first frame. [SpriteAnim.zoom] replaces the
+/// fit with a fixed whole-number scale, centred and clipped.
 class AnimatedSprite extends StatefulWidget {
   const AnimatedSprite({
     super.key,
@@ -36,6 +43,27 @@ class AnimatedSprite extends StatefulWidget {
   State<AnimatedSprite> createState() => _AnimatedSpriteState();
 }
 
+/// Trim results: kept frame indices and the shared crop (relative to each
+/// frame's origin), keyed by [trimKey]. Bounded; oldest entries go first.
+@visibleForTesting
+final trimCache = <String, (List<int>, Rect)>{};
+const _trimCacheSize = 4000;
+
+/// Cache key for [anim] in [packPath]: the file(s) and everything that
+/// changes the slicing (not fps or zoom).
+@visibleForTesting
+String trimKey(String packPath, SpriteAnim anim, List<ui.Image> images) => [
+  packPath,
+  anim.path,
+  anim.kind.name,
+  anim.frameW,
+  anim.frameH,
+  anim.frameTotal,
+  anim.rowToPlay,
+  anim.frames.length,
+  for (final i in images) '${i.width}x${i.height}',
+].join('|');
+
 class _AnimatedSpriteState extends State<AnimatedSprite>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker = createTicker(_tick);
@@ -51,6 +79,9 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
   var _frame = 0;
   Object? _error;
 
+  /// False until [_trimEmpty] has run, so the untrimmed frame never flashes.
+  var _trimmed = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -60,15 +91,22 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
   @override
   void didUpdateWidget(AnimatedSprite old) {
     super.didUpdateWidget(old);
-    // Only the row changed: re-slice the loaded image, no reload.
+    // Only the row changed: re-slice the loaded image, no reload. Zoom and
+    // fps only change the drawing.
     final sameSheet =
-        old.anim.copyWith(playRow: widget.anim.playRow) == widget.anim;
+        old.anim.copyWith(
+          playRow: widget.anim.playRow,
+          zoom: widget.anim.zoom,
+          fps: widget.anim.fps,
+        ) ==
+        widget.anim;
     if (!sameSheet || old.packPath != widget.packPath) {
       _release();
       _load();
     } else if (old.anim.playRow != widget.anim.playRow) {
       _frames = _computeFrames();
       _frame = 0;
+      _trimmed = false;
       _trimEmpty();
     }
     _syncTicker();
@@ -100,6 +138,7 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
                 ..addAll(pending.cast<ui.Image>());
               _frames = _computeFrames();
               _frame = 0;
+              _trimmed = false;
             });
             _trimEmpty();
             _syncTicker();
@@ -151,26 +190,37 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
     ];
   }
 
-  /// Drops fully transparent sheet cells and crops every frame to the
-  /// union of their opaque bounds, so padded frames still scale up.
+  /// Drops fully transparent frames and crops every frame to the union of
+  /// their opaque bounds, so padded frames still scale up. Sheets and
+  /// sequences alike; GIFs play as they are.
   Future<void> _trimEmpty() async {
-    if (widget.anim.kind != AnimKind.sheet || _images.isEmpty) return;
-    final image = _images.first;
     final frames = _frames;
-    final data = await image.toByteData();
-    if (data == null || !mounted || !identical(frames, _frames)) return;
-    final w = image.width;
-    final h = image.height;
-    // Opaque bounds of a cell relative to its origin, or null when empty.
+    if (widget.anim.kind == AnimKind.gif || _images.isEmpty) {
+      _trimmed = true;
+      return;
+    }
+    final key = trimKey(widget.packPath, widget.anim, _images);
+    final cached = trimCache[key];
+    if (cached != null) {
+      _applyTrim(cached);
+      return;
+    }
+    final data = <ui.Image, ByteData?>{};
+    for (final i in {for (final (index, _) in frames) _images[index]}) {
+      data[i] = await i.toByteData();
+    }
+    if (!mounted || !identical(frames, _frames)) return;
+    // Opaque bounds of a frame relative to its origin, or null when empty.
     // A cell can reach past the image (frame size larger than the sheet),
     // so the scan stays inside it.
-    Rect? bounds(Rect r) {
+    Rect? bounds(ui.Image image, ByteData bytes, Rect r) {
+      final w = image.width;
       int? x0, y0, x1, y1;
       final xEnd = math.min(r.right.toInt(), w);
-      final yEnd = math.min(r.bottom.toInt(), h);
+      final yEnd = math.min(r.bottom.toInt(), image.height);
       for (var y = r.top.toInt(); y < yEnd; y++) {
         for (var x = r.left.toInt(); x < xEnd; x++) {
-          if (data.getUint8((y * w + x) * 4 + 3) == 0) continue;
+          if (bytes.getUint8((y * w + x) * 4 + 3) == 0) continue;
           x0 = x0 == null ? x : math.min(x0, x);
           x1 = x1 == null ? x : math.max(x1, x);
           y0 ??= y;
@@ -187,19 +237,50 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
     }
 
     Rect? union;
-    final kept = <(int, Rect)>[];
-    for (final f in frames) {
-      final b = bounds(f.$2);
+    final kept = <int>[];
+    for (var i = 0; i < frames.length; i++) {
+      final (index, rect) = frames[i];
+      final image = _images[index];
+      final bytes = data[image];
+      if (bytes == null) {
+        // Unreadable: keep the frame whole.
+        kept.add(i);
+        union = (union ?? rect.shift(-rect.topLeft)).expandToInclude(
+          rect.shift(-rect.topLeft),
+        );
+        continue;
+      }
+      final b = bounds(image, bytes, rect);
       if (b == null) continue;
-      kept.add(f);
+      kept.add(i);
       union = union == null ? b : union.expandToInclude(b);
     }
-    if (kept.isEmpty) return;
-    final crop = union!;
+    if (kept.isEmpty) {
+      setState(() => _trimmed = true);
+      return;
+    }
+    final result = (kept, union!);
+    if (trimCache.length >= _trimCacheSize) {
+      trimCache.remove(trimCache.keys.first);
+    }
+    trimCache[key] = result;
+    _applyTrim(result);
+  }
+
+  void _applyTrim((List<int>, Rect) trim) {
+    final (kept, crop) = trim;
+    final frames = _frames;
     setState(() {
-      _frames = [for (final (i, r) in kept) (i, crop.shift(r.topLeft))];
+      _frames = [
+        for (final i in kept)
+          if (i < frames.length)
+            (frames[i].$1, crop.shift(frames[i].$2.topLeft)),
+      ];
+      if (_frames.isEmpty) _frames = frames;
       _frame = _frame % _frames.length;
+      _trimmed = true;
     });
+    _syncTicker();
   }
 
   void _syncTicker() {
@@ -242,10 +323,12 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null || _frames.isEmpty) return const SizedBox.expand();
+    if (_error != null || _frames.isEmpty || !_trimmed) {
+      return const SizedBox.expand();
+    }
     final (index, src) = _frames[_frame % _frames.length];
     return CustomPaint(
-      painter: SpriteFramePainter(_images[index], src),
+      painter: SpriteFramePainter(_images[index], src, zoom: widget.anim.zoom),
       size: Size.infinite,
     );
   }
@@ -253,16 +336,23 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
 
 /// Paints one frame; public so tests can read [src].
 class SpriteFramePainter extends CustomPainter {
-  SpriteFramePainter(this.image, this.src);
+  SpriteFramePainter(this.image, this.src, {this.zoom});
 
   final ui.Image image;
   final Rect src;
 
+  /// A fixed scale (centred, clipped to the box); null fits in whole steps.
+  final int? zoom;
+
+  /// The scale [paint] draws [src] at in a box of [size].
+  double scaleFor(Size size) =>
+      zoom?.toDouble() ??
+      integerScale(math.min(size.width / src.width, size.height / src.height));
+
   @override
   void paint(Canvas canvas, Size size) {
-    final scale = integerScale(
-      math.min(size.width / src.width, size.height / src.height),
-    );
+    final scale = scaleFor(size);
+    if (zoom != null) canvas.clipRect(Offset.zero & size);
     final w = src.width * scale;
     final h = src.height * scale;
     final dst = Rect.fromLTWH(
@@ -284,5 +374,5 @@ class SpriteFramePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(SpriteFramePainter old) =>
-      old.image != image || old.src != src;
+      old.image != image || old.src != src || old.zoom != zoom;
 }
