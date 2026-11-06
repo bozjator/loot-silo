@@ -175,21 +175,21 @@ void main() {
   testWidgets('unmounting while the trim reads the frames is safe', (
     tester,
   ) async {
-    // Three frame files: the trim reads them one after the other, so the
-    // sprite can go (scrolled away) between two reads.
-    final names = [for (var i = 0; i < 3; i++) 'walk_$i.png'];
-    for (final n in names) {
-      final image = img.Image(width: 16, height: 16, numChannels: 4);
+    // A three-frame strip: the sprite can go (scrolled away) while the
+    // trim reads its pixels.
+    final names = ['walk.png'];
+    final image = img.Image(width: 48, height: 16, numChannels: 4);
+    for (var i = 0; i < 3; i++) {
       img.fillRect(
         image,
-        x1: 4,
+        x1: 4 + i * 16,
         y1: 4,
-        x2: 11,
+        x2: 11 + i * 16,
         y2: 11,
         color: img.ColorRgba8(0, 0, 255, 255),
       );
-      File(p.join(tmp.path, n)).writeAsBytesSync(img.encodePng(image));
     }
+    File(p.join(tmp.path, names.single)).writeAsBytesSync(img.encodePng(image));
     await tester.pumpWidget(const SizedBox());
     for (final n in names) {
       await tester.runAsync(
@@ -204,11 +204,11 @@ void main() {
       AnimatedSprite(
         packPath: tmp.path,
         anim: SpriteAnim(
-          path: names.first,
-          kind: AnimKind.sequence,
+          path: names.single,
+          kind: AnimKind.sheet,
           frameW: 16,
           frameH: 16,
-          frames: names,
+          cols: 3,
         ),
         playing: true,
       ),
@@ -346,33 +346,6 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(painter(tester).src, const Rect.fromLTRB(20, 24, 32, 40));
-    });
-
-    testWidgets('sequences are trimmed across their frame files', (
-      tester,
-    ) async {
-      for (var i = 0; i < 2; i++) {
-        final image = img.Image(width: 32, height: 32, numChannels: 4);
-        img.fillRect(
-          image,
-          x1: 8 + i * 4,
-          y1: 10,
-          x2: 15 + i * 4,
-          y2: 17,
-          color: img.ColorRgba8(200, 0, 0, 255),
-        );
-        File(p.join(tmp.path, 'smoke_${i + 1}.png'))
-            .writeAsBytesSync(img.encodePng(image));
-      }
-      const seq = SpriteAnim(
-        path: 'smoke_1.png',
-        kind: AnimKind.sequence,
-        frameW: 32,
-        frameH: 32,
-        frames: ['smoke_1.png', 'smoke_2.png'],
-      );
-      await pumpAt(tester, seq);
-      expect(painter(tester).src, const Rect.fromLTRB(8, 10, 20, 18));
     });
 
     testWidgets('a zoom is a fixed scale, centred and clipped', (tester) async {

@@ -11,8 +11,7 @@ import 'package:path/path.dart' as p;
 import '../../core/animation_detector.dart';
 import 'pixel_image.dart';
 
-/// Plays a [SpriteAnim]: slices sheet cells (or loads sequence frames) and
-/// draws them crisp, scaled up in whole steps.
+/// Plays a [SpriteAnim]: slices sheet cells and draws them crisp, scaled up in whole steps.
 ///
 /// Shows frame 0 while [playing] is false. For grids, the animation's
 /// [SpriteAnim.rowToPlay] picks the row to play; `null` plays every cell.
@@ -60,7 +59,6 @@ String trimKey(String packPath, SpriteAnim anim, List<ui.Image> images) => [
   anim.frameH,
   anim.frameTotal,
   anim.rowToPlay,
-  anim.frames.length,
   for (final i in images) '${i.width}x${i.height}',
 ].join('|');
 
@@ -115,7 +113,7 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
   void _load() {
     _loading = true;
     final anim = widget.anim;
-    final paths = anim.kind == AnimKind.sequence ? anim.frames : [anim.path];
+    final paths = [anim.path];
     final pending = List<ui.Image?>.filled(paths.length, null);
     var remaining = paths.length;
     for (var i = 0; i < paths.length; i++) {
@@ -156,20 +154,6 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
 
   List<(int, Rect)> _computeFrames() {
     final anim = widget.anim;
-    if (anim.kind == AnimKind.sequence) {
-      return [
-        for (var i = 0; i < _images.length; i++)
-          (
-            i,
-            Rect.fromLTWH(
-              0,
-              0,
-              _images[i].width.toDouble(),
-              _images[i].height.toDouble(),
-            ),
-          ),
-      ];
-    }
     if (_images.isEmpty) return const [];
     final image = _images.first;
     // The decoded image may differ from the recorded size (overrides,
@@ -191,8 +175,8 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
   }
 
   /// Drops fully transparent frames and crops every frame to the union of
-  /// their opaque bounds, so padded frames still scale up. Sheets and
-  /// sequences alike; GIFs play as they are.
+  /// their opaque bounds, so padded frames still scale up. Sheets only;
+  /// GIFs play as they are.
   Future<void> _trimEmpty() async {
     final frames = _frames;
     if (widget.anim.kind == AnimKind.gif || _images.isEmpty) {

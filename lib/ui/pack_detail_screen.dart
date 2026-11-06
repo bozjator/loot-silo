@@ -390,6 +390,9 @@ class _BodyState extends State<_Body> {
     if (widget.file case final file? when widget.search != null) {
       final at = tabs.indexWhere(
         (t) => switch (t.$1) {
+          const (_AnimationsTab) => contents.shownDetected.any(
+            (a) => a.path == file,
+          ),
           const (_ImagesTab) => contents.images.contains(file),
           const (_AudioTab) => contents.audio.contains(file),
           const (_FilesTab) => contents.other.contains(file),
@@ -1349,7 +1352,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
   late Set<String> _animated = _animatedFiles();
 
   Set<String> _animatedFiles() => {
-    for (final a in contents.shownDetected) ...[a.path, ...a.frames],
+    for (final a in contents.shownDetected) a.path,
   };
 
   @override
@@ -2029,9 +2032,6 @@ class _AnimationEditorState extends State<AnimationEditor> {
                         AnimKind.sheet =>
                           'Sheet · ${a.frameW}×${a.frameH} frames · '
                               '${a.cols} × ${a.rows} · ${a.frameCount} frames',
-                        AnimKind.sequence =>
-                          'Sequence · ${a.frames.length} files · '
-                              '${a.frameW}×${a.frameH}',
                         AnimKind.gif => 'Animated GIF',
                       }),
                       if (a.kind != AnimKind.gif)

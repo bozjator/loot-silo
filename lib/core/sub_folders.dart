@@ -21,7 +21,7 @@ class SubFolder {
   /// Representative image relative to [folder].
   final String? preview;
 
-  /// Frame data when [preview] is a sprite sheet or sequence; paths in it
+  /// Frame data when [preview] is a sprite sheet; paths in it
   /// are relative to [folder] too.
   final SpriteAnim? previewAnim;
   final int fileCount;

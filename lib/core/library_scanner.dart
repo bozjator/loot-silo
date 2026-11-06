@@ -54,7 +54,7 @@ class ScannedPack {
   /// its own, a sub-pack's preview.
   final String? preview;
 
-  /// Frame data when [preview] is a sprite sheet or frame sequence.
+  /// Frame data when [preview] is a sprite sheet.
   final SpriteAnim? previewAnim;
   final int totalBytes;
   final PackSidecar? sidecar;

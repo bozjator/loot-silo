@@ -360,9 +360,6 @@ class _AnimationTileState extends State<_AnimationTile> {
                                     '${a.frameW}×${a.frameH} · '
                                         '${a.frameCount} frames · '
                                         '${a.fps.round()} fps',
-                                  AnimKind.sequence =>
-                                    '${a.frames.length} files · '
-                                        '${a.fps.round()} fps',
                                   AnimKind.gif => 'GIF',
                                 },
                                 maxLines: 1,

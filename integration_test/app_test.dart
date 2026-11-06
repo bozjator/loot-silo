@@ -483,9 +483,11 @@ void main() {
     // After a route pop the test text input needs a fresh tap.
     await tester.tap(find.byType(TextField));
     await tester.pump();
-    await tester.enterText(find.byType(TextField), 'ashishlko11');
-    await pumpUntil(tester, find.text('Special Effects Vol.03'));
-    await tester.tap(find.text('Special Effects Vol.03'));
+    // M34: Special Effects Vol.03 holds only animations now (no Images
+    // tab); Village(interiors) has plain images.
+    await tester.enterText(find.byType(TextField), 'Village(interiors)');
+    await pumpUntil(tester, find.text(villageInteriors));
+    await tester.tap(find.text(villageInteriors).first);
     await pumpUntil(tester, find.textContaining('Images ('));
     await tester.tap(find.textContaining('Images ('));
     await tester.pump(const Duration(milliseconds: 500));
@@ -636,7 +638,9 @@ void main() {
 
     checker('knight_mockup.png', 500, 300, 50);
     checker('ui/tall_banner-panel.png', 300, 1200, 60);
-    checker('fx/wide_strip.png', 4000, 200, 100);
+    // A UI word: a 20:1 image that isn't a strip, so it stays in Images
+    // (M34 lists animations under Animations only).
+    checker('fx/wide_ui-panorama.png', 4000, 200, 100);
     checker('tiny_gem.png', 16, 16, 4);
     await tester.pumpWidget(app(lib));
     await pumpUntil(tester, find.text('Knight Pack'));
@@ -667,12 +671,12 @@ void main() {
     await tester.tap(find.textContaining('Images ('));
     await tester.pump(const Duration(milliseconds: 500));
     await settleImages(tester);
-    await tester.tap(find.text('wide_strip.png'));
-    await pumpUntil(tester, find.text('Wide strip'));
+    await tester.tap(find.text('wide_ui-panorama.png'));
+    await pumpUntil(tester, find.text('Wide ui panorama'));
     await settleImages(tester);
     expect(find.textContaining('4000 × 200 px'), findsOneWidget);
     await captureScreenshot(tester, 'm12_viewer_strip', settle: false);
-    // Sorted order: fx/wide_strip, knight, knight_mockup, tiny_gem, ui/tall.
+    // Sorted order: fx/wide_ui-panorama, knight, knight_mockup, tiny_gem, ui/tall.
     for (final (steps, title, shot) in [
       (3, 'Tiny gem', 'm12_viewer_tiny'),
       (1, 'Tall banner panel', 'm12_viewer_tall'),
@@ -697,14 +701,23 @@ void main() {
     final before = Directory(real).statSync().modified;
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
-    await tester.enterText(find.byType(TextField), 'ashishlko11');
-    await pumpUntil(tester, find.text('Special Effects Vol.03'));
-    await tester.tap(find.text('Special Effects Vol.03'));
+    // M34: Special Effects Vol.03 holds only animations now (no Images
+    // tab); Village(interiors) has plain images.
+    await tester.enterText(find.byType(TextField), 'Village(interiors)');
+    await pumpUntil(tester, find.text(villageInteriors));
+    await tester.tap(find.text(villageInteriors).first);
     await pumpUntil(tester, find.textContaining('Images ('));
     await tester.tap(find.textContaining('Images ('));
     await tester.pump(const Duration(milliseconds: 500));
     await settleImages(tester);
-    await tester.tap(find.text('1.png'));
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Card),
+          )
+          .first,
+    );
     await pumpUntil(tester, find.byType(ImageViewer));
     await settleImages(tester);
     await captureScreenshot(tester, 'm12_viewer_real', settle: false);
@@ -856,9 +869,11 @@ A **16×16** knight with *walk* and *idle* animations.
       await captureScreenshot(tester, shot, settle: false);
     }
 
-    await tester.enterText(find.byType(TextField), 'ashishlko11');
-    await pumpUntil(tester, find.text('Special Effects Vol.03'));
-    await tester.tap(find.text('Special Effects Vol.03'));
+    // M34: Special Effects Vol.03 holds only animations now (no Images
+    // tab); Village(interiors) has plain images.
+    await tester.enterText(find.byType(TextField), 'Village(interiors)');
+    await pumpUntil(tester, find.text(villageInteriors));
+    await tester.tap(find.text(villageInteriors).first);
     await pumpUntil(tester, find.textContaining('Images ('));
     await tester.tap(find.textContaining('Images ('));
     await tester.pump(const Duration(milliseconds: 500));
@@ -1209,26 +1224,27 @@ A **16×16** knight with *walk* and *idle* animations.
     await hoverOver(tester, find.text('Chimney smoke'));
     await tester.tap(find.byTooltip('Edit animation'));
     await pumpUntil(tester, find.text('Apply size'));
-    expect(find.text('Sheet · 64×64 frames · 24 × 1 · 24 frames'), findsOne);
+    // M34: the column gaps give the real 16 frames of 96 px right away.
+    expect(find.text('Sheet · 96×64 frames · 16 × 1 · 16 frames'), findsOne);
     final frames = find.widgetWithText(TextField, 'Frames');
     // Since M26 a count only fails when no grid fits at all.
     await tester.enterText(frames, '600');
     await tester.pump();
     expect(find.text("Doesn't fit 1536×64 px"), findsOneWidget);
-    await tester.enterText(frames, '16');
+    await tester.enterText(frames, '24');
     await tester.pump();
-    expect(find.text('Sheet · 96×64 frames · 16 × 1 · 16 frames'), findsOne);
+    expect(find.text('Sheet · 64×64 frames · 24 × 1 · 24 frames'), findsOne);
     await settleImages(tester);
     await captureScreenshot(tester, 'm18_frames_dialog', settle: false);
     await tester.tap(find.text('Save'));
     await pumpUntil(tester, find.text('Reset to detected'));
     expect(
       File(p.join(pack.path, 'asset_pack.json')).readAsStringSync(),
-      contains('"frames": 16'),
+      contains('"frames": 24'),
     );
     await tester.tap(find.text('Close'));
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('96×64 · 16 frames · 10 fps'), findsOneWidget);
+    expect(find.text('64×64 · 24 frames · 10 fps'), findsOneWidget);
     await settleImages(tester);
     await captureScreenshot(tester, 'm18_card_16_frames', settle: false);
   });
@@ -1487,7 +1503,8 @@ A **16×16** knight with *walk* and *idle* animations.
     // Back on the dashboard, still filtered by the search.
     await pumpUntil(tester, find.text('1 pack'));
 
-    // Special Effects Vol.03: All rows makes the dialog savable.
+    // Special Effects Vol.03: All rows is the default (M34); one row makes
+    // the dialog savable.
     await openEditor(
       'Special Effects Vol',
       'Special Effects Vol.03',
@@ -1496,14 +1513,14 @@ A **16×16** knight with *walk* and *idle* animations.
     FilledButton save() =>
         tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'));
     expect(save().onPressed, isNull);
-    await tester.tap(find.text('Row 1'));
+    await tester.tap(find.text('All rows'));
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.text('All rows').last);
+    await tester.tap(find.text('Row 1').last);
     await tester.pump(const Duration(milliseconds: 500));
     expect(save().onPressed, isNotNull);
     expect(find.text('Not an animation'), findsOneWidget);
     await settleImages(tester);
-    await captureScreenshot(tester, 'm26_all_rows', settle: false);
+    await captureScreenshot(tester, 'm26_one_row', settle: false);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump(const Duration(milliseconds: 500));
 
@@ -1924,6 +1941,81 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m34: Sea Adventures animations, one file each (real)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    const title = 'ERW - Sea Adventures (GL 2.0 expansion) V1.5';
+    if (!Directory(p.join(real, 'RafaelMatos', title)).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'Sea Adventures');
+    final tile = find.descendant(
+      of: find.byType(PackTile),
+      matching: find.text(title),
+    );
+    await pumpUntil(tester, tile);
+    await tester.tap(tile.first);
+    await pumpUntil(tester, find.textContaining('Animations ('), seconds: 60);
+    await tester.tap(find.textContaining('Animations ('));
+    await tester.pump(const Duration(seconds: 1));
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm34_sea_animations', settle: false);
+
+    // banner-only.png: 12 frames of 96×128; gems-1.png an 8-frame strip.
+    final field = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    await tester.enterText(field, 'banner');
+    await pumpUntil(tester, find.text('Matching “banner”'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('96×128 · 12 frames · 10 fps'), findsWidgets);
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm34_sea_banner', settle: false);
+    await tester.enterText(field, 'gems');
+    await pumpUntil(tester, find.text('Matching “gems”'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('32×32 · 8 frames · 10 fps'), findsNWidgets(4));
+    // Animations aren't listed again among the images.
+    expect(find.textContaining('Images ('), findsNothing);
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm34_sea_gems', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m34: a file result that is an animation opens Animations', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    const title = 'ERW - Sea Adventures (GL 2.0 expansion) V1.5';
+    if (!Directory(p.join(real, 'RafaelMatos', title)).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.tap(find.text('Files'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.enterText(find.byType(TextField), 'gems');
+    final result = find.textContaining('$title · ');
+    await pumpUntil(tester, result);
+    await tester.ensureVisible(result.first);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(result.first);
+    await pumpUntil(tester, find.text('Matching “gems”'));
+    await tester.pump(const Duration(seconds: 1));
+    // The Animations tab is the one shown: its cards are built.
+    await pumpUntil(tester, find.text('32×32 · 8 frames · 10 fps'));
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm34_file_result_animation', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m21: sort by type (real library, read-only)', (tester) async {
     final real = p.canonicalize('../assets_library');
     if (!Directory(real).existsSync()) return;
@@ -2320,6 +2412,9 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm10_search_dark', settle: false);
   });
 }
+
+/// A real pack with both animations and plain images.
+const villageInteriors = 'Epic RPG World - Village(interiors) V1.3';
 
 /// Records seeks; the test pushes positions.
 class _FakeTrackPlayer implements TrackPlayer {

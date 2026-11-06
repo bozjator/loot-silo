@@ -83,22 +83,28 @@ class HelpScreen extends StatelessWidget {
               ]),
               _Section('Animations', [
                 const _P(
-                  'Animations are found when the library is scanned. Three '
-                  'kinds are detected:',
+                  'Animations are found when the library is scanned. One file '
+                  'is one animation: numbered frame files (walk_0.png, '
+                  'walk_1.png …) stay separate images; use Combine into '
+                  'animation (below) to make one strip of them. Two kinds '
+                  'are detected:',
                 ),
                 const _Bullets([
-                  'Numbered sequences: three or more numbered PNGs with the '
-                      'same prefix in one folder (walk_0.png, walk_1.png …), '
-                      'frames of the same size up to 512 px. The prefix or a '
-                      'folder name must contain an animation word (below), so '
-                      'barrels_0.png, barrels_1.png stay separate images.',
                   'Sheets: one image cut into frames, from a size hint in the '
-                      'name like (32x32), a frame count like _8f or 8frames, a '
-                      'horizontal strip of square frames, or a grid of the '
-                      'pack\'s usual frame size. A transparent gap between '
-                      'frames also counts.',
+                      'name like (32x32), a frame count like _8f or 8frames, '
+                      'or a horizontal strip. A strip is cut into square '
+                      'frames, unless transparent gaps between its frames '
+                      'show another frame width (checked for strips whose '
+                      'name or folder has an animation word, below). In '
+                      'effect packs, transparent gaps also find grids.',
                   'GIF and animated WebP files.',
                 ]),
+                const _P(
+                  'A sheet with several rows plays all its rows, unless you '
+                  'save one row in Edit. A file shown in the Animations tab '
+                  'isn\'t listed again in the Images tab; "Not an animation" '
+                  'puts it back there.',
+                ),
                 _P('Animation words: ${animationWords.join(', ')}.'),
                 _P('Sheet words: ${sheetWords.join(', ')}.'),
                 _P(
@@ -107,7 +113,7 @@ class HelpScreen extends StatelessWidget {
                 ),
                 const _P('Naming tips'),
                 const _Bullets([
-                  '<name>_<frame>.png for frame files: knight_walk_0.png …',
+                  'Frame files: combine them into one animation.',
                   '…_strip8.png or …_8f.png for a strip of 8 frames.',
                   '(32x32) in the name for the frame size of a grid.',
                 ]),

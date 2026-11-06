@@ -37,12 +37,8 @@ void main() {
       ('tiles.png', 7),
     ];
     final c = loadPackContents(tmp.path, files);
-    expect(c.images, [
-      'Hero/Idle.png',
-      '_itch/cover.png',
-      'preview.png',
-      'tiles.png',
-    ]);
+    // Hero/Idle.png is an animation, listed in that tab only.
+    expect(c.images, ['_itch/cover.png', 'preview.png', 'tiles.png']);
     expect(c.audio, ['sfx/hit.wav']);
     expect(c.other, [
       'license.txt',
@@ -132,10 +128,10 @@ void main() {
   test('PackContents.matching keeps only matching files and animations', () {
     const seq = SpriteAnim(
       path: 'fx/smoke_1.png',
-      kind: AnimKind.sequence,
+      kind: AnimKind.sheet,
       frameW: 8,
       frameH: 8,
-      frames: ['fx/smoke_1.png', 'fx/smoke_2.png'],
+      cols: 2,
     );
     const sheet = SpriteAnim(
       path: 'hero/idle.png',
@@ -163,34 +159,71 @@ void main() {
     expect(c.matching(['arrel']).images, isEmpty);
   });
 
+  test('an animation is not listed in images; Not an animation brings it '
+      'back', () {
+    png('hero/walk_strip.png', 64, 16);
+    png('hero/portrait.png', 40, 60);
+    final files = [('hero/portrait.png', 1), ('hero/walk_strip.png', 1)];
+    final c = loadPackContents(tmp.path, files);
+    expect(c.detected.single.path, 'hero/walk_strip.png');
+    expect(c.images, ['hero/portrait.png']);
+    setNotAnimation(tmp.path, 'hero/walk_strip.png');
+    final back = loadPackContents(tmp.path, files);
+    expect(back.images, ['hero/portrait.png', 'hero/walk_strip.png']);
+    expect(back.shownDetected, isEmpty);
+  });
+
+  test('the preview carousel still offers animated GIF mockups', () {
+    png('mockups/mockup2.png', 40, 30);
+    File(p.join(tmp.path, 'mockups', 'mockup1.gif')).writeAsBytesSync([
+      ...'GIF89a'.codeUnits,
+      8, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+    ]);
+    final c = loadPackContents(tmp.path, [
+      ('mockups/mockup1.gif', 1),
+      ('mockups/mockup2.png', 1),
+    ]);
+    expect(c.images, ['mockups/mockup2.png']);
+    expect(c.carousel(null), ['mockups/mockup1.gif', 'mockups/mockup2.png']);
+  });
+
   test('the row choice is saved as rows: all or a 1-based number', () {
     png('fx/Explosion(32x32).png', 64, 64);
     final detected = loadPackContents(tmp.path, [
       ('fx/Explosion(32x32).png', 1),
     ]).detected.single;
     expect(detected.rows, greaterThan(1));
+    // All rows is the default (M34), so it isn't written.
+    expect(detected.rowToPlay, isNull);
+    saveAnimationOverride(tmp.path, detected, detected.copyWith(playRow: 1));
+    expect(sidecarJson()['animations'], {
+      'fx/Explosion(32x32).png': {'rows': 2},
+    });
+    final c = loadPackContents(tmp.path, [('fx/Explosion(32x32).png', 1)]);
+    expect(c.animations.single.rowToPlay, 1);
     saveAnimationOverride(
       tmp.path,
       detected,
       detected.copyWith(playRow: SpriteAnim.allRows),
     );
-    expect(sidecarJson()['animations'], {
-      'fx/Explosion(32x32).png': {'rows': 'all'},
-    });
-    final c = loadPackContents(tmp.path, [('fx/Explosion(32x32).png', 1)]);
-    expect(c.animations.single.rowToPlay, isNull);
-    saveAnimationOverride(tmp.path, detected, detected.copyWith(playRow: 1));
-    expect(sidecarJson()['animations'], {
-      'fx/Explosion(32x32).png': {'rows': 2},
-    });
-    // Row 0 is the default, so it isn't written.
-    saveAnimationOverride(tmp.path, detected, detected.copyWith(playRow: 0));
     expect(sidecarJson().containsKey('animations'), isFalse);
+    // An old sidecar's explicit rows still apply.
+    File(p.join(tmp.path, 'asset_pack.json')).writeAsStringSync(
+      '{"animations": {"fx/Explosion(32x32).png": {"rows": 1}}}',
+    );
+    final old = loadPackContents(tmp.path, [('fx/Explosion(32x32).png', 1)]);
+    expect(old.animations.single.rowToPlay, 0);
+    File(p.join(tmp.path, 'asset_pack.json')).writeAsStringSync(
+      '{"animations": {"fx/Explosion(32x32).png": {"rows": "all"}}}',
+    );
+    final all = loadPackContents(tmp.path, [('fx/Explosion(32x32).png', 1)]);
+    expect(all.animations.single.rowToPlay, isNull);
   });
 
   test('"Not an animation" moves a file to the images only and back', () {
     png('Hero/Idle.png', 128, 32);
-    for (var i = 1; i <= 3; i++) {
+    png('fx/smoke_1.png', 64, 16);
+    for (var i = 2; i <= 3; i++) {
       png('fx/smoke_$i.png', 16, 16);
     }
     final files = [
@@ -202,7 +235,7 @@ void main() {
       'Hero/Idle.png',
       'fx/smoke_1.png',
     });
-    // A sheet and a numbered sequence.
+    // Two strips.
     setNotAnimation(tmp.path, 'Hero/Idle.png');
     setNotAnimation(tmp.path, 'fx/smoke_1.png');
     expect(sidecarJson()['animations'], {
@@ -217,7 +250,7 @@ void main() {
       'fx/smoke_1.png',
     });
     expect(hidden.images, contains('Hero/Idle.png'));
-    expect(hidden.images, contains('fx/smoke_2.png'));
+    expect(hidden.images, contains('fx/smoke_1.png'));
 
     // Restore drops the override entirely.
     setNotAnimation(tmp.path, 'Hero/Idle.png', hidden: false);
@@ -226,6 +259,7 @@ void main() {
     final back = loadPackContents(tmp.path, files);
     expect(back.animations.length, 2);
     expect(back.hiddenAnimations, isEmpty);
+    expect(back.images, ['fx/smoke_2.png', 'fx/smoke_3.png']);
   });
 
   test('detectAnimations and the preview skip files marked false', () {

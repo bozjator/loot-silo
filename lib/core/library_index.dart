@@ -55,7 +55,7 @@ class Packs extends Table {
   /// Preview image relative to [path].
   TextColumn get preview => text().nullable()();
 
-  /// [SpriteAnim] JSON when the preview is a sheet or sequence.
+  /// [SpriteAnim] JSON when the preview is a sprite sheet.
   TextColumn get previewAnim =>
       text().map(const SpriteAnimConverter()).nullable()();
   IntColumn get fileCount => integer()();
@@ -110,7 +110,7 @@ class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("

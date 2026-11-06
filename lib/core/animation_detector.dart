@@ -6,10 +6,11 @@ import 'package:path/path.dart' as p;
 
 import 'type_classifier.dart';
 
-enum AnimKind { sheet, sequence, gif }
+enum AnimKind { sheet, gif }
 
-/// One animation found in a pack: a sprite sheet (strip or grid), a
-/// numbered frame sequence, or a natively animated GIF.
+/// One animation found in a pack: a sprite sheet (strip or grid) or a
+/// natively animated GIF. One file is always one animation; frame files
+/// are combined into a strip by hand ("Combine into animation").
 class SpriteAnim {
   const SpriteAnim({
     required this.path,
@@ -18,10 +19,9 @@ class SpriteAnim {
     required this.frameH,
     this.cols = 1,
     this.rows = 1,
-    this.frames = const [],
     this.fps = defaultFps,
     this.frameTotal,
-    this.playRow = 0,
+    this.playRow = allRows,
     this.zoom,
   });
 
@@ -36,7 +36,7 @@ class SpriteAnim {
   /// Most frames the Frames field steps to.
   static const maxFrameCount = 512;
 
-  /// Sheet / GIF / first frame, relative to the pack.
+  /// Sheet or GIF, relative to the pack.
   final String path;
   final AnimKind kind;
   final int frameW;
@@ -44,16 +44,15 @@ class SpriteAnim {
   final int cols;
   final int rows;
 
-  /// Frame files of a sequence, relative to the pack, in order.
-  final List<String> frames;
   final double fps;
 
   /// User override of a sheet's total frame count (sidecar `frames`). When
   /// set, frames past it in the last row are skipped.
   final int? frameTotal;
 
-  /// The grid row that plays (0-based), or [allRows]. Row 0 by default, as
-  /// before; sidecar key `rows` (`"all"` or a 1-based row number).
+  /// The grid row that plays (0-based), or [allRows]. Every row by default
+  /// (M34); sidecar key `rows` (`"all"` or a 1-based row number) saves a
+  /// single row.
   final int playRow;
 
   /// Screen pixels per sprite pixel, or null for Auto: the trimmed frame
@@ -65,18 +64,12 @@ class SpriteAnim {
   int? get rowToPlay => playRow < 0 ? null : playRow.clamp(0, rows - 1);
 
   int get frameCount => switch (kind) {
-    AnimKind.sequence => frames.length,
     AnimKind.sheet => frameTotal ?? cols * rows,
     AnimKind.gif => 1,
   };
 
-  /// Display name: file stem, or the shared prefix of a sequence.
-  String get label {
-    final stem = p.basenameWithoutExtension(path);
-    if (kind != AnimKind.sequence) return stem;
-    final prefix = stem.replaceFirst(RegExp(r'[\s_-]*\d+$'), '');
-    return prefix.isEmpty ? p.basename(p.dirname(path)) : prefix;
-  }
+  /// Display name: the file stem.
+  String get label => p.basenameWithoutExtension(path);
 
   /// Changing the frame size drops a [frameTotal] override, since cols and
   /// rows are recomputed from it.
@@ -99,7 +92,6 @@ class SpriteAnim {
       frameH: fh,
       cols: kind == AnimKind.sheet && fw > 0 ? sheetW ~/ fw : cols,
       rows: newRows,
-      frames: frames,
       fps: fps ?? this.fps,
       frameTotal: frameW == null && frameH == null ? frameTotal : null,
       playRow: _keepRow(playRow ?? this.playRow, newRows),
@@ -110,8 +102,8 @@ class SpriteAnim {
   /// [copyWith]'s "leave [zoom] as it is"; pass null for Auto.
   static const _keep = Object();
 
-  /// A row that no longer exists falls back to row 0.
-  static int _keepRow(int row, int rows) => row < rows ? row : 0;
+  /// A row that no longer exists falls back to all rows.
+  static int _keepRow(int row, int rows) => row < rows ? row : allRows;
 
   /// This sheet re-sliced into [n] frames on the best grid that fits:
   /// `cols × rows` with `cols * rows >= n > (rows - 1) * cols` (the last
@@ -180,10 +172,9 @@ class SpriteAnim {
     'frame_h': frameH,
     if (cols != 1) 'cols': cols,
     if (rows != 1) 'rows': rows,
-    if (frames.isNotEmpty) 'frames': frames,
     if (fps != defaultFps) 'fps': fps,
     if (frameTotal != null) 'frames_total': frameTotal,
-    if (playRow != 0) 'play_row': playRow,
+    if (playRow != allRows) 'play_row': playRow,
     'zoom': ?zoom,
   };
 
@@ -194,10 +185,9 @@ class SpriteAnim {
     frameH: (j['frame_h']! as num).toInt(),
     cols: (j['cols'] as num?)?.toInt() ?? 1,
     rows: (j['rows'] as num?)?.toInt() ?? 1,
-    frames: (j['frames'] as List?)?.cast<String>() ?? const [],
     fps: (j['fps'] as num?)?.toDouble() ?? defaultFps,
     frameTotal: (j['frames_total'] as num?)?.toInt(),
-    playRow: (j['play_row'] as num?)?.toInt() ?? 0,
+    playRow: (j['play_row'] as num?)?.toInt() ?? allRows,
     zoom: (j['zoom'] as num?)?.toInt(),
   );
 
@@ -213,8 +203,7 @@ class SpriteAnim {
       other.fps == fps &&
       other.frameTotal == frameTotal &&
       other.playRow == playRow &&
-      other.zoom == zoom &&
-      other.frames.length == frames.length;
+      other.zoom == zoom;
 
   @override
   int get hashCode => Object.hash(
@@ -232,7 +221,7 @@ class SpriteAnim {
 
   @override
   String toString() =>
-      'SpriteAnim($path, ${kind.name}, ${frameW}x$frameH, ${cols}x$rows, ${frames.length} frames${frameTotal == null ? '' : ', $frameTotal total'})';
+      'SpriteAnim($path, ${kind.name}, ${frameW}x$frameH, ${cols}x$rows${frameTotal == null ? '' : ', $frameTotal total'})';
 }
 
 /// Width and height from a PNG or GIF header, without decoding.
@@ -281,7 +270,6 @@ const _notAnimWords = {
   'map', 'terrain', 'mockup', 'preview', 'cover', 'icon', 'icons', 'font',
   'ui', 'gui', 'panel', 'button', 'screenshot',
 };
-final _numbered = RegExp(r'^(.*?)(\d+)$');
 
 /// Most frames a detected sheet may have; bigger grids are tilesets.
 const maxSheetFrames = 64;
@@ -301,15 +289,25 @@ const maxSheetFrames = 64;
 ///
 /// In order: a size hint like `(96x96)` that divides the image; a frame
 /// count hint like `_8f`; a horizontal strip of square frames (width a
-/// multiple of height, 3–64 frames, or 2+ with a "sheet" word); a grid of
-/// [consensus]-sized squares, where [consensus] is the most common strip
-/// height in the same pack. Tilesets, backgrounds, UI and previews are
-/// excluded unless the name says "sheet".
-SpriteAnim? detectSheet(String rel, int w, int h, {int? consensus}) {
-  if (w <= 0 || h <= 0) return null;
+/// multiple of height, 3–64 frames, or 2+ with a "sheet" word). Tilesets,
+/// backgrounds, UI and previews are excluded unless the name says "sheet".
+/// A square-frame guess may still be re-cut by its transparent column gaps
+/// ([detectAnimations]).
+SpriteAnim? detectSheet(String rel, int w, int h) =>
+    _detectSheet(rel, w, h)?.anim;
+
+/// Tilesets, backgrounds, UI and previews without a sheet word: never
+/// sheets, so not worth a pixel scan either.
+bool _notAnimation(String rel) {
   final words = pathWords(rel).toSet();
-  final sheetWord = words.any(_sheetWords.contains);
-  if (!sheetWord && words.any(_notAnimWords.contains)) return null;
+  return !words.any(_sheetWords.contains) && words.any(_notAnimWords.contains);
+}
+
+/// [detectSheet], also saying whether the frames are only the square-strip
+/// guess (no size or frame-count hint behind them).
+({SpriteAnim anim, bool squareGuess})? _detectSheet(String rel, int w, int h) {
+  if (w <= 0 || h <= 0 || _notAnimation(rel)) return null;
+  final sheetWord = pathWords(rel).any(_sheetWords.contains);
 
   SpriteAnim? grid(int fw, int fh) {
     if (fw <= 0 || fh <= 0 || w % fw != 0 || h % fh != 0) return null;
@@ -330,29 +328,29 @@ SpriteAnim? detectSheet(String rel, int w, int h, {int? consensus}) {
   final hint = _hintedSize(rel);
   if (hint != null) {
     final g = grid(hint.$1, hint.$2);
-    if (g != null) return g;
+    if (g != null) return (anim: g, squareGuess: false);
   }
   final framesHint = _framesHint.firstMatch(p.basenameWithoutExtension(rel));
   if (framesHint != null) {
     final n = int.parse(framesHint[1]!);
     if (n >= 2 && w % n == 0) {
       final g = grid(w ~/ n, h);
-      if (g != null) return g;
+      if (g != null) return (anim: g, squareGuess: false);
     }
   }
   if (h <= 512 && w % h == 0) {
     final n = w ~/ h;
-    if (n >= 3 && n <= maxSheetFrames || n == 2 && sheetWord) return grid(h, h);
-  }
-  if (consensus != null && w > consensus && h > consensus) {
-    final g = grid(consensus, consensus);
-    if (g != null && g.frameCount <= maxSheetFrames * 2) return g;
+    if (n >= 3 && n <= maxSheetFrames || n == 2 && sheetWord) {
+      final g = grid(h, h);
+      if (g != null) return (anim: g, squareGuess: true);
+    }
   }
   return null;
 }
 
-/// Words that make numbered files a frame sequence when they appear in the
-/// shared file prefix or a folder name inside the pack. Plurals match too.
+/// Words that mark a file or folder as animated: a strip there gets a
+/// pixel check of its frame width ([detectAnimations]), and its headers are
+/// read at scan time ([animationCandidates]). Plurals match too.
 const _animVocabulary = {
   ..._sheetWords, 'idle', 'walk', 'walking', 'run', 'running', 'attack', //
   'jump', 'death', 'die', 'dying', 'dead', 'hurt', 'hit', 'fly', 'flying',
@@ -363,8 +361,7 @@ const _animVocabulary = {
   'fireball',
 };
 
-/// The words that let numbered files form a sequence (also with a plural
-/// `s`), sorted; the Help page lists them.
+/// [_animVocabulary] sorted; the Help page lists them.
 List<String> get animationWords => _animVocabulary.toList()..sort();
 
 /// Words that keep an image from being taken as a sheet, unless its name
@@ -378,63 +375,22 @@ bool _isAnimWord(String w) =>
     _animVocabulary.contains(w) ||
     (w.endsWith('s') && _animVocabulary.contains(w.substring(0, w.length - 1)));
 
-/// Whether numbered files with stem prefix [prefix] in folder [dir] (both
-/// relative to the pack) may form an animation: an animation word in the
-/// prefix or in any folder of [dir].
-bool hasAnimationWord(String dir, String prefix) =>
-    pathWords(prefix).any(_isAnimWord) ||
-    (dir != '.' && pathWords(dir).any(_isAnimWord));
+/// Whether [rel] (pack-relative) has an animation word in its file name or
+/// in one of its folders.
+bool hasAnimationWord(String rel) => pathWords(rel).any(_isAnimWord);
 
-/// Finds numbered frame sequences (`walk_0.png … walk_7.png`, `fx/1.png …`).
-///
-/// Needs ≥ 3 consecutive numbers with the same prefix and extension in one
-/// folder, an animation word in the prefix or a folder name
-/// ([hasAnimationWord]; `barrels_0.png …` are separate props), and first and
-/// last frames of the same size, at most 512 px (bigger numbered images are
-/// separate artworks, not frames).
-List<SpriteAnim> detectSequences(String packPath, Iterable<String> files) {
-  final groups = <String, List<(int, String)>>{};
-  for (final rel in files) {
-    final ext = p.extension(rel).toLowerCase();
-    if (ext != '.png') continue;
-    final m = _numbered.firstMatch(p.basenameWithoutExtension(rel));
-    if (m == null) continue;
-    if (!hasAnimationWord(p.dirname(rel), m[1]!)) continue;
-    final key = '${p.dirname(rel)}\u0000${m[1]!.toLowerCase()}\u0000$ext';
-    groups.putIfAbsent(key, () => []).add((int.parse(m[2]!), rel));
-  }
-  final out = <SpriteAnim>[];
-  for (final g in groups.values) {
-    if (g.length < 3) continue;
-    g.sort((a, b) => a.$1.compareTo(b.$1));
-    var consecutive = true;
-    for (var i = 1; i < g.length; i++) {
-      if (g[i].$1 != g[i - 1].$1 + 1) consecutive = false;
-    }
-    if (!consecutive) continue;
-    final first = readImageSize(p.join(packPath, g.first.$2));
-    final last = readImageSize(p.join(packPath, g.last.$2));
-    if (first == null || first != last) continue;
-    if (first.$1 > 512 || first.$2 > 512) continue;
-    out.add(
-      SpriteAnim(
-        path: g.first.$2,
-        kind: AnimKind.sequence,
-        frameW: first.$1,
-        frameH: first.$2,
-        frames: [for (final (_, rel) in g) rel],
-      ),
-    );
-  }
-  return out;
-}
-
-/// All animations in a pack. Reads image headers, plus up to
-/// [maxPixelScans] full decodes for the transparency-gap heuristic; run in
-/// an isolate for big packs. Per-file [overrides] (the sidecar's
-/// `animations{}`) set frame size and fps. Files marked `manual` there, or
-/// listed in [manual], become one-row strips ([guessStrip]) when nothing
-/// else detects them ("Make animation…").
+/// All animations in a pack, one per file. Reads image headers, plus up to
+/// [maxPixelScans] full decodes for the transparency-gap heuristic on any
+/// undetected image, and up to [maxWordScans] decodes for files with an
+/// animation word ([hasAnimationWord]): a square-frame strip guess is
+/// re-cut by its column gaps ([stripFromColumnGaps]), an undetected image
+/// is checked for a grid of gaps ([detectSheetByPixels]). [atlases]
+/// ([atlasImages]) skip those checks. Run it in an isolate for big packs.
+/// Per-file [overrides] (the sidecar's `animations{}`) set frame size and
+/// fps. Files
+/// with saved edits there ([editedAnimations]), or listed in [manual],
+/// become one-row strips ([guessStrip]) when nothing else detects them
+/// ("Make animation…").
 List<SpriteAnim> detectAnimations(
   String packPath,
   List<String> files, {
@@ -442,17 +398,16 @@ List<SpriteAnim> detectAnimations(
   Set<String> manual = const {},
   int maxHeaders = 4000,
   int maxPixelScans = 0,
+  int maxWordScans = 0,
+  Set<String> atlases = const {},
 }) {
-  final made = {...manual, ...manualAnimations(overrides)};
-  final sequences = detectSequences(packPath, files);
-  final inSequence = {for (final s in sequences) ...s.frames};
+  final made = {...manual, ...editedAnimations(overrides)};
   final sizes = <String, (int, int)>{};
-  final out = <SpriteAnim>[...sequences];
+  final out = <SpriteAnim>[];
   var reads = 0;
   for (final rel in files) {
     final ext = p.extension(rel).toLowerCase();
     if (ext != '.png' && ext != '.gif') continue;
-    if (inSequence.contains(rel)) continue;
     if (reads++ >= maxHeaders) break;
     final size = readImageSize(p.join(packPath, rel));
     if (size == null) continue;
@@ -469,23 +424,37 @@ List<SpriteAnim> detectAnimations(
       sizes[rel] = size;
     }
   }
-  final strips = <String, SpriteAnim>{};
-  for (final MapEntry(key: rel, value: (w, h)) in sizes.entries) {
-    final s = detectSheet(rel, w, h);
-    if (s != null) strips[rel] = s;
-  }
-  final consensus = _consensus(strips.values);
   var pixelScans = 0;
+  var wordScans = 0;
   for (final MapEntry(key: rel, value: (w, h)) in sizes.entries) {
-    var s = strips[rel] ?? detectSheet(rel, w, h, consensus: consensus);
-    if (s == null &&
-        pixelScans < maxPixelScans &&
-        w <= 2048 &&
-        h <= 2048 &&
-        w >= 64 &&
-        h >= 64) {
-      pixelScans++;
-      s = detectSheetByPixels(packPath, rel);
+    final found = _detectSheet(rel, w, h);
+    var s = found?.anim;
+    // Big images are rarely one animation and cost the most to decode.
+    final worded =
+        wordScans < maxWordScans &&
+        w * h <= maxWordScanPixels &&
+        !atlases.contains(rel) &&
+        hasAnimationWord(rel);
+    if (found != null && found.squareGuess && worded && w <= 4096) {
+      wordScans++;
+      s = stripFromColumnGaps(packPath, found.anim) ?? s;
+    }
+    final scannable = w <= 2048 && h <= 2048 && w >= 64 && h >= 64;
+    if (s == null && scannable) {
+      if (pixelScans < maxPixelScans) {
+        pixelScans++;
+        s = detectSheetByPixels(packPath, rel);
+      } else if (worded && !_notAnimation(rel)) {
+        wordScans++;
+        // Character sheets (all moves, one per row) run past 64 cells;
+        // the same limit as a size-hinted grid.
+        s = detectSheetByPixels(
+          packPath,
+          rel,
+          fallback: false,
+          maxFrames: maxSheetFrames * 2,
+        );
+      }
     }
     if (s == null && made.contains(rel)) s = guessStrip(rel, w, h);
     if (s != null) out.add(s);
@@ -497,6 +466,35 @@ List<SpriteAnim> detectAnimations(
   ]..sort((a, b) => a.path.compareTo(b.path));
   return result;
 }
+
+/// Atlas data formats: an image with one of these next to it (same stem)
+/// is a texture atlas of unrelated sprites, not an animation.
+const _atlasExts = {'.xml', '.json', '.plist', '.atlas', '.tpsheet'};
+
+/// Images in [files] (pack-relative) that come with an atlas data file,
+/// e.g. Kenney's `sheet_tanks.png` + `sheet_tanks.xml`.
+Set<String> atlasImages(Iterable<String> files) {
+  final data = {
+    for (final f in files)
+      if (_atlasExts.contains(p.extension(f).toLowerCase()))
+        p.withoutExtension(f).toLowerCase(),
+  };
+  return {
+    for (final f in files)
+      if (p.extension(f).toLowerCase() == '.png' &&
+          data.contains(p.withoutExtension(f).toLowerCase()))
+        f,
+  };
+}
+
+/// Files with saved edits in the sidecar's `animations{}` (any map, `manual`
+/// or not). They stay animations even when detection no longer finds them
+/// (M34 dropped sequences and the consensus grid), so saved work isn't
+/// lost: they start from [guessStrip] and the edits apply on top.
+Set<String> editedAnimations(Map<String, Object?> overrides) => {
+  for (final MapEntry(:key, :value) in overrides.entries)
+    if (value is Map) key,
+};
 
 /// Files the sidecar's `animations{}` marks `"manual": true`: made into
 /// animations by hand, not by detection.
@@ -516,20 +514,6 @@ SpriteAnim guessStrip(String rel, int w, int h) {
     frameH: h,
     cols: square ? w ~/ h : 1,
   );
-}
-
-/// Most common frame height among single-row strips, if any.
-int? _consensus(Iterable<SpriteAnim> sheets) {
-  final counts = <int, int>{};
-  for (final s in sheets) {
-    if (s.rows == 1 && s.frameW == s.frameH) {
-      counts[s.frameH] = (counts[s.frameH] ?? 0) + 1;
-    }
-  }
-  if (counts.isEmpty) return null;
-  return (counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))
-      .first
-      .key;
 }
 
 /// The sidecar override that marks a file as not an animation
@@ -562,14 +546,14 @@ SpriteAnim applyOverride(SpriteAnim a, Object? override) {
 }
 
 /// The animation a tile should show: idle first, then walk/run, then any
-/// strip or sequence, then grids; shallower and shorter paths win ties.
+/// strip, then grids; shallower and shorter paths win ties.
 SpriteAnim? pickTileAnimation(List<SpriteAnim> anims) {
   int score(SpriteAnim a) {
     final words = pathWords(p.basenameWithoutExtension(a.path)).toSet();
     var s = 0;
     if (words.contains('idle')) s += 30;
     if (words.contains('walk') || words.contains('run')) s += 20;
-    if (a.kind == AnimKind.sequence || a.rows == 1) s += 10;
+    if (a.rows == 1) s += 10;
     if (a.kind == AnimKind.gif) s -= 5;
     if (pathWords(a.path).contains('shadow') ||
         pathWords(a.path).contains('shadows')) {
@@ -597,16 +581,15 @@ const _animNameWords = {
 };
 
 /// Cheap subset of a pack's files worth reading headers for: names with
-/// animation words or size hints, and numbered files that pass the
-/// sequence word rule ([hasAnimationWord]).
+/// animation words or size hints, and files in folders with an animation
+/// word ([hasAnimationWord]).
 List<String> animationCandidates(Iterable<String> files, {int limit = 400}) {
   final out = <String>[];
   for (final rel in files) {
     if (!rel.toLowerCase().endsWith('.png')) continue;
     final stem = p.basenameWithoutExtension(rel);
-    final numbered = _numbered.firstMatch(stem);
     if (_sizeHint.hasMatch(rel) ||
-        numbered != null && hasAnimationWord(p.dirname(rel), numbered[1]!) ||
+        hasAnimationWord(p.dirname(rel)) ||
         _framesHint.hasMatch(stem) ||
         pathWords(stem).any(_animNameWords.contains)) {
       out.add(rel);
@@ -636,6 +619,8 @@ List<String> animationCandidates(Iterable<String> files, {int limit = 400}) {
         packPath,
         candidates,
         overrides: overrides,
+        maxWordScans: tileWordScans,
+        atlases: atlasImages(files),
       ).where((a) => a.kind != AnimKind.gif).toList(),
     );
     if (anim != null) return (preview: anim.path, anim: anim);
@@ -662,17 +647,7 @@ List<String> animationCandidates(Iterable<String> files, {int limit = 400}) {
   }
   final size = readImageSize(p.join(packPath, preview));
   if (size == null) return (preview: preview, anim: null);
-  var sheet = detectSheet(preview, size.$1, size.$2);
-  if (sheet == null) {
-    final strips = <SpriteAnim>[];
-    for (final rel in candidates.take(60)) {
-      final s = readImageSize(p.join(packPath, rel));
-      final d = s == null ? null : detectSheet(rel, s.$1, s.$2);
-      if (d != null) strips.add(d);
-    }
-    final c = _consensus(strips);
-    if (c != null) sheet = detectSheet(preview, size.$1, size.$2, consensus: c);
-  }
+  final sheet = detectSheet(preview, size.$1, size.$2);
   return (
     preview: preview,
     anim: sheet == null || isNotAnimation(overrides[preview])
@@ -691,7 +666,12 @@ List<String> animationCandidates(Iterable<String> files, {int limit = 400}) {
 /// even cell counts per axis instead ([_evenCellCounts]); it only splits
 /// when both axes end up with at least two cells, so a single sprite with a
 /// transparent middle line stays whole. Returns null when nothing fits.
-(int, int)? gridFromTransparency(Uint8List alpha, int w, int h) {
+(int, int)? gridFromTransparency(
+  Uint8List alpha,
+  int w,
+  int h, {
+  bool fallback = true,
+}) {
   final colEmpty = List.generate(w, (x) {
     for (var y = 0; y < h; y++) {
       if (alpha[y * w + x] != 0) return false;
@@ -706,31 +686,13 @@ List<String> animationCandidates(Iterable<String> files, {int limit = 400}) {
     return true;
   });
 
-  int? pitch(List<bool> empty) {
-    final length = empty.length;
-    final starts = <int>[];
-    var inRun = false;
-    for (var i = 0; i < length; i++) {
-      final e = empty[i];
-      if (!e && !inRun) starts.add(i);
-      inRun = !e;
-    }
-    final n = starts.length;
-    if (n < 2 || length % n != 0) return n == 1 ? length : null;
-    final cell = length ~/ n;
-    // Every run must start inside its own cell.
-    for (var k = 0; k < n; k++) {
-      if (starts[k] < k * cell || starts[k] >= (k + 1) * cell) return null;
-    }
-    return cell;
-  }
-
-  final fw = pitch(colEmpty);
-  final fh = pitch(rowEmpty);
+  final fw = _pitch(colEmpty);
+  final fh = _pitch(rowEmpty);
   if (fw != null && fh != null) {
     if (fw == w && fh == h) return null;
     return (fw, fh);
   }
+  if (!fallback) return null;
 
   // Fallback: cell counts whose boundaries are transparent.
   final xs = fw != null ? [w ~/ fw] : _evenCellCounts(colEmpty);
@@ -777,11 +739,27 @@ List<int> _evenCellCounts(List<bool> empty) {
   return out;
 }
 
-/// Decodes [path] and applies [gridFromTransparency]; slow, so callers
-/// limit it to a few likely files.
-SpriteAnim? detectSheetByPixels(String packPath, String rel) {
-  final bytes = File(p.join(packPath, rel)).readAsBytesSync();
-  final image = img.decodePng(bytes);
+/// Most pixel checks of files with an animation word per pack at scan
+/// time, for the tile animation; the detail page allows [detailWordScans].
+const tileWordScans = 8;
+
+/// Largest image (in pixels) a word-based pixel check decodes.
+const maxWordScanPixels = 1500000;
+
+/// Most pixel checks of files with an animation word per pack when its
+/// detail page loads.
+const detailWordScans = 256;
+
+/// One alpha byte per pixel of the PNG at [rel], with its size; null when
+/// it has no alpha or can't be read.
+(Uint8List, int, int)? _alphaOf(String packPath, String rel) {
+  final File file = File(p.join(packPath, rel));
+  final img.Image? image;
+  try {
+    image = img.decodePng(file.readAsBytesSync());
+  } on FileSystemException {
+    return null;
+  }
   if (image == null || !image.hasAlpha) return null;
   final w = image.width;
   final h = image.height;
@@ -790,11 +768,85 @@ SpriteAnim? detectSheetByPixels(String packPath, String rel) {
   for (final px in image) {
     alpha[i++] = px.a.toInt();
   }
-  final cell = gridFromTransparency(alpha, w, h);
+  return (alpha, w, h);
+}
+
+/// Re-cuts a square-frame strip guess [guess] by its transparent column
+/// gaps: when they give an equal frame width that differs from the square
+/// guess (`banner-only.png`, 1152×128: 12 frames of 96, not 9 of 128), the
+/// strip uses that width. Null when the gaps say nothing else.
+SpriteAnim? stripFromColumnGaps(String packPath, SpriteAnim guess) {
+  final decoded = _alphaOf(packPath, guess.path);
+  if (decoded == null) return null;
+  final (alpha, w, h) = decoded;
+  if (w != guess.frameW * guess.cols || h != guess.frameH * guess.rows) {
+    return null;
+  }
+  final fw = columnPitch(alpha, w, h);
+  if (fw == null || fw == guess.frameW || w % fw != 0) return null;
+  final cols = w ~/ fw;
+  if (cols < 2 || cols > maxSheetFrames) return null;
+  return SpriteAnim(
+    path: guess.path,
+    kind: AnimKind.sheet,
+    frameW: fw,
+    frameH: h,
+    cols: cols,
+  );
+}
+
+/// The equal pitch of the runs between fully transparent columns, when
+/// every run starts inside its own cell; null otherwise or for one run.
+int? columnPitch(Uint8List alpha, int w, int h) {
+  final empty = List.generate(w, (x) {
+    for (var y = 0; y < h; y++) {
+      if (alpha[y * w + x] != 0) return false;
+    }
+    return true;
+  });
+  final p = _pitch(empty);
+  return p == null || p == w ? null : p;
+}
+
+/// See [gridFromTransparency]: the cell length of equal-pitch runs along
+/// one axis, the whole [empty] length for one run, null when uneven.
+int? _pitch(List<bool> empty) {
+  final length = empty.length;
+  final starts = <int>[];
+  var inRun = false;
+  for (var i = 0; i < length; i++) {
+    final e = empty[i];
+    if (!e && !inRun) starts.add(i);
+    inRun = !e;
+  }
+  final n = starts.length;
+  if (n < 2 || length % n != 0) return n == 1 ? length : null;
+  final cell = length ~/ n;
+  // Every run must start inside its own cell.
+  for (var k = 0; k < n; k++) {
+    if (starts[k] < k * cell || starts[k] >= (k + 1) * cell) return null;
+  }
+  return cell;
+}
+
+/// Decodes [path] and applies [gridFromTransparency]; slow, so callers
+/// limit it to a few likely files. Without [fallback] only clean runs
+/// count (the particle fallback splits single sprites too often outside
+/// effect packs). At most [maxFrames] cells.
+SpriteAnim? detectSheetByPixels(
+  String packPath,
+  String rel, {
+  bool fallback = true,
+  int maxFrames = maxSheetFrames,
+}) {
+  final decoded = _alphaOf(packPath, rel);
+  if (decoded == null) return null;
+  final (alpha, w, h) = decoded;
+  final cell = gridFromTransparency(alpha, w, h, fallback: fallback);
   if (cell == null) return null;
   final cols = w ~/ cell.$1;
   final rows = h ~/ cell.$2;
-  if (cols * rows < 2 || cols * rows > maxSheetFrames) return null;
+  if (cols * rows < 2 || cols * rows > maxFrames) return null;
   return SpriteAnim(
     path: rel,
     kind: AnimKind.sheet,

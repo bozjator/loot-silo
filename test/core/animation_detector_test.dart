@@ -90,10 +90,34 @@ void main() {
       expect(detectSheet('Tiles/water-sheet.png', 128, 32)!.cols, 4);
     });
 
-    test('grid from consensus strip height', () {
+    test('no consensus grid: big images next to strips stay images', () {
       expect(detectSheet('All-Spritesheet.png', 864, 672), isNull);
-      final s = detectSheet('All-Spritesheet.png', 864, 672, consensus: 96)!;
-      expect((s.cols, s.rows), (9, 7));
+      // Generic Items: a 52×13 strip of 4 frames next to 130×130 items.
+      png('PNG/White/genericItem_white_061.png', 52, 13);
+      png('PNG/White/genericItem_white_147.png', 130, 130);
+      // Sea Adventures: 128 px banner strips next to a 896×640 shadow.
+      png('props/animated/banner-flag.png', 512, 128);
+      png('props/islands-update/islands-grass-shadow.png', 896, 640);
+      final anims = detectAnimations(tmp.path, [
+        'PNG/White/genericItem_white_061.png',
+        'PNG/White/genericItem_white_147.png',
+        'props/animated/banner-flag.png',
+        'props/islands-update/islands-grass-shadow.png',
+      ]);
+      expect(anims.map((a) => a.path), [
+        'PNG/White/genericItem_white_061.png',
+        'props/animated/banner-flag.png',
+      ]);
+    });
+
+    test('several rows play all rows by default', () {
+      final g = detectSheet('hero(32x32).png', 128, 64)!;
+      expect((g.cols, g.rows), (4, 2));
+      expect(g.playRow, SpriteAnim.allRows);
+      expect(g.rowToPlay, isNull);
+      // A saved row still wins; "all" stays all.
+      expect(applyOverride(g, {'rows': 2}).rowToPlay, 1);
+      expect(applyOverride(g, {'rows': 'all'}).rowToPlay, isNull);
     });
 
     test('non-dividing hints and plain images are rejected', () {
@@ -102,69 +126,144 @@ void main() {
     });
   });
 
-  test('sequences: consecutive numbers, same size, small frames', () {
-    for (var i = 0; i < 4; i++) {
-      png('walk/walk_$i.png', 16, 16);
-    }
-    png('gap/f1.png', 8, 8);
-    png('gap/f2.png', 8, 8);
-    png('gap/f4.png', 8, 8);
-    for (var i = 1; i <= 3; i++) {
-      png('big/$i.png', 600, 600);
-    }
-    final files = [
-      for (final f in tmp.listSync(recursive: true).whereType<File>())
-        p.relative(f.path, from: tmp.path),
-    ];
-    final seqs = detectSequences(tmp.path, files);
-    expect(seqs, hasLength(1));
-    expect(seqs.single.frames, [
-      'walk/walk_0.png',
-      'walk/walk_1.png',
-      'walk/walk_2.png',
-      'walk/walk_3.png',
-    ]);
-    expect(seqs.single.label, 'walk');
-    expect(seqs.single.frameCount, 4);
-  });
-
-  group('sequence word rule', () {
+  group('one file, one animation', () {
     List<String> listed() => [
       for (final f in tmp.listSync(recursive: true).whereType<File>())
         p.relative(f.path, from: tmp.path),
-    ];
+    ]..sort();
 
-    test('numbered props without an animation word are images', () {
+    test('numbered files are never a sequence; each is judged alone', () {
+      for (var i = 0; i < 4; i++) {
+        png('walk/walk_$i.png', 16, 16);
+      }
+      // Sea Adventures' gems: gems-1.png is really an 8-frame strip.
+      for (var i = 1; i <= 4; i++) {
+        png('props/animated/gems-$i.png', 256, 32);
+      }
+      // Kenney explosions: frames trimmed to their content.
+      png('Ground explosion/groundExplosion00.png', 192, 192);
+      png('Ground explosion/groundExplosion01.png', 149, 151);
+      png('Ground explosion/groundExplosion02.png', 160, 170);
+      final anims = detectAnimations(tmp.path, listed());
+      expect(anims.map((a) => a.path), [
+        for (var i = 1; i <= 4; i++) 'props/animated/gems-$i.png',
+      ]);
+      final gems = anims.first;
+      expect(
+        (gems.kind, gems.frameW, gems.cols, gems.rows),
+        (AnimKind.sheet, 32, 8, 1),
+      );
+      expect(gems.label, 'gems-1');
+    });
+
+    test('animation words mark files and folders, plurals too', () {
+      expect(hasAnimationWord('fx/explosions/boom.png'), isTrue);
+      expect(hasAnimationWord('walk_0.png'), isTrue);
+      expect(hasAnimationWord('props/animated/banner-only.png'), isTrue);
+      expect(hasAnimationWord('barrels_0.png'), isFalse);
+      expect(hasAnimationWord('furniture/decor_animals_0.png'), isFalse);
+    });
+
+    test('numbered props without an animation word are no candidates', () {
       for (var i = 0; i < 6; i++) {
         png('props-sprites/barrels_$i.png', 16, 16);
-        png('Decorations_sprites/chimney-h_$i.png', 8, 32);
       }
-      expect(detectSequences(tmp.path, listed()), isEmpty);
-      expect(animationCandidates(listed()), isEmpty);
+      png('Effects/Hit/1.png', 16, 16);
+      expect(animationCandidates(listed()), ['Effects/Hit/1.png']);
+    });
+  });
+
+  test('saved edits keep a file an animation detection no longer finds', () {
+    // Sea Adventures' tower VFX was only a consensus grid; its saved edits
+    // still apply.
+    png('props/islands-update/islands-grass-tower-vfx.png', 640, 800);
+    const rel = 'props/islands-update/islands-grass-tower-vfx.png';
+    expect(detectAnimations(tmp.path, [rel]), isEmpty);
+    final a = detectAnimations(
+      tmp.path,
+      [rel],
+      overrides: {
+        rel: {'frame_h': 160, 'frames': 16, 'rows': 'all'},
+      },
+    ).single;
+    expect((a.frameCount, a.rowToPlay), (16, null));
+    expect(a.frameH * a.rows, 800);
+    expect(
+      editedAnimations({
+        rel: {'fps': 4},
+        'x.png': false,
+      }),
+      {rel},
+    );
+  });
+
+  test('atlas images (with an .xml) skip the pixel checks', () {
+    expect(
+      atlasImages([
+        'Spritesheet/sheet_tanks.png',
+        'Spritesheet/sheet_tanks.xml',
+        'Spritesheet/other.png',
+      ]),
+      {'Spritesheet/sheet_tanks.png'},
+    );
+  });
+
+  group('non-square strips from column gaps', () {
+    /// 1152×128 with 12 frames of 96×128, a transparent gap in each.
+    void banner(String rel, {bool gaps = true}) => png(
+      rel,
+      1152,
+      128,
+      blobs: [
+        if (gaps)
+          for (var i = 0; i < 12; i++) (i * 96 + 6, 4, 84, 120)
+        else
+          (0, 4, 1152, 120),
+      ],
+    );
+
+    test('banner-only.png is 12 frames of 96×128', () {
+      banner('props/animated/banner-only.png');
+      // The square guess alone: 9 frames of 128.
+      final guess = detectSheet('props/animated/banner-only.png', 1152, 128)!;
+      expect((guess.frameW, guess.cols), (128, 9));
+      final a = detectAnimations(tmp.path, [
+        'props/animated/banner-only.png',
+      ], maxWordScans: 4).single;
+      expect((a.frameW, a.frameH, a.cols, a.rows), (96, 128, 12, 1));
+      expect(a.frameCount, 12);
+      // Frame counts step from there as usual.
+      expect(a.withFrameCount(12), isNotNull);
+      expect(a.withFrameCount(12)!.cols, 12);
     });
 
-    test('a word in the prefix or any folder keeps the sequence', () {
-      for (var i = 1; i <= 3; i++) {
-        png('props/torch_fire_$i.png', 16, 16);
-        png('Effects/Hit/$i.png', 16, 16);
-        png('Animated stuff/flag/flag$i.png', 16, 16);
-        png('Projectiles/Fireball$i.png', 8, 8);
-      }
-      final seqs = detectSequences(tmp.path, listed());
-      expect(seqs.map((s) => s.path).toSet(), {
-        'props/torch_fire_1.png',
-        'Effects/Hit/1.png',
-        'Animated stuff/flag/flag1.png',
-        'Projectiles/Fireball1.png',
-      });
-      expect(animationCandidates(listed()), hasLength(12));
+    test('no check without budget, animation word or gaps', () {
+      banner('props/animated/banner-only.png');
+      banner('props/banner-plain.png');
+      banner('props/animated/banner-solid.png', gaps: false);
+      final anims = {
+        for (final a in detectAnimations(tmp.path, [
+          'props/animated/banner-only.png',
+          'props/animated/banner-solid.png',
+          'props/banner-plain.png',
+        ], maxWordScans: 8))
+          a.path: a,
+      };
+      expect(anims['props/animated/banner-only.png']!.frameW, 96);
+      expect(anims['props/animated/banner-solid.png']!.frameW, 128);
+      expect(anims['props/banner-plain.png']!.frameW, 128);
+      final unchecked = detectAnimations(tmp.path, [
+        'props/animated/banner-only.png',
+      ]).single;
+      expect(unchecked.frameW, 128);
     });
 
-    test('hasAnimationWord matches plurals and ignores the pack root', () {
-      expect(hasAnimationWord('fx/explosions', 'boom'), isTrue);
-      expect(hasAnimationWord('.', 'walk_'), isTrue);
-      expect(hasAnimationWord('.', 'barrels_'), isFalse);
-      expect(hasAnimationWord('furniture', 'decor_animals_'), isFalse);
+    test('a size hint is never re-cut', () {
+      banner('anim/banner(128x128).png');
+      final a = detectAnimations(tmp.path, [
+        'anim/banner(128x128).png',
+      ], maxWordScans: 4).single;
+      expect(a.frameW, 128);
     });
   });
 
@@ -264,7 +363,7 @@ void main() {
     });
   });
 
-  test('detectAnimations combines kinds, consensus and overrides', () {
+  test('detectAnimations combines kinds and overrides', () {
     png('Wolf/Idle/Idle.png', 128, 32);
     png('Wolf/All-Spritesheet.png', 96, 64);
     for (var i = 0; i < 3; i++) {
@@ -299,23 +398,16 @@ void main() {
       },
     );
     final byPath = {for (final a in anims) a.path: a};
-    expect(
-      byPath.keys,
-      unorderedEquals([
-        'Wolf/Idle/Idle.png',
-        'Wolf/All-Spritesheet.png',
-        'fx/boom0.png',
-        'loop.gif',
-      ]),
-    );
-    expect(byPath['Wolf/All-Spritesheet.png']!.cols, 3);
+    // No consensus grid: 96×64 isn't cut by the 32 px strip height.
+    expect(byPath.keys, unorderedEquals(['Wolf/Idle/Idle.png', 'loop.gif']));
     expect(byPath['Wolf/Idle/Idle.png']!.fps, 4);
     expect(
       byPath['Wolf/Idle/Idle.png']!.cols,
       2,
       reason: 'frame_w override re-slices',
     );
-    expect(byPath['fx/boom0.png']!.kind, AnimKind.sequence);
+    // Numbered frame files stay images.
+    expect(byPath.keys.where((k) => k.startsWith('fx/')), isEmpty);
     expect(byPath['loop.gif']!.kind, AnimKind.gif);
     expect(pickTileAnimation(anims)!.path, 'Wolf/Idle/Idle.png');
   });
@@ -347,15 +439,15 @@ void main() {
     );
     expect(mockup.preview, 'mockup.png');
     expect(mockup.anim, isNull);
-    // A named sheet keeps its place and gains frames from the strip height.
-    final sheet = choosePreviewAnimation(
+    // No consensus grid: the strip height doesn't cut a strong preview.
+    final strong = choosePreviewAnimation(
       tmp.path,
       files,
       preview: 'big_effect.png',
       rank: 3,
     );
-    expect(sheet.preview, 'big_effect.png');
-    expect((sheet.anim!.cols, sheet.anim!.rows), (9, 7));
+    expect(strong.preview, 'big_effect.png');
+    expect(strong.anim, isNull);
   });
 
   test('SpriteAnim JSON round trip and copyWith', () {
@@ -371,14 +463,14 @@ void main() {
     expect(SpriteAnim.fromJson(a.toJson()), a);
     final b = a.copyWith(frameW: 64);
     expect((b.cols, b.rows), (2, 2));
-    const seq = SpriteAnim(
-      path: 'a_1.png',
-      kind: AnimKind.sequence,
-      frameW: 8,
-      frameH: 8,
-      frames: ['a_1.png', 'a_2.png'],
-    );
-    expect(SpriteAnim.fromJson(seq.toJson()).frames, seq.frames);
+    // All rows is the default and isn't written; a single row is.
+    expect(a.playRow, SpriteAnim.allRows);
+    expect(a.toJson().containsKey('play_row'), isFalse);
+    final row = a.copyWith(playRow: 1);
+    expect(row.toJson()['play_row'], 1);
+    expect(SpriteAnim.fromJson(row.toJson()), row);
+    // A row past the new grid falls back to all rows.
+    expect(row.copyWith(frameH: 64).playRow, SpriteAnim.allRows);
   });
 
   group('total frame count override', () {
@@ -514,16 +606,17 @@ void main() {
     });
 
     test('play row: JSON, copyWith and sidecar rows', () {
-      expect(islands.playRow, 0);
-      expect(islands.rowToPlay, 0);
-      final all = islands.copyWith(playRow: SpriteAnim.allRows);
-      expect(all.rowToPlay, isNull);
-      expect(all.toJson()['play_row'], SpriteAnim.allRows);
-      expect(SpriteAnim.fromJson(all.toJson()), all);
-      expect(SpriteAnim.fromJson(islands.toJson()).playRow, 0);
-      expect(all == islands, isFalse);
+      // All rows by default (M34).
+      expect(islands.playRow, SpriteAnim.allRows);
+      expect(islands.rowToPlay, isNull);
+      final first = islands.copyWith(playRow: 0);
+      expect(first.rowToPlay, 0);
+      expect(first.toJson()['play_row'], 0);
+      expect(SpriteAnim.fromJson(first.toJson()), first);
+      expect(SpriteAnim.fromJson(islands.toJson()).playRow, SpriteAnim.allRows);
+      expect(first == islands, isFalse);
       // Size edits keep the row choice.
-      expect(all.copyWith(frameW: 64).playRow, SpriteAnim.allRows);
+      expect(first.copyWith(frameW: 64).playRow, 0);
       expect(applyOverride(islands, {'rows': 'all'}).rowToPlay, isNull);
       expect(applyOverride(islands, {'rows': 3}).rowToPlay, 2);
       expect(applyOverride(islands, {'rows': 'x'}), islands);

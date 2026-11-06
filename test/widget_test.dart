@@ -161,11 +161,7 @@ void main() {
       scrollable: list,
     );
     expect(find.text(appVersionLabel), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Dark'),
-      -300,
-      scrollable: list,
-    );
+    await tester.scrollUntilVisible(find.text('Dark'), -300, scrollable: list);
 
     await tester.tap(find.text('Dark'));
     await tester.pumpAndSettle();

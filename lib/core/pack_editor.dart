@@ -26,7 +26,8 @@ class PackContents {
     required this.sidecar,
   });
 
-  /// Paths relative to the pack, sorted.
+  /// Paths relative to the pack, sorted. [images] leaves out the files
+  /// shown as animations ([shownDetected]): one file is listed in one tab.
   final List<String> images;
   final List<String> audio;
   final List<String> other;
@@ -60,8 +61,7 @@ class PackContents {
   bool get isEmpty =>
       images.isEmpty && audio.isEmpty && other.isEmpty && detected.isEmpty;
 
-  /// Only files matching a search ([fileMatches]); an animation stays when
-  /// its sheet or any of its frames matches.
+  /// Only files matching a search ([fileMatches]).
   PackContents matching(List<String> words, {bool infix = false}) {
     bool hit(String rel) => fileMatches(rel, words, infix: infix);
     List<String> keep(List<String> l) => [
@@ -74,7 +74,7 @@ class PackContents {
       other: keep(other),
       detected: [
         for (final a in detected)
-          if (hit(a.path) || a.frames.any(hit)) a,
+          if (hit(a.path)) a,
       ],
       sizes: sizes,
       sidecar: sidecar,
@@ -106,9 +106,14 @@ class PackContents {
   /// Images worth flipping through at the top of the page and in the
   /// viewer opened from it: the tile preview first, then the pack's preview
   /// candidates ([previewCandidates]), at most [limit].
+  ///
+  /// Animations count too (animated GIF mockups), although [images] leaves
+  /// them out.
   List<String> carousel(String? preview, {int limit = 100}) => [
     ?preview,
-    ...previewCandidates(images).where((f) => f != preview),
+    ...previewCandidates(
+      [...images, for (final a in shownDetected) a.path]..sort(),
+    ).where((f) => f != preview),
   ].take(limit).toList();
 }
 
@@ -129,18 +134,32 @@ PackContents loadPackContents(String packPath, List<(String, int)> files) {
       other.add(rel);
     }
   }
+  // Effect packs often hold grids with no size hints; a few full decodes
+  // find them by their transparent gaps. Files with an animation word get
+  // the same check, and their strips a check of the frame width.
+  images.sort();
+  final detected = detectAnimations(
+    packPath,
+    images,
+    manual: editedAnimations(sidecar?.animations ?? const {}),
+    maxPixelScans: worthPixelScan(packPath) ? 24 : 0,
+    maxWordScans: detailWordScans,
+    atlases: atlasImages([for (final (rel, _) in files) rel]),
+  );
+  // An animation is listed in the Animations tab only; "Not an animation"
+  // brings it back here.
+  final animated = {
+    for (final a in detected)
+      if (!isNotAnimation(sidecar?.animations[a.path])) a.path,
+  };
   return PackContents(
-    images: images..sort(),
+    images: [
+      for (final f in images)
+        if (!animated.contains(f)) f,
+    ],
     audio: audio..sort(),
     other: other..sort(),
-    // Effect packs often hold grids with no size hints; a few full
-    // decodes find them by their transparent gaps.
-    detected: detectAnimations(
-      packPath,
-      images,
-      manual: manualAnimations(sidecar?.animations ?? const {}),
-      maxPixelScans: worthPixelScan(packPath) ? 24 : 0,
-    ),
+    detected: detected,
     sizes: {for (final (rel, size) in files) rel: size},
     sidecar: sidecar,
   );

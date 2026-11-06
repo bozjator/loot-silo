@@ -1064,7 +1064,7 @@ void main() {
       ),
     ).readAsStringSync();
 
-    testWidgets('All rows can be saved and the card plays every row', (
+    testWidgets('All rows is the default; one row can be saved (M34)', (
       tester,
     ) async {
       await openGrid(tester);
@@ -1072,21 +1072,26 @@ void main() {
         find.widgetWithText(FilledButton, 'Save'),
       );
       expect(save().onPressed, isNull);
-      await tester.tap(find.text('Row 1'));
+      // A 4×2 grid plays every row out of the box (dialog and card).
+      for (final s in tester.widgetList<AnimatedSprite>(
+        find.byType(AnimatedSprite),
+      )) {
+        expect(s.anim.rowToPlay, isNull);
+      }
+      await tester.tap(find.text('All rows'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('All rows').last);
+      await tester.tap(find.text('Row 1').last);
       await tester.pumpAndSettle();
       expect(save().onPressed, isNotNull, reason: 'the row choice is dirty');
       await tester.tap(find.text('Save'));
       await pumpUntil(tester, find.text('Reset to detected'));
-      expect(sidecar(), contains('"rows": "all"'));
-      // Every sprite of this sheet (dialog preview and card) plays all rows.
+      expect(sidecar(), contains('"rows": 1'));
       final sprites = tester.widgetList<AnimatedSprite>(
         find.byType(AnimatedSprite),
       );
       expect(sprites, isNotEmpty);
       for (final s in sprites) {
-        expect(s.anim.rowToPlay, isNull);
+        expect(s.anim.rowToPlay, 0);
       }
     });
 
@@ -1220,6 +1225,93 @@ void main() {
     }
   });
 
+  group('Banner strips (M34)', () {
+    /// 1152×128 with 12 frames of 96×128, a transparent gap in each.
+    img.Image banner() {
+      final image = img.Image(width: 1152, height: 128, numChannels: 4);
+      for (var i = 0; i < 12; i++) {
+        img.fillRect(
+          image,
+          x1: i * 96 + 6,
+          y1: 4,
+          x2: i * 96 + 89,
+          y2: 123,
+          color: img.ColorRgba8(40, 120, 220, 255),
+        );
+      }
+      return image;
+    }
+
+    String sidecar() => File(
+      p.join(
+        tmp.path,
+        'library',
+        'HeroMaker',
+        'Knight Pack',
+        'asset_pack.json',
+      ),
+    ).readAsStringSync();
+
+    testWidgets('12 frames of 96×128, also when typed into Frames', (
+      tester,
+    ) async {
+      await openKnight(
+        tester,
+        files: const ['props/portrait.png'],
+        images: {
+          'props/animated/banner-only.png': banner(),
+          // No animation word: only the square guess (9 × 128).
+          'props/banner-plain.png': banner(),
+        },
+      );
+      tester.takeException();
+      // Both strips are animations, not images.
+      expect(find.textContaining('Animations (2)'), findsOneWidget);
+      await tester.tap(find.textContaining('Animations ('));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('96×128 · 12 frames · 10 fps'), findsOneWidget);
+      expect(find.text('128×128 · 9 frames · 10 fps'), findsOneWidget);
+
+      // The square guess, set to 12 frames by hand.
+      final card = find.ancestor(
+        of: find.text('128×128 · 9 frames · 10 fps'),
+        matching: find.byType(Card),
+      );
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(card.first));
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      await tester.tap(
+        find.descendant(of: card, matching: find.byTooltip('Edit animation')),
+      );
+      await pumpUntil(tester, find.text('Apply size'));
+      final frames = find.widgetWithText(TextField, 'Frames');
+      await tester.enterText(frames, '');
+      await tester.enterText(frames, '1');
+      await tester.enterText(frames, '12');
+      await tester.pump();
+      String field(String label) => tester
+          .widget<TextField>(find.widgetWithText(TextField, label))
+          .controller!
+          .text;
+      expect((field('Frame width'), field('Frame height')), ('96', '128'));
+      expect(find.textContaining('12 × 1 · 12 frames'), findsOneWidget);
+      // One row: no row choice.
+      expect(find.text('All rows'), findsNothing);
+      await tester.tap(find.text('Save'));
+      await pumpUntil(tester, find.text('Reset to detected'));
+      expect(sidecar(), contains('"frames": 12'));
+      await tester.tap(find.text('Close'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('96×128 · 12 frames · 10 fps'), findsNWidgets(2));
+      for (final s in tester.widgetList<AnimatedSprite>(
+        find.byType(AnimatedSprite),
+      )) {
+        expect((s.anim.frameW, s.anim.cols, s.anim.rows), (96, 12, 1));
+      }
+    });
+  });
+
   group('Make animations from images (M28)', () {
     img.Image solid(int w, int h, int shade) {
       final i = img.Image(width: w, height: h, numChannels: 4);
@@ -1258,7 +1350,10 @@ void main() {
     testWidgets('Make animation… on an image card saves a strip', (
       tester,
     ) async {
-      await openImages(tester, {'ui/panel.png': solid(64, 16, 10)});
+      await openImages(tester, {
+        'ui/panel.png': solid(64, 16, 10),
+        'ui/portrait.png': solid(20, 30, 40),
+      });
       expect(find.textContaining('Animations ('), findsNothing);
       final mouse = await hover(tester, 'panel.png');
       await tester.tap(find.byTooltip('Make animation…'));
@@ -1271,8 +1366,10 @@ void main() {
       await tester.tap(find.text('Close'));
       await pumpUntil(tester, find.textContaining('Animations (1)'));
       await tester.pump(const Duration(milliseconds: 500));
-      // Still on the Images tab after the rescan.
-      expect(find.text('panel.png'), findsOneWidget);
+      // Still on the Images tab after the rescan; the strip is listed under
+      // Animations only (M34).
+      expect(find.text('portrait.png'), findsOneWidget);
+      expect(find.text('panel.png'), findsNothing);
       await tester.tap(find.textContaining('Animations ('));
       final edit = find.byIcon(Icons.tune);
       // The tab slide takes several frames.
@@ -1294,6 +1391,8 @@ void main() {
       expect(sidecar(), isNot(contains('manual')));
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Apply size'), findsNothing, reason: 'dialog closed');
+      // Back among the images.
+      expect(find.text('panel.png'), findsOneWidget);
     });
 
     testWidgets('a folder header combines its images into one strip', (
