@@ -379,6 +379,106 @@ void main() {
       expect((a.frameW, a.frameH, a.frameCount), (8, 6, 2));
     });
 
+    test('the strip is built in memory; nothing is written (M35)', () {
+      solid('fx/x1.png', 8, 8, 10);
+      solid('fx/x2.png', 6, 6, 20);
+      final before = Directory(tmp.path)
+          .listSync(recursive: true)
+          .map((e) => e.path)
+          .toSet();
+      final built = buildCombinedStrip(tmp.path, ['fx/x2.png', 'fx/x1.png']);
+      expect((built.frameW, built.frameH, built.frames), (8, 8, 2));
+      final strip = img.decodePng(built.png)!;
+      expect((strip.width, strip.height), (16, 8));
+      expect(strip.getPixel(4, 4).r, 10, reason: 'natural order');
+      expect(
+        Directory(tmp.path)
+            .listSync(recursive: true)
+            .map((e) => e.path)
+            .toSet(),
+        before,
+      );
+      expect(File(p.join(tmp.path, 'pack.json')).existsSync(), isFalse);
+    });
+
+    test('palette and 16-bit frames keep their colours (M35 fix)', () {
+      // A 4-bit palette PNG, like Kenney's Pixel explosion frames.
+      final pal = img.Image(
+        width: 4,
+        height: 4,
+        format: img.Format.uint4,
+        numChannels: 1,
+        palette: img.PaletteUint8(16, 4),
+      );
+      pal.palette!.setRgba(0, 0, 0, 0, 0);
+      pal.palette!.setRgba(1, 255, 203, 0, 128);
+      for (final px in pal) {
+        px.index = 1;
+      }
+      File(p.join(tmp.path, 'x/a.png'))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(img.encodePng(pal));
+      final wide = img.Image(
+        width: 4,
+        height: 4,
+        format: img.Format.uint16,
+        numChannels: 4,
+      );
+      for (final px in wide) {
+        px
+          ..r = 65535
+          ..g = 0
+          ..b = 0
+          ..a = 65535;
+      }
+      File(p.join(tmp.path, 'x/b.png')).writeAsBytesSync(img.encodePng(wide));
+      final strip = img.decodePng(
+        buildCombinedStrip(tmp.path, ['x/a.png', 'x/b.png']).png,
+      )!;
+      final a = strip.getPixel(1, 1);
+      expect([a.r, a.g, a.b, a.a], [255, 203, 0, 128]);
+      final b = strip.getPixel(5, 1);
+      expect([b.r, b.g, b.b, b.a], [255, 0, 0, 255]);
+    });
+
+    test('Save writes the strip with the edited settings (M35)', () {
+      solid('fx/x1.png', 8, 8, 10);
+      solid('fx/x2.png', 8, 8, 20);
+      final built = buildCombinedStrip(tmp.path, ['fx/x1.png', 'fx/x2.png']);
+      final detected = SpriteAnim(
+        path: 'fx/fx_animation.png',
+        kind: AnimKind.sheet,
+        frameW: built.frameW,
+        frameH: built.frameH,
+        cols: built.frames,
+      );
+      saveCombinedStrip(
+        tmp.path,
+        built.png,
+        detected,
+        detected.copyWith(fps: 12, zoom: 4),
+      );
+      expect(read('fx/fx_animation.png').width, 16);
+      expect(sidecarJson()['animations'], {
+        'fx/fx_animation.png': {
+          'manual': true,
+          'fps': 12.0,
+          'zoom': 4,
+          'frame_w': 8,
+          'frame_h': 8,
+        },
+      });
+      final c = loadPackContents(tmp.path, [
+        ('fx/x1.png', 1),
+        ('fx/x2.png', 1),
+        ('fx/fx_animation.png', 1),
+      ]);
+      final a = c.animations.singleWhere(
+        (a) => a.path == 'fx/fx_animation.png',
+      );
+      expect((a.frameW, a.frameCount, a.fps, a.zoom), (8, 2, 12.0, 4));
+    });
+
     test('output names: folder, root, numbered when taken', () {
       expect(
         combinedName(['fx/Black smoke/b2.png', 'fx/Black smoke/b1.png']),

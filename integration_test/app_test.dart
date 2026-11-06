@@ -1585,9 +1585,24 @@ A **16×16** knight with *walk* and *idle* animations.
         await tester.pump();
         await tester.tap(edit);
         await pumpUntil(tester, find.text('Apply size'));
-        await tester.tap(find.byKey(const ValueKey('zoom')));
-        await tester.pump(const Duration(milliseconds: 500));
-        await tester.tap(find.text('2×').last);
+        // M35: the −/+/reset overlay on the preview replaced the dropdown.
+        await mouse.moveTo(tester.getCenter(find.byType(ZoomPreview)));
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('zoom-reset')));
+        await tester.pump();
+        while (tester
+                .widget<Text>(find.byKey(const ValueKey('zoom-value')))
+                .data !=
+            '2×') {
+          final value = tester
+              .widget<Text>(find.byKey(const ValueKey('zoom-value')))
+              .data!;
+          final n = value == 'Auto' ? 3 : int.parse(value.replaceAll('×', ''));
+          await tester.tap(
+            find.byKey(ValueKey(n > 2 ? 'zoom-out' : 'zoom-in')),
+          );
+          await tester.pump();
+        }
         await tester.pump(const Duration(milliseconds: 500));
         await settleImages(tester);
         await captureScreenshot(tester, 'm27_zoom_2x', settle: false);
@@ -1625,6 +1640,9 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm28_folder_header', settle: false);
 
     await tester.tap(combine);
+    // M35: asks first, then previews; Save writes.
+    await pumpUntil(tester, find.text('Continue'));
+    await tester.tap(find.text('Continue'));
     await pumpUntil(tester, find.text('Apply size'));
     await settleImages(tester);
     await captureScreenshot(tester, 'm28_combined_editor', settle: false);
@@ -1633,6 +1651,9 @@ A **16×16** knight with *walk* and *idle* animations.
     final out = File(
       p.join(pack, 'fx', 'Explosion', 'Explosion_animation.png'),
     );
+    expect(out.existsSync(), isFalse);
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.text('Back to image'));
     expect(out.existsSync(), isTrue);
     // The frame files stay.
     expect(
@@ -1654,6 +1675,94 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(find.text('Combine 2 images into animation'), findsOneWidget);
     await settleImages(tester);
     await captureScreenshot(tester, 'm28_selection_bar', settle: false);
+  });
+
+  testWidgets('m35: combine Pixel explosion — confirm, preview, Save', (
+    tester,
+  ) async {
+    const pixel =
+        '../assets_library/Kenney/Kenney Game Assets 1 version 42/2D assets/'
+        'Explosion Pack/PNG/Pixel explosion';
+    if (!Directory(pixel).existsSync()) return;
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    final folder = p.join(pack, 'fx', 'Pixel explosion');
+    copyTree(pixel, folder);
+    final out = File(p.join(folder, 'Pixel explosion_animation.png'));
+    List<String> files() =>
+        Directory(pack).listSync(recursive: true).map((e) => e.path).toList()
+          ..sort();
+    final before = files();
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('By folder'));
+    await tester.pump(const Duration(milliseconds: 500));
+    final combine = find.text('Combine into animation');
+    await tester.ensureVisible(combine);
+    await tester.pump(const Duration(milliseconds: 300));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm35_folder_header', settle: false);
+
+    await tester.tap(combine);
+    await pumpUntil(tester, find.byKey(const ValueKey('combine-confirm')));
+    expect(
+      find.textContaining(
+        'Combine 9 images from Pixel explosion into one animation?',
+        findRichText: true,
+      ),
+      findsOneWidget,
+    );
+    await captureScreenshot(tester, 'm35_combine_confirm', settle: false);
+    await tester.tap(find.text('Continue'));
+    await pumpUntil(tester, find.text('Apply size'));
+    expect(find.text('Sheet · 96×91 frames · 9 × 1 · 9 frames'), findsOne);
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    // The strip plays before anything is written.
+    await captureScreenshot(tester, 'm35_combine_preview', settle: false);
+    expect(files(), before);
+
+    // Esc: nothing written.
+    expect(await tester.sendKeyEvent(LogicalKeyboardKey.escape), isTrue);
+    await pumpUntil(tester, find.text('Apply size'), gone: true, seconds: 10);
+    expect(files(), before);
+
+    // Again, zoom with the wheel, then Save.
+    await tester.tap(combine);
+    await pumpUntil(tester, find.text('Continue'));
+    await tester.tap(find.text('Continue'));
+    await pumpUntil(tester, find.text('Apply size'));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(
+      location: tester.getCenter(find.byType(ZoomPreview)),
+    );
+    addTearDown(mouse.removePointer);
+    await tester.pump();
+    final pointer = TestPointer(9, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(
+      pointer.hover(tester.getCenter(find.byType(ZoomPreview))),
+    );
+    await tester.sendEventToBinding(pointer.scroll(const Offset(0, -20)));
+    await tester.pump(const Duration(milliseconds: 300));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm35_preview_zoom', settle: false);
+    final zoom = tester
+        .widget<Text>(find.byKey(const ValueKey('zoom-value')))
+        .data!;
+    expect(zoom, isNot('Auto'));
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.text('Back to image'));
+    expect(out.existsSync(), isTrue);
+    final sidecar = File(p.join(pack, 'asset_pack.json')).readAsStringSync();
+    expect(sidecar, contains('"manual": true'));
+    expect(sidecar, contains('"zoom": ${zoom.replaceAll('×', '')}'));
+    await tester.tap(find.text('Close'));
+    await pumpUntil(tester, find.textContaining('Animations ('));
+    await tester.pump(const Duration(milliseconds: 500));
   });
 
   testWidgets('m29: header previews and viewer zoom (real, read-only)', (

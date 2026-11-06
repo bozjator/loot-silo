@@ -82,13 +82,13 @@ void main() {
 
   testWidgets('shows frame 0 when not playing', (tester) async {
     await pumpSprite(tester, playing: false);
-    // Cropped to the shared opaque bounds (1..7 in each cell).
-    expect(src(tester), const Rect.fromLTRB(1, 1, 7, 7));
+    // The whole cell, padding included.
+    expect(src(tester), const Rect.fromLTWH(0, 0, 8, 8));
     await tester.pump(const Duration(milliseconds: 500));
-    expect(src(tester).left, 1);
+    expect(src(tester).left, 0);
   });
 
-  testWidgets('advances at fps, skips the empty cell, crops padding', (
+  testWidgets('advances at fps, skips the empty cell, keeps padding', (
     tester,
   ) async {
     await pumpSprite(tester, playing: true);
@@ -97,7 +97,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       seen.add(src(tester).left);
     }
-    expect(seen, {1, 9, 17});
+    expect(seen, {0, 8, 16});
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -134,7 +134,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       seen.add(src(tester).left);
     }
-    expect(seen, {1, 9});
+    expect(seen, {0, 8});
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -154,7 +154,7 @@ void main() {
       ),
     );
     expect(tester.takeException(), isNull);
-    expect(src(tester), const Rect.fromLTRB(1, 1, 7, 7));
+    expect(src(tester), const Rect.fromLTWH(0, 0, 8, 16));
   });
 
   testWidgets('unmounting after the image cache dropped the sheet is safe', (
@@ -172,11 +172,11 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('unmounting while the trim reads the frames is safe', (
+  testWidgets('unmounting while the empty-frame check reads pixels is safe', (
     tester,
   ) async {
     // A three-frame strip: the sprite can go (scrolled away) while the
-    // trim reads its pixels.
+    // empty-frame check reads its pixels.
     final names = ['walk.png'];
     final image = img.Image(width: 48, height: 16, numChannels: 4);
     for (var i = 0; i < 3; i++) {
@@ -199,7 +199,7 @@ void main() {
         ),
       );
     }
-    // Cached: the frames arrive at once and the trim starts reading.
+    // Cached: the frames arrive at once and the check starts reading.
     await tester.pumpWidget(
       AnimatedSprite(
         packPath: tmp.path,
@@ -224,7 +224,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  group('auto-trim and zoom (M27)', () {
+  group('whole frames and zoom (M35)', () {
     /// Two 64 px frames with a small blob each, at different places: the
     /// union of their opaque bounds is the shared crop.
     void paddedSheet(String name) {
@@ -300,52 +300,64 @@ void main() {
                 .painter!
             as SpriteFramePainter;
 
-    testWidgets('the crop is the union of every frame, the same for all', (
-      tester,
-    ) async {
-      paddedSheet('padded.png');
-      await pumpAt(tester, padded);
-      // Frame 1 blob 20..28 × 24..32, frame 2 24..32 × 28..40.
-      expect(painter(tester).src, const Rect.fromLTRB(20, 24, 32, 40));
-      final key = trimKey(tmp.path, padded, []);
-      expect(trimCache.keys.any((k) => k.startsWith(key)), isTrue);
-    });
-
-    testWidgets('a padded sheet fills the card in whole steps', (tester) async {
+    testWidgets('a padded sheet is drawn whole, padding kept', (tester) async {
       paddedSheet('padded.png');
       await pumpAt(tester, padded, box: 200);
       final pt = painter(tester);
-      // 12×16 crop in 200 px: 12×, so the sprite spans 192 px of height
-      // (untrimmed, 64 px frames would only get 3×).
-      expect(pt.scaleFor(const Size(200, 200)), 12);
-      expect(pt.src.height * pt.scaleFor(const Size(200, 200)), 192);
+      // The whole 64 px cell, not the opaque bounds.
+      expect(pt.src, const Rect.fromLTWH(0, 0, 64, 64));
+      // 64 px in 200 px: 3× in whole steps.
+      expect(pt.scaleFor(const Size(200, 200)), 3);
     });
 
-    testWidgets('a cached trim draws trimmed from the first frame', (
+    testWidgets('drawn on the first frame, no wait for a pixel read', (
       tester,
     ) async {
       paddedSheet('padded.png');
       await pumpAt(tester, padded, settle: false);
-      // Not trimmed yet: nothing is drawn rather than the untrimmed frame.
       await tester.pump();
-      expect(
-        find.descendant(
-          of: find.byType(AnimatedSprite),
-          matching: find.byType(CustomPaint),
+      expect(painter(tester).src, const Rect.fromLTWH(0, 0, 64, 64));
+    });
+
+    testWidgets('plays an in-memory image (bytes) without a file', (
+      tester,
+    ) async {
+      final image = img.Image(width: 32, height: 16, numChannels: 4);
+      img.fill(image, color: img.ColorRgba8(9, 9, 9, 255));
+      final bytes = img.encodePng(image);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        Center(
+          child: SizedBox(
+            width: 64,
+            height: 64,
+            child: AnimatedSprite(
+              packPath: tmp.path,
+              anim: const SpriteAnim(
+                path: 'not_written.png',
+                kind: AnimKind.sheet,
+                frameW: 16,
+                frameH: 16,
+                cols: 2,
+              ),
+              bytes: bytes,
+              playing: false,
+            ),
+          ),
         ),
-        findsNothing,
       );
-      for (var i = 0; i < 5; i++) {
+      final drawn = find.descendant(
+        of: find.byType(AnimatedSprite),
+        matching: find.byType(CustomPaint),
+      );
+      for (var i = 0; i < 50 && drawn.evaluate().isEmpty; i++) {
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 20)),
         );
         await tester.pump();
       }
-      // Shown again: the cache answers in the frame the image arrives.
-      await pumpAt(tester, padded, settle: false);
-      await tester.pump();
-      await tester.pump();
-      expect(painter(tester).src, const Rect.fromLTRB(20, 24, 32, 40));
+      expect(painter(tester).src, const Rect.fromLTWH(0, 0, 16, 16));
+      expect(File(p.join(tmp.path, 'not_written.png')).existsSync(), isFalse);
     });
 
     testWidgets('a zoom is a fixed scale, centred and clipped', (tester) async {

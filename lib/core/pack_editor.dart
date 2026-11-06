@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
@@ -298,15 +299,21 @@ String combinedName(
   return out;
 }
 
+/// A strip built by [buildCombinedStrip], not written anywhere yet.
+typedef CombinedStripImage = ({
+  Uint8List png,
+  int frameW,
+  int frameH,
+  int frames,
+});
+
 /// What [combineFrames] wrote.
 typedef CombinedStrip = ({String path, int frameW, int frameH, int frames});
 
-/// Stacks the images [rels] (natural order) left to right into one PNG at
-/// [outRel]. Frames of different sizes are centred in the largest frame
-/// size. The frame files stay. Records the strip in the sidecar as a
-/// `manual` animation with its frame size. Pure Dart; see
-/// [combineFramesInBackground].
-CombinedStrip combineFrames(String packPath, List<String> rels, String outRel) {
+/// Stacks the images [rels] (natural order) left to right into one PNG, in
+/// memory. Frames of different sizes are centred in the largest frame size.
+/// Pure Dart; see [buildCombinedStripInBackground].
+CombinedStripImage buildCombinedStrip(String packPath, List<String> rels) {
   final ordered = [...rels]..sort(naturalCompare);
   final frames = <img.Image>[];
   for (final rel in ordered) {
@@ -314,7 +321,10 @@ CombinedStrip combineFrames(String packPath, List<String> rels, String outRel) {
       File(p.join(packPath, rel)).readAsBytesSync(),
     );
     if (decoded == null) throw FormatException('Not an image: $rel');
-    frames.add(decoded.convert(numChannels: 4));
+    // 8-bit RGBA: palette and 1/2/4/16-bit PNGs keep their own format
+    // under a plain `convert(numChannels: 4)`, and compositing then copies
+    // raw values (15 for white in a 4-bit file) into the 8-bit strip.
+    frames.add(decoded.convert(format: img.Format.uint8, numChannels: 4));
   }
   if (frames.length < 2) throw ArgumentError('Need at least 2 images');
   final fw = frames.map((f) => f.width).reduce(math.max);
@@ -334,24 +344,64 @@ CombinedStrip combineFrames(String packPath, List<String> rels, String outRel) {
       blend: img.BlendMode.direct,
     );
   }
-  File(p.join(packPath, outRel))
-    ..parent.createSync(recursive: true)
-    ..writeAsBytesSync(img.encodePng(strip));
-  final old = PackSidecar.read(packPath) ?? const PackSidecar();
-  old
-      .copyWith(
-        animations: {
-          ...old.animations,
-          outRel: {'manual': true, 'frame_w': fw, 'frame_h': fh},
-        },
-      )
-      .write(packPath);
-  return (path: outRel, frameW: fw, frameH: fh, frames: frames.length);
+  return (
+    png: img.encodePng(strip),
+    frameW: fw,
+    frameH: fh,
+    frames: frames.length,
+  );
 }
 
-/// [combineFrames] in an isolate.
-Future<CombinedStrip> combineFramesInBackground(
+/// [buildCombinedStrip] in an isolate.
+Future<CombinedStripImage> buildCombinedStripInBackground(
   String packPath,
   List<String> rels,
-  String outRel,
-) => Isolate.run(() => combineFrames(packPath, rels, outRel));
+) => Isolate.run(() => buildCombinedStrip(packPath, rels));
+
+/// Writes a combined strip ([png]) to [anim]'s path and records it in the
+/// sidecar as a `manual` animation with [anim]'s settings. [detected] is the
+/// strip as built; its frame size is always stored, since detection alone
+/// would guess square frames.
+PackSidecar saveCombinedStrip(
+  String packPath,
+  Uint8List png,
+  SpriteAnim detected,
+  SpriteAnim anim,
+) {
+  File(p.join(packPath, anim.path))
+    ..parent.createSync(recursive: true)
+    ..writeAsBytesSync(png);
+  final saved = saveAnimationOverride(packPath, detected, anim, manual: true);
+  final entry = <String, Object?>{
+    ...?(saved.animations[anim.path] as Map?)?.cast<String, Object?>(),
+    'manual': true,
+  };
+  if (anim.frameTotal == null) entry.putIfAbsent('frame_w', () => anim.frameW);
+  entry.putIfAbsent('frame_h', () => anim.frameH);
+  final next = saved.copyWith(
+    animations: {...saved.animations, anim.path: entry},
+  );
+  next.write(packPath);
+  return next;
+}
+
+/// Builds the strip for [rels] and writes it at [outRel] right away (see
+/// [saveCombinedStrip]); the UI shows it first and writes on Save. The
+/// frame files stay.
+CombinedStrip combineFrames(String packPath, List<String> rels, String outRel) {
+  final built = buildCombinedStrip(packPath, rels);
+  final anim = SpriteAnim(
+    path: outRel,
+    kind: AnimKind.sheet,
+    frameW: built.frameW,
+    frameH: built.frameH,
+    cols: built.frames,
+  );
+  saveCombinedStrip(packPath, built.png, anim, anim);
+  return (
+    path: outRel,
+    frameW: built.frameW,
+    frameH: built.frameH,
+    frames: built.frames,
+  );
+}

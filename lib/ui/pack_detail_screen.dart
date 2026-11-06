@@ -1396,8 +1396,8 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
   }
 
   /// Combines [rels] into one strip ([combinedName]); [unique] picks a free
-  /// name instead of asking to overwrite. Then rescans and opens the new
-  /// animation in the Edit dialog.
+  /// name, otherwise Save asks before replacing. Asks first, builds the strip
+  /// in memory and opens it in the Edit dialog; only Save writes anything.
   Future<void> _combine(List<String> rels, {required bool unique}) async {
     if (rels.length < 2 || _busy || !packExists(pack.path)) return;
     final taken = {
@@ -1405,37 +1405,55 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
       ...contents.other,
     }.where((r) => File(p.join(pack.path, r)).existsSync()).toSet();
     final out = combinedName(rels, taken: taken, unique: unique);
-    final container = ProviderScope.containerOf(context, listen: false);
+    final folder = p.posix.dirname(out);
+    final from = folder == '.'
+        ? prettyName(pack.title, isFile: false)
+        : prettyName(p.posix.basename(folder), isFile: false);
     final messenger = ScaffoldMessenger.maybeOf(context);
-    // The tab may be rebuilt by the rescan; the dialog opens from the
+    // The tab may be rebuilt meanwhile; the dialog opens from the
     // navigator, which stays.
     final navigator = Navigator.of(context);
-    final exists = File(p.join(pack.path, out)).existsSync();
-    if (exists && !unique) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Replace animation?'),
-          content: Text('$out already exists. Replace it?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Replace'),
-            ),
-          ],
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('combine-confirm'),
+        title: const Text('Combine into animation'),
+        content: Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: 'Combine ${rels.length} images from '),
+              TextSpan(
+                text: from,
+                style: const TextStyle(fontStyle: FontStyle.italic),
+              ),
+              const TextSpan(text: ' into one animation?\n\nSaved as '),
+              TextSpan(
+                text: out,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const TextSpan(
+                text: ' when you press Save. Nothing is written before.',
+              ),
+            ],
+          ),
         ),
-      );
-      if (ok != true) return;
-    }
-    if (!mounted) return;
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
     setState(() => _busy = true);
-    final CombinedStrip strip;
+    final CombinedStripImage strip;
     try {
-      strip = await combineFramesInBackground(pack.path, rels, out);
+      strip = await buildCombinedStripInBackground(pack.path, rels);
     } on Object catch (e) {
       if (mounted) setState(() => _busy = false);
       messenger?.showSnackBar(
@@ -1443,21 +1461,16 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
       );
       return;
     }
-    await container.read(libraryProvider.notifier).reload();
-    if (mounted) {
-      setState(() {
-        _busy = false;
-        _selected.clear();
-      });
-    }
+    if (mounted) setState(() => _busy = false);
     if (!navigator.mounted) return;
-    await showDialog<void>(
+    final saved = await showDialog<bool>(
       context: navigator.context,
       builder: (_) => _AnimationEditorDialog(
         pack: pack,
-        path: strip.path,
+        path: out,
+        bytes: strip.png,
         pending: SpriteAnim(
-          path: strip.path,
+          path: out,
           kind: AnimKind.sheet,
           frameW: strip.frameW,
           frameH: strip.frameH,
@@ -1465,6 +1478,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
         ),
       ),
     );
+    if (saved == true && mounted) setState(_selected.clear);
   }
 
   @override
@@ -1693,11 +1707,12 @@ class _AnimationsTab extends StatelessWidget {
 /// The fps / frame size / row editor for the animation at [path]. Watches
 /// the pack, so after Save the editor shows the stored override, as the old
 /// in-list cards did.
-class _AnimationEditorDialog extends ConsumerWidget {
+class _AnimationEditorDialog extends ConsumerStatefulWidget {
   const _AnimationEditorDialog({
     required this.pack,
     required this.path,
     this.pending,
+    this.bytes,
   });
 
   final PackRow pack;
@@ -1708,68 +1723,149 @@ class _AnimationEditorDialog extends ConsumerWidget {
   /// it, the stored animation takes over.
   final SpriteAnim? pending;
 
+  /// "Combine into animation": the strip built in memory, written to
+  /// [path] only on Save (asking before replacing a file). Cancel / Esc
+  /// write nothing. The dialog pops `true` once it has been saved.
+  final Uint8List? bytes;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AnimationEditorDialog> createState() =>
+      _AnimationEditorDialogState();
+}
+
+class _AnimationEditorDialogState
+    extends ConsumerState<_AnimationEditorDialog> {
+  PackRow get pack => widget.pack;
+  String get path => widget.path;
+
+  /// The unsaved strip; null once saved (or for files on disk).
+  late Uint8List? _bytes = widget.bytes;
+  var _saved = false;
+
+  /// Takes the keyboard focus once shown, so Esc closes this dialog even
+  /// when it opened while the Combine confirmation was still closing.
+  final _focus = FocusNode(debugLabel: 'animation editor dialog');
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_focus.hasFocus) _focus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  /// Asks before a combined strip replaces an existing file.
+  Future<bool> _confirmReplace() async {
+    if (!File(p.join(pack.path, path)).existsSync()) return true;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Replace animation?'),
+        content: Text('$path already exists. Replace it?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Replace'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = widget.pending;
     final contents = ref.watch(packContentsProvider(pack.id)).value;
-    // `animations` follows `shownDetected`, index for index.
+    final bytes = _bytes;
+    // `animations` follows `shownDetected`, index for index. An unsaved
+    // strip is always new, even when a file of that name exists.
     final shown = contents?.shownDetected ?? const <SpriteAnim>[];
-    final i = shown.indexWhere((a) => a.path == path);
+    final i = bytes != null ? -1 : shown.indexWhere((a) => a.path == path);
     final isNew = i < 0 && pending != null;
     final detected = i >= 0 ? shown[i] : pending;
     final current = i >= 0 ? contents!.animations[i] : pending;
     // Made by hand: resetting turns it back into a plain image.
     final manual =
+        bytes == null &&
         contents != null &&
         manualAnimations(contents.sidecar?.animations ?? const {})
             .contains(path);
     return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760),
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: contents == null || detected == null || current == null
-              ? const SizedBox(
-                  height: 200,
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    AnimationEditor(
-                      key: ValueKey(path),
-                      packPath: pack.path,
-                      detected: detected,
-                      current: current,
-                      isNew: isNew,
-                      manual: manual,
-                      onSave: (anim) async {
-                        if (!packExists(pack.path)) return;
-                        saveAnimationOverride(
-                          pack.path,
-                          detected,
-                          anim,
-                          manual: isNew,
-                        );
-                        final library = ref.read(libraryProvider.notifier);
-                        // Back to image: nothing is left to edit here.
-                        if (anim == null && manual && context.mounted) {
-                          Navigator.of(context).pop();
-                        }
-                        // The tile preview may be this sheet; rescan picks the
-                        // override up.
-                        await library.reload();
-                      },
-                      onNotAnimation: () =>
-                          markNotAnimation(context, ref, pack, path),
-                    ),
-                    TextButton(
-                      // maybePop: the editor holds it while saving.
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      child: const Text('Close'),
-                    ),
-                  ],
-                ),
+      child: Focus(
+        focusNode: _focus,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: contents == null || detected == null || current == null
+                ? const SizedBox(
+                    height: 200,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      AnimationEditor(
+                        key: ValueKey('$path:${bytes != null}'),
+                        packPath: pack.path,
+                        detected: detected,
+                        current: current,
+                        isNew: isNew,
+                        manual: manual,
+                        bytes: bytes,
+                        onSave: (anim) async {
+                          if (!packExists(pack.path)) return;
+                          final library = ref.read(libraryProvider.notifier);
+                          if (bytes != null) {
+                            if (anim == null || !await _confirmReplace()) {
+                              return;
+                            }
+                            saveCombinedStrip(pack.path, bytes, detected, anim);
+                            // The same path may be cached from an older file.
+                            await FileImage(File(p.join(pack.path, path)))
+                                .evict();
+                            _saved = true;
+                            await library.reload();
+                            if (mounted) setState(() => _bytes = null);
+                            return;
+                          }
+                          saveAnimationOverride(
+                            pack.path,
+                            detected,
+                            anim,
+                            manual: isNew,
+                          );
+                          // Back to image: nothing is left to edit here.
+                          if (anim == null && manual && context.mounted) {
+                            Navigator.of(context).pop(_saved);
+                          }
+                          // The tile preview may be this sheet; rescan picks the
+                          // override up.
+                          await library.reload();
+                        },
+                        onNotAnimation: () =>
+                            markNotAnimation(context, ref, pack, path),
+                      ),
+                      TextButton(
+                        // maybePop: the editor holds it while saving.
+                        onPressed: () => Navigator.of(context).maybePop(_saved),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+          ),
         ),
       ),
     );
@@ -1825,7 +1921,12 @@ class AnimationEditor extends StatefulWidget {
     required this.onNotAnimation,
     this.isNew = false,
     this.manual = false,
+    this.bytes,
   });
+
+  /// The encoded sheet when it isn't on disk yet (a combined strip shown
+  /// before Save); [SpriteAnim.path] is then where Save will write it.
+  final Uint8List? bytes;
 
   /// Made into an animation by hand ("Make animation…" / combined): Reset
   /// is always offered and makes it a plain image again.
@@ -1978,7 +2079,17 @@ class _AnimationEditorState extends State<AnimationEditor> {
                           File(p.join(widget.packPath, a.path)),
                           animate: true,
                         )
-                      : AnimatedSprite(packPath: widget.packPath, anim: a),
+                      // Wheel / −, +, reset over the preview set the zoom.
+                      : ZoomPreview(
+                          anim: a,
+                          onZoom: (z) =>
+                              setState(() => _anim = _anim.copyWith(zoom: z)),
+                          child: AnimatedSprite(
+                            packPath: widget.packPath,
+                            anim: a,
+                            bytes: widget.bytes,
+                          ),
+                        ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -1994,15 +2105,18 @@ class _AnimationEditorState extends State<AnimationEditor> {
                             ),
                           ),
                           // Opens on top of this dialog; Esc closes it first.
-                          OpenImageButton(
-                            onPressed: () => showImageViewer(
-                              context,
-                              packPath: widget.packPath,
-                              images: [a.path],
-                              index: 0,
+                          // Nothing to open before an unsaved strip exists.
+                          if (widget.bytes == null) ...[
+                            OpenImageButton(
+                              onPressed: () => showImageViewer(
+                                context,
+                                packPath: widget.packPath,
+                                images: [a.path],
+                                index: 0,
+                              ),
                             ),
-                          ),
-                          RevealButton(p.join(widget.packPath, a.path)),
+                            RevealButton(p.join(widget.packPath, a.path)),
+                          ],
                         ],
                       ),
                       Row(
@@ -2015,16 +2129,22 @@ class _AnimationEditorState extends State<AnimationEditor> {
                               ),
                             ),
                           ),
-                          _CopyButton(
-                            tooltip: 'Copy relative path',
-                            text: a.path,
-                            icon: Icons.content_copy,
-                          ),
-                          _CopyButton(
-                            tooltip: 'Copy full path',
-                            text: p.join(widget.packPath, a.path),
-                            icon: Icons.copy_all,
-                          ),
+                          if (widget.bytes == null) ...[
+                            _CopyButton(
+                              tooltip: 'Copy relative path',
+                              text: a.path,
+                              icon: Icons.content_copy,
+                            ),
+                            _CopyButton(
+                              tooltip: 'Copy full path',
+                              text: p.join(widget.packPath, a.path),
+                              icon: Icons.copy_all,
+                            ),
+                          ] else
+                            Text(
+                              '  (not saved yet)',
+                              style: theme.textTheme.bodySmall,
+                            ),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -2058,30 +2178,6 @@ class _AnimationEditorState extends State<AnimationEditor> {
                               ),
                             ),
                             Text('${a.fps.round()}'),
-                            const SizedBox(width: 16),
-                            const Text('Zoom'),
-                            const SizedBox(width: 8),
-                            // Auto fits the trimmed frame; a number is a fixed
-                            // pixel scale, centred and clipped on cards.
-                            DropdownButton<int?>(
-                              key: const ValueKey('zoom'),
-                              mouseCursor: clickCursor,
-                              dropdownMenuItemMouseCursor: clickCursor,
-                              value: a.zoom,
-                              items: [
-                                const DropdownMenuItem(
-                                  value: null,
-                                  child: Text('Auto'),
-                                ),
-                                for (final z in SpriteAnim.zoomSteps)
-                                  DropdownMenuItem(
-                                    value: z,
-                                    child: Text('$z×'),
-                                  ),
-                              ],
-                              onChanged: (z) =>
-                                  setState(() => _anim = a.copyWith(zoom: z)),
-                            ),
                           ],
                         ),
                       if (isSheet)
@@ -2201,6 +2297,130 @@ class _AnimationEditorState extends State<AnimationEditor> {
       ),
     );
   }
+}
+
+/// The Edit dialog's preview: the mouse wheel zooms in whole steps
+/// (1×–8×), and on hover a small overlay shows −, the value, + and reset
+/// (Auto, the fit). The wheel is claimed, so nothing under the dialog scrolls
+/// or zooms.
+class ZoomPreview extends StatefulWidget {
+  const ZoomPreview({
+    super.key,
+    required this.anim,
+    required this.onZoom,
+    required this.child,
+  });
+
+  final SpriteAnim anim;
+
+  /// The new [SpriteAnim.zoom]; null is Auto.
+  final ValueChanged<int?> onZoom;
+  final Widget child;
+
+  @override
+  State<ZoomPreview> createState() => _ZoomPreviewState();
+}
+
+class _ZoomPreviewState extends State<ZoomPreview> {
+  var _hover = false;
+
+  /// What Auto draws at in this box; the first step starts from it. Read
+  /// from the laid-out size (no LayoutBuilder: the editor sizes itself with
+  /// IntrinsicHeight).
+  int _fit() {
+    final a = widget.anim;
+    final box = context.size ?? const Size(224, 224);
+    return integerScale(math.min(box.width / a.frameW, box.height / a.frameH))
+        .floor()
+        .clamp(SpriteAnim.zoomSteps.first, SpriteAnim.zoomSteps.last);
+  }
+
+  @override
+  Widget build(BuildContext context) => Builder(
+    builder: (context) {
+      final a = widget.anim;
+      final steps = SpriteAnim.zoomSteps;
+      void step(int by) {
+        final next = ((a.zoom ?? _fit()) + by).clamp(steps.first, steps.last);
+        if (next != a.zoom) widget.onZoom(next);
+      }
+
+      final zoom = a.zoom;
+      final theme = Theme.of(context);
+      return MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: Listener(
+          // The whole box, transparent pixels and padding included.
+          behavior: HitTestBehavior.opaque,
+          onPointerSignal: (e) {
+            if (e is PointerScrollEvent && e.scrollDelta.dy != 0) {
+              GestureBinding.instance.pointerSignalResolver.register(
+                e,
+                (_) => step(e.scrollDelta.dy < 0 ? 1 : -1),
+              );
+            }
+          },
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              widget.child,
+              if (_hover)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Material(
+                    key: const ValueKey('zoom-overlay'),
+                    color: theme.colorScheme.surface.withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          key: const ValueKey('zoom-out'),
+                          tooltip: 'Zoom out',
+                          iconSize: 16,
+                          visualDensity: VisualDensity.compact,
+                          onPressed: zoom == null || zoom > steps.first
+                              ? () => step(-1)
+                              : null,
+                          icon: const Icon(Icons.remove),
+                        ),
+                        Text(
+                          a.zoom == null ? 'Auto' : '${a.zoom}×',
+                          key: const ValueKey('zoom-value'),
+                          style: theme.textTheme.labelMedium,
+                        ),
+                        IconButton(
+                          key: const ValueKey('zoom-in'),
+                          tooltip: 'Zoom in',
+                          iconSize: 16,
+                          visualDensity: VisualDensity.compact,
+                          onPressed: zoom == null || zoom < steps.last
+                              ? () => step(1)
+                              : null,
+                          icon: const Icon(Icons.add),
+                        ),
+                        IconButton(
+                          key: const ValueKey('zoom-reset'),
+                          tooltip: 'Reset zoom (Auto)',
+                          iconSize: 16,
+                          visualDensity: VisualDensity.compact,
+                          onPressed: a.zoom == null
+                              ? null
+                              : () => widget.onZoom(null),
+                          icon: const Icon(Icons.fit_screen_outlined),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 /// Copies [text] to the clipboard and says so in a snack bar.

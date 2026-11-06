@@ -16,12 +16,10 @@ import 'pixel_image.dart';
 /// Shows frame 0 while [playing] is false. For grids, the animation's
 /// [SpriteAnim.rowToPlay] picks the row to play; `null` plays every cell.
 ///
-/// Auto-trim: fully transparent cells (common at the end of grid rows) are
-/// skipped, and every frame is cropped to the union of the frames' opaque
-/// bounds, the same rectangle for all of them so nothing jitters. The
-/// result is cached per sheet and slicing ([trimCache]), so a card shown
-/// again draws trimmed from its first frame. [SpriteAnim.zoom] replaces the
-/// fit with a fixed whole-number scale, centred and clipped.
+/// Every frame is drawn whole (no cropping), so all animations of one
+/// character keep the same size. Fully transparent cells (common at the end
+/// of grid rows) are skipped once the pixels are read. [SpriteAnim.zoom]
+/// replaces the fit with a fixed whole-number scale, centred and clipped.
 class AnimatedSprite extends StatefulWidget {
   const AnimatedSprite({
     super.key,
@@ -29,6 +27,7 @@ class AnimatedSprite extends StatefulWidget {
     required this.anim,
     this.playing = true,
     this.fps,
+    this.bytes,
   });
 
   final String packPath;
@@ -38,29 +37,13 @@ class AnimatedSprite extends StatefulWidget {
   /// Overrides [SpriteAnim.fps].
   final double? fps;
 
+  /// An encoded image to play instead of the file at [SpriteAnim.path]
+  /// (e.g. a combined strip not saved yet).
+  final Uint8List? bytes;
+
   @override
   State<AnimatedSprite> createState() => _AnimatedSpriteState();
 }
-
-/// Trim results: kept frame indices and the shared crop (relative to each
-/// frame's origin), keyed by [trimKey]. Bounded; oldest entries go first.
-@visibleForTesting
-final trimCache = <String, (List<int>, Rect)>{};
-const _trimCacheSize = 4000;
-
-/// Cache key for [anim] in [packPath]: the file(s) and everything that
-/// changes the slicing (not fps or zoom).
-@visibleForTesting
-String trimKey(String packPath, SpriteAnim anim, List<ui.Image> images) => [
-  packPath,
-  anim.path,
-  anim.kind.name,
-  anim.frameW,
-  anim.frameH,
-  anim.frameTotal,
-  anim.rowToPlay,
-  for (final i in images) '${i.width}x${i.height}',
-].join('|');
 
 class _AnimatedSpriteState extends State<AnimatedSprite>
     with SingleTickerProviderStateMixin {
@@ -76,9 +59,6 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
   List<(int, Rect)> _frames = const [];
   var _frame = 0;
   Object? _error;
-
-  /// False until [_trimEmpty] has run, so the untrimmed frame never flashes.
-  var _trimmed = false;
 
   @override
   void didChangeDependencies() {
@@ -98,14 +78,15 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
           fps: widget.anim.fps,
         ) ==
         widget.anim;
-    if (!sameSheet || old.packPath != widget.packPath) {
+    if (!sameSheet ||
+        old.packPath != widget.packPath ||
+        !identical(old.bytes, widget.bytes)) {
       _release();
       _load();
     } else if (old.anim.playRow != widget.anim.playRow) {
       _frames = _computeFrames();
       _frame = 0;
-      _trimmed = false;
-      _trimEmpty();
+      _skipEmpty();
     }
     _syncTicker();
   }
@@ -117,7 +98,10 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
     final pending = List<ui.Image?>.filled(paths.length, null);
     var remaining = paths.length;
     for (var i = 0; i < paths.length; i++) {
-      final provider = FileImage(File(p.join(widget.packPath, paths[i])));
+      final bytes = widget.bytes;
+      final ImageProvider provider = bytes != null
+          ? MemoryImage(bytes)
+          : FileImage(File(p.join(widget.packPath, paths[i])));
       final stream = provider.resolve(createLocalImageConfiguration(context));
       late final ImageStreamListener listener;
       listener = ImageStreamListener(
@@ -136,9 +120,8 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
                 ..addAll(pending.cast<ui.Image>());
               _frames = _computeFrames();
               _frame = 0;
-              _trimmed = false;
             });
-            _trimEmpty();
+            _skipEmpty();
             _syncTicker();
           }
         },
@@ -174,110 +157,44 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
     ];
   }
 
-  /// Drops fully transparent frames and crops every frame to the union of
-  /// their opaque bounds, so padded frames still scale up. Sheets only;
-  /// GIFs play as they are.
-  Future<void> _trimEmpty() async {
+  /// Drops fully transparent frames; the rest are drawn whole. Sheets
+  /// only; GIFs play as they are.
+  Future<void> _skipEmpty() async {
     final frames = _frames;
-    if (widget.anim.kind == AnimKind.gif || _images.isEmpty) {
-      _trimmed = true;
-      return;
-    }
-    final key = trimKey(widget.packPath, widget.anim, _images);
-    final cached = trimCache[key];
-    if (cached != null) {
-      _applyTrim(cached);
-      return;
-    }
-    // Read from clones taken now: the sprite can be removed or reloaded
-    // between two reads, which disposes [_images].
-    final sources = {for (final (index, _) in frames) _images[index]};
-    final clones = {for (final i in sources) i: i.clone()};
-    final data = <ui.Image, ByteData?>{};
+    if (widget.anim.kind == AnimKind.gif || _images.isEmpty) return;
+    // Read from a clone taken now: the sprite can be removed or reloaded
+    // during the read, which disposes [_images].
+    final image = _images.first;
+    final clone = image.clone();
+    ByteData? bytes;
     try {
-      for (final MapEntry(key: image, value: clone) in clones.entries) {
-        if (!mounted || !identical(frames, _frames)) return;
-        try {
-          data[image] = await clone.toByteData();
-        } catch (_) {
-          data[image] = null; // unreadable: the frame is kept whole
-        }
-      }
+      bytes = await clone.toByteData();
+    } catch (_) {
+      return; // unreadable: every frame is kept
     } finally {
-      for (final c in clones.values) {
-        c.dispose();
-      }
+      clone.dispose();
     }
-    if (!mounted || !identical(frames, _frames)) return;
-    // Opaque bounds of a frame relative to its origin, or null when empty.
-    // A cell can reach past the image (frame size larger than the sheet),
-    // so the scan stays inside it.
-    Rect? bounds(ui.Image image, ByteData bytes, Rect r) {
+    if (bytes == null || !mounted || !identical(frames, _frames)) return;
+    bool opaque(Rect r) {
       final w = image.width;
-      int? x0, y0, x1, y1;
       final xEnd = math.min(r.right.toInt(), w);
       final yEnd = math.min(r.bottom.toInt(), image.height);
       for (var y = r.top.toInt(); y < yEnd; y++) {
         for (var x = r.left.toInt(); x < xEnd; x++) {
-          if (bytes.getUint8((y * w + x) * 4 + 3) == 0) continue;
-          x0 = x0 == null ? x : math.min(x0, x);
-          x1 = x1 == null ? x : math.max(x1, x);
-          y0 ??= y;
-          y1 = y;
+          if (bytes!.getUint8((y * w + x) * 4 + 3) != 0) return true;
         }
       }
-      if (x0 == null) return null;
-      return Rect.fromLTRB(
-        x0 - r.left,
-        y0! - r.top,
-        x1! + 1 - r.left,
-        y1! + 1 - r.top,
-      );
+      return false;
     }
 
-    Rect? union;
-    final kept = <int>[];
-    for (var i = 0; i < frames.length; i++) {
-      final (index, rect) = frames[i];
-      final image = _images[index];
-      final bytes = data[image];
-      if (bytes == null) {
-        // Unreadable: keep the frame whole.
-        kept.add(i);
-        union = (union ?? rect.shift(-rect.topLeft)).expandToInclude(
-          rect.shift(-rect.topLeft),
-        );
-        continue;
-      }
-      final b = bounds(image, bytes, rect);
-      if (b == null) continue;
-      kept.add(i);
-      union = union == null ? b : union.expandToInclude(b);
-    }
-    if (kept.isEmpty) {
-      setState(() => _trimmed = true);
-      return;
-    }
-    final result = (kept, union!);
-    if (trimCache.length >= _trimCacheSize) {
-      trimCache.remove(trimCache.keys.first);
-    }
-    trimCache[key] = result;
-    _applyTrim(result);
-  }
-
-  void _applyTrim((List<int>, Rect) trim) {
-    final (kept, crop) = trim;
-    final frames = _frames;
+    final kept = [
+      for (final f in frames)
+        if (opaque(f.$2)) f,
+    ];
+    if (kept.isEmpty || kept.length == frames.length) return;
     setState(() {
-      _frames = [
-        for (final i in kept)
-          if (i < frames.length)
-            (frames[i].$1, crop.shift(frames[i].$2.topLeft)),
-      ];
-      if (_frames.isEmpty) _frames = frames;
-      _frame = _frame % _frames.length;
-      _trimmed = true;
+      _frames = kept;
+      _frame = _frame % kept.length;
     });
     _syncTicker();
   }
@@ -322,7 +239,7 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null || _frames.isEmpty || !_trimmed) {
+    if (_error != null || _frames.isEmpty) {
       return const SizedBox.expand();
     }
     final (index, src) = _frames[_frame % _frames.length];

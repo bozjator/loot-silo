@@ -1113,27 +1113,72 @@ void main() {
       expect(sidecar(), isNot(contains('animations')));
     });
 
-    testWidgets('Zoom is saved in the sidecar and drawn on the card', (
+    testWidgets('wheel and −/+/reset over the preview set the saved zoom', (
       tester,
     ) async {
       await openGrid(tester);
-      await tester.tap(find.byKey(const ValueKey('zoom')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('3×').last);
-      await tester.pumpAndSettle();
+      final preview = find.byType(ZoomPreview);
+      final center = tester.getCenter(preview);
+      FilledButton save() => tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Save'),
+      );
+      String value() =>
+          tester.widget<Text>(find.byKey(const ValueKey('zoom-value'))).data!;
+      // No Zoom dropdown any more.
+      expect(find.byKey(const ValueKey('zoom')), findsNothing);
+      expect(find.byKey(const ValueKey('zoom-overlay')), findsNothing);
+      final summary = find.textContaining('Sheet · ');
+      final summaryBefore = tester.widget<Text>(summary).data;
+
+      // Hover shows the overlay at Auto; Save stays off.
+      final pointer = TestPointer(7, PointerDeviceKind.mouse);
+      await tester.sendEventToBinding(pointer.hover(center));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('zoom-overlay')), findsOneWidget);
+      expect(value(), 'Auto');
+      expect(save().onPressed, isNull);
+
+      // Wheel up: one whole step above the fit.
+      await tester.sendEventToBinding(pointer.scroll(const Offset(0, -20)));
+      await tester.pump();
+      final up = int.parse(value().replaceAll('×', ''));
+      expect(up, inInclusiveRange(2, 8));
+      expect(save().onPressed, isNotNull);
+      // The wheel over the image leaves the frame count alone.
+      expect(tester.widget<Text>(summary).data, summaryBefore);
+      await tester.sendEventToBinding(pointer.scroll(const Offset(0, 20)));
+      await tester.pump();
+      expect(value(), '${up - 1}×');
+
+      // + and −, then reset back to Auto (not dirty any more).
+      await tester.tap(find.byKey(const ValueKey('zoom-in')));
+      await tester.pump();
+      expect(value(), '$up×');
+      await tester.tap(find.byKey(const ValueKey('zoom-out')));
+      await tester.pump();
+      expect(value(), '${up - 1}×');
+      await tester.tap(find.byKey(const ValueKey('zoom-reset')));
+      await tester.pump();
+      expect(value(), 'Auto');
+      expect(save().onPressed, isNull);
+
+      // Saved and drawn on the card.
+      await tester.tap(find.byKey(const ValueKey('zoom-in')));
+      await tester.pump();
       await tester.tap(find.text('Save'));
       await pumpUntil(tester, find.text('Reset to detected'));
-      expect(sidecar(), contains('"zoom": 3'));
+      expect(sidecar(), contains('"zoom": $up'));
       for (final s in tester.widgetList<AnimatedSprite>(
         find.byType(AnimatedSprite),
       )) {
-        expect(s.anim.zoom, 3);
+        expect(s.anim.zoom, up);
       }
       // Reset clears it again.
       await tester.tap(find.text('Reset to detected'));
       await pumpUntil(tester, find.text('Not an animation'));
       await tester.pump(const Duration(milliseconds: 500));
       expect(sidecar(), isNot(contains('zoom')));
+      await tester.sendEventToBinding(pointer.removePointer());
     });
 
     testWidgets('Undo on the snackbar restores the animation', (tester) async {
@@ -1395,7 +1440,14 @@ void main() {
       expect(find.text('panel.png'), findsOneWidget);
     });
 
-    testWidgets('a folder header combines its images into one strip', (
+    /// Every file under the pack with its bytes, to show nothing changed.
+    Map<String, String> snapshot() => {
+      for (final f in Directory(packDir()).listSync(recursive: true))
+        if (f is File)
+          p.relative(f.path, from: packDir()): f.readAsBytesSync().join(','),
+    };
+
+    testWidgets('a folder header combines: confirm, preview, write on Save', (
       tester,
     ) async {
       await openImages(tester, {
@@ -1404,25 +1456,85 @@ void main() {
         'fx/puff/puff_b.png': solid(6, 6, 20),
         'single/one.png': solid(8, 8, 40),
       }, byFolder: true);
-      // Only folders with 2+ images get the button.
-      expect(find.text('Combine into animation'), findsOneWidget);
-      await tester.tap(find.text('Combine into animation'));
+      // Only folders with 2+ images get the button, right after the name.
+      final button = find.text('Combine into animation');
+      expect(button, findsOneWidget);
+      final name = find.text('Fx');
+      expect(name, findsOneWidget);
+      expect(
+        tester.getRect(button).left - tester.getRect(name).right,
+        lessThan(120),
+      );
+      final out = File(p.join(packDir(), 'fx', 'puff', 'puff_animation.png'));
+      final before = snapshot();
+
+      // Cancel on the confirmation writes nothing.
+      await tester.tap(button);
+      await pumpUntil(tester, find.byKey(const ValueKey('combine-confirm')));
+      expect(
+        find.textContaining(
+          'Combine 3 images from Puff into one animation?',
+          findRichText: true,
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('fx/puff/puff_animation.png', findRichText: true),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(snapshot(), before);
+
+      // Continue: the preview opens, still nothing on disk; Esc leaves.
+      await tester.tap(button);
+      await pumpUntil(tester, find.text('Continue'));
+      await tester.tap(find.text('Continue'));
       await pumpUntil(tester, find.text('Apply size'));
       expect(find.text('Sheet · 8×8 frames · 3 × 1 · 3 frames'), findsOne);
-      final out = File(p.join(packDir(), 'fx', 'puff', 'puff_animation.png'));
+      expect(find.textContaining('not saved yet'), findsOneWidget);
+      expect(find.text('Not an animation'), findsNothing);
+      final sprite = tester.widget<AnimatedSprite>(
+        find.descendant(
+          of: find.byType(ZoomPreview),
+          matching: find.byType(AnimatedSprite),
+        ),
+      );
+      expect(sprite.bytes, isNotNull);
+      expect(snapshot(), before);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Apply size'), findsNothing);
+      expect(snapshot(), before);
+
+      // Save writes the strip and the sidecar entry.
+      await tester.tap(button);
+      await pumpUntil(tester, find.text('Continue'));
+      await tester.tap(find.text('Continue'));
+      await pumpUntil(tester, find.text('Apply size'));
+      await tester.tap(find.text('Save'));
+      await pumpUntil(tester, find.text('Back to image'));
       expect(out.existsSync(), isTrue);
       final strip = img.decodePng(out.readAsBytesSync())!;
       expect((strip.width, strip.height), (24, 8));
+      expect(sidecar(), contains('"manual": true'));
+      expect(sidecar(), contains('"frame_w": 8'));
       await tester.tap(find.text('Close'));
       await pumpUntil(tester, find.textContaining('Animations (1)'));
 
-      // Again: asks before replacing the existing strip.
+      // Again: Save asks before replacing; Cancel keeps the old file.
       await tester.pump(const Duration(milliseconds: 500));
+      final saved = out.readAsBytesSync();
       await tester.tap(find.text('Combine into animation').first);
+      await pumpUntil(tester, find.text('Continue'));
+      await tester.tap(find.text('Continue'));
+      await pumpUntil(tester, find.text('Apply size'));
+      await tester.tap(find.text('Save'));
       await pumpUntil(tester, find.text('Replace animation?'));
       await tester.tap(find.text('Cancel'));
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Apply size'), findsNothing);
+      expect(out.readAsBytesSync(), saved);
+      expect(find.text('Apply size'), findsOneWidget, reason: 'still editing');
     });
 
     testWidgets('Flat view: Ctrl/Shift-click select, then combine', (
@@ -1458,12 +1570,22 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('select:b/z.png')));
       await tester.pump();
       await tester.tap(find.text('Combine 3 images into animation'));
+      await pumpUntil(tester, find.text('Continue'));
+      expect(
+        find.textContaining(
+          'Combine 3 images from A into one animation?',
+          findRichText: true,
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Continue'));
       await pumpUntil(tester, find.text('Apply size'));
       expect(find.text('Sheet · 8×8 frames · 3 × 1 · 3 frames'), findsOne);
-      expect(
-        File(p.join(packDir(), 'a', 'a_animation.png')).existsSync(),
-        isTrue,
-      );
+      final out = File(p.join(packDir(), 'a', 'a_animation.png'));
+      expect(out.existsSync(), isFalse);
+      await tester.tap(find.text('Save'));
+      await pumpUntil(tester, find.text('Back to image'));
+      expect(out.existsSync(), isTrue);
       await tester.tap(find.text('Close'));
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.textContaining('selected'), findsNothing);

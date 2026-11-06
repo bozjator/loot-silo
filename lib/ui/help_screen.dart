@@ -105,6 +105,12 @@ class HelpScreen extends StatelessWidget {
                   'isn\'t listed again in the Images tab; "Not an animation" '
                   'puts it back there.',
                 ),
+                const _P(
+                  'Cards, focus mode and the Edit preview show the whole '
+                  'frame, transparent border included (no cropping), scaled '
+                  'up in whole steps, so every animation of one character '
+                  'keeps the same size. Fully empty frames are skipped.',
+                ),
                 _P('Animation words: ${animationWords.join(', ')}.'),
                 _P('Sheet words: ${sheetWords.join(', ')}.'),
                 _P(
@@ -120,16 +126,21 @@ class HelpScreen extends StatelessWidget {
                 const _P('Your overrides (saved in the pack\'s file)'),
                 const _Bullets([
                   'Edit (on a card): fps, frame size, total frames (−/+, '
-                      '↑/↓ or the wheel step through counts that fit), the '
-                      'row to play or all rows, and zoom.',
+                      '↑/↓ or the wheel step through counts that fit), and '
+                      'the row to play or all rows.',
+                  'Zoom: the mouse wheel over the Edit preview, or the −, + '
+                      'and reset buttons shown on hover (1×–8×; reset is '
+                      'Auto, the fit). Cards then use that zoom.',
                   '"Not an animation" moves a file to Images; Restore brings '
                       'it back.',
                   '"Make animation…" on an image marks it as a sheet; "Back '
                       'to image" undoes that.',
-                  'Combine frame files: the button on a folder header (By '
-                      'folder), or select images in Flat view (Ctrl/Shift-'
-                      'click), writes <folder>_animation.png next to them; the '
-                      'frame files stay.',
+                  'Combine frame files: the button after a folder\'s name '
+                      '(By folder), or select images in Flat view (Ctrl/'
+                      'Shift-click). It asks first, then shows the strip in '
+                      'Edit. Only Save writes <folder>_animation.png next to '
+                      'them (asking before replacing one); Cancel or Esc '
+                      'writes nothing. The frame files stay.',
                 ]),
               ]),
               const _Section('Search', [

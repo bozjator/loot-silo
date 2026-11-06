@@ -54,6 +54,18 @@ void main() {
     expect(text, contains('F1'));
   });
 
+  testWidgets('M35: whole frames, wheel zoom, Combine writes on Save', (
+    tester,
+  ) async {
+    await pumpHelp(tester);
+    final text = pageText(tester);
+    expect(text, contains('no cropping'));
+    expect(text, contains('Wheel over the Edit preview'));
+    expect(text, contains('mouse wheel over the Edit preview'));
+    expect(text, contains('Only Save writes <folder>_animation.png'));
+    expect(text, isNot(contains('and zoom.')));
+  });
+
   test('keys are described as printed on the keyboard', () {
     expect(AppKeys.dashboardSearch.keys, '/  or  Ctrl+F');
     expect(AppKeys.rescan.keys, 'F5  or  Ctrl+R');
