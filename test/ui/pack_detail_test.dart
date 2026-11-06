@@ -1362,14 +1362,14 @@ void main() {
     bool searchFocused(WidgetTester tester) =>
         tester.widget<TextField>(field()).focusNode!.hasFocus;
 
-    testWidgets('typing restarts the 200 ms wait on every key', (tester) async {
+    testWidgets('typing restarts the 250 ms wait on every key', (tester) async {
       await openKnight(tester, files: files);
       expect(find.text('Images (4)'), findsOneWidget);
       var text = '';
       for (final ch in 'barrel'.split('')) {
         text += ch;
         await tester.enterText(field(), text);
-        await tester.pump(const Duration(milliseconds: 190));
+        await tester.pump(const Duration(milliseconds: 240));
         expect(find.text('Images (4)'), findsOneWidget, reason: text);
       }
       await tester.pump(const Duration(milliseconds: 9));

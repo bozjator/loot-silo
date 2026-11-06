@@ -1929,13 +1929,13 @@ A **16×16** knight with *walk* and *idle* animations.
       tester.widget<Text>(realPacks()).data!,
     ); // e.g. "72 packs"
 
-    // Typing doesn't search until it pauses for 200 ms: keys 150 ms
+    // Typing doesn't search until it pauses for 250 ms: keys 210 ms
     // apart keep the full list.
     var typed = '';
     for (final ch in 'barrels'.split('')) {
       typed += ch;
       await tester.enterText(find.byType(TextField), typed);
-      await tester.pump(const Duration(milliseconds: 150));
+      await tester.pump(const Duration(milliseconds: 210));
       expect(all, findsOneWidget, reason: typed);
     }
     final line = find.byKey(const ValueKey('file-matches'));
