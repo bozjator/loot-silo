@@ -93,33 +93,10 @@ class PackDetailScreen extends ConsumerWidget {
         return KeyEventResult.handled;
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(pack.title),
-          bottom: tabStrip(ref),
-          actions: [
-            IconButton(
-              tooltip: pinned
-                  ? 'Unpin header — show it on hover (H)'
-                  : 'Pin header (H)',
-              isSelected: pinned,
-              icon: const Icon(Icons.push_pin_outlined),
-              selectedIcon: const Icon(Icons.push_pin),
-              onPressed: togglePin,
-            ),
-            if (pack.itchUrl case final url?)
-              IconButton(
-                tooltip: 'itch.io page',
-                icon: const Icon(Icons.storefront_outlined),
-                onPressed: () => launchUrl(Uri.parse(url)),
-              ),
-            IconButton(
-              tooltip: 'Open folder',
-              icon: const Icon(Icons.folder_open),
-              onPressed: () => launchUrl(Uri.directory(pack.path)),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
+        // With the tab strip there is no bar: the title is in the header
+        // and the tab, the icons in the header's corner. Without it, a bar
+        // with the back arrow.
+        appBar: tabStrip(ref) ?? AppBar(title: Text(pack.title)),
         // While a rescan reloads the contents, the old ones stay on screen,
         // so the open tab and its state survive.
         body: switch (contents) {
@@ -127,6 +104,7 @@ class PackDetailScreen extends ConsumerWidget {
             pack: pack,
             contents: value,
             pinned: pinned,
+            onTogglePin: togglePin,
             folder: folder,
             search: search,
             file: file,
@@ -146,6 +124,7 @@ class _Body extends StatefulWidget {
     required this.pack,
     required this.contents,
     required this.pinned,
+    required this.onTogglePin,
     this.folder,
     this.search,
     this.file,
@@ -160,6 +139,7 @@ class _Body extends StatefulWidget {
   /// False: a slim bar replaces the header; hovering it shows the header
   /// floating over the tabs, so nothing below moves.
   final bool pinned;
+  final VoidCallback onTogglePin;
 
   @override
   State<_Body> createState() => _BodyState();
@@ -167,6 +147,19 @@ class _Body extends StatefulWidget {
 
 class _BodyState extends State<_Body> {
   var _peek = false;
+
+  /// Opens the floating header once the pointer has rested on the slim bar
+  /// for [headerHoverDelay]; leaving first cancels it.
+  Timer? _peekTimer;
+
+  void _hoverSlim(bool inside) {
+    _peekTimer?.cancel();
+    _peekTimer = null;
+    if (!inside) return;
+    _peekTimer = Timer(headerHoverDelay, () {
+      if (mounted) setState(() => _peek = true);
+    });
+  }
 
   /// The open tab, by kind, so it stays open when a tab appears or goes
   /// (e.g. the Animations tab after "Combine into animation").
@@ -205,11 +198,15 @@ class _BodyState extends State<_Body> {
   @override
   void didUpdateWidget(_Body old) {
     super.didUpdateWidget(old);
-    if (widget.pinned) _peek = false;
+    if (widget.pinned) {
+      _peek = false;
+      _peekTimer?.cancel();
+    }
   }
 
   @override
   void dispose() {
+    _peekTimer?.cancel();
     _debounce?.cancel();
     _searchText.dispose();
     _searchFocus.dispose();
@@ -316,7 +313,16 @@ class _BodyState extends State<_Body> {
       base.other.length,
       () => _FilesTab(pack: pack, contents: contents),
     );
-    final header = _Header(pack: pack, contents: widget.contents);
+    final actions = _HeaderActions(
+      pack: pack,
+      pinned: widget.pinned,
+      onTogglePin: widget.onTogglePin,
+    );
+    final header = _Header(
+      pack: pack,
+      contents: widget.contents,
+      actions: actions,
+    );
     final field = Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
       child: SizedBox(
@@ -425,8 +431,13 @@ class _BodyState extends State<_Body> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       MouseRegion(
-                        onEnter: (_) => setState(() => _peek = true),
-                        child: _SlimHeader(pack: pack, contents: contents),
+                        onEnter: (_) => _hoverSlim(true),
+                        onExit: (_) => _hoverSlim(false),
+                        child: _SlimHeader(
+                          pack: pack,
+                          contents: contents,
+                          actions: actions,
+                        ),
                       ),
                       ...tabArea,
                     ],
@@ -559,10 +570,17 @@ class _FolderBar extends StatelessWidget {
 
 /// Carousel and info side by side.
 class _Header extends StatelessWidget {
-  const _Header({required this.pack, required this.contents});
+  const _Header({
+    required this.pack,
+    required this.contents,
+    required this.actions,
+  });
 
   final PackRow pack;
   final PackContents contents;
+
+  /// Pin / itch.io / folder, in the top-right corner.
+  final Widget actions;
 
   @override
   Widget build(BuildContext context) {
@@ -585,9 +603,20 @@ class _Header extends StatelessWidget {
             images: contents.carousel(pack.preview),
             sizes: contents.sizes,
           ),
-          info: KeyedSubtree(
-            key: const ValueKey('header-info'),
-            child: _Info(pack: pack, contents: contents),
+          // The icons take their own column on the right, so the info
+          // never runs under them.
+          info: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: KeyedSubtree(
+                  key: const ValueKey('header-info'),
+                  child: _Info(pack: pack, contents: contents),
+                ),
+              ),
+              const SizedBox(width: 8),
+              actions,
+            ],
           ),
         ),
       ),
@@ -683,12 +712,65 @@ class _RenderHeaderRow extends RenderBox
       defaultHitTestChildren(result, position: position);
 }
 
+/// How long the pointer rests on the slim bar before the header opens.
+const headerHoverDelay = Duration(milliseconds: 400);
+
+/// Pin header, itch.io page (when linked) and open folder: the header's
+/// top-right corner, and the slim bar's right end.
+class _HeaderActions extends StatelessWidget {
+  const _HeaderActions({
+    required this.pack,
+    required this.pinned,
+    required this.onTogglePin,
+  });
+
+  final PackRow pack;
+  final bool pinned;
+  final VoidCallback onTogglePin;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    key: const ValueKey('header-actions'),
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      IconButton(
+        tooltip: pinned
+            ? 'Unpin header — show it on hover (H)'
+            : 'Pin header (H)',
+        isSelected: pinned,
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.push_pin_outlined),
+        selectedIcon: const Icon(Icons.push_pin),
+        onPressed: onTogglePin,
+      ),
+      if (pack.itchUrl case final url?)
+        IconButton(
+          tooltip: 'itch.io page',
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.storefront_outlined),
+          onPressed: () => launchUrl(Uri.parse(url)),
+        ),
+      IconButton(
+        tooltip: 'Open folder',
+        visualDensity: VisualDensity.compact,
+        icon: const Icon(Icons.folder_open),
+        onPressed: () => launchUrl(Uri.directory(pack.path)),
+      ),
+    ],
+  );
+}
+
 /// The unpinned header: one line of facts; hover shows the full header.
 class _SlimHeader extends StatelessWidget {
-  const _SlimHeader({required this.pack, required this.contents});
+  const _SlimHeader({
+    required this.pack,
+    required this.contents,
+    required this.actions,
+  });
 
   final PackRow pack;
   final PackContents contents;
+  final Widget actions;
 
   @override
   Widget build(BuildContext context) {
@@ -697,8 +779,8 @@ class _SlimHeader extends StatelessWidget {
       color: theme.colorScheme.onSurfaceVariant,
     );
     return Container(
-      height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      height: 40,
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
       color: theme.colorScheme.surfaceContainerLow,
       child: Row(
         children: [
@@ -720,6 +802,8 @@ class _SlimHeader extends StatelessWidget {
           Icon(Icons.unfold_more, size: 16, color: muted?.color),
           const SizedBox(width: 4),
           Text('Hover for details', style: muted),
+          const Spacer(),
+          actions,
         ],
       ),
     );

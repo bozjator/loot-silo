@@ -54,6 +54,15 @@ void main() {
     expect(text, contains('F1'));
   });
 
+  testWidgets('M36: header icons, hover delay, Dashboard tab', (tester) async {
+    await pumpHelp(tester);
+    final text = pageText(tester);
+    expect(find.text('Pack page & tabs'), findsOneWidget);
+    expect(text, contains("in the header's top-right corner"));
+    expect(text, contains('Rest the pointer on the bar for a moment'));
+    expect(text, contains('clicking it takes you back to the dashboard'));
+  });
+
   testWidgets('M35: whole frames, wheel zoom, Combine writes on Save', (
     tester,
   ) async {

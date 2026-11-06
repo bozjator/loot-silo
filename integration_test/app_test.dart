@@ -1081,8 +1081,10 @@ A **16×16** knight with *walk* and *idle* animations.
     await mouse.addPointer(location: const Offset(700, 700));
     addTearDown(mouse.removePointer);
     await mouse.moveTo(tester.getCenter(find.text('Hover for details')));
+    // M36: it opens after a short rest on the bar.
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text('Used in'), findsOneWidget);
+    await tester.pump(headerHoverDelay);
+    await pumpUntil(tester, find.text('Used in'));
     await settleImages(tester);
     await captureScreenshot(tester, 'm16_hover_header', settle: false);
     await mouse.moveTo(const Offset(700, 700));
@@ -1577,12 +1579,13 @@ A **16×16** knight with *walk* and *idle* animations.
       if (shot == 'tiny_rpg' && m27Phase == 'after') {
         // Zoom 2× in the editor (not saved).
         final edit = find.byIcon(Icons.tune).first;
-        await mouse.moveTo(
-          tester.getCenter(
-            find.ancestor(of: edit, matching: find.byType(Card)).first,
-          ),
-        );
-        await tester.pump();
+        // The header can push the first row's buttons below the window;
+        // hover the (hidden) button itself.
+        await tester.ensureVisible(edit);
+        await tester.pump(const Duration(milliseconds: 300));
+        await mouse.moveTo(tester.getCenter(edit));
+        // The card icons fade in on hover.
+        await tester.pump(const Duration(milliseconds: 300));
         await tester.tap(edit);
         await pumpUntil(tester, find.text('Apply size'));
         // M35: the −/+/reset overlay on the preview replaced the dropdown.
@@ -1939,6 +1942,100 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump(const Duration(seconds: 1));
     await settleImages(tester);
     await captureScreenshot(tester, 'm31_volcano_tab', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m36: detail layout with and without tabs (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField).first, 'Epic RPG World');
+    const village = 'Epic RPG World - The Village V2.2';
+    const volcano = 'Epic RPG World - Volcano V1.6.1';
+    Finder tile(String t) =>
+        find.descendant(of: find.byType(PackTile), matching: find.text(t));
+    final detail = find.byType(PackDetailScreen);
+    await pumpUntil(tester, tile(volcano));
+
+    // No tabs: the bar with the back arrow.
+    await tester.tap(tile(village));
+    await pumpUntil(tester, find.textContaining('Animations ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(
+      find.descendant(of: detail, matching: find.byType(BackButton)),
+      findsOneWidget,
+    );
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm36_no_tabs', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, detail, gone: true);
+
+    // A tab open; a plain click opens Village inside the Dashboard tab.
+    final g = await tester.startGesture(
+      tester.getCenter(tile(volcano)),
+      kind: PointerDeviceKind.mouse,
+      buttons: kMiddleMouseButton,
+    );
+    await g.up();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(tile(village));
+    await pumpUntil(tester, find.textContaining('Animations (').hitTestable());
+    await tester.pump(const Duration(milliseconds: 500));
+    final shown = detail.hitTestable();
+    expect(
+      find.descendant(of: shown.first, matching: find.byType(AppBar)),
+      findsNothing,
+    );
+    await settleImages(tester);
+    await captureScreenshot(
+      tester,
+      'm36_tabs_pack_in_dashboard',
+      settle: false,
+    );
+
+    // Unpinned: the slim bar with the icons; resting on it opens the header.
+    final unpin = find
+        .byTooltip('Unpin header — show it on hover (H)')
+        .hitTestable();
+    await tester.tap(unpin);
+    await tester.pump(const Duration(milliseconds: 300));
+    // The middle-click's mouse is still there; it hovers from now on.
+    final mouse = g;
+    await mouse.moveTo(const Offset(640, 700));
+    await tester.pump();
+    await captureScreenshot(tester, 'm36_slim_bar', settle: false);
+    await mouse.moveTo(
+      tester.getCenter(find.text('Hover for details').hitTestable()),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Used in').hitTestable(), findsNothing);
+    await tester.pump(headerHoverDelay);
+    await pumpUntil(tester, find.text('Used in').hitTestable());
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm36_slim_hover', settle: false);
+    // Pin it again from the floating header's corner.
+    await tester.tap(find.byTooltip('Pin header (H)').hitTestable().first);
+    await tester.pump(const Duration(milliseconds: 300));
+    await mouse.moveTo(const Offset(640, 700));
+
+    // The Dashboard tab goes back to the dashboard.
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byType(PackTabStrip),
+            matching: find.text('Dashboard'),
+          )
+          .hitTestable()
+          .first,
+    );
+    await pumpUntil(tester, tile(volcano).hitTestable());
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(detail.hitTestable(), findsNothing);
+    await captureScreenshot(tester, 'm36_back_on_dashboard', settle: false);
     expect(Directory(real).statSync().modified, before);
   });
 

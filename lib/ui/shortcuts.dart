@@ -198,6 +198,11 @@ const mouseHelp = [
   MouseHelp('Middle-click a tab', 'Close it'),
   MouseHelp('Ctrl + wheel over a grid', 'Bigger or smaller thumbnails'),
   MouseHelp('Hover a dashboard tile', 'Play its animation'),
+  MouseHelp(
+    'Rest on the slim header bar',
+    'Show the full header (after a moment)',
+  ),
+  MouseHelp('Click the Dashboard tab', 'Back to the dashboard from a pack'),
   MouseHelp('Click an animation card', 'Focus mode: dim and pause the others'),
   MouseHelp(
     'Wheel in the image viewer',

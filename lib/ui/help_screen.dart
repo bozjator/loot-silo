@@ -180,6 +180,27 @@ class HelpScreen extends StatelessWidget {
                   'grid.',
                 ),
               ]),
+              const _Section('Pack page & tabs', [
+                _P(
+                  'A pack page has a header (previews and info) above the '
+                  'Animations, Images, Audio and Other files tabs. The pin '
+                  '(H), itch.io page (when linked) and open folder icons sit '
+                  'in the header\'s top-right corner. When the header is '
+                  'unpinned, a slim bar replaces it, with the same icons at '
+                  'its right end. Rest the pointer on the bar for a moment '
+                  'to see the full header floating over the tabs; passing '
+                  'over it on the way to a tab doesn\'t open it.',
+                ),
+                _P(
+                  'Middle-click a pack (or right-click → Open in new tab) to '
+                  'open it in a tab. While tabs are open, the tab strip '
+                  'replaces the page\'s top bar; without tabs the bar with '
+                  'the back arrow stays. A plain click opens a pack inside '
+                  'the Dashboard tab, which then isn\'t shown as selected; '
+                  'clicking it takes you back to the dashboard. Esc and the '
+                  'mouse back button go back as well.',
+                ),
+              ]),
               _Section('Keyboard & mouse', [
                 for (final (where, keys) in shortcutSections) ...[
                   _P(where),

@@ -197,8 +197,18 @@ void main() {
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(location: const Offset(700, 890));
     addTearDown(mouse.removePointer);
+    // Passing over it quickly (on the way to a tab) doesn't open it (M36).
     await mouse.moveTo(tester.getCenter(find.text('Hover for details')));
-    await tester.pump();
+    await tester.pump(headerHoverDelay - const Duration(milliseconds: 100));
+    expect(find.text('Used in'), findsNothing);
+    await mouse.moveTo(const Offset(700, 890));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Used in'), findsNothing, reason: 'left before the delay');
+    // Resting on it opens it after the delay.
+    await mouse.moveTo(tester.getCenter(find.text('Hover for details')));
+    await tester.pump(headerHoverDelay - const Duration(milliseconds: 100));
+    expect(find.text('Used in'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 150));
     expect(find.text('Used in'), findsOneWidget);
     // Floating: the tabs didn't move.
     expect(tester.getTopLeft(find.byType(TabBar)).dy, unpinnedTop);
@@ -1942,6 +1952,125 @@ void main() {
       expect(find.byType(PackTabStrip), findsNothing);
       await ctrl(tester, LogicalKeyboardKey.keyW);
       expect(find.byType(Dashboard), findsOneWidget);
+    });
+
+    bool selected(WidgetTester tester, Finder stripTab) {
+      // The stadium behind the shown strip's tab.
+      final material = tester.widget<Material>(
+        find
+            .ancestor(
+              of: stripTab.hitTestable().first,
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      return material.color != Colors.transparent;
+    }
+
+    testWidgets('M36: no top bar with the strip; Dashboard tab goes back', (
+      tester,
+    ) async {
+      // No pack tab: the detail page keeps its bar with the back arrow.
+      await openKnight(tester);
+      final detail = find.byType(PackDetailScreen);
+      expect(
+        find.descendant(of: detail, matching: find.byType(AppBar)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: detail, matching: find.byType(BackButton)),
+        findsOneWidget,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settle(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(detail, findsNothing);
+
+      // With a tab open, a pack opened by a plain click has no bar: only
+      // the strip, where the Dashboard tab isn't selected.
+      await middleClick(tester, tile('Slimes'));
+      expect(selected(tester, strip('Dashboard')), isTrue);
+      await tester.tap(tile('Knight Pack'));
+      await pumpUntil(tester, detail);
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        find.descendant(of: detail, matching: find.byType(AppBar)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: detail, matching: find.byType(PackTabStrip)),
+        findsOneWidget,
+      );
+      expect(selected(tester, strip('Dashboard')), isFalse);
+      expect(selected(tester, strip('Slimes')), isFalse);
+      // The pin / folder icons are in the header, not a bar.
+      final folder = find.byTooltip('Open folder').hitTestable();
+      await pumpUntil(tester, folder);
+      expect(folder, findsOneWidget);
+      expect(tester.getTopRight(folder).dx, greaterThan(1400 - 80));
+      expect(
+        tester.getBottomLeft(folder).dy,
+        lessThan(tester.getTopLeft(find.byType(TabBar).hitTestable()).dy),
+      );
+
+      // Its click goes back to the dashboard, which is selected again.
+      await tester.tap(strip('Dashboard'));
+      await settle(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(detail, findsNothing);
+      expect(tile('Knight Pack'), findsOneWidget);
+      expect(selected(tester, strip('Dashboard')), isTrue);
+
+      // A pack tab is selected on its own page; Esc and the strip still work.
+      await tester.tap(strip('Slimes'));
+      await settle(tester);
+      expect(selected(tester, strip('Slimes')), isTrue);
+      expect(selected(tester, strip('Dashboard')), isFalse);
+      expect(
+        find.descendant(of: detail, matching: find.byType(AppBar)),
+        findsNothing,
+      );
+    });
+
+    testWidgets('M36: the slim bar carries the icons too', (tester) async {
+      await openKnight(tester);
+      await tester.tap(find.byTooltip('Unpin header — show it on hover (H)'));
+      await tester.pump();
+      expect(find.text('Hover for details'), findsOneWidget);
+      final pin = find.byTooltip('Pin header (H)');
+      expect(pin, findsOneWidget);
+      final bar = tester.getRect(
+        find
+            .ancestor(
+              of: find.text('Hover for details'),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      expect(bar.contains(tester.getCenter(pin)), isTrue);
+      expect(
+        bar.contains(tester.getCenter(find.byTooltip('Open folder'))),
+        isTrue,
+      );
+      // Clicking the pin there pins it again without opening on hover.
+      await tester.tap(pin);
+      await tester.pump();
+      expect(store.load().detailHeaderPinned, isTrue);
+    });
+
+    testWidgets('M36: icons fit at the minimum window size', (tester) async {
+      await openKnight(tester, size: const Size(1024, 600));
+      tester.takeException();
+      final info = tester.getRect(find.byKey(const ValueKey('header-info')));
+      final icons = tester.getRect(
+        find.byKey(const ValueKey('header-actions')),
+      );
+      expect(info.right, lessThanOrEqualTo(icons.left));
+      expect(icons.right, lessThanOrEqualTo(1024));
+      final preview = tester.getRect(
+        find.byKey(const ValueKey('header-preview')),
+      );
+      expect(preview.right, lessThan(icons.left));
     });
 
     testWidgets('a snack bar with two tabs open, then a page on top', (

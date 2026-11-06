@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/providers.dart';
@@ -7,21 +10,42 @@ import 'cursors.dart';
 import 'pack_detail_screen.dart';
 
 /// Tracks a navigator's top route, so app-wide shortcuts can skip dialogs
-/// and menus.
+/// and menus, and how many pages ([PageRoute]s, not menus) it holds.
 class TopRoute extends NavigatorObserver {
   Route<dynamic>? top;
 
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
-      top = route;
+  /// Pages on the navigator; 1 means it shows its first page.
+  final pages = ValueNotifier<int>(0);
+
+  void _count(Route<dynamic> route, int delta) {
+    if (route is! PageRoute) return;
+    void apply() => pages.value = math.max(0, pages.value + delta);
+    // Navigators push their first page while building; listeners may not
+    // rebuild then.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => apply());
+    } else {
+      apply();
+    }
+  }
 
   @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
-      top = previousRoute;
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    top = route;
+    _count(route, 1);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    top = previousRoute;
+    _count(route, -1);
+  }
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (route == top) top = previousRoute;
+    _count(route, -1);
   }
 
   @override
@@ -255,10 +279,15 @@ class PackTabStrip extends ConsumerWidget implements PreferredSizeWidget {
     final notifier = ref.read(tabsProvider.notifier);
     final packs = ref.watch(libraryProvider).value?.packs ?? const [];
     // From a page pushed over the tabs (e.g. itch.io → a pack), a tab
-    // click first goes back to the tabs.
+    // click first goes back to the tabs. The Dashboard tab also goes back
+    // from a pack opened in it to the dashboard itself.
     void show(int i) {
       Navigator.of(context, rootNavigator: true).popUntil((r) => r.isFirst);
-      notifier.select(i);
+      if (i == 0) {
+        notifier.showDashboard();
+      } else {
+        notifier.select(i);
+      }
     }
 
     return SizedBox(
@@ -270,12 +299,17 @@ class PackTabStrip extends ConsumerWidget implements PreferredSizeWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
             children: [
-              _StripTab(
-                key: const ValueKey('strip-dashboard'),
-                label: 'Dashboard',
-                icon: Icons.dashboard_outlined,
-                selected: tabs.active == 0,
-                onTap: () => show(0),
+              // Selected only while it shows the dashboard itself, not a
+              // pack opened in it.
+              ValueListenableBuilder(
+                valueListenable: notifier.dashboardTop.pages,
+                builder: (context, pages, _) => _StripTab(
+                  key: const ValueKey('strip-dashboard'),
+                  label: 'Dashboard',
+                  icon: Icons.dashboard_outlined,
+                  selected: tabs.active == 0 && pages <= 1,
+                  onTap: () => show(0),
+                ),
               ),
               for (final (i, t) in tabs.tabs.indexed)
                 _StripTab(
