@@ -172,6 +172,10 @@ class CtrlWheelResize extends StatelessWidget {
   );
 }
 
+/// Width of the pack detail page's file search box, and of the thumbnail
+/// slider in the tab toolbars right under it, so the two line up.
+const detailControlWidth = 260.0;
+
 /// Compact thumbnail size slider for a toolbar.
 class ThumbSizeSlider extends StatelessWidget {
   const ThumbSizeSlider({
@@ -179,33 +183,44 @@ class ThumbSizeSlider extends StatelessWidget {
     required this.range,
     required this.value,
     required this.onChanged,
+    this.width,
   });
 
   final SizeRange range;
   final double value;
   final ValueChanged<double> onChanged;
 
+  /// The whole slider's width, icons included; a compact 140 px track when
+  /// null.
+  final double? width;
+
   @override
   Widget build(BuildContext context) => Tooltip(
     message: 'Thumbnail size (Ctrl + mouse wheel)',
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Icon(Icons.photo_size_select_small, size: 18),
-        SizedBox(
-          width: 140,
-          child: Slider(
-            mouseCursor: WidgetStateMouseCursor.clickable,
-            min: range.min,
-            max: range.max,
-            divisions: ((range.max - range.min) / range.step).round(),
-            value: range.clamp(value),
-            label: '${value.round()} px',
-            onChanged: onChanged,
+    child: SizedBox(
+      width: width,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.photo_size_select_small, size: 18),
+          _track(
+            Slider(
+              mouseCursor: WidgetStateMouseCursor.clickable,
+              min: range.min,
+              max: range.max,
+              divisions: ((range.max - range.min) / range.step).round(),
+              value: range.clamp(value),
+              label: '${value.round()} px',
+              onChanged: onChanged,
+            ),
           ),
-        ),
-        const Icon(Icons.photo_size_select_large, size: 22),
-      ],
+          const Icon(Icons.photo_size_select_large, size: 22),
+        ],
+      ),
     ),
   );
+
+  Widget _track(Widget slider) => width == null
+      ? SizedBox(width: 140, child: slider)
+      : Expanded(child: slider);
 }

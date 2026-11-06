@@ -26,7 +26,6 @@ class AppSettings {
     this.theme = ThemeChoice.system,
     this.animateAll = false,
     this.audioLoop = false,
-    this.viewerPixelPerfect = false,
     this.dashboardTileSize = 240,
     this.imageThumbSize = 160,
     this.animationThumbSize = 200,
@@ -47,10 +46,6 @@ class AppSettings {
 
   /// Repeat the playing sound in a pack's Audio tab.
   final bool audioLoop;
-
-  /// The image viewer keeps whole-number scaling even when a fractional fit
-  /// would fill much more of the window.
-  final bool viewerPixelPerfect;
 
   /// Widest a dashboard tile may get, in logical pixels.
   final double dashboardTileSize;
@@ -80,7 +75,6 @@ class AppSettings {
     theme: ThemeChoice.values.asNameMap()[json['theme']] ?? ThemeChoice.system,
     animateAll: json['animate_all'] == true,
     audioLoop: json['audio_loop'] == true,
-    viewerPixelPerfect: json['viewer_pixel_perfect'] == true,
     dashboardTileSize: (json['dashboard_tile_size'] as num?)?.toDouble() ?? 240,
     imageThumbSize: (json['image_thumb_size'] as num?)?.toDouble() ?? 160,
     animationThumbSize:
@@ -105,7 +99,6 @@ class AppSettings {
     'theme': theme.name,
     'animate_all': animateAll,
     'audio_loop': audioLoop,
-    'viewer_pixel_perfect': viewerPixelPerfect,
     'dashboard_tile_size': dashboardTileSize,
     'image_thumb_size': imageThumbSize,
     'animation_thumb_size': animationThumbSize,
@@ -122,7 +115,6 @@ class AppSettings {
     ThemeChoice? theme,
     bool? animateAll,
     bool? audioLoop,
-    bool? viewerPixelPerfect,
     double? dashboardTileSize,
     double? imageThumbSize,
     double? animationThumbSize,
@@ -137,7 +129,6 @@ class AppSettings {
     theme: theme ?? this.theme,
     animateAll: animateAll ?? this.animateAll,
     audioLoop: audioLoop ?? this.audioLoop,
-    viewerPixelPerfect: viewerPixelPerfect ?? this.viewerPixelPerfect,
     dashboardTileSize: dashboardTileSize ?? this.dashboardTileSize,
     imageThumbSize: imageThumbSize ?? this.imageThumbSize,
     animationThumbSize: animationThumbSize ?? this.animationThumbSize,

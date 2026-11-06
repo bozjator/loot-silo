@@ -126,6 +126,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                 ),
                 const Spacer(),
                 ThumbSizeSlider(
+                  width: detailControlWidth,
                   range: animationThumbRange,
                   value: size,
                   onChanged: settings.setAnimationThumbSize,

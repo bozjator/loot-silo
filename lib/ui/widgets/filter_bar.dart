@@ -119,11 +119,27 @@ class FilterBar extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               DropdownButton<PackSort>(
+                key: const ValueKey('sort-menu'),
                 mouseCursor: clickCursor,
                 dropdownMenuItemMouseCursor: clickCursor,
                 value: query.sort,
                 underline: const SizedBox(),
-                icon: const Icon(Icons.sort),
+                // The sort icon sits left of the label (selectedItemBuilder);
+                // padding and rounding keep the focus highlight off both.
+                icon: const SizedBox.shrink(),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                borderRadius: BorderRadius.circular(8),
+                selectedItemBuilder: (context) => [
+                  for (final s in PackSort.values)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.sort, size: 20),
+                        const SizedBox(width: 8),
+                        Text(s.label),
+                      ],
+                    ),
+                ],
                 items: [
                   for (final s in PackSort.values)
                     DropdownMenuItem(value: s, child: Text(s.label)),
@@ -174,9 +190,12 @@ class FilterBar extends StatelessWidget {
                           onSelected: (_) => onToggleType(t.id),
                         ),
                     for (final (value, toggle, icon) in active)
+                      // Coloured like a selected type chip, own icon kept.
                       InputChip(
                         avatar: Icon(icon, size: 16),
                         label: Text(value),
+                        selected: true,
+                        showCheckmark: false,
                         visualDensity: VisualDensity.compact,
                         deleteIcon: deleteIcon,
                         onDeleted: () => toggle(value),

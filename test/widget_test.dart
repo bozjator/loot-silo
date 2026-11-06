@@ -7,6 +7,7 @@ import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/settings_screen.dart';
+import 'package:assets_explorer/version.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -44,6 +45,20 @@ void main() {
     expect(store.load().libraryPath, tmp.path);
   });
 
+  test('settings from before M33 still load (viewer_pixel_perfect)', () {
+    final f = File(p.join(tmp.path, 'settings.json'))
+      ..writeAsStringSync(
+        '{"library_path": "/lib", "viewer_pixel_perfect": true, '
+        '"audio_loop": true}',
+      );
+    final back = SettingsStore(f).load();
+    expect(back.libraryPath, '/lib');
+    expect(back.audioLoop, isTrue);
+    // Saving again drops the old key.
+    SettingsStore(f).save(back);
+    expect(f.readAsStringSync(), isNot(contains('viewer_pixel_perfect')));
+  });
+
   test('settings survive a corrupt file', () {
     final f = File(p.join(tmp.path, 'settings.json'))..writeAsStringSync('{');
     expect(SettingsStore(f).load().libraryPath, isNull);
@@ -58,7 +73,6 @@ void main() {
         theme: ThemeChoice.dark,
         animateAll: true,
         audioLoop: true,
-        viewerPixelPerfect: true,
         detailHeaderPinned: false,
         imagesView: ItemsView.folders,
         animationsView: ItemsView.folders,
@@ -72,7 +86,6 @@ void main() {
     expect(back.detailAnimateMode, AnimateMode.all);
     expect(f.readAsStringSync(), contains('"detail_animate_mode": "all"'));
     expect(back.audioLoop, isTrue);
-    expect(back.viewerPixelPerfect, isTrue);
     expect(back.detailHeaderPinned, isFalse);
     expect(back.imagesView, ItemsView.folders);
     expect(back.animationsView, ItemsView.folders);
@@ -83,7 +96,6 @@ void main() {
     expect(store.load().theme, ThemeChoice.system);
     expect(store.load().animateAll, isFalse);
     expect(store.load().audioLoop, isFalse);
-    expect(store.load().viewerPixelPerfect, isFalse);
     expect(store.load().detailHeaderPinned, isTrue);
     expect(store.load().imagesView, ItemsView.flat);
     expect(store.load().audioView, AudioView.rows);
@@ -115,10 +127,45 @@ void main() {
       () => Future<void>.delayed(Duration(milliseconds: 300)),
     );
     await tester.pump();
+    // M33: both import buttons are the same kind and height.
+    final bar = find.byType(AppBar);
+    final folder = find.descendant(
+      of: bar,
+      matching: find.widgetWithText(OutlinedButton, 'Import folder'),
+    );
+    final archive = find.descendant(
+      of: bar,
+      matching: find.widgetWithText(OutlinedButton, 'Import archive'),
+    );
+    expect(folder, findsOneWidget);
+    expect(archive, findsOneWidget);
+    expect(tester.getSize(folder).height, tester.getSize(archive).height);
+    expect(
+      find.descendant(of: bar, matching: find.byType(FilledButton)),
+      findsNothing,
+    );
     await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsScreen), findsOneWidget);
     expect(find.text('Not connected'), findsOneWidget);
+    // The About line at the bottom shows the version.
+    final list = find
+        .descendant(
+          of: find.byType(SettingsScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text(appVersionLabel),
+      300,
+      scrollable: list,
+    );
+    expect(find.text(appVersionLabel), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Dark'),
+      -300,
+      scrollable: list,
+    );
 
     await tester.tap(find.text('Dark'));
     await tester.pumpAndSettle();

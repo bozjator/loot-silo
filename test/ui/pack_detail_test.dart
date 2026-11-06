@@ -17,6 +17,7 @@ import 'package:assets_explorer/ui/dashboard.dart';
 import 'package:assets_explorer/ui/track_player.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
 import 'package:assets_explorer/ui/widgets/pack_tile.dart';
+import 'package:assets_explorer/ui/widgets/thumb_size.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -496,6 +497,21 @@ void main() {
         types: ['character', 'sfx'],
       );
       expect(tabIndex(tester), 0);
+    });
+
+    testWidgets('toolbar: Rows / Cards left, Loop right (M33)', (tester) async {
+      await openKnight(
+        tester,
+        files: const [],
+        raw: {'theme.wav': tone},
+        types: ['music'],
+      );
+      final rows = tester.getRect(find.text('Rows'));
+      final loop = tester.getRect(find.widgetWithText(FilterChip, 'Loop'));
+      expect(rows.right, lessThan(loop.left));
+      // Same left edge as the Images / Animations toggles (16 px in).
+      expect(rows.left, lessThan(200));
+      expect(loop.right, greaterThan(800));
     });
 
     testWidgets('seek bar: long tracks seek, short ones show only length', (
@@ -1127,6 +1143,27 @@ void main() {
       expect(sidecar(), isNot(contains('animations')));
     });
 
+    testWidgets('the Undo snackbar hides by itself (M33)', (tester) async {
+      await openGrid(tester);
+      await tester.tap(find.text('Not an animation'));
+      final undo = find.widgetWithText(SnackBarAction, 'Undo');
+      await pumpUntil(tester, undo);
+      final bar = tester.widget<SnackBar>(find.byType(SnackBar));
+      expect(bar.persist, isFalse);
+      expect(bar.duration, undoSnackDuration);
+      // Fake time: the slide-in (the timer starts after it), its
+      // duration, then the slide-out.
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(SnackBar), findsOneWidget);
+      await tester.pump(undoSnackDuration);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(SnackBar), findsNothing);
+      // Nothing was undone.
+      expect(sidecar(), contains('animations'));
+    });
+
     testWidgets('−/+ step the frame count to counts that fit', (tester) async {
       await openGrid(tester);
       final frames = find.widgetWithText(TextField, 'Frames');
@@ -1345,6 +1382,18 @@ void main() {
     ];
 
     Finder field() => find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+
+    testWidgets('the size slider is as wide as the search box (M33)', (
+      tester,
+    ) async {
+      await openKnight(tester, files: files);
+      final search = tester.getRect(field());
+      final slider = tester.getRect(find.byType(ThumbSizeSlider));
+      expect(slider.width, search.width);
+      expect(slider.width, detailControlWidth);
+      // Right under it, same right edge.
+      expect(slider.right, closeTo(search.right, 0.5));
+    });
 
     Future<void> type(WidgetTester tester, String text) async {
       await tester.enterText(field(), text);

@@ -19,9 +19,11 @@ import 'package:assets_explorer/ui/track_player.dart';
 import 'package:assets_explorer/ui/widgets/pack_tile.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
 import 'package:assets_explorer/ui/reveal.dart';
+import 'package:assets_explorer/ui/settings_screen.dart';
 import 'package:assets_explorer/ui/tabs.dart';
 import 'package:assets_explorer/ui/text_preview_dialog.dart';
 import 'package:assets_explorer/ui/widgets/thumb_size.dart';
+import 'package:assets_explorer/version.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -1849,6 +1851,76 @@ A **16×16** knight with *walk* and *idle* animations.
       await tester.pump(const Duration(milliseconds: 100));
     }
     expect(find.byType(HelpScreen), findsNothing);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m33: toolbars, author chip, version (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    const title = 'Epic RPG World - Village(interiors) V1.3';
+    if (!Directory(p.join(real, 'RafaelMatos', title)).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    // Both import buttons are outlined, side by side.
+    expect(find.widgetWithText(OutlinedButton, 'Import folder'), findsOne);
+    expect(find.widgetWithText(OutlinedButton, 'Import archive'), findsOne);
+
+    // A selected author shows as a filled chip.
+    await tester.tap(find.text('Author'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CheckboxMenuButton),
+        matching: find.textContaining('RafaelMatos'),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    // Its button closes the menu again.
+    await tester.tap(find.text('Author · 1'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.widgetWithText(InputChip, 'RafaelMatos'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm33_dashboard_toolbar', settle: false);
+
+    // The detail toolbar: slider as wide as the search box.
+    final tile = find.descendant(
+      of: find.byType(PackTile),
+      matching: find.text(title),
+    );
+    await pumpUntil(tester, tile);
+    await tester.tap(tile.first);
+    await pumpUntil(tester, find.byType(TabBar));
+    await tester.pump(const Duration(seconds: 1));
+    final field = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    expect(
+      tester.getSize(find.byType(ThumbSizeSlider)).width,
+      tester.getSize(field).width,
+    );
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm33_detail_toolbar', settle: false);
+
+    // Settings ends with the version.
+    // Ctrl+, (the detail page has no Settings button).
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await pumpUntil(tester, find.text('Keyboard shortcuts'));
+    final list = find
+        .descendant(
+          of: find.byType(SettingsScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text(appVersionLabel),
+      300,
+      scrollable: list,
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm33_settings_about', settle: false);
     expect(Directory(real).statSync().modified, before);
   });
 

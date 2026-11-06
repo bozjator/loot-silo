@@ -320,7 +320,7 @@ class _BodyState extends State<_Body> {
     final field = Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
       child: SizedBox(
-        width: 260,
+        width: detailControlWidth,
         child: TextField(
           key: _fieldKey,
           controller: _searchText,
@@ -863,6 +863,9 @@ class _CarouselState extends State<_Carousel> {
   }
 }
 
+/// Widest card in the "All previews" dialog.
+const previewGridTileWidth = 440.0;
+
 /// Every preview candidate of a pack in a grid; a click opens it in the
 /// viewer, stepping through the grid.
 class PreviewGridDialog extends StatelessWidget {
@@ -882,7 +885,9 @@ class PreviewGridDialog extends StatelessWidget {
     final theme = Theme.of(context);
     return Dialog(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1000, maxHeight: 720),
+        // Twice the cards of the first version (220 → 440 px); the window
+        // limits the dialog first.
+        constraints: const BoxConstraints(maxWidth: 2000, maxHeight: 1440),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -910,7 +915,7 @@ class PreviewGridDialog extends StatelessWidget {
                 shrinkWrap: true,
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 gridDelegate: ThumbGridDelegate(
-                  maxTileWidth: 220,
+                  maxTileWidth: previewGridTileWidth,
                   imageAspect: 4 / 3,
                   footer: (_) => 26,
                   spacing: 8,
@@ -1490,6 +1495,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
               ],
               const Spacer(),
               ThumbSizeSlider(
+                width: detailControlWidth,
                 range: imageThumbRange,
                 value: size,
                 onChanged: settings.setImageThumbSize,
@@ -1727,7 +1733,7 @@ class _AnimationEditorDialog extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    _AnimationEditor(
+                    AnimationEditor(
                       key: ValueKey(path),
                       packPath: pack.path,
                       detected: detected,
@@ -1755,7 +1761,8 @@ class _AnimationEditorDialog extends ConsumerWidget {
                           markNotAnimation(context, ref, pack, path),
                     ),
                     TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
+                      // maybePop: the editor holds it while saving.
+                      onPressed: () => Navigator.of(context).maybePop(),
                       child: const Text('Close'),
                     ),
                   ],
@@ -1765,6 +1772,9 @@ class _AnimationEditorDialog extends ConsumerWidget {
     );
   }
 }
+
+/// How long a snack bar with Undo stays before it hides by itself.
+const undoSnackDuration = Duration(seconds: 6);
 
 /// Marks [rel] as not an animation, closes the editor and offers Undo.
 ///
@@ -1784,6 +1794,9 @@ Future<void> markNotAnimation(
   messenger?.showSnackBar(
     SnackBar(
       content: Text('${p.basename(rel)} is now listed as an image only'),
+      // With an action Flutter keeps it open until clicked otherwise.
+      persist: false,
+      duration: undoSnackDuration,
       action: SnackBarAction(
         label: 'Undo',
         onPressed: () {
@@ -1799,8 +1812,8 @@ Future<void> markNotAnimation(
 
 /// Plays one animation with live fps / frame-size / row controls; Save
 /// writes the override into the pack sidecar. Shown in the Edit dialog.
-class _AnimationEditor extends StatefulWidget {
-  const _AnimationEditor({
+class AnimationEditor extends StatefulWidget {
+  const AnimationEditor({
     super.key,
     required this.packPath,
     required this.detected,
@@ -1830,10 +1843,10 @@ class _AnimationEditor extends StatefulWidget {
   final Future<void> Function() onNotAnimation;
 
   @override
-  State<_AnimationEditor> createState() => _AnimationEditorState();
+  State<AnimationEditor> createState() => _AnimationEditorState();
 }
 
-class _AnimationEditorState extends State<_AnimationEditor> {
+class _AnimationEditorState extends State<AnimationEditor> {
   late SpriteAnim _anim = widget.current;
   late final _w = TextEditingController(text: '${widget.current.frameW}');
   late final _h = TextEditingController(text: '${widget.current.frameH}');
@@ -1842,8 +1855,23 @@ class _AnimationEditorState extends State<_AnimationEditor> {
   /// Shown under the Frames field when the count doesn't fit the sheet.
   String? _framesError;
 
+  /// A save (Save, Reset / Back to image, Not an animation) is running: its
+  /// buttons are disabled, Save shows a spinner, and Close / Esc wait.
+  bool _saving = false;
+
+  /// Runs [save] with the buttons locked; ignores a second click meanwhile.
+  Future<void> _runSave(Future<void> Function() save) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await save();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
-  void didUpdateWidget(_AnimationEditor old) {
+  void didUpdateWidget(AnimationEditor old) {
     super.didUpdateWidget(old);
     if (old.current != widget.current) _reset(widget.current);
   }
@@ -1922,220 +1950,252 @@ class _AnimationEditorState extends State<_AnimationEditor> {
     final dirty = widget.isNew || a != widget.current;
     final overridden = widget.manual || widget.current != widget.detected;
     // The preview box is as tall as the controls (at least 240 px); the
-    // whole editor scrolls when the window is too short.
-    return Material(
-      type: MaterialType.transparency,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 240,
-                constraints: const BoxConstraints(minHeight: 240),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
+    // whole editor scrolls when the window is too short. Close and Esc
+    // (both `maybePop`) wait while a save runs.
+    return PopScope(
+      canPop: !_saving,
+      child: Material(
+        type: MaterialType.transparency,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(12),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 240,
+                  constraints: const BoxConstraints(minHeight: 240),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  child: a.kind == AnimKind.gif
+                      ? PixelImage(
+                          File(p.join(widget.packPath, a.path)),
+                          animate: true,
+                        )
+                      : AnimatedSprite(packPath: widget.packPath, anim: a),
                 ),
-                padding: const EdgeInsets.all(8),
-                child: a.kind == AnimKind.gif
-                    ? PixelImage(
-                        File(p.join(widget.packPath, a.path)),
-                        animate: true,
-                      )
-                    : AnimatedSprite(packPath: widget.packPath, anim: a),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SelectableText(
-                            prettyName(a.label, isFile: false),
-                            style: theme.textTheme.titleMedium,
-                          ),
-                        ),
-                        // Opens on top of this dialog; Esc closes it first.
-                        OpenImageButton(
-                          onPressed: () => showImageViewer(
-                            context,
-                            packPath: widget.packPath,
-                            images: [a.path],
-                            index: 0,
-                          ),
-                        ),
-                        RevealButton(p.join(widget.packPath, a.path)),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: SelectableText(
-                            a.path,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        _CopyButton(
-                          tooltip: 'Copy relative path',
-                          text: a.path,
-                          icon: Icons.content_copy,
-                        ),
-                        _CopyButton(
-                          tooltip: 'Copy full path',
-                          text: p.join(widget.packPath, a.path),
-                          icon: Icons.copy_all,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(switch (a.kind) {
-                      AnimKind.sheet =>
-                        'Sheet · ${a.frameW}×${a.frameH} frames · '
-                            '${a.cols} × ${a.rows} · ${a.frameCount} frames',
-                      AnimKind.sequence =>
-                        'Sequence · ${a.frames.length} files · '
-                            '${a.frameW}×${a.frameH}',
-                      AnimKind.gif => 'Animated GIF',
-                    }),
-                    if (a.kind != AnimKind.gif)
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Row(
                         children: [
-                          const Text('FPS'),
+                          Expanded(
+                            child: SelectableText(
+                              prettyName(a.label, isFile: false),
+                              style: theme.textTheme.titleMedium,
+                            ),
+                          ),
+                          // Opens on top of this dialog; Esc closes it first.
+                          OpenImageButton(
+                            onPressed: () => showImageViewer(
+                              context,
+                              packPath: widget.packPath,
+                              images: [a.path],
+                              index: 0,
+                            ),
+                          ),
+                          RevealButton(p.join(widget.packPath, a.path)),
+                        ],
+                      ),
+                      Row(
+                        children: [
                           Flexible(
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 240),
-                              child: Slider(
-                                min: 1,
-                                max: 30,
-                                divisions: 29,
-                                value: a.fps.clamp(1, 30),
-                                label: a.fps.round().toString(),
-                                onChanged: (v) => setState(
-                                  () => _anim = a.copyWith(
-                                    fps: v.roundToDouble(),
+                            child: SelectableText(
+                              a.path,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          _CopyButton(
+                            tooltip: 'Copy relative path',
+                            text: a.path,
+                            icon: Icons.content_copy,
+                          ),
+                          _CopyButton(
+                            tooltip: 'Copy full path',
+                            text: p.join(widget.packPath, a.path),
+                            icon: Icons.copy_all,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(switch (a.kind) {
+                        AnimKind.sheet =>
+                          'Sheet · ${a.frameW}×${a.frameH} frames · '
+                              '${a.cols} × ${a.rows} · ${a.frameCount} frames',
+                        AnimKind.sequence =>
+                          'Sequence · ${a.frames.length} files · '
+                              '${a.frameW}×${a.frameH}',
+                        AnimKind.gif => 'Animated GIF',
+                      }),
+                      if (a.kind != AnimKind.gif)
+                        Row(
+                          children: [
+                            const Text('FPS'),
+                            Flexible(
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 240,
+                                ),
+                                child: Slider(
+                                  min: 1,
+                                  max: 30,
+                                  divisions: 29,
+                                  value: a.fps.clamp(1, 30),
+                                  label: a.fps.round().toString(),
+                                  onChanged: (v) => setState(
+                                    () => _anim = a.copyWith(
+                                      fps: v.roundToDouble(),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                          Text('${a.fps.round()}'),
-                          const SizedBox(width: 16),
-                          const Text('Zoom'),
-                          const SizedBox(width: 8),
-                          // Auto fits the trimmed frame; a number is a fixed
-                          // pixel scale, centred and clipped on cards.
-                          DropdownButton<int?>(
-                            key: const ValueKey('zoom'),
-                            mouseCursor: clickCursor,
-                            dropdownMenuItemMouseCursor: clickCursor,
-                            value: a.zoom,
-                            items: [
-                              const DropdownMenuItem(
-                                value: null,
-                                child: Text('Auto'),
-                              ),
-                              for (final z in SpriteAnim.zoomSteps)
-                                DropdownMenuItem(value: z, child: Text('$z×')),
-                            ],
-                            onChanged: (z) =>
-                                setState(() => _anim = a.copyWith(zoom: z)),
-                          ),
-                        ],
-                      ),
-                    if (isSheet)
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          _NumberField(
-                            label: 'Frame width',
-                            controller: _w,
-                            onSubmit: _applySize,
-                          ),
-                          _NumberField(
-                            label: 'Frame height',
-                            controller: _h,
-                            onSubmit: _applySize,
-                          ),
-                          _FramesField(
-                            controller: _n,
-                            onSubmit: _applyFrames,
-                            onChanged: _applyFrames,
-                            onStep: _stepFrames,
-                            errorText: _framesError,
-                          ),
-                          OutlinedButton(
-                            onPressed: _applySize,
-                            child: const Text('Apply size'),
-                          ),
-                          if (a.rows > 1)
+                            Text('${a.fps.round()}'),
+                            const SizedBox(width: 16),
+                            const Text('Zoom'),
+                            const SizedBox(width: 8),
+                            // Auto fits the trimmed frame; a number is a fixed
+                            // pixel scale, centred and clipped on cards.
                             DropdownButton<int?>(
+                              key: const ValueKey('zoom'),
                               mouseCursor: clickCursor,
                               dropdownMenuItemMouseCursor: clickCursor,
-                              value: a.rowToPlay,
+                              value: a.zoom,
                               items: [
                                 const DropdownMenuItem(
                                   value: null,
-                                  child: Text('All rows'),
+                                  child: Text('Auto'),
                                 ),
-                                for (var r = 0; r < a.rows; r++)
+                                for (final z in SpriteAnim.zoomSteps)
                                   DropdownMenuItem(
-                                    value: r,
-                                    child: Text('Row ${r + 1}'),
+                                    value: z,
+                                    child: Text('$z×'),
                                   ),
                               ],
-                              // Saved with the animation; cards play it.
-                              onChanged: (r) => setState(
-                                () => _anim = a.copyWith(
-                                  playRow: r ?? SpriteAnim.allRows,
+                              onChanged: (z) =>
+                                  setState(() => _anim = a.copyWith(zoom: z)),
+                            ),
+                          ],
+                        ),
+                      if (isSheet)
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            _NumberField(
+                              label: 'Frame width',
+                              controller: _w,
+                              onSubmit: _applySize,
+                            ),
+                            _NumberField(
+                              label: 'Frame height',
+                              controller: _h,
+                              onSubmit: _applySize,
+                            ),
+                            _FramesField(
+                              controller: _n,
+                              onSubmit: _applyFrames,
+                              onChanged: _applyFrames,
+                              onStep: _stepFrames,
+                              errorText: _framesError,
+                            ),
+                            OutlinedButton(
+                              onPressed: _applySize,
+                              child: const Text('Apply size'),
+                            ),
+                            if (a.rows > 1)
+                              DropdownButton<int?>(
+                                mouseCursor: clickCursor,
+                                dropdownMenuItemMouseCursor: clickCursor,
+                                value: a.rowToPlay,
+                                items: [
+                                  const DropdownMenuItem(
+                                    value: null,
+                                    child: Text('All rows'),
+                                  ),
+                                  for (var r = 0; r < a.rows; r++)
+                                    DropdownMenuItem(
+                                      value: r,
+                                      child: Text('Row ${r + 1}'),
+                                    ),
+                                ],
+                                // Saved with the animation; cards play it.
+                                onChanged: (r) => setState(
+                                  () => _anim = a.copyWith(
+                                    playRow: r ?? SpriteAnim.allRows,
+                                  ),
                                 ),
                               ),
+                          ],
+                        ),
+                      const Spacer(),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton(
+                            onPressed: dirty && !_saving
+                                ? () => _runSave(() => widget.onSave(a))
+                                : null,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_saving) ...[
+                                  const SizedBox.square(
+                                    key: ValueKey('save-spinner'),
+                                    dimension: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                const Text('Save'),
+                              ],
+                            ),
+                          ),
+                          if (overridden)
+                            TextButton(
+                              onPressed: _saving
+                                  ? null
+                                  : () => _runSave(() => widget.onSave(null)),
+                              child: Text(
+                                widget.manual
+                                    ? 'Back to image'
+                                    : 'Reset to detected',
+                              ),
+                            )
+                          else if (dirty)
+                            TextButton(
+                              onPressed: _saving
+                                  ? null
+                                  : () => _reset(widget.current),
+                              child: const Text('Undo'),
+                            ),
+                          if (!widget.isNew)
+                            TextButton.icon(
+                              onPressed: _saving
+                                  ? null
+                                  : () => _runSave(widget.onNotAnimation),
+                              icon: const Icon(Icons.image_outlined, size: 18),
+                              label: const Text('Not an animation'),
                             ),
                         ],
                       ),
-                    const Spacer(),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton(
-                          onPressed: dirty ? () => widget.onSave(a) : null,
-                          child: const Text('Save'),
-                        ),
-                        if (overridden)
-                          TextButton(
-                            onPressed: () => widget.onSave(null),
-                            child: Text(
-                              widget.manual
-                                  ? 'Back to image'
-                                  : 'Reset to detected',
-                            ),
-                          )
-                        else if (dirty)
-                          TextButton(
-                            onPressed: () => _reset(widget.current),
-                            child: const Text('Undo'),
-                          ),
-                        if (!widget.isNew)
-                          TextButton.icon(
-                            onPressed: widget.onNotAnimation,
-                            icon: const Icon(Icons.image_outlined, size: 18),
-                            label: const Text('Not an animation'),
-                          ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -2433,10 +2493,16 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Like Images / Animations: view options left, controls right.
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
             child: Row(
               children: [
+                _AudioViewToggle(
+                  view: view,
+                  onChanged: ref.read(settingsProvider.notifier).setAudioView,
+                ),
+                const Spacer(),
                 FilterChip(
                   mouseCursor: clickCursor,
                   avatar: const Icon(Icons.repeat, size: 18),
@@ -2445,11 +2511,6 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
                   selected: loop,
                   showCheckmark: false,
                   onSelected: _setLoop,
-                ),
-                const Spacer(),
-                _AudioViewToggle(
-                  view: view,
-                  onChanged: ref.read(settingsProvider.notifier).setAudioView,
                 ),
               ],
             ),

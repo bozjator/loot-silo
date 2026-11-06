@@ -31,7 +31,7 @@ class PixelImage extends StatefulWidget {
   final BoxFit fit;
 
   /// Turns the exact fit scale into the one drawn; [integerScale] for
-  /// tiles, [viewerScale] in the image viewer.
+  /// tiles, the exact fit in the image viewer.
   final double Function(double fitScale) scale;
 
   /// Decodes at the file's own size instead of [maxDecodeEdge]; for the one
@@ -161,17 +161,3 @@ class _PixelImageState extends State<PixelImage> {
 /// Whole-number upscaling (crisp pixels); fractional when shrinking.
 double integerScale(double fitScale) =>
     fitScale >= 1 ? fitScale.floorToDouble() : fitScale;
-
-/// Image viewer scaling: whole steps while they fill at least [minFill] of
-/// the exact fit (crisp pixel art), the exact fit otherwise, so a 500 px
-/// image in an 868 px box isn't left at 1×. [pixelPerfect] always keeps
-/// whole steps.
-double viewerScale(
-  double fitScale, {
-  bool pixelPerfect = false,
-  double minFill = 0.75,
-}) {
-  final whole = integerScale(fitScale);
-  if (pixelPerfect || whole >= fitScale * minFill) return whole;
-  return fitScale;
-}

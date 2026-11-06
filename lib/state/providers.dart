@@ -74,9 +74,6 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   void setAudioLoop(bool on) => _save(state.copyWith(audioLoop: on));
 
-  void setViewerPixelPerfect(bool on) =>
-      _save(state.copyWith(viewerPixelPerfect: on));
-
   void setDashboardTileSize(double size) {
     if (size != state.dashboardTileSize) {
       _save(state.copyWith(dashboardTileSize: size));

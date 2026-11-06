@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/animation_detector.dart'
     show animationWords, notAnimationWords, sheetWords;
 import '../core/sidecar.dart' show authorFileName, packFileName;
+import '../version.dart';
 import 'shortcuts.dart';
 
 /// Opens the Help page over everything (from the app bar, Settings or F1).
@@ -187,6 +188,13 @@ class HelpScreen extends StatelessWidget {
                   'screenshots in _itch/.',
                 ),
               ]),
+              const Divider(height: 32),
+              Text(
+                appVersionLabel,
+                key: const ValueKey('help-version'),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
           ),
         ),

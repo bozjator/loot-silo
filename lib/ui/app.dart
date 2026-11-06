@@ -307,7 +307,9 @@ class HomeScreen extends ConsumerWidget {
             label: const Text('Import archive'),
           ),
           const SizedBox(width: 8),
-          FilledButton.tonalIcon(
+          // Same button kind as Import archive: a tonal fill read as a
+          // selected tab.
+          OutlinedButton.icon(
             onPressed: () => importFolder(context, ref),
             icon: const Icon(Icons.drive_folder_upload_outlined),
             label: const Text('Import folder'),

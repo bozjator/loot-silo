@@ -14,26 +14,7 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
 void main() {
-  group('viewerScale', () {
-    test('keeps whole steps while they fill most of the fit', () {
-      expect(viewerScale(54.2), 54); // 16 px sprite in a big window
-      expect(viewerScale(2.33), 2); // 500 px wide: 2× fills 86%
-      expect(viewerScale(4.9), 4); // 82%
-    });
-
-    test('fits exactly when whole steps would waste space', () {
-      expect(viewerScale(1.73), 1.73); // 500 px in 868 px: 1× is only 58%
-      expect(viewerScale(1.2, minFill: 0.9), 1.2);
-    });
-
-    test('shrinks big images exactly; pixel-perfect forces whole steps', () {
-      expect(viewerScale(0.31), 0.31);
-      expect(viewerScale(1.73, pixelPerfect: true), 1);
-      expect(viewerScale(0.31, pixelPerfect: true), 0.31);
-    });
-
-    test('tiles keep floored upscaling', () => expect(integerScale(1.73), 1));
-  });
+  test('tiles keep floored upscaling', () => expect(integerScale(1.73), 1));
 
   group('revealInFileManager', () {
     test('Linux asks the file manager over D-Bus', () async {
@@ -173,11 +154,15 @@ void main() {
       await open(tester, ['hero.png']);
       await drawn(tester);
       await tester.pump();
-      // A 32 px sprite fills the viewer in whole steps.
+      // A 32 px sprite fills the viewer's height exactly (no whole steps).
       final fit = zoomShown(tester);
       expect(fit, greaterThan(10));
-      expect(fit, fit.roundToDouble());
-      expect(tester.getRect(find.byType(RawImage)).width, closeTo(32 * fit, 1));
+      final area = tester.getSize(find.byType(InteractiveViewer));
+      expect(
+        tester.getRect(find.byType(RawImage)).height,
+        closeTo(area.height - 32, 0.5),
+      );
+      expect(tester.getRect(find.byType(RawImage)).width, closeTo(32 * fit, 2));
 
       await tester.tap(find.text('1:1'));
       await tester.pump();
@@ -286,25 +271,24 @@ void main() {
       for (final (w, h) in cases.values) {
         final size = await drawn(tester);
         expect(size.width / size.height, closeTo(w / h, 0.01));
-        // Fills at least 75% of one side of the (padded) area.
+        // Fit is exact: one side of the (padded) area is filled completely.
         final fill =
-            (size.width / (area.width - 128)).clamp(0, 1) > 0.75 ||
-            (size.height / (area.height - 32)).clamp(0, 1) > 0.75;
+            (size.width - (area.width - 128)).abs() < 0.5 ||
+            (size.height - (area.height - 32)).abs() < 0.5;
         expect(fill, isTrue, reason: '$w×$h drawn at $size in $area');
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
         await tester.pump();
       }
     });
 
-    testWidgets('pixel-perfect toggle is saved; reveal gets the file', (
+    testWidgets('no Fit / Pixel-perfect toggle; reveal gets the file', (
       tester,
     ) async {
       png('x.png', 8, 8);
       await open(tester, ['x.png']);
-      await tester.tap(find.byTooltip('Fit to window'));
-      await tester.pump();
-      expect(store.load().viewerPixelPerfect, isTrue);
-      expect(find.byTooltip('Pixel-perfect (whole steps)'), findsOneWidget);
+      expect(find.byTooltip('Fit to window'), findsNothing);
+      expect(find.byTooltip('Pixel-perfect (whole steps)'), findsNothing);
+      expect(find.byIcon(Icons.fit_screen_outlined), findsNothing);
       await tester.tap(find.byTooltip('Show in file manager'));
       expect(revealed.last, p.join(tmp.path, 'x.png'));
     });

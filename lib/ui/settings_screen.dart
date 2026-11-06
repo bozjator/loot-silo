@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/itch.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
+import '../version.dart';
 import 'itch_screen.dart';
 import 'help_screen.dart';
 import 'shortcuts.dart';
@@ -177,6 +178,11 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   title: Text(k.label),
                 ),
+              section('About'),
+              const ListTile(
+                leading: Icon(Icons.info_outline),
+                title: SelectableText(appVersionLabel),
+              ),
               const SizedBox(height: 24),
             ],
           ),

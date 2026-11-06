@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/animation_detector.dart' show readImageSize;
-import '../state/providers.dart';
 import 'format.dart';
 import 'reveal.dart';
 import 'widgets/pixel_image.dart';
@@ -170,9 +169,6 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   Widget build(BuildContext context) {
     final window = MediaQuery.sizeOf(context);
     final theme = Theme.of(context);
-    final pixelPerfect = ref.watch(
-      settingsProvider.select((s) => s.viewerPixelPerfect),
-    );
     final rel = widget.images[_index];
     final file = File(p.join(widget.packPath, rel));
     return Dialog(
@@ -246,17 +242,6 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                           child: const Text('Fit'),
                         ),
                         IconButton(
-                          tooltip: pixelPerfect
-                              ? 'Pixel-perfect (whole steps)'
-                              : 'Fit to window',
-                          isSelected: pixelPerfect,
-                          icon: const Icon(Icons.fit_screen_outlined),
-                          selectedIcon: const Icon(Icons.grid_on),
-                          onPressed: () => ref
-                              .read(settingsProvider.notifier)
-                              .setViewerPixelPerfect(!pixelPerfect),
-                        ),
-                        IconButton(
                           tooltip: 'Show in file manager',
                           icon: const Icon(Icons.drive_file_move_outline),
                           onPressed: () => ref.read(revealProvider)(file.path),
@@ -284,12 +269,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                         final dims = _sizeOf(rel);
                         final inner = _imagePadding.deflateSize(box.biggest);
                         if (dims != null && dims.$1 > 0 && dims.$2 > 0) {
-                          final fit = viewerScale(
-                            math.min(
-                              inner.width / dims.$1,
-                              inner.height / dims.$2,
-                            ),
-                            pixelPerfect: pixelPerfect,
+                          // Fit always fills the window exactly.
+                          final fit = math.min(
+                            inner.width / dims.$1,
+                            inner.height / dims.$2,
                           );
                           if (fit != _fitScale) {
                             _fitScale = fit;
@@ -318,10 +301,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                                 key: ValueKey(rel),
                                 animate: true,
                                 fullResolution: true,
-                                scale: (fit) => viewerScale(
-                                  fit,
-                                  pixelPerfect: pixelPerfect,
-                                ),
+                                scale: (fit) => fit,
                               ),
                             ),
                           ),
