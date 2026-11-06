@@ -28,6 +28,7 @@ import 'animation_grid.dart';
 import 'folder_groups.dart';
 import 'image_viewer.dart';
 import 'reveal.dart';
+import 'tabs.dart';
 import 'text_preview_dialog.dart';
 import 'track_player.dart';
 import 'widgets/animated_sprite.dart';
@@ -96,6 +97,7 @@ class PackDetailScreen extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(
           title: Text(pack.title),
+          bottom: tabStrip(ref),
           actions: [
             IconButton(
               tooltip: pinned
@@ -190,6 +192,17 @@ class _BodyState extends State<_Body> {
   /// Keeps the field (and its focus) when the tab set changes and the tab
   /// controller is rebuilt around it.
   final _fieldKey = GlobalKey(debugLabel: 'detail search field');
+
+  final _tabFocus = TabFocus();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Back in a pack tab: keys work again without a click.
+    _tabFocus.update(context, () {
+      if (!_keys.hasFocus) _keys.requestFocus();
+    });
+  }
 
   @override
   void didUpdateWidget(_Body old) {
@@ -1164,7 +1177,9 @@ class _AuthorPacksLink extends ConsumerWidget {
       ),
       onPressed: () {
         ref.read(dashboardQueryProvider.notifier).showAuthor(author);
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        // Also from a pack tab, or a pack opened over the tabs (itch.io).
+        Navigator.of(context, rootNavigator: true).popUntil((r) => r.isFirst);
+        ref.read(tabsProvider.notifier).showDashboard();
       },
       child: Tooltip(
         message: 'Show $author’s packs on the dashboard',

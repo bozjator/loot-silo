@@ -18,6 +18,7 @@ import 'package:assets_explorer/ui/track_player.dart';
 import 'package:assets_explorer/ui/widgets/pack_tile.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
 import 'package:assets_explorer/ui/reveal.dart';
+import 'package:assets_explorer/ui/tabs.dart';
 import 'package:assets_explorer/ui/text_preview_dialog.dart';
 import 'package:assets_explorer/ui/widgets/thumb_size.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
@@ -1757,6 +1758,58 @@ A **16×16** knight with *walk* and *idle* animations.
     );
     await settleImages(tester);
     await captureScreenshot(tester, 'm30_author_filter', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m31: two pack tabs side by side (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField).first, 'Epic RPG World');
+    const village = 'Epic RPG World - The Village V2.2';
+    const volcano = 'Epic RPG World - Volcano V1.6.1';
+    Finder tile(String t) =>
+        find.descendant(of: find.byType(PackTile), matching: find.text(t));
+    await pumpUntil(tester, tile(volcano));
+    for (final t in [village, volcano]) {
+      final g = await tester.startGesture(
+        tester.getCenter(tile(t)),
+        kind: PointerDeviceKind.mouse,
+        buttons: kMiddleMouseButton,
+      );
+      await g.up();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    final strip = find.byType(PackTabStrip);
+    expect(strip, findsOneWidget);
+    expect(
+      find.descendant(of: strip, matching: find.text(volcano)),
+      findsOneWidget,
+    );
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm31_dashboard_tabs', settle: false);
+
+    // Ctrl+Tab to the first pack, then its neighbour.
+    Future<void> ctrlTab() async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    await ctrlTab();
+    await pumpUntil(tester, find.byType(TabBar));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm31_village_tab', settle: false);
+    await ctrlTab();
+    await pumpUntil(tester, find.text(volcano));
+    await tester.pump(const Duration(seconds: 1));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm31_volcano_tab', settle: false);
     expect(Directory(real).statSync().modified, before);
   });
 

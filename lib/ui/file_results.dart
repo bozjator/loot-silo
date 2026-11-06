@@ -8,6 +8,7 @@ import '../core/type_classifier.dart' show audioExts;
 import '../state/dashboard.dart';
 import 'cursors.dart';
 import 'format.dart';
+import 'tabs.dart';
 import 'widgets/pixel_image.dart';
 import 'widgets/thumb_size.dart';
 
@@ -19,11 +20,15 @@ class FileResultsGrid extends StatelessWidget {
     required this.files,
     required this.tileSize,
     required this.onOpen,
+    this.onOpenInNewTab,
   });
 
   final List<FileTile> files;
   final double tileSize;
   final ValueChanged<FileTile> onOpen;
+
+  /// Middle-click or the right-click menu: the file's pack in a new tab.
+  final ValueChanged<FileTile>? onOpenInNewTab;
 
   @override
   Widget build(BuildContext context) => GridView.builder(
@@ -37,16 +42,18 @@ class FileResultsGrid extends StatelessWidget {
       spacing: 8,
     ),
     itemCount: files.length,
-    itemBuilder: (context, i) => _FileResultTile(
+    itemBuilder: (context, i) => OpenInNewTab(
       key: ValueKey('${files[i].pack.id}/${files[i].relPath}'),
-      file: files[i],
-      onTap: () => onOpen(files[i]),
+      onOpenInNewTab: onOpenInNewTab == null
+          ? null
+          : () => onOpenInNewTab!(files[i]),
+      child: _FileResultTile(file: files[i], onTap: () => onOpen(files[i])),
     ),
   );
 }
 
 class _FileResultTile extends StatelessWidget {
-  const _FileResultTile({super.key, required this.file, required this.onTap});
+  const _FileResultTile({required this.file, required this.onTap});
 
   final FileTile file;
   final VoidCallback onTap;

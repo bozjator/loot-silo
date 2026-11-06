@@ -16,6 +16,7 @@ import 'dashboard.dart';
 import 'folder_import_screen.dart';
 import 'itch_screen.dart';
 import 'settings_screen.dart';
+import 'tabs.dart';
 import 'cursors.dart';
 
 /// Root widget of Asset Explorer.
@@ -28,7 +29,7 @@ class AssetsExplorerApp extends ConsumerStatefulWidget {
 
 class _AppState extends ConsumerState<AssetsExplorerApp> {
   final _navigator = GlobalKey<NavigatorState>();
-  final _top = _TopRoute();
+  final _top = TopRoute();
 
   /// Runs an app-wide shortcut on any page, but not over a dialog or a
   /// popup menu, and only once a library is set up.
@@ -40,6 +41,9 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
     final context = _navigator.currentContext;
     final top = _top.top;
     if (context == null || top is! PageRoute) return;
+    // A popup menu inside a tab is on that tab's navigator.
+    final tabTop = ref.read(tabsProvider.notifier).currentTop;
+    if (top.isFirst && tabTop != null && tabTop is! PageRoute) return;
     if (notOn != null && top.settings.name == notOn) return;
     if (needsLibrary && ref.read(settingsProvider).libraryPath == null) return;
     action(context);
@@ -61,6 +65,15 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
       ),
       const SingleActivator(LogicalKeyboardKey.keyR, control: true): rescan,
       const SingleActivator(LogicalKeyboardKey.f5): rescan,
+      // Pack tabs: only while the tabs are shown (no page over them).
+      const SingleActivator(LogicalKeyboardKey.tab, control: true): _onTabs(
+        (t) => t.cycle(1),
+      ),
+      const SingleActivator(LogicalKeyboardKey.tab, control: true, shift: true):
+          _onTabs((t) => t.cycle(-1)),
+      const SingleActivator(LogicalKeyboardKey.keyW, control: true): _onTabs(
+        (t) => t.closeCurrent(),
+      ),
       const SingleActivator(LogicalKeyboardKey.comma, control: true): _shortcut(
         openSettings,
         needsLibrary: false,
@@ -69,9 +82,24 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
     };
   }
 
-  /// Closes the top page or dialog; on the dashboard, leaves an open bundle.
+  /// A tab shortcut, run when the tabs are on top (no page or dialog over
+  /// them, no menu inside the shown tab).
+  VoidCallback _onTabs(void Function(TabsNotifier tabs) action) =>
+      _shortcut((_) {
+        if (_top.top?.isFirst ?? false) action(ref.read(tabsProvider.notifier));
+      });
+
+  /// Closes the top page or dialog, else goes back within the shown tab; on
+  /// the dashboard, leaves an open bundle.
   Future<void> _back() async {
-    if (await _navigator.currentState?.maybePop() ?? false) return;
+    final root = _navigator.currentState;
+    if (root != null && root.canPop()) {
+      await root.maybePop();
+      return;
+    }
+    final tabs = ref.read(tabsProvider.notifier);
+    if (await tabs.currentNavigator?.maybePop() ?? false) return;
+    if (ref.read(tabsProvider).active != 0) return;
     final query = ref.read(dashboardQueryProvider.notifier);
     if (ref.read(dashboardQueryProvider).bundleId != null) {
       query.openBundle(null);
@@ -111,31 +139,8 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
       darkTheme: withClickCursors(
         ThemeData(colorSchemeSeed: Colors.teal, brightness: Brightness.dark),
       ),
-      home: const HomeScreen(),
+      home: const TabsHost(dashboard: HomeScreen()),
     );
-  }
-}
-
-/// Tracks the top route, so app-wide shortcuts can skip dialogs and menus.
-class _TopRoute extends NavigatorObserver {
-  Route<dynamic>? top;
-
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
-      top = route;
-
-  @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
-      top = previousRoute;
-
-  @override
-  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (route == top) top = previousRoute;
-  }
-
-  @override
-  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
-    if (oldRoute == top) top = newRoute;
   }
 }
 
@@ -143,7 +148,7 @@ class _TopRoute extends NavigatorObserver {
 Future<void> importFolder(BuildContext context, WidgetRef ref) async {
   final source = await ref.read(directoryPickerProvider)('Import folder');
   if (source == null || !context.mounted) return;
-  final imported = await Navigator.of(context).push<bool>(
+  final imported = await Navigator.of(context, rootNavigator: true).push<bool>(
     MaterialPageRoute(
       settings: const RouteSettings(name: FolderImportScreen.routeName),
       builder: (_) => FolderImportScreen(sourcePath: source),
@@ -168,12 +173,13 @@ void rescanLibrary(WidgetRef ref) {
   }
 }
 
-void openSettings(BuildContext context) => Navigator.of(context).push(
-  MaterialPageRoute<void>(
-    settings: const RouteSettings(name: SettingsScreen.routeName),
-    builder: (_) => const SettingsScreen(),
-  ),
-);
+void openSettings(BuildContext context) =>
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: SettingsScreen.routeName),
+        builder: (_) => const SettingsScreen(),
+      ),
+    );
 
 /// Library overview: the dashboard plus import, itch.io, credits and
 /// settings.
@@ -219,7 +225,7 @@ class HomeScreen extends ConsumerWidget {
     for (final folder in folders) {
       if (!context.mounted) break;
       imported |=
-          await Navigator.of(context).push<bool>(
+          await Navigator.of(context, rootNavigator: true).push<bool>(
             MaterialPageRoute(
               settings: const RouteSettings(name: FolderImportScreen.routeName),
               builder: (_) => FolderImportScreen(sourcePath: folder),
@@ -261,23 +267,19 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Asset Explorer'),
-        bottom: scanning
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(4),
-                child: LinearProgressIndicator(),
-              )
-            : null,
+        bottom: tabStrip(ref, progress: scanning),
         actions: [
           IconButton(
             tooltip: 'itch.io',
             onPressed: () => Navigator.of(
               context,
+              rootNavigator: true,
             ).push(MaterialPageRoute<void>(builder: (_) => const ItchScreen())),
             icon: const Icon(Icons.storefront_outlined),
           ),
           IconButton(
             tooltip: 'Credits',
-            onPressed: () => Navigator.of(context).push(
+            onPressed: () => Navigator.of(context, rootNavigator: true).push(
               MaterialPageRoute<void>(builder: (_) => const CreditsScreen()),
             ),
             icon: const Icon(Icons.receipt_long_outlined),

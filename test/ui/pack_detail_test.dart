@@ -11,6 +11,8 @@ import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:assets_explorer/ui/pack_detail_screen.dart';
 import 'package:assets_explorer/ui/settings_screen.dart';
+import 'package:assets_explorer/ui/tabs.dart';
+import 'package:assets_explorer/ui/dashboard.dart';
 import 'package:assets_explorer/ui/track_player.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
 import 'package:assets_explorer/ui/widgets/pack_tile.dart';
@@ -1505,6 +1507,202 @@ void main() {
       isEmpty,
     );
     expect(find.text('Knight Pack'), findsOneWidget);
+  });
+
+  group('Pack tabs (M31)', () {
+    Finder tile(String title) =>
+        find.descendant(of: find.byType(PackTile), matching: find.text(title));
+    Finder strip(String label) => find.descendant(
+      of: find.byType(PackTabStrip),
+      matching: find.text(label),
+    );
+
+    Future<void> settle(WidgetTester tester) async {
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    Future<void> middleClick(WidgetTester tester, Finder f) async {
+      final g = await tester.startGesture(
+        tester.getCenter(f),
+        kind: PointerDeviceKind.mouse,
+        buttons: kMiddleMouseButton,
+      );
+      await g.up();
+      await settle(tester);
+    }
+
+    Future<void> ctrl(
+      WidgetTester tester,
+      LogicalKeyboardKey key, {
+      bool shift = false,
+    }) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      if (shift) await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(key);
+      if (shift) await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await settle(tester);
+    }
+
+    Tabs tabs(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(TabsHost)))
+            .read(tabsProvider);
+
+    testWidgets('middle-click and the menu open background tabs', (
+      tester,
+    ) async {
+      await openKnight(tester, open: false);
+      expect(find.byType(PackTabStrip), findsNothing);
+      await middleClick(tester, tile('Knight Pack'));
+      // A tab, but the dashboard stays in front.
+      expect(strip('Knight Pack'), findsOneWidget);
+      expect(strip('Dashboard'), findsOneWidget);
+      expect(tabs(tester).active, 0);
+      expect(tile('Slimes'), findsOneWidget);
+      expect(find.byType(PackDetailScreen), findsNothing);
+
+      await tester.tapAt(
+        tester.getCenter(tile('Slimes')),
+        buttons: kSecondaryMouseButton,
+      );
+      await settle(tester);
+      await tester.tap(find.text('Open in new tab'));
+      await settle(tester);
+      expect(strip('Slimes'), findsOneWidget);
+      expect(tabs(tester).tabs.map((t) => t.packId), [
+        'HeroMaker/Knight Pack',
+        'HeroMaker/Slimes',
+      ]);
+      expect(tabs(tester).active, 0);
+
+      // A pack that already has a tab: that tab is shown.
+      await middleClick(tester, tile('Knight Pack'));
+      expect(tabs(tester).tabs, hasLength(2));
+      expect(tabs(tester).active, 1);
+      expect(find.byType(PackDetailScreen), findsOneWidget);
+      expect(find.textContaining('Images ('), findsOneWidget);
+
+      // A plain click still opens the pack in the current (dashboard) tab.
+      await tester.tap(strip('Dashboard'));
+      await settle(tester);
+      await tester.tap(tile('Slimes'));
+      await pumpUntil(tester, find.byType(PackDetailScreen));
+      await tester.pump(const Duration(seconds: 1));
+      expect(tabs(tester).active, 0);
+      expect(tabs(tester).tabs, hasLength(2));
+      // Esc goes back within the dashboard tab.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settle(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(PackDetailScreen), findsNothing);
+      expect(tile('Slimes'), findsOneWidget);
+    });
+
+    testWidgets('each tab keeps its state; Ctrl+Tab and Ctrl+W', (
+      tester,
+    ) async {
+      await openKnight(tester, open: false);
+      // Dashboard search, kept while another tab shows.
+      await tester.enterText(find.byType(TextField).first, 'knight');
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
+      await pumpUntil(tester, tile('Knight Pack'));
+      await middleClick(tester, tile('Knight Pack'));
+      await tester.tap(strip('Knight Pack'));
+      await settle(tester);
+      expect(tabs(tester).active, 1);
+
+      // A detail search in the pack tab.
+      final field = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+      await tester.enterText(field, 'z root');
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
+      await settle(tester);
+      expect(find.text('Matching “z root”'), findsOneWidget);
+      // Esc on a pack tab's own page has nothing to go back to: the tab
+      // and its search stay.
+      await tester.tapAt(const Offset(700, 880));
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settle(tester);
+      expect(tabs(tester).active, 1);
+      expect(find.text('Matching “z root”'), findsOneWidget);
+
+      // Ctrl+Tab to the dashboard: its search is still there.
+      await ctrl(tester, LogicalKeyboardKey.tab);
+      expect(tabs(tester).active, 0);
+      expect(
+        tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+        'knight',
+      );
+      expect(tile('Slimes'), findsNothing);
+      // Ctrl+Shift+Tab wraps back to the pack, with its search.
+      await ctrl(tester, LogicalKeyboardKey.tab, shift: true);
+      expect(tabs(tester).active, 1);
+      expect(find.text('Matching “z root”'), findsOneWidget);
+      // Keys work in the shown tab without a click (focus followed).
+      await ctrl(tester, LogicalKeyboardKey.keyF);
+      expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+
+      // Ctrl+W closes the pack tab; the dashboard shows and stays.
+      await tester.tapAt(const Offset(700, 880));
+      await ctrl(tester, LogicalKeyboardKey.keyW);
+      expect(tabs(tester).tabs, isEmpty);
+      expect(tabs(tester).active, 0);
+      expect(find.byType(PackTabStrip), findsNothing);
+      await ctrl(tester, LogicalKeyboardKey.keyW);
+      expect(find.byType(Dashboard), findsOneWidget);
+    });
+
+    testWidgets('× and middle-click close tabs; left neighbour shows', (
+      tester,
+    ) async {
+      await openKnight(tester, open: false);
+      await middleClick(tester, tile('Knight Pack'));
+      await middleClick(tester, tile('Slimes'));
+      await tester.tap(strip('Slimes'));
+      await settle(tester);
+      expect(tabs(tester).active, 2);
+      // The tooltip carries the full title.
+      expect(find.byTooltip('Slimes'), findsWidgets);
+      final close = find.descendant(
+        of: find.byKey(ValueKey('strip-${tabs(tester).tabs[1].id}')),
+        matching: find.byTooltip('Close tab (Ctrl+W)'),
+      );
+      await tester.tap(close);
+      await settle(tester);
+      expect(tabs(tester).tabs.map((t) => t.packId), ['HeroMaker/Knight Pack']);
+      expect(tabs(tester).active, 1);
+      await middleClick(tester, strip('Knight Pack'));
+      expect(tabs(tester).tabs, isEmpty);
+      expect(tabs(tester).active, 0);
+      expect(tile('Knight Pack'), findsOneWidget);
+    });
+
+    test('closing tabs keeps the shown one when it is not closed', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(tabsProvider.notifier)
+        ..open('a')
+        ..open('b')
+        ..open('c')
+        ..select(3);
+      n.close(0); // a, left of the shown c
+      expect(c.read(tabsProvider).active, 2);
+      expect(c.read(tabsProvider).tabs.map((t) => t.packId), ['b', 'c']);
+      n.cycle(1); // wraps to the dashboard
+      expect(c.read(tabsProvider).active, 0);
+      n.cycle(-1);
+      expect(c.read(tabsProvider).active, 2);
+      n.closeCurrent();
+      expect(c.read(tabsProvider).active, 1);
+      n
+        ..select(0)
+        ..closeCurrent();
+      expect(c.read(tabsProvider).tabs, hasLength(1));
+    });
   });
 
   group('Header preview (M29)', () {

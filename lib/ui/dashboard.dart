@@ -7,6 +7,7 @@ import '../state/providers.dart';
 import '../state/settings.dart';
 import '../core/library_index.dart' show LibraryIndex;
 import 'file_results.dart';
+import 'tabs.dart';
 import 'pack_detail_screen.dart';
 import 'widgets/filter_bar.dart';
 import 'widgets/thumb_size.dart';
@@ -37,6 +38,17 @@ class _DashboardState extends ConsumerState<Dashboard> {
   void initState() {
     super.initState();
     _search.text = ref.read(dashboardQueryProvider).text;
+  }
+
+  final _tabFocus = TabFocus();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Back on the dashboard tab: `/` and Ctrl+F work again without a click.
+    _tabFocus.update(context, () {
+      if (!_gridFocus.hasFocus) _gridFocus.requestFocus();
+    });
   }
 
   @override
@@ -102,6 +114,9 @@ class _DashboardState extends ConsumerState<Dashboard> {
           file: f.relPath,
           returnFocus: _gridFocus,
         ),
+        onOpenInNewTab: (f) => ref
+            .read(tabsProvider.notifier)
+            .open(f.pack.id, search: search, file: f.relPath),
       ),
     );
   }
@@ -150,6 +165,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
       ref.watch(settingsProvider.select((s) => s.dashboardTileSize)),
     );
     final settings = ref.read(settingsProvider.notifier);
+    final tabsNotifier = ref.read(tabsProvider.notifier);
 
     return Focus(
       focusNode: _gridFocus,
@@ -284,36 +300,44 @@ class _DashboardState extends ConsumerState<Dashboard> {
                       itemCount: tiles.length,
                       itemBuilder: (context, i) {
                         final DashboardTile(:tile, :pack, :folder) = tiles[i];
-                        return PackTile(
+                        return OpenInNewTab(
                           key: ValueKey(tiles[i].key),
-                          pack: tile,
-                          subPackCount: subCounts[pack.id] ?? 0,
-                          alwaysAnimate: animateAll,
-                          showTags: query.sort == PackSort.tags,
-                          fileMatches: folder == null
-                              ? fileMatchLine(
-                                  fileSearch?.counts[pack.id] ?? 0,
-                                  examples[pack.id] ?? const [],
-                                )
-                              : null,
-                          fileMatchesTooltip: fileMatchTooltip(
-                            fileSearch?.counts[pack.id] ?? 0,
-                            examples[pack.id] ?? const [],
+                          // Bundles open in place; their details have a
+                          // button.
+                          onOpenInNewTab: pack.isContainer
+                              ? null
+                              : () =>
+                                    tabsNotifier.open(pack.id, folder: folder),
+                          child: PackTile(
+                            pack: tile,
+                            subPackCount: subCounts[pack.id] ?? 0,
+                            alwaysAnimate: animateAll,
+                            showTags: query.sort == PackSort.tags,
+                            fileMatches: folder == null
+                                ? fileMatchLine(
+                                    fileSearch?.counts[pack.id] ?? 0,
+                                    examples[pack.id] ?? const [],
+                                  )
+                                : null,
+                            fileMatchesTooltip: fileMatchTooltip(
+                              fileSearch?.counts[pack.id] ?? 0,
+                              examples[pack.id] ?? const [],
+                            ),
+                            onFileMatchesTap: () => openPackDetail(
+                              context,
+                              pack.id,
+                              search: search,
+                              returnFocus: _gridFocus,
+                            ),
+                            onTap: pack.isContainer
+                                ? () => notifier.openBundle(pack.id)
+                                : () => openPackDetail(
+                                    context,
+                                    pack.id,
+                                    folder: folder,
+                                    returnFocus: _gridFocus,
+                                  ),
                           ),
-                          onFileMatchesTap: () => openPackDetail(
-                            context,
-                            pack.id,
-                            search: search,
-                            returnFocus: _gridFocus,
-                          ),
-                          onTap: pack.isContainer
-                              ? () => notifier.openBundle(pack.id)
-                              : () => openPackDetail(
-                                  context,
-                                  pack.id,
-                                  folder: folder,
-                                  returnFocus: _gridFocus,
-                                ),
                         );
                       },
                     ),

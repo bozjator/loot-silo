@@ -238,9 +238,7 @@ void main() {
     expect(texts, ['barr', '']);
   });
 
-  testWidgets('showAuthor keeps only that author and the sort', (
-    tester,
-  ) async {
+  testWidgets('showAuthor keeps only that author and the sort', (tester) async {
     final c = ProviderContainer();
     addTearDown(c.dispose);
     final n = c.read(dashboardQueryProvider.notifier)

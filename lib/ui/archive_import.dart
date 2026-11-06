@@ -52,7 +52,7 @@ Future<bool> importArchives(
         );
       }
     }
-    if (context.mounted) Navigator.of(context).pop();
+    if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
     if (!context.mounted) return false;
     if (extracted.isEmpty) {
       await showDialog<void>(
@@ -70,19 +70,22 @@ Future<bool> importArchives(
       );
       return false;
     }
-    final imported = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        settings: const RouteSettings(name: FolderImportScreen.routeName),
-        builder: (_) => FolderImportScreen(
-          sourcePath: temp.path,
-          title: archives.length == 1 ? 'Import archive' : 'Import archives',
-          origins: {
-            for (final e in extracted) p.basename(e.folder): e.archivePath,
-          },
-          notes: errors,
-        ),
-      ),
-    );
+    final imported = await Navigator.of(context, rootNavigator: true)
+        .push<bool>(
+          MaterialPageRoute(
+            settings: const RouteSettings(name: FolderImportScreen.routeName),
+            builder: (_) => FolderImportScreen(
+              sourcePath: temp.path,
+              title: archives.length == 1
+                  ? 'Import archive'
+                  : 'Import archives',
+              origins: {
+                for (final e in extracted) p.basename(e.folder): e.archivePath,
+              },
+              notes: errors,
+            ),
+          ),
+        );
     return imported ?? false;
   } finally {
     progress.dispose();
