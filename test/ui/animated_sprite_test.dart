@@ -172,6 +172,58 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('unmounting while the trim reads the frames is safe', (
+    tester,
+  ) async {
+    // Three frame files: the trim reads them one after the other, so the
+    // sprite can go (scrolled away) between two reads.
+    final names = [for (var i = 0; i < 3; i++) 'walk_$i.png'];
+    for (final n in names) {
+      final image = img.Image(width: 16, height: 16, numChannels: 4);
+      img.fillRect(
+        image,
+        x1: 4,
+        y1: 4,
+        x2: 11,
+        y2: 11,
+        color: img.ColorRgba8(0, 0, 255, 255),
+      );
+      File(p.join(tmp.path, n)).writeAsBytesSync(img.encodePng(image));
+    }
+    await tester.pumpWidget(const SizedBox());
+    for (final n in names) {
+      await tester.runAsync(
+        () => precacheImage(
+          FileImage(File(p.join(tmp.path, n))),
+          tester.element(find.byType(SizedBox)),
+        ),
+      );
+    }
+    // Cached: the frames arrive at once and the trim starts reading.
+    await tester.pumpWidget(
+      AnimatedSprite(
+        packPath: tmp.path,
+        anim: SpriteAnim(
+          path: names.first,
+          kind: AnimKind.sequence,
+          frameW: 16,
+          frameH: 16,
+          frames: names,
+        ),
+        playing: true,
+      ),
+    );
+    // Gone before the first read finishes; its images are disposed.
+    await tester.pumpWidget(const SizedBox());
+    for (var i = 0; i < 5; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   group('auto-trim and zoom (M27)', () {
     /// Two 64 px frames with a small blob each, at different places: the
     /// union of their opaque bounds is the shared crop.

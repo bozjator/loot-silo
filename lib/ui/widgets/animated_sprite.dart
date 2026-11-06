@@ -205,9 +205,24 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
       _applyTrim(cached);
       return;
     }
+    // Read from clones taken now: the sprite can be removed or reloaded
+    // between two reads, which disposes [_images].
+    final sources = {for (final (index, _) in frames) _images[index]};
+    final clones = {for (final i in sources) i: i.clone()};
     final data = <ui.Image, ByteData?>{};
-    for (final i in {for (final (index, _) in frames) _images[index]}) {
-      data[i] = await i.toByteData();
+    try {
+      for (final MapEntry(key: image, value: clone) in clones.entries) {
+        if (!mounted || !identical(frames, _frames)) return;
+        try {
+          data[image] = await clone.toByteData();
+        } catch (_) {
+          data[image] = null; // unreadable: the frame is kept whole
+        }
+      }
+    } finally {
+      for (final c in clones.values) {
+        c.dispose();
+      }
     }
     if (!mounted || !identical(frames, _frames)) return;
     // Opaque bounds of a frame relative to its origin, or null when empty.
