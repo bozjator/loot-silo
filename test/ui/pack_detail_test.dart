@@ -1331,6 +1331,182 @@ void main() {
     });
   });
 
+  group('Detail search (M30)', () {
+    final files = [
+      'props/barrels_0.png',
+      'props/barrels_1.png',
+      'heroes/knight_red/a.png',
+      'sfx/barrel_roll.wav',
+      'sfx/sword.wav',
+      'docs/readme.txt',
+    ];
+
+    Finder field() => find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+
+    Future<void> type(WidgetTester tester, String text) async {
+      await tester.enterText(field(), text);
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    Future<void> ctrlF(WidgetTester tester) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+    }
+
+    bool searchFocused(WidgetTester tester) =>
+        tester.widget<TextField>(field()).focusNode!.hasFocus;
+
+    testWidgets('filters every tab, counts follow, Esc clears', (tester) async {
+      await openKnight(tester, files: files);
+      expect(find.text('Images (4)'), findsOneWidget);
+      expect(find.text('Audio (2)'), findsOneWidget);
+      expect(find.text('Other files (1)'), findsOneWidget);
+
+      // Debounced: nothing changes until typing pauses.
+      await tester.enterText(field(), 'barrel');
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('Images (4)'), findsOneWidget);
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Images (2)'), findsOneWidget);
+      expect(find.text('Audio (1)'), findsOneWidget);
+      // No match in Other files: that tab goes.
+      expect(find.textContaining('Other files'), findsNothing);
+      expect(find.text('Matching “barrel”'), findsOneWidget);
+      expect(find.text('Barrels 0'), findsNothing); // not a card title
+      expect(find.text('barrels_0.png'), findsOneWidget);
+      expect(find.text('a.png'), findsNothing);
+
+      // The open tab stays even without matches.
+      await type(tester, 'sword');
+      expect(find.text('Images (0)'), findsOneWidget);
+      expect(find.text('No files match “sword”'), findsOneWidget);
+      expect(find.text('Audio (1)'), findsOneWidget);
+
+      // Infix fallback, like the dashboard.
+      await type(tester, 'arrel');
+      expect(find.text('Images (2)'), findsOneWidget);
+
+      // Esc in the field clears it, a second Esc leaves the field, and the
+      // page is still open.
+      expect(searchFocused(tester), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(find.text('Images (4)'), findsOneWidget);
+      expect(find.text('Other files (1)'), findsOneWidget);
+      expect(find.textContaining('Matching'), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(searchFocused(tester), isFalse);
+      expect(find.byType(PackDetailScreen), findsOneWidget);
+
+      // Ctrl+F focuses it again (focus stayed on the page).
+      await ctrlF(tester);
+      expect(searchFocused(tester), isTrue);
+    });
+
+    testWidgets('works inside the folder filter', (tester) async {
+      await openKnight(
+        tester,
+        files: ['Archer/c.png', 'Archer/bow.png', 'Mage/bow_staff.png'],
+        open: false,
+      );
+      await tester.tap(find.text('Expanded'));
+      await pumpUntil(tester, find.text('Mage'));
+      await tester.tap(find.text('Archer'));
+      await pumpUntil(tester, find.textContaining('Images ('));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Images (2)'), findsOneWidget);
+      await type(tester, 'bow');
+      // Only Archer/bow.png: Mage's bow is outside the folder.
+      expect(find.text('Images (1)'), findsOneWidget);
+      await tester.tap(find.text('Show whole pack'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Images (2)'), findsOneWidget);
+      expect(find.text('Matching “bow”'), findsOneWidget);
+    });
+
+    testWidgets('a dashboard search seeds the field; one chip', (tester) async {
+      await openKnight(tester, files: files, open: false);
+      await tester.tap(find.text('Files'));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField).first, 'barrel');
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
+      await pumpUntil(tester, find.text('Barrels 1'));
+      await tester.tap(find.text('Barrels 1'));
+      await pumpUntil(tester, find.text('Show all files'));
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.widget<TextField>(field()).controller!.text, 'barrel');
+      expect(find.byType(InputChip), findsOneWidget);
+      expect(find.text('Images (2)'), findsOneWidget);
+      // Refining here replaces the dashboard search, still one chip.
+      await type(tester, 'barrel roll');
+      expect(find.text('Matching “barrel roll”'), findsOneWidget);
+      expect(find.byType(InputChip), findsOneWidget);
+      expect(find.text('Audio (1)'), findsOneWidget);
+      await tester.tap(find.text('Show all files'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(tester.widget<TextField>(field()).controller!.text, isEmpty);
+      expect(find.text('Images (4)'), findsOneWidget);
+    });
+
+    testWidgets('Ctrl+F on the detail page focuses its search', (tester) async {
+      await openKnight(tester, files: files);
+      expect(searchFocused(tester), isFalse);
+      await ctrlF(tester);
+      expect(searchFocused(tester), isTrue);
+      // A click outside hands focus back to the page: H still pins.
+      await tester.tapAt(const Offset(700, 880));
+      await tester.pump();
+      expect(searchFocused(tester), isFalse);
+      final pinned = store.load().detailHeaderPinned;
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+      await tester.pump();
+      expect(store.load().detailHeaderPinned, !pinned);
+    });
+  });
+
+  testWidgets('author link: N packs opens the dashboard filtered by author', (
+    tester,
+  ) async {
+    await openKnight(tester, open: false);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(HomeScreen)),
+    );
+    // A search and a type filter that the link must clear.
+    await tester.enterText(find.byType(TextField).first, 'knight');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
+    container.read(dashboardQueryProvider.notifier).toggleType('character');
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.pump();
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.byType(TabBar));
+    await tester.pump(const Duration(seconds: 1));
+
+    // Knight Pack and Slimes.
+    final link = find.byKey(const ValueKey('author-packs'));
+    expect(
+      find.descendant(of: link, matching: find.text('2 packs')),
+      findsOneWidget,
+    );
+    await tester.tap(link);
+    await pumpUntil(tester, find.text('Slimes'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(PackDetailScreen), findsNothing);
+    final q = container.read(dashboardQueryProvider);
+    expect(q.authors, {'HeroMaker'});
+    expect(q.text, isEmpty);
+    expect(q.types, isEmpty);
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+      isEmpty,
+    );
+    expect(find.text('Knight Pack'), findsOneWidget);
+  });
+
   group('Header preview (M29)', () {
     img.Image solid(int w, int h, int shade) {
       final i = img.Image(width: w, height: h, numChannels: 4);

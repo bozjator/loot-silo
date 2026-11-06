@@ -19,7 +19,8 @@ import '../core/pack_editor.dart';
 import '../core/sidecar.dart';
 import '../core/text_preview.dart';
 import '../core/type_classifier.dart' show AssetType;
-import '../state/dashboard.dart' show knownTags, sortedTags;
+import '../state/dashboard.dart'
+    show DashboardQueryNotifier, dashboardQueryProvider, knownTags, sortedTags;
 import '../state/providers.dart';
 import '../state/settings.dart';
 import 'format.dart';
@@ -78,8 +79,8 @@ class PackDetailScreen extends ConsumerWidget {
     void togglePin() =>
         ref.read(settingsProvider.notifier).setDetailHeaderPinned(!pinned);
     return Focus(
-      autofocus: true,
-      // H pins or unpins the header, unless a text field has the key.
+      // H pins or unpins the header, unless a text field has the key. The
+      // body holds the focus (see _BodyState._keys); keys bubble up here.
       onKeyEvent: (node, event) {
         if (event is! KeyDownEvent ||
             event.logicalKey != LogicalKeyboardKey.keyH ||
@@ -171,7 +172,24 @@ class _BodyState extends State<_Body> {
   /// (e.g. the Animations tab after "Combine into animation").
   Type? _tab;
   late String? _folder = widget.folder;
-  late SearchFilter? _search = widget.search;
+
+  /// The file-name search over every tab, seeded with the dashboard search
+  /// the page was opened with. [_query] is what the tabs are filtered by;
+  /// it follows the field once typing pauses.
+  late final _searchText = TextEditingController(
+    text: widget.search?.text ?? '',
+  );
+  late String _query = widget.search?.text ?? '';
+  final _searchFocus = FocusNode(debugLabel: 'detail search');
+  Timer? _debounce;
+
+  /// Holds focus when the search doesn't, so Ctrl+F and H keep working
+  /// after Esc or a click outside the field.
+  final _keys = FocusNode(debugLabel: 'detail');
+
+  /// Keeps the field (and its focus) when the tab set changes and the tab
+  /// controller is rebuilt around it.
+  final _fieldKey = GlobalKey(debugLabel: 'detail search field');
 
   @override
   void didUpdateWidget(_Body old) {
@@ -180,128 +198,265 @@ class _BodyState extends State<_Body> {
   }
 
   @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchText.dispose();
+    _searchFocus.dispose();
+    _keys.dispose();
+    super.dispose();
+  }
+
+  /// Same timing as the dashboard: applied once typing pauses, clearing at
+  /// once.
+  void _onSearchText(String text) {
+    _debounce?.cancel();
+    if (text.trim().isEmpty) {
+      if (_query != text) setState(() => _query = text);
+      return;
+    }
+    _debounce = Timer(DashboardQueryNotifier.searchDebounce, () {
+      if (mounted && _query != text) setState(() => _query = text);
+    });
+  }
+
+  void _clearSearch() {
+    _searchText.clear();
+    _onSearchText('');
+  }
+
+  /// Ctrl+F focuses the search; Esc in it clears it, or leaves it when it
+  /// is already empty.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.keyF &&
+        HardwareKeyboard.instance.isControlPressed) {
+      _searchFocus.requestFocus();
+      _searchText.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _searchText.text.length,
+      );
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.escape &&
+        _searchFocus.hasFocus) {
+      if (_searchText.text.isEmpty) {
+        _keys.requestFocus();
+      } else {
+        _clearSearch();
+      }
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final pack = widget.pack;
     final folder = _folder;
-    final search = _search;
-    var contents = folder == null
+    final base = folder == null
         ? widget.contents
         : widget.contents.within(folder);
-    if (search != null) {
-      contents = contents.matching(search.words, infix: search.infix);
+    final words = queryWords(_query);
+    final searching = words.isNotEmpty;
+    var contents = base;
+    if (searching) {
+      contents = base.matching(words);
+      // The dashboard's infix fallback: only when no file matches by word
+      // prefix and every word has 3+ characters.
+      if (contents.isEmpty && words.every((w) => w.length >= 3)) {
+        contents = base.matching(words, infix: true);
+      }
     }
-    final tabs = <(String, Widget)>[
-      if (contents.animations.isNotEmpty)
-        (
-          'Animations (${formatCount(contents.animations.length)})',
-          _AnimationsTab(pack: pack, contents: contents),
-        ),
-      if (contents.images.isNotEmpty)
-        (
-          'Images (${formatCount(contents.images.length)})',
-          _ImagesTab(pack: pack, contents: contents),
-        ),
-      if (contents.audio.isNotEmpty)
-        (
-          'Audio (${formatCount(contents.audio.length)})',
-          _AudioTab(pack: pack, contents: contents),
-        ),
-      if (contents.other.isNotEmpty)
-        (
-          'Other files (${formatCount(contents.other.length)})',
-          _FilesTab(pack: pack, contents: contents),
-        ),
-    ];
+    // A tab without matches goes, unless it is the open one: it stays and
+    // says so, so typing doesn't jump to another tab.
+    final tabs = <(Type, String, Widget)>[];
+    void add(Type kind, String label, int count, int all, Widget Function() t) {
+      if (count == 0 && !(searching && kind == _tab && all > 0)) return;
+      tabs.add((
+        kind,
+        '$label (${formatCount(count)})',
+        count == 0 ? _NoMatches(query: _query) : t(),
+      ));
+    }
+
+    add(
+      _AnimationsTab,
+      'Animations',
+      contents.animations.length,
+      base.animations.length,
+      () => _AnimationsTab(pack: pack, contents: contents),
+    );
+    add(
+      _ImagesTab,
+      'Images',
+      contents.images.length,
+      base.images.length,
+      () => _ImagesTab(pack: pack, contents: contents),
+    );
+    add(
+      _AudioTab,
+      'Audio',
+      contents.audio.length,
+      base.audio.length,
+      () => _AudioTab(pack: pack, contents: contents),
+    );
+    add(
+      _FilesTab,
+      'Other files',
+      contents.other.length,
+      base.other.length,
+      () => _FilesTab(pack: pack, contents: contents),
+    );
     final header = _Header(pack: pack, contents: widget.contents);
+    final field = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
+      child: SizedBox(
+        width: 260,
+        child: TextField(
+          key: _fieldKey,
+          controller: _searchText,
+          focusNode: _searchFocus,
+          onChanged: _onSearchText,
+          onTapOutside: (_) {
+            if (_searchFocus.hasFocus) _keys.requestFocus();
+          },
+          decoration: InputDecoration(
+            isDense: true,
+            prefixIcon: const Icon(Icons.search, size: 20),
+            hintText: 'Search files (Ctrl+F)',
+            border: const OutlineInputBorder(),
+            suffixIcon: ValueListenableBuilder(
+              valueListenable: _searchText,
+              builder: (context, value, _) => value.text.isEmpty
+                  ? const SizedBox.shrink()
+                  : IconButton(
+                      tooltip: 'Clear search (Esc)',
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: _clearSearch,
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
     final tabArea = <Widget>[
       if (folder != null)
         _FolderBar(
           folder: folder,
           onShowAll: () => setState(() => _folder = null),
         ),
-      if (search != null)
-        _SearchFilterBar(
-          search: search,
-          onShowAll: () => setState(() => _search = null),
+      if (searching) _SearchFilterBar(text: _query, onShowAll: _clearSearch),
+      if (tabs.isEmpty) ...[
+        Row(children: [const Spacer(), field]),
+        Expanded(
+          child: searching
+              ? _NoMatches(query: _query)
+              : const Center(child: Text('No files')),
         ),
-      if (tabs.isEmpty)
-        const Expanded(child: Center(child: Text('No files')))
-      else ...[
-        TabBar(
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          tabs: [for (final (label, _) in tabs) Tab(text: label)],
+      ] else ...[
+        Row(
+          children: [
+            Expanded(
+              child: TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                tabs: [for (final (_, label, _) in tabs) Tab(text: label)],
+              ),
+            ),
+            field,
+          ],
         ),
         _TabMemory(
-          onChanged: (i) =>
-              _tab = i < tabs.length ? tabs[i].$2.runtimeType : null,
+          onChanged: (i) => _tab = i < tabs.length ? tabs[i].$1 : null,
         ),
-        Expanded(child: TabBarView(children: [for (final (_, t) in tabs) t])),
+        Expanded(
+          child: TabBarView(children: [for (final (_, _, t) in tabs) t]),
+        ),
       ],
     ];
     // Music / sfx packs open on their Audio tab; a clicked file result on
     // the tab that lists it.
-    final audioTab = tabs.indexWhere((t) => t.$2 is _AudioTab);
+    final audioTab = tabs.indexWhere((t) => t.$1 == _AudioTab);
     var initial = isAudioPack(pack.types) && audioTab >= 0 ? audioTab : 0;
-    if (widget.file case final file? when search != null) {
+    if (widget.file case final file? when widget.search != null) {
       final at = tabs.indexWhere(
-        (t) => switch (t.$2) {
-          _ImagesTab() => contents.images.contains(file),
-          _AudioTab() => contents.audio.contains(file),
-          _FilesTab() => contents.other.contains(file),
+        (t) => switch (t.$1) {
+          const (_ImagesTab) => contents.images.contains(file),
+          const (_AudioTab) => contents.audio.contains(file),
+          const (_FilesTab) => contents.other.contains(file),
           _ => false,
         },
       );
       if (at >= 0) initial = at;
     }
-    final kept = tabs.indexWhere((t) => t.$2.runtimeType == _tab);
+    final kept = tabs.indexWhere((t) => t.$1 == _tab);
     if (kept >= 0) initial = kept;
-    if (tabs.isNotEmpty) _tab = tabs[initial].$2.runtimeType;
-    return DefaultTabController(
-      // A new controller when the folder or search filter is cleared or
-      // the set of tabs changes; the open tab is kept by kind.
-      key: ValueKey((
-        folder,
-        search,
-        [for (final (_, t) in tabs) t.runtimeType].join(','),
-      )),
-      length: tabs.length,
-      initialIndex: initial,
-      child: widget.pinned
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [header, ...tabArea],
-            )
-          : Stack(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    MouseRegion(
-                      onEnter: (_) => setState(() => _peek = true),
-                      child: _SlimHeader(pack: pack, contents: contents),
-                    ),
-                    ...tabArea,
-                  ],
-                ),
-                if (_peek)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: MouseRegion(
-                      onExit: (_) => setState(() => _peek = false),
-                      child: Material(
-                        elevation: 8,
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: header,
+    if (tabs.isNotEmpty) _tab = tabs[initial].$1;
+    return Focus(
+      focusNode: _keys,
+      autofocus: true,
+      onKeyEvent: _onKey,
+      child: DefaultTabController(
+        // A new controller when the folder filter is cleared or the set of
+        // tabs changes; the open tab is kept by kind.
+        key: ValueKey((folder, [for (final (k, _, _) in tabs) k].join(','))),
+        length: tabs.length,
+        initialIndex: initial,
+        child: widget.pinned
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [header, ...tabArea],
+              )
+            : Stack(
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      MouseRegion(
+                        onEnter: (_) => setState(() => _peek = true),
+                        child: _SlimHeader(pack: pack, contents: contents),
+                      ),
+                      ...tabArea,
+                    ],
+                  ),
+                  if (_peek)
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: MouseRegion(
+                        onExit: (_) => setState(() => _peek = false),
+                        child: Material(
+                          elevation: 8,
+                          color: Theme.of(context).colorScheme.surfaceContainer,
+                          child: header,
+                        ),
                       ),
                     ),
-                  ),
-              ],
-            ),
+                ],
+              ),
+      ),
     );
   }
+}
+
+/// An open tab whose files all miss the search.
+class _NoMatches extends StatelessWidget {
+  const _NoMatches({required this.query});
+
+  final String query;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.search_off, size: 48),
+        const SizedBox(height: 8),
+        Text('No files match “${query.trim()}”'),
+      ],
+    ),
+  );
 }
 
 /// Every type is music or sfx (mixed packs such as characters + sfx keep
@@ -322,12 +477,13 @@ class SearchFilter {
   List<String> get words => queryWords(text);
 }
 
-/// Says the tabs list only the files matching a search, with a way back to
-/// all of them.
+/// Says the tabs list only the files matching the search, with a way back to
+/// all of them. One chip, whether the search came from the dashboard or was
+/// typed here.
 class _SearchFilterBar extends StatelessWidget {
-  const _SearchFilterBar({required this.search, required this.onShowAll});
+  const _SearchFilterBar({required this.text, required this.onShowAll});
 
-  final SearchFilter search;
+  final String text;
   final VoidCallback onShowAll;
 
   @override
@@ -339,7 +495,7 @@ class _SearchFilterBar extends StatelessWidget {
         children: [
           InputChip(
             avatar: const Icon(Icons.search, size: 18),
-            label: Text('Matching “${search.text.trim()}”'),
+            label: Text('Matching “${text.trim()}”'),
             tooltip: 'Showing only files that match the search',
             mouseCursor: clickCursor,
             onDeleted: onShowAll,
@@ -897,6 +1053,8 @@ class _Info extends ConsumerWidget {
                 )
               else
                 Text(pack.author ?? 'Unknown author'),
+              if (pack.author case final author?)
+                _AuthorPacksLink(author: author),
               IconButton(
                 tooltip: 'Edit author info',
                 icon: const Icon(Icons.edit, size: 18),
@@ -981,6 +1139,36 @@ class _Info extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "N packs" by the author name: how many packs in the library carry this
+/// author (sub-packs too, as the dashboard's Author filter lists them).
+/// Clicking it shows exactly those on the dashboard.
+class _AuthorPacksLink extends ConsumerWidget {
+  const _AuthorPacksLink({required this.author});
+
+  final String author;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final packs = ref.watch(libraryProvider).value?.packs ?? const [];
+    final n = packs.where((p) => p.author == author).length;
+    return TextButton(
+      key: const ValueKey('author-packs'),
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+      ),
+      onPressed: () {
+        ref.read(dashboardQueryProvider.notifier).showAuthor(author);
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      },
+      child: Tooltip(
+        message: 'Show $author’s packs on the dashboard',
+        child: Text('${formatCount(n)} pack${n == 1 ? '' : 's'}'),
       ),
     );
   }

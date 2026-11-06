@@ -238,6 +238,30 @@ void main() {
     expect(texts, ['barr', '']);
   });
 
+  testWidgets('showAuthor keeps only that author and the sort', (
+    tester,
+  ) async {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(dashboardQueryProvider.notifier)
+      ..setSort(PackSort.title)
+      ..toggleType('ui')
+      ..toggleAuthor('Kenney')
+      ..toggleTag('pixel')
+      ..openBundle('b')
+      ..setText('pending');
+    n.showAuthor('Rafael');
+    // The pending search never lands.
+    await tester.pump(const Duration(seconds: 1));
+    final q = c.read(dashboardQueryProvider);
+    expect(q.authors, {'Rafael'});
+    expect(q.text, isEmpty);
+    expect(q.types, isEmpty);
+    expect(q.tags, isEmpty);
+    expect(q.bundleId, isNull);
+    expect(q.sort, PackSort.title);
+  });
+
   test('copyWith can clear the bundle', () {
     const q = DashboardQuery(bundleId: 'x');
     expect(q.copyWith(bundleId: () => null).bundleId, isNull);

@@ -122,6 +122,13 @@ class DashboardQueryNotifier extends Notifier<DashboardQuery> {
   void toggleSource(String v) =>
       state = state.copyWith(sources: _toggle(state.sources, v));
 
+  /// Only [author]'s packs: the search, the other filters and an open
+  /// bundle are cleared, so the grid lists all of them (the sort stays).
+  void showAuthor(String author) {
+    _debounce?.cancel();
+    state = DashboardQuery(sort: state.sort, authors: {author});
+  }
+
   void clearFilters() {
     _debounce?.cancel();
     state = DashboardQuery(sort: state.sort);

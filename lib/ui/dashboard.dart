@@ -108,6 +108,10 @@ class _DashboardState extends ConsumerState<Dashboard> {
 
   @override
   Widget build(BuildContext context) {
+    // The search can be cleared from elsewhere (a pack page's author link).
+    ref.listen(dashboardQueryProvider.select((q) => q.text), (_, text) {
+      if (text.isEmpty && _search.text.isNotEmpty) _search.clear();
+    });
     final query = ref.watch(dashboardQueryProvider);
     final notifier = ref.read(dashboardQueryProvider.notifier);
     final visible = ref.watch(visibleTilesProvider);

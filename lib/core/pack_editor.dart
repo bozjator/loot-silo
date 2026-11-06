@@ -56,6 +56,10 @@ class PackContents {
     );
   }
 
+  /// No file in any tab.
+  bool get isEmpty =>
+      images.isEmpty && audio.isEmpty && other.isEmpty && detected.isEmpty;
+
   /// Only files matching a search ([fileMatches]); an animation stays when
   /// its sheet or any of its frames matches.
   PackContents matching(List<String> words, {bool infix = false}) {

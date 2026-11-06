@@ -11,6 +11,7 @@ import 'package:assets_explorer/state/itch.dart';
 import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
+import 'package:assets_explorer/ui/dashboard.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:assets_explorer/ui/pack_detail_screen.dart';
 import 'package:assets_explorer/ui/track_player.dart';
@@ -1422,7 +1423,7 @@ A **16×16** knight with *walk* and *idle* animations.
     /// Opens [title]'s Animations tab and the editor of the card whose
     /// name matches [card].
     Future<void> openEditor(String search, String title, Pattern card) async {
-      await tester.enterText(find.byType(TextField), search);
+      await tester.enterText(find.byType(TextField).first, search);
       await pumpUntil(tester, find.text(title));
       await tester.tap(find.text(title));
       final tab = find.descendant(
@@ -1531,9 +1532,9 @@ A **16×16** knight with *walk* and *idle* animations.
         'characters',
       ),
     ]) {
-      await tester.tap(find.byType(TextField));
+      await tester.tap(find.byType(TextField).first);
       await tester.pump();
-      await tester.enterText(find.byType(TextField), search);
+      await tester.enterText(find.byType(TextField).first, search);
       await tester.pump(const Duration(milliseconds: 300));
       // The search box can hold the same text; tap the tile.
       final tile = find.descendant(
@@ -1688,6 +1689,74 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump(const Duration(milliseconds: 300));
     // mockup2.png is this pack's preview, so it comes first.
     expect(find.textContaining('mockups/mockup1'), findsOneWidget);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m30: detail search and author link (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    const title = 'Epic RPG World - Village(interiors) V1.3';
+    if (!Directory(p.join(real, 'RafaelMatos', title)).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'Village(interiors)');
+    final tile = find.descendant(
+      of: find.byType(PackTile),
+      matching: find.text(title),
+    );
+    await pumpUntil(tester, tile);
+    await tester.tap(tile.first);
+    await pumpUntil(tester, find.byType(TabBar));
+    await tester.pump(const Duration(seconds: 1));
+    // Opened from a pack search (not a file search): no file filter yet.
+    final field = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    expect(field, findsOneWidget);
+    expect(find.textContaining('Matching'), findsNothing);
+    final images = find.textContaining('Images (');
+    final all = (tester
+        .widget<Tab>(find.ancestor(of: images, matching: find.byType(Tab)))
+        .text)!;
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    await tester.enterText(field, 'barrel');
+    await pumpUntil(tester, find.text('Matching “barrel”'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(images);
+    await tester.pump(const Duration(seconds: 1));
+    final filtered = (tester
+        .widget<Tab>(find.ancestor(of: images, matching: find.byType(Tab)))
+        .text)!;
+    expect(filtered, isNot(all));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm30_detail_search', settle: false);
+
+    // The author's pack count leads to the dashboard filtered by author.
+    final link = find.byKey(const ValueKey('author-packs'));
+    expect(link, findsOneWidget);
+    final label = tester
+        .widget<Text>(find.descendant(of: link, matching: find.byType(Text)))
+        .data!;
+    final n = int.parse(label.split(' ').first);
+    await tester.tap(link);
+    await pumpUntil(tester, find.byType(Dashboard));
+    await tester.pump(const Duration(seconds: 1));
+    // The result count says the same number of packs.
+    expect(find.text(label), findsOneWidget);
+    expect(n, greaterThan(1));
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      isEmpty,
+    );
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm30_author_filter', settle: false);
     expect(Directory(real).statSync().modified, before);
   });
 
