@@ -190,14 +190,20 @@ class TabsHost extends ConsumerWidget {
           excluding: !active,
           child: TabActive(
             active: active,
-            // Each navigator needs its own (or no) hero controller.
-            child: HeroControllerScope.none(
-              child: Navigator(
-                key: navigator,
-                observers: [top],
-                onGenerateRoute: (settings) => MaterialPageRoute<void>(
-                  settings: settings,
-                  builder: (_) => page,
+            // Hidden tabs keep out of page transitions over the tabs: every
+            // tab's Scaffold shows the app's snack bar, and two snack bar
+            // heroes with one tag would assert.
+            child: HeroMode(
+              enabled: active,
+              // Each navigator needs its own (or no) hero controller.
+              child: HeroControllerScope.none(
+                child: Navigator(
+                  key: navigator,
+                  observers: [top],
+                  onGenerateRoute: (settings) => MaterialPageRoute<void>(
+                    settings: settings,
+                    builder: (_) => page,
+                  ),
                 ),
               ),
             ),

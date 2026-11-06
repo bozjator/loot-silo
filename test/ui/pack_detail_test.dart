@@ -1674,6 +1674,26 @@ void main() {
       expect(find.byType(Dashboard), findsOneWidget);
     });
 
+    testWidgets('a snack bar with two tabs open, then a page on top', (
+      tester,
+    ) async {
+      await openKnight(tester, open: false);
+      await middleClick(tester, tile('Knight Pack'));
+      await tester.tap(strip('Knight Pack'));
+      await settle(tester);
+      // Every tab's Scaffold shows the app's snack bar; hidden tabs must
+      // not add a second snack bar hero to the page transition.
+      final context = tester.element(find.byType(PackDetailScreen));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('listed as an image')));
+      await settle(tester);
+      openHelp(context);
+      await settle(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.takeException(), isNull);
+      expect(find.byType(HelpScreen), findsOneWidget);
+    });
+
     testWidgets('× and middle-click close tabs; left neighbour shows', (
       tester,
     ) async {
