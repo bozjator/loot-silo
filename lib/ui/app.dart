@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../install/archive_extractor.dart';
@@ -17,6 +16,8 @@ import 'folder_import_screen.dart';
 import 'itch_screen.dart';
 import 'settings_screen.dart';
 import 'tabs.dart';
+import 'help_screen.dart';
+import 'shortcuts.dart';
 import 'cursors.dart';
 
 /// Root widget of Asset Explorer.
@@ -55,29 +56,32 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
   Map<ShortcutActivator, VoidCallback> get _appShortcuts {
     final rescan = _shortcut((_) => rescanLibrary(ref));
     return {
-      const SingleActivator(LogicalKeyboardKey.keyI, control: true): _shortcut(
-        (c) => importFolder(c, ref),
-        notOn: FolderImportScreen.routeName,
+      ...AppKeys.importFolder.bind(
+        _shortcut(
+          (c) => importFolder(c, ref),
+          notOn: FolderImportScreen.routeName,
+        ),
       ),
-      const SingleActivator(LogicalKeyboardKey.keyO, control: true): _shortcut(
-        (c) => importArchive(c, ref),
-        notOn: FolderImportScreen.routeName,
+      ...AppKeys.importArchive.bind(
+        _shortcut(
+          (c) => importArchive(c, ref),
+          notOn: FolderImportScreen.routeName,
+        ),
       ),
-      const SingleActivator(LogicalKeyboardKey.keyR, control: true): rescan,
-      const SingleActivator(LogicalKeyboardKey.f5): rescan,
+      ...AppKeys.rescan.bind(rescan),
       // Pack tabs: only while the tabs are shown (no page over them).
-      const SingleActivator(LogicalKeyboardKey.tab, control: true): _onTabs(
-        (t) => t.cycle(1),
+      ...AppKeys.nextTab.bind(_onTabs((t) => t.cycle(1))),
+      ...AppKeys.previousTab.bind(_onTabs((t) => t.cycle(-1))),
+      ...AppKeys.closeTab.bind(_onTabs((t) => t.closeCurrent())),
+      ...AppKeys.settings.bind(
+        _shortcut(
+          openSettings,
+          needsLibrary: false,
+          notOn: SettingsScreen.routeName,
+        ),
       ),
-      const SingleActivator(LogicalKeyboardKey.tab, control: true, shift: true):
-          _onTabs((t) => t.cycle(-1)),
-      const SingleActivator(LogicalKeyboardKey.keyW, control: true): _onTabs(
-        (t) => t.closeCurrent(),
-      ),
-      const SingleActivator(LogicalKeyboardKey.comma, control: true): _shortcut(
-        openSettings,
-        needsLibrary: false,
-        notOn: SettingsScreen.routeName,
+      ...AppKeys.help.bind(
+        _shortcut(openHelp, needsLibrary: false, notOn: HelpScreen.routeName),
       ),
     };
   }
@@ -126,10 +130,7 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
           if (event.buttons & kBackMouseButton != 0) _back();
         },
         child: CallbackShortcuts(
-          bindings: {
-            const SingleActivator(LogicalKeyboardKey.escape): _back,
-            ..._appShortcuts,
-          },
+          bindings: {...AppKeys.back.bind(_back), ..._appShortcuts},
           child: child!,
         ),
       ),
@@ -288,6 +289,11 @@ class HomeScreen extends ConsumerWidget {
             tooltip: 'Rescan library (F5)',
             onPressed: scanning ? null : rescan,
             icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: 'How Asset Explorer works (F1)',
+            onPressed: () => openHelp(context),
+            icon: const Icon(Icons.help_outline),
           ),
           IconButton(
             tooltip: 'Settings (Ctrl+,)',

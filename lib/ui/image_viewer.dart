@@ -11,6 +11,7 @@ import '../state/providers.dart';
 import 'format.dart';
 import 'reveal.dart';
 import 'widgets/pixel_image.dart';
+import 'shortcuts.dart';
 
 /// Opens [images] (paths relative to [packPath]) in the [ImageViewer] at
 /// [index], over a dark backdrop.
@@ -137,11 +138,11 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is KeyUpEvent) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+    if (AppKeys.viewerPrevious.accepts(event)) {
       _go(-1);
       return KeyEventResult.handled;
     }
-    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+    if (AppKeys.viewerNext.accepts(event)) {
       _go(1);
       return KeyEventResult.handled;
     }

@@ -28,6 +28,7 @@ import 'animation_grid.dart';
 import 'folder_groups.dart';
 import 'image_viewer.dart';
 import 'reveal.dart';
+import 'shortcuts.dart';
 import 'tabs.dart';
 import 'text_preview_dialog.dart';
 import 'track_player.dart';
@@ -83,10 +84,7 @@ class PackDetailScreen extends ConsumerWidget {
       // H pins or unpins the header, unless a text field has the key. The
       // body holds the focus (see _BodyState._keys); keys bubble up here.
       onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent ||
-            event.logicalKey != LogicalKeyboardKey.keyH ||
-            HardwareKeyboard.instance.isControlPressed ||
-            HardwareKeyboard.instance.isAltPressed ||
+        if (!AppKeys.pinHeader.pressed(event) ||
             FocusManager.instance.primaryFocus?.context?.widget
                 is EditableText) {
           return KeyEventResult.ignored;
@@ -241,8 +239,7 @@ class _BodyState extends State<_Body> {
   /// is already empty.
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.keyF &&
-        HardwareKeyboard.instance.isControlPressed) {
+    if (AppKeys.fileSearch.accepts(event)) {
       _searchFocus.requestFocus();
       _searchText.selection = TextSelection(
         baseOffset: 0,
@@ -250,8 +247,7 @@ class _BodyState extends State<_Body> {
       );
       return KeyEventResult.handled;
     }
-    if (event.logicalKey == LogicalKeyboardKey.escape &&
-        _searchFocus.hasFocus) {
+    if (AppKeys.clearFileSearch.accepts(event) && _searchFocus.hasFocus) {
       if (_searchText.text.isEmpty) {
         _keys.requestFocus();
       } else {
@@ -2220,11 +2216,11 @@ class _FramesField extends StatelessWidget {
           skipTraversal: true,
           onKeyEvent: (node, event) {
             if (event is KeyUpEvent) return KeyEventResult.ignored;
-            if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            if (AppKeys.framesUp.accepts(event)) {
               onStep(1);
               return KeyEventResult.handled;
             }
-            if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            if (AppKeys.framesDown.accepts(event)) {
               onStep(-1);
               return KeyEventResult.handled;
             }
@@ -2383,8 +2379,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   /// Space plays / stops the selected row; ←/→ seek 5 s while playing.
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is KeyUpEvent) return KeyEventResult.ignored;
-    final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.space && event is KeyDownEvent) {
+    if (AppKeys.playStop.pressed(event)) {
       final rel = _selected ?? _playing;
       if (rel == null) return KeyEventResult.ignored;
       _toggle(rel);
@@ -2392,11 +2387,11 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     }
     if (_playing == null) return KeyEventResult.ignored;
     const step = Duration(seconds: 5);
-    if (key == LogicalKeyboardKey.arrowRight) {
+    if (AppKeys.seekForward.accepts(event)) {
       _seek(_position + step);
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.arrowLeft) {
+    if (AppKeys.seekBack.accepts(event)) {
       _seek(_position - step);
       return KeyEventResult.handled;
     }

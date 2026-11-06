@@ -5,17 +5,10 @@ import '../state/itch.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
 import 'itch_screen.dart';
+import 'help_screen.dart';
+import 'shortcuts.dart';
 
 /// Keyboard shortcuts, listed on the settings screen.
-const shortcutHelp = [
-  ('/  or  Ctrl+F', 'Search the library'),
-  ('Esc', 'Leave search, close a page'),
-  ('Ctrl+I', 'Import folder'),
-  ('Ctrl+O', 'Import archive'),
-  ('F5  or  Ctrl+R', 'Rescan the library'),
-  ('Ctrl+,', 'Settings'),
-];
-
 class SettingsScreen extends ConsumerWidget {
   /// Its route's name, so Ctrl+, doesn't open it twice.
   static const routeName = 'settings';
@@ -157,21 +150,32 @@ class SettingsScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              section('Help'),
+              ListTile(
+                leading: const Icon(Icons.help_outline),
+                title: const Text('How Asset Explorer works'),
+                subtitle: const Text(
+                  'Library layout, import, animations, search, previews, '
+                  'every shortcut (F1)',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openHelp(context),
+              ),
               section('Keyboard shortcuts'),
-              for (final (keys, action) in shortcutHelp)
+              for (final k in shortcutSections.first.$2)
                 ListTile(
                   dense: true,
                   leading: SizedBox(
-                    width: 140,
+                    width: 180,
                     child: Text(
-                      keys,
+                      k.keys,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontFamily: 'monospace',
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                  title: Text(action),
+                  title: Text(k.label),
                 ),
               const SizedBox(height: 24),
             ],

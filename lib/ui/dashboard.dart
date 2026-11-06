@@ -7,6 +7,7 @@ import '../state/providers.dart';
 import '../state/settings.dart';
 import '../core/library_index.dart' show LibraryIndex;
 import 'file_results.dart';
+import 'shortcuts.dart';
 import 'tabs.dart';
 import 'pack_detail_screen.dart';
 import 'widgets/filter_bar.dart';
@@ -64,15 +65,14 @@ class _DashboardState extends ConsumerState<Dashboard> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final typing =
         FocusManager.instance.primaryFocus?.context?.widget is EditableText;
-    final ctrlF =
-        event.logicalKey == LogicalKeyboardKey.keyF &&
-        HardwareKeyboard.instance.isControlPressed;
-    if (ctrlF || (event.logicalKey == LogicalKeyboardKey.slash && !typing)) {
+    final ctrlF = AppKeys.dashboardSearch.activators
+        .whereType<SingleActivator>()
+        .any((a) => a.accepts(event, HardwareKeyboard.instance));
+    if (ctrlF || (AppKeys.dashboardSearch.pressed(event) && !typing)) {
       _searchFocus.requestFocus();
       return KeyEventResult.handled;
     }
-    if (event.logicalKey == LogicalKeyboardKey.escape &&
-        _searchFocus.hasFocus) {
+    if (AppKeys.leaveSearch.pressed(event) && _searchFocus.hasFocus) {
       _gridFocus.requestFocus();
       return KeyEventResult.handled;
     }

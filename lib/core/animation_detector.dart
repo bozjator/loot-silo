@@ -363,6 +363,17 @@ const _animVocabulary = {
   'fireball',
 };
 
+/// The words that let numbered files form a sequence (also with a plural
+/// `s`), sorted; the Help page lists them.
+List<String> get animationWords => _animVocabulary.toList()..sort();
+
+/// Words that keep an image from being taken as a sheet, unless its name
+/// also has a sheet word; sorted, for the Help page.
+List<String> get notAnimationWords => _notAnimWords.toList()..sort();
+
+/// Words that mark a file as a sheet; sorted, for the Help page.
+List<String> get sheetWords => _sheetWords.toList()..sort();
+
 bool _isAnimWord(String w) =>
     _animVocabulary.contains(w) ||
     (w.endsWith('s') && _animVocabulary.contains(w.substring(0, w.length - 1)));

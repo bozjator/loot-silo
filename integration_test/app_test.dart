@@ -12,6 +12,7 @@ import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
 import 'package:assets_explorer/ui/dashboard.dart';
+import 'package:assets_explorer/ui/help_screen.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:assets_explorer/ui/pack_detail_screen.dart';
 import 'package:assets_explorer/ui/track_player.dart';
@@ -1810,6 +1811,44 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump(const Duration(seconds: 1));
     await settleImages(tester);
     await captureScreenshot(tester, 'm31_volcano_tab', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m32: help page (real library, read-only)', (tester) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await pumpUntil(tester, find.byType(HelpScreen));
+    await tester.pump(const Duration(seconds: 1));
+    await captureScreenshot(tester, 'm32_help_top', settle: false);
+    // The page's list (its paragraphs have scrollables of their own).
+    final list = find
+        .descendant(
+          of: find.byType(HelpScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    final animations = find.text('Animations');
+    await tester.scrollUntilVisible(animations, 300, scrollable: list);
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm32_help_animations', settle: false);
+    final keys = find.text('Keyboard & mouse');
+    await tester.scrollUntilVisible(keys, 300, scrollable: list);
+    await tester.drag(list, const Offset(0, -200));
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm32_help_keys', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    for (
+      var i = 0;
+      i < 30 && find.byType(HelpScreen).evaluate().isNotEmpty;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.byType(HelpScreen), findsNothing);
     expect(Directory(real).statSync().modified, before);
   });
 

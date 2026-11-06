@@ -17,6 +17,7 @@ import 'reveal.dart';
 import 'widgets/animated_sprite.dart';
 import 'widgets/pixel_image.dart';
 import 'widgets/thumb_size.dart';
+import 'shortcuts.dart';
 
 /// Animations as a grid of small cards that play all at once or only while
 /// hovered ([AnimateMode]). Clicking a card focuses it: it plays, the others
@@ -80,15 +81,14 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
       _collapsed,
     );
     final at = order.indexOf(focused);
-    switch (event.logicalKey) {
-      case LogicalKeyboardKey.escape:
-        _focus(null);
-      case LogicalKeyboardKey.arrowLeft when at >= 0:
-        _focus(order[math.max(0, at - 1)]);
-      case LogicalKeyboardKey.arrowRight when at >= 0:
-        _focus(order[math.min(order.length - 1, at + 1)]);
-      default:
-        return KeyEventResult.ignored;
+    if (AppKeys.leaveFocus.accepts(event)) {
+      _focus(null);
+    } else if (AppKeys.focusPrevious.accepts(event) && at >= 0) {
+      _focus(order[math.max(0, at - 1)]);
+    } else if (AppKeys.focusNext.accepts(event) && at >= 0) {
+      _focus(order[math.min(order.length - 1, at + 1)]);
+    } else {
+      return KeyEventResult.ignored;
     }
     return KeyEventResult.handled;
   }

@@ -8,6 +8,7 @@ import 'package:assets_explorer/state/dashboard.dart';
 import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
+import 'package:assets_explorer/ui/help_screen.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:assets_explorer/ui/pack_detail_screen.dart';
 import 'package:assets_explorer/ui/settings_screen.dart';
@@ -1703,6 +1704,63 @@ void main() {
         ..closeCurrent();
       expect(c.read(tabsProvider).tabs, hasLength(1));
     });
+  });
+
+  testWidgets('Help opens from the app bar, F1 and Settings (M32)', (
+    tester,
+  ) async {
+    await openKnight(tester, open: false);
+    Future<void> settle() async {
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    await tester.tap(find.byTooltip('How Asset Explorer works (F1)'));
+    await settle();
+    expect(find.byType(HelpScreen), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle();
+    expect(find.byType(HelpScreen), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settle();
+    expect(find.byType(HelpScreen), findsOneWidget);
+    // Clicking or dragging over its text (selectable) keeps Esc working.
+    await tester.drag(find.byType(SelectableText).first, const Offset(0, -200));
+    await tester.tap(find.byType(SelectableText).at(2));
+    await settle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle();
+    expect(find.byType(HelpScreen), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settle();
+    // F1 again doesn't stack a second page.
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settle();
+    expect(find.byType(HelpScreen), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle();
+
+    // F1 from a pack page too.
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.byType(TabBar));
+    await settle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settle();
+    expect(find.byType(HelpScreen), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle();
+
+    await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
+    await settle();
+    final entry = find.text('How Asset Explorer works');
+    await tester.scrollUntilVisible(entry, 200);
+    await tester.tap(entry);
+    await settle();
+    expect(find.byType(HelpScreen), findsOneWidget);
   });
 
   group('Header preview (M29)', () {
