@@ -208,6 +208,30 @@ void main() {
     });
   });
 
+  testWidgets('debounce waits 200 ms after the last key press', (tester) async {
+    expect(DashboardQueryNotifier.searchDebounce.inMilliseconds, 200);
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final texts = <String>[];
+    c.listen(
+      dashboardQueryProvider.select((q) => q.text),
+      (_, t) => texts.add(t),
+    );
+    final n = c.read(dashboardQueryProvider.notifier);
+    // Keys 190 ms apart: each one restarts the wait, so nothing runs
+    // although 950 ms pass in all.
+    for (final t in ['b', 'ba', 'bar', 'barr', 'barre']) {
+      n.setText(t);
+      await tester.pump(const Duration(milliseconds: 190));
+    }
+    expect(texts, isEmpty);
+    // 199 ms after the last key: still waiting; at 200 ms it runs once.
+    await tester.pump(const Duration(milliseconds: 9));
+    expect(texts, isEmpty);
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(texts, ['barre']);
+  });
+
   testWidgets('search text is debounced; clearing applies at once', (
     tester,
   ) async {

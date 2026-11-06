@@ -83,8 +83,9 @@ final dashboardQueryProvider =
     );
 
 class DashboardQueryNotifier extends Notifier<DashboardQuery> {
-  /// How long typing must pause before the search runs.
-  static const searchDebounce = Duration(milliseconds: 150);
+  /// How long typing must pause before the search runs; every key press
+  /// starts the wait again.
+  static const searchDebounce = Duration(milliseconds: 200);
 
   Timer? _debounce;
 
