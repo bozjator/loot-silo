@@ -172,4 +172,103 @@ void main() {
       );
     },
   );
+
+  test(
+    'M43: ship sheets, false strips, known good strips (read-only)',
+    skip: Directory(managed).existsSync() ? false : 'no $managed',
+    () {
+      final packs = scanLibrary(managed).packs;
+      PackContents contentsOf(String id) {
+        final pack = packs.firstWhere((p) => p.id == id);
+        return loadPackContents(pack.path, [
+          for (final f in pack.files) (f, 0),
+        ]);
+      }
+
+      final sea = contentsOf(
+        'RafaelMatos/ERW - Sea Adventures (GL 2.0 expansion) V1.5',
+      );
+      final anims = {for (final a in sea.detected) a.path: a};
+      const ship = 'props/animated/ship/ship-animations';
+      (int, int, int, int, int) grid(String rel) {
+        final a = anims[rel]!;
+        return (a.frameW, a.frameH, a.cols, a.rows, a.frameCount);
+      }
+
+      for (final dir in [' - down', ' - up', '-sideways']) {
+        expect(grid('$ship$dir-idle-baked.png'), (608, 640, 15, 1, 15));
+        expect(grid('$ship$dir-idle-baked-packed.png'), (608, 640, 4, 4, 15));
+        expect(grid('$ship$dir-sailing-baked.png'), (608, 640, 17, 1, 17));
+        expect(grid('$ship$dir-sailing-baked-packed.png'), (
+          608,
+          640,
+          5,
+          4,
+          17,
+        ));
+      }
+      // The windFX files take the grid of the baked ones next to them.
+      for (final f in [
+        '$ship - down-sailing-windFX.png',
+        '$ship - up-sailing-windFX.png',
+        '$ship-sideways-sailing-windFX-baked.png',
+      ]) {
+        expect(grid(f), (608, 640, 17, 1, 17), reason: f);
+      }
+      for (final f in [
+        '$ship - down-sailing-windFX-packed.png',
+        '$ship - up-sailing-windFX-packed.png',
+        '$ship-sideways-sailing-windFX-baked-packed.png',
+      ]) {
+        expect(grid(f), (608, 640, 5, 4, 17), reason: f);
+      }
+
+      // One wide prop, not a strip.
+      expect(
+        anims,
+        isNot(contains('props/atlas-props-sprites/lighthouse cabin-grass.png')),
+      );
+      expect(
+        sea.images,
+        contains('props/atlas-props-sprites/lighthouse cabin-grass.png'),
+      );
+      final interiors = contentsOf(
+        'RafaelMatos/Epic RPG World - Village(interiors) V1.3',
+      );
+      const bags = 'assets/furniture_and_props_sprites/supply_bags_1.png';
+      expect(interiors.detected.map((a) => a.path), isNot(contains(bags)));
+      expect(interiors.images, contains(bags));
+
+      // Known good strips stay animations.
+      for (var i = 1; i <= 4; i++) {
+        expect(grid('props/animated/gems-$i.png'), (32, 32, 8, 1, 8));
+      }
+      expect(grid('props/animated/banner-only.png'), (96, 128, 12, 1, 12));
+      expect(grid('props/islands-update/deck-storage-door-1-opening.png'), (
+        96,
+        96,
+        11,
+        1,
+        11,
+      ));
+      final banner = {
+        for (final a in contentsOf('Pixel Banner/Pixel-Banner').detected)
+          a.path: a,
+      };
+      expect(banner['WarriorBandit/Block/Block.png']!.cols, 4);
+      expect(banner['ArcherSkeleton/Attack2/Attack2.png']!.cols, 11);
+      final village = {
+        for (final a in contentsOf(
+          'RafaelMatos/Epic RPG World - The Village V2.2',
+        ).detected)
+          a.path: a,
+      };
+      expect(
+        village['NPCs/fisherman/beard/fisherman-beard-fishing-waiting.png']!
+            .cols,
+        10,
+      );
+      expect(village['tilesets and props/Water-fountain.png']!.cols, 4);
+    },
+  );
 }

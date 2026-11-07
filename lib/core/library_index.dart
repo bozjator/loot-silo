@@ -117,7 +117,7 @@ class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("

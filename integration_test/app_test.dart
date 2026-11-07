@@ -1089,11 +1089,13 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.text('By folder'));
     await tester.pump(const Duration(milliseconds: 300));
-    // One section per character, not one per action sub-folder.
-    expect(find.text('ArcherSkeleton'), findsOneWidget);
-    expect(find.textContaining('ArcherSkeleton /'), findsNothing);
     await settleImages(tester);
     await captureScreenshot(tester, 'm16_images_by_folder', settle: false);
+    // Since M43 the All-Spritesheet files are animations; the 15 images
+    // left (arrows, projectiles) average two or more per sub-folder, so the
+    // sections are the sub-folders, not the characters.
+    expect(find.text('ArcherSkeleton / Arrow'), findsOneWidget);
+    expect(find.text('ArcherSkeleton'), findsNothing);
 
     // Unpinned: the grid gets the height the header had.
     final gridTop = tester.getTopLeft(find.byType(CustomScrollView)).dy;
@@ -2602,6 +2604,48 @@ A **16×16** knight with *walk* and *idle* animations.
     await settleImages(tester);
     await tester.pump(const Duration(milliseconds: 300));
     await captureScreenshot(tester, 'm34_sea_gems', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m43: ship sheets in the Animations tab (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    const title = 'ERW - Sea Adventures (GL 2.0 expansion) V1.5';
+    if (!Directory(p.join(real, 'RafaelMatos', title)).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'Sea Adventures');
+    final tile = find.descendant(
+      of: find.byType(PackTile),
+      matching: find.text(title),
+    );
+    await pumpUntil(tester, tile);
+    await tester.tap(tile.first);
+    await pumpUntil(tester, find.textContaining('Animations ('), seconds: 60);
+    await tester.tap(find.textContaining('Animations ('));
+    await tester.pump(const Duration(seconds: 1));
+    final field = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    await tester.enterText(field, 'ship-animations');
+    await pumpUntil(tester, find.text('Matching “ship-animations”'));
+    await tester.pump(const Duration(milliseconds: 500));
+    // Idle: 15 frames of 608×640 (strips and 4×4 grids of 15 used cells);
+    // sailing: 17 (strips and 5×4 grids), windFX ones included.
+    expect(find.text('608×640 · 15 frames · 10 fps'), findsWidgets);
+    expect(find.text('608×640 · 17 frames · 10 fps'), findsWidgets);
+    await tester.tap(find.text('By folder'));
+    await tester.pump(const Duration(seconds: 1));
+    // Fold the mockup GIF's section so the ship folder is in view.
+    await tester.tap(find.text('Mockups'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Props / Animated / Ship'), findsOneWidget);
+    await settleImages(tester);
+    await tester.pump(const Duration(seconds: 1));
+    await captureScreenshot(tester, 'm43_ship_folder', settle: false);
     expect(Directory(real).statSync().modified, before);
   });
 

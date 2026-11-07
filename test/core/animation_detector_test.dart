@@ -260,7 +260,9 @@ void main() {
       };
       expect(anims['props/animated/banner-only.png']!.frameW, 96);
       expect(anims['props/animated/banner-solid.png']!.frameW, 128);
-      expect(anims['props/banner-plain.png']!.frameW, 128);
+      // No animation word: the 128 px cuts run through its frames, so it
+      // is one picture (M43).
+      expect(anims['props/banner-plain.png'], isNull);
       final unchecked = detectAnimations(tmp.path, [
         'props/animated/banner-only.png',
       ]).single;
@@ -658,5 +660,229 @@ void main() {
     expect(applyOverride(a, {'zoom': 2}).zoom, 2);
     expect(applyOverride(a, {'zoom': 0}).zoom, isNull);
     expect(applyOverride(a, {'zoom': 99}).zoom, isNull);
+  });
+
+  group('M43: non-square frames, same-folder grids, false strips', () {
+    Map<String, SpriteAnim> detect(List<String> files, {int scans = 16}) => {
+      for (final a in detectAnimations(tmp.path, files, maxWordScans: scans))
+        a.path: a,
+    };
+
+    /// A [cols]×[rows] grid of [fw]×[fh] frames, each a blob with a 3 px
+    /// transparent border; the first [used] cells only.
+    List<(int, int, int, int)> cells(
+      int fw,
+      int fh,
+      int cols,
+      int rows, {
+      int? used,
+    }) => [
+      for (var i = 0; i < (used ?? cols * rows); i++)
+        ((i % cols) * fw + 3, (i ~/ cols) * fh + 3, fw - 6, fh - 6),
+    ];
+
+    test('a strip of 5 non-square frames (30×40) with gaps', () {
+      png('fx/slash.png', 150, 40, blobs: cells(30, 40, 5, 1));
+      final a = detect(['fx/slash.png'])['fx/slash.png']!;
+      expect((a.frameW, a.frameH, a.cols, a.rows), (30, 40, 5, 1));
+      expect(a.frameCount, 5);
+    });
+
+    test('a grid with an empty last cell: the frame total is the used '
+        'cells', () {
+      png('fx/boom-anim.png', 150, 120, blobs: cells(50, 60, 3, 2, used: 5));
+      final a = detect(['fx/boom-anim.png'])['fx/boom-anim.png']!;
+      expect((a.frameW, a.frameH, a.cols, a.rows), (50, 60, 3, 2));
+      expect(a.frameTotal, 5);
+      expect(a.frameCount, 5);
+      // An empty cell before a used one keeps the whole grid.
+      png(
+        'fx/hole-anim.png',
+        150,
+        120,
+        blobs: [
+          for (final (i, b) in cells(50, 60, 3, 2).indexed)
+            if (i != 2) b,
+        ],
+      );
+      expect(
+        detect(['fx/hole-anim.png'])['fx/hole-anim.png']!.frameTotal,
+        null,
+      );
+    });
+
+    test('a gap inside each frame (sails) does not split its row', () {
+      // 4 × 2 cells of 40×50, each two parts with a transparent row between.
+      png(
+        'ship/sails-anim.png',
+        160,
+        100,
+        blobs: [
+          for (var r = 0; r < 2; r++)
+            for (var c = 0; c < 4; c++) ...[
+              (c * 40 + 5, r * 50 + 5, 30, 16),
+              (c * 40 + 5, r * 50 + 24, 30, 22),
+            ],
+        ],
+      );
+      final a = detect(['ship/sails-anim.png'])['ship/sails-anim.png']!;
+      expect((a.frameW, a.frameH, a.cols, a.rows), (40, 50, 4, 2));
+    });
+
+    test('big strips are checked: 9120×640 → 15 frames of 608×640', () {
+      png(
+        'ship/ship-animations-idle.png',
+        9120,
+        640,
+        blobs: [for (var i = 0; i < 15; i++) (i * 608 + 202, 111, 197, 490)],
+      );
+      final a = detect([
+        'ship/ship-animations-idle.png',
+      ])['ship/ship-animations-idle.png']!;
+      expect((a.frameW, a.frameH, a.cols, a.rows), (608, 640, 15, 1));
+      // Over the pixel budget: not decoded.
+      expect(
+        detectAnimations(
+          tmp.path,
+          ['ship/ship-animations-idle.png'],
+          maxWordScans: 16,
+          maxWordPixels: 1000000,
+        ),
+        isEmpty,
+      );
+      expect(wordScanSize(16384, 1024), isTrue);
+      expect(wordScanSize(16385, 640), isFalse);
+      expect(wordScanSize(4096, 4096), isTrue);
+      expect(wordScanSize(4097, 2048), isFalse);
+    });
+
+    test('a same-size file without gaps borrows its sibling\'s grid', () {
+      png('ship/sail-anim.png', 150, 40, blobs: cells(30, 40, 5, 1));
+      png('ship/sail-anim-fx.png', 150, 40); // particles: no clean gap
+      png('ship/sail-anim-wide.png', 170, 40); // other size
+      png('other/sail-anim-fx.png', 150, 40); // other folder
+      final anims = detect([
+        'ship/sail-anim.png',
+        'ship/sail-anim-fx.png',
+        'ship/sail-anim-wide.png',
+        'other/sail-anim-fx.png',
+      ]);
+      final fx = anims['ship/sail-anim-fx.png']!;
+      expect((fx.frameW, fx.frameH, fx.cols, fx.rows), (30, 40, 5, 1));
+      expect(anims.containsKey('ship/sail-anim-wide.png'), isFalse);
+      expect(anims.containsKey('other/sail-anim-fx.png'), isFalse);
+    });
+
+    test('borrowGrid: only less sure grids, only from surer ones', () {
+      const sizes = {'a/x.png': (100, 50), 'a/y.png': (100, 50)};
+      const x = SpriteAnim(
+        path: 'a/x.png',
+        kind: AnimKind.sheet,
+        frameW: 25,
+        frameH: 50,
+        cols: 4,
+      );
+      const y = SpriteAnim(
+        path: 'a/y.png',
+        kind: AnimKind.sheet,
+        frameW: 50,
+        frameH: 50,
+        cols: 2,
+      );
+      // y was cut from uneven gaps (0), x is sure (3): y takes x's grid.
+      final b = borrowGrid({'a/x.png': 3, 'a/y.png': 0}, [x, y], sizes);
+      expect(b.single.path, 'a/y.png');
+      expect(b.single.frameW, 25);
+      // Two sure grids keep their own.
+      expect(borrowGrid({'a/x.png': 3, 'a/y.png': 2}, [x, y], sizes), isEmpty);
+    });
+
+    test('a 96×32 continuous prop stays an image', () {
+      png('props/bags.png', 96, 32, blobs: [(5, 1, 85, 29)]);
+      expect(detect(['props/bags.png']), isEmpty);
+      // Without the budget the square guess stands.
+      expect(detectAnimations(tmp.path, ['props/bags.png']), hasLength(1));
+    });
+
+    test('a 96×32 strip of 3 separate frames is still a strip', () {
+      png('props/coin.png', 96, 32, blobs: cells(32, 32, 3, 1));
+      final a = detect(['props/coin.png'])['props/coin.png']!;
+      expect((a.frameW, a.cols), (32, 3));
+      // Full frames (water tiles) cross every cut but look alike.
+      png('props/water.png', 96, 32);
+      expect(detect(['props/water.png']), contains('props/water.png'));
+    });
+
+    test('picturesAcrossCuts', () {
+      Uint8List alpha(int w, int h, List<(int, int, int, int)> rects) {
+        final a = Uint8List(w * h);
+        for (final (x0, y0, rw, rh) in rects) {
+          for (var y = y0; y < y0 + rh; y++) {
+            for (var x = x0; x < x0 + rw; x++) {
+              a[y * w + x] = 255;
+            }
+          }
+        }
+        return a;
+      }
+
+      // One wide prop over 6 cuts of 32.
+      expect(
+        picturesAcrossCuts(alpha(192, 32, [(15, 0, 162, 27)]), 192, 32, 32),
+        isTrue,
+      );
+      // Touching only one cut of five: not most of them.
+      expect(
+        picturesAcrossCuts(
+          alpha(192, 32, [
+            for (var i = 0; i < 6; i++) (i * 32 + 4, 4, 24, 24),
+            (60, 10, 8, 8),
+          ]),
+          192,
+          32,
+          32,
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+      'two cells: never in a numbered series, otherwise clean gaps only',
+      () {
+        for (var i = 1; i <= 3; i++) {
+          png('boat/boat-anim-$i.png', 60, 40, blobs: cells(30, 40, 2, 1));
+        }
+        png('raft/raft-anim.png', 60, 40, blobs: cells(30, 40, 2, 1));
+        final anims = detect([
+          for (var i = 1; i <= 3; i++) 'boat/boat-anim-$i.png',
+          'raft/raft-anim.png',
+        ]);
+        expect(anims.keys, ['raft/raft-anim.png']);
+        expect(anims['raft/raft-anim.png']!.cols, 2);
+        expect(
+          numberedFrames({
+            'a/b-1.png': (4, 4),
+            'a/b-2.png': (4, 4),
+            'a/b-3.png': (4, 4),
+            'a/c-1.png': (4, 4),
+            'a/b-4.png': (8, 8),
+          }),
+          {'a/b-1.png', 'a/b-2.png', 'a/b-3.png'},
+        );
+      },
+    );
+
+    test('a file named as one frame is not cut', () {
+      png('ship/parts/sail-frame12.png', 150, 40, blobs: cells(30, 40, 5, 1));
+      expect(detect(['ship/parts/sail-frame12.png']), isEmpty);
+    });
+
+    test('a small size hint that is no frame size counts cells', () {
+      png('fx/wind spritesheet3x2.png', 300, 80);
+      final a = detectSheet('fx/wind spritesheet3x2.png', 300, 80)!;
+      expect((a.frameW, a.frameH, a.cols, a.rows), (100, 40, 3, 2));
+      // A real frame size still wins.
+      expect(detectSheet('fx/wind(16x16).png', 64, 32)!.frameW, 16);
+    });
   });
 }

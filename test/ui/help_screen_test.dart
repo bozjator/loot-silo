@@ -108,6 +108,20 @@ void main() {
     expect(text, contains('Ctrl / Shift-click images'));
   });
 
+  testWidgets('M43: frame sizes from gaps, borrowed sizes, false strips', (
+    tester,
+  ) async {
+    await pumpHelp(tester);
+    final text = pageText(tester);
+    expect(text, contains("Frames don't have to be square"));
+    expect(text, contains('the transparent gaps between frames decide'));
+    expect(text, contains('borrows the frame size'));
+    expect(text, contains('exactly the same size in its folder'));
+    expect(text, contains('only if its frames look apart'));
+    expect(text, contains('stays one image'));
+    expect(text, isNot(contains('checked for strips whose')));
+  });
+
   test('keys are described as printed on the keyboard', () {
     expect(AppKeys.dashboardSearch.keys, '/  or  Ctrl+F');
     expect(AppKeys.rescan.keys, 'F5  or  Ctrl+R');

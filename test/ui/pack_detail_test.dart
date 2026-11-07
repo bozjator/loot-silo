@@ -1732,8 +1732,13 @@ void main() {
         files: const ['props/portrait.png'],
         images: {
           'props/animated/banner-only.png': banner(),
-          // No animation word: only the square guess (9 × 128).
-          'props/banner-plain.png': banner(),
+          // No animation word: only the square guess (9 × 128). Opaque
+          // like water tiles, so its frames look alike and it stays a
+          // strip (M43: a banner drawn across the cuts is one picture).
+          'props/banner-plain.png': img.fill(
+            img.Image(width: 1152, height: 128, numChannels: 4),
+            color: img.ColorRgba8(40, 120, 220, 255),
+          ),
         },
       );
       tester.takeException();

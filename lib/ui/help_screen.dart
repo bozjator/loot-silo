@@ -91,12 +91,26 @@ class HelpScreen extends StatelessWidget {
                 ),
                 const _Bullets([
                   'Sheets: one image cut into frames, from a size hint in the '
-                      'name like (32x32), a frame count like _8f or 8frames, '
-                      'or a horizontal strip. A strip is cut into square '
-                      'frames, unless transparent gaps between its frames '
-                      'show another frame width (checked for strips whose '
-                      'name or folder has an animation word, below). In '
+                      'name like (32x32) (or 7x7 for 7 × 7 frames), a frame '
+                      'count like _8f or 8frames, or a horizontal strip. A '
+                      'strip is cut into square frames, unless transparent '
+                      'gaps between its frames show another frame width. In '
                       'effect packs, transparent gaps also find grids.',
+                  'Frames don\'t have to be square: for a file whose name or '
+                      'folder has an animation word (below), the transparent '
+                      'gaps between frames decide the frame width and height, '
+                      'even on big strips and grids (a ship of 608×640 '
+                      'frames). Empty cells at the end of a grid don\'t count '
+                      'as frames. A file named as one frame (sail-frame12.png) '
+                      'is not cut.',
+                  'A file with an animation word that nothing detects (its '
+                      'gaps are hidden by particles) borrows the frame size '
+                      'of an animation of exactly the same size in its '
+                      'folder.',
+                  'A wide image without a sheet or animation word is a strip '
+                      'only if its frames look apart: a picture that runs '
+                      'across the square frame cuts (a bench, a row of bags) '
+                      'stays one image.',
                   'GIF and animated WebP files.',
                 ]),
                 const _P(

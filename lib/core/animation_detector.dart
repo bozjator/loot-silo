@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
@@ -287,7 +288,8 @@ const maxSheetFrames = 64;
 
 /// Decides whether one image of [w]×[h] at [rel] is a sprite sheet.
 ///
-/// In order: a size hint like `(96x96)` that divides the image; a frame
+/// In order: a size hint like `(96x96)` that divides the image (a small
+/// one like `7x7` that doesn't may count columns × rows); a frame
 /// count hint like `_8f`; a horizontal strip of square frames (width a
 /// multiple of height, 3–64 frames, or 2+ with a "sheet" word). Tilesets,
 /// backgrounds, UI and previews are excluded unless the name says "sheet".
@@ -329,6 +331,13 @@ bool _notAnimation(String rel) {
   if (hint != null) {
     final g = grid(hint.$1, hint.$2);
     if (g != null) return (anim: g, squareGuess: false);
+    // A small hint that isn't a frame size may count cells instead:
+    // `spritesheet7x7.png` is 7 × 7 frames.
+    final (c, r) = hint;
+    if (c <= 16 && r <= 16 && w % c == 0 && h % r == 0) {
+      final cells = grid(w ~/ c, h ~/ r);
+      if (cells != null) return (anim: cells, squareGuess: false);
+    }
   }
   final framesHint = _framesHint.firstMatch(p.basenameWithoutExtension(rel));
   if (framesHint != null) {
@@ -371,6 +380,10 @@ List<String> get notAnimationWords => _notAnimWords.toList()..sort();
 /// Words that mark a file as a sheet; sorted, for the Help page.
 List<String> get sheetWords => _sheetWords.toList()..sort();
 
+bool _isSheetWord(String w) =>
+    _sheetWords.contains(w) ||
+    (w.endsWith('s') && _sheetWords.contains(w.substring(0, w.length - 1)));
+
 bool _isAnimWord(String w) =>
     _animVocabulary.contains(w) ||
     (w.endsWith('s') && _animVocabulary.contains(w.substring(0, w.length - 1)));
@@ -382,9 +395,16 @@ bool hasAnimationWord(String rel) => pathWords(rel).any(_isAnimWord);
 /// All animations in a pack, one per file. Reads image headers, plus up to
 /// [maxPixelScans] full decodes for the transparency-gap heuristic on any
 /// undetected image, and up to [maxWordScans] decodes for files with an
-/// animation word ([hasAnimationWord]): a square-frame strip guess is
-/// re-cut by its column gaps ([stripFromColumnGaps]), an undetected image
-/// is checked for a grid of gaps ([detectSheetByPixels]). [atlases]
+/// animation word ([hasAnimationWord]), [maxWordPixels] pixels in all: a
+/// square-frame strip guess is re-cut by its column gaps
+/// ([stripFromColumnGaps]), an undetected image is checked for a grid of
+/// gaps ([detectSheetByGaps]; strips up to [maxWordStripWidth] ×
+/// [maxWordStripHeight], grids up to [maxWordGridSide] a side). An
+/// undetected file with an animation word then takes the grid of a
+/// detected sheet of exactly its size in its folder ([borrowGrid]). A
+/// square-frame guess with no sheet or animation word in its path is
+/// checked too, up to [maxWordScans] times: when the picture runs across
+/// the frame cuts it's one image ([runsAcrossCuts]). [atlases]
 /// ([atlasImages]) skip those checks. Run it in an isolate for big packs.
 /// Per-file [overrides] (the sidecar's `animations{}`) set frame size and
 /// fps. Files marked `manual` there ([manualAnimations]), or listed in
@@ -398,6 +418,7 @@ List<SpriteAnim> detectAnimations(
   int maxHeaders = 4000,
   int maxPixelScans = 0,
   int maxWordScans = 0,
+  int maxWordPixels = detailWordPixels,
   Set<String> atlases = const {},
 }) {
   final made = {...manual, ...manualAnimations(overrides)};
@@ -425,39 +446,85 @@ List<SpriteAnim> detectAnimations(
   }
   var pixelScans = 0;
   var wordScans = 0;
-  for (final MapEntry(key: rel, value: (w, h)) in sizes.entries) {
+  var wordPixels = 0;
+  var recuts = 0;
+  var stripChecks = 0;
+  // How sure each sheet's grid is ([borrowGrid]): a gap grid counts its
+  // evenly cut axes (0–2), anything else is sure; undetected files are -1.
+  final sureness = <String, int>{};
+  final series = numberedFrames(sizes);
+  // Names with a sheet word are checked first, then other animation
+  // words, then files that only sit in an animated folder (often hundreds
+  // of single frames), so the budget goes to the likely sheets.
+  int rank(String rel) {
+    final words = pathWords(p.basenameWithoutExtension(rel));
+    if (words.any(_isSheetWord)) return 0;
+    return words.any(_isAnimWord) ? 1 : 2;
+  }
+
+  final order = sizes.keys.toList()
+    ..sort((a, b) {
+      final c = rank(a).compareTo(rank(b));
+      return c != 0 ? c : a.compareTo(b);
+    });
+  for (final rel in order) {
+    final (w, h) = sizes[rel]!;
     final found = _detectSheet(rel, w, h);
     var s = found?.anim;
-    // Big images are rarely one animation and cost the most to decode.
-    final worded =
-        wordScans < maxWordScans &&
-        w * h <= maxWordScanPixels &&
-        !atlases.contains(rel) &&
-        hasAnimationWord(rel);
-    if (found != null && found.squareGuess && worded && w <= 4096) {
-      wordScans++;
-      s = stripFromColumnGaps(packPath, found.anim) ?? s;
+    final animWord = hasAnimationWord(rel);
+    if (found != null && found.squareGuess) {
+      if (!animWord) {
+        if (stripChecks < maxWordScans) {
+          stripChecks++;
+          if (runsAcrossCuts(packPath, found.anim)) s = null;
+        }
+      } else if (recuts < maxWordScans &&
+          w <= maxWordStripWidth &&
+          h <= maxWordStripHeight &&
+          !atlases.contains(rel)) {
+        recuts++;
+        s = stripFromColumnGaps(packPath, found.anim) ?? s;
+      }
     }
+    // Big images are rarely one animation and cost the most to decode:
+    // bounded by size, by count and by pixels per pack. A file named as one
+    // frame (`sail-frame15.png`) isn't decoded.
     final scannable = w <= 2048 && h <= 2048 && w >= 64 && h >= 64;
-    if (s == null && scannable) {
-      if (pixelScans < maxPixelScans) {
+    if (s == null && found == null) {
+      if (scannable && pixelScans < maxPixelScans) {
         pixelScans++;
         s = detectSheetByPixels(packPath, rel);
-      } else if (worded && !_notAnimation(rel)) {
+      } else if (animWord &&
+          wordScans < maxWordScans &&
+          wordScanSize(w, h) &&
+          wordPixels + w * h <= maxWordPixels &&
+          !atlases.contains(rel) &&
+          !_notAnimation(rel) &&
+          !_oneFrame.hasMatch(p.basenameWithoutExtension(rel))) {
         wordScans++;
-        // Character sheets (all moves, one per row) run past 64 cells;
-        // the same limit as a size-hinted grid.
-        s = detectSheetByPixels(
+        wordPixels += w * h;
+        final byGaps = _sheetByGaps(
           packPath,
           rel,
-          fallback: false,
-          maxFrames: maxSheetFrames * 2,
+          allowTwo: !series.contains(rel),
         );
+        s = byGaps?.anim;
+        if (byGaps != null) sureness[rel] = byGaps.evenAxes;
       }
     }
     if (s == null && made.contains(rel)) s = guessStrip(rel, w, h);
-    if (s != null) out.add(s);
+    if (s != null) {
+      out.add(s);
+      sureness[rel] ??= 3;
+    } else if (found == null && animWord && !atlases.contains(rel)) {
+      sureness[rel] = -1;
+    }
   }
+  final borrowed = borrowGrid(sureness, out, sizes);
+  final replaced = {for (final a in borrowed) a.path};
+  out
+    ..removeWhere((a) => replaced.contains(a.path))
+    ..addAll(borrowed);
   final result = [
     for (final a in out)
       if (!isNotAnimation(overrides[a.path]))
@@ -465,6 +532,84 @@ List<SpriteAnim> detectAnimations(
   ]..sort((a, b) => a.path.compareTo(b.path));
   return result;
 }
+
+/// A file name that says it is one frame: `sail-frame15`, `frame_3`.
+final _oneFrame = RegExp(r'frame[ _-]?\d+$', caseSensitive: false);
+
+/// Grids borrowed from a same-size sheet in the same folder, e.g. for a
+/// strip whose particle effects hide its frame gaps, next to the same
+/// strip without them. [sureness] (by path) says how sure each grid is:
+/// -1 for an undetected file with an animation word, 0–2 for a grid cut
+/// from gaps (its evenly cut axes), 3 for any other. A file whose grid is
+/// less than sure (under 2) takes the grid of the surest sheet in [found]
+/// of exactly its size ([sizes]) in its folder, when that one is surer.
+/// Never for paths with a not-animation word ([detectSheet]).
+List<SpriteAnim> borrowGrid(
+  Map<String, int> sureness,
+  List<SpriteAnim> found,
+  Map<String, (int, int)> sizes,
+) {
+  final best = <(String, int, int), (SpriteAnim, int)>{};
+  for (final a in [...found]..sort((a, b) => a.path.compareTo(b.path))) {
+    final size = sizes[a.path];
+    if (a.kind != AnimKind.sheet || size == null) continue;
+    final key = (p.dirname(a.path), size.$1, size.$2);
+    final sure = sureness[a.path] ?? 3;
+    if (best[key] case (_, final known) when known >= sure) continue;
+    best[key] = (a, sure);
+  }
+  return [
+    for (final MapEntry(key: rel, value: sure) in sureness.entries)
+      if (sure < 2 && !_notAnimation(rel))
+        if (sizes[rel] case (final w, final h))
+          if (best[(p.dirname(rel), w, h)] case (final a, final from)
+              when from > sure && a.path != rel)
+            SpriteAnim(
+              path: rel,
+              kind: AnimKind.sheet,
+              frameW: a.frameW,
+              frameH: a.frameH,
+              cols: a.cols,
+              rows: a.rows,
+              frameTotal: a.frameTotal,
+            ),
+  ];
+}
+
+/// Files in a numbered series: at least three of the same size in one
+/// folder named alike but for a trailing number (`boat-idle-1.png`,
+/// `boat-idle-2.png`, …). Each is likely one frame, so a gap grid of only
+/// two cells (one sprite with a gap in the middle) doesn't count for them.
+Set<String> numberedFrames(Map<String, (int, int)> sizes) {
+  final series = <(String, String, int, int), List<String>>{};
+  for (final MapEntry(key: rel, value: (w, h)) in sizes.entries) {
+    final m = _numbered.firstMatch(p.basenameWithoutExtension(rel));
+    if (m == null) continue;
+    final key = (p.dirname(rel), m[1]!.toLowerCase(), w, h);
+    (series[key] ??= []).add(rel);
+  }
+  return {
+    for (final files in series.values)
+      if (files.length >= 3) ...files,
+  };
+}
+
+final _numbered = RegExp(r'^(.*?)[ _-]?\d+$');
+
+/// Widest and tallest strip a pixel check of a file with an animation word
+/// decodes ([detectAnimations]).
+const maxWordStripWidth = 16384;
+const maxWordStripHeight = 1024;
+
+/// Longest side of any other image that check decodes.
+const maxWordGridSide = 4096;
+
+/// Whether a [w]×[h] image is within the word-based pixel check's limits.
+bool wordScanSize(int w, int h) =>
+    w >= 8 &&
+    h >= 8 &&
+    (w <= maxWordStripWidth && h <= maxWordStripHeight ||
+        w <= maxWordGridSide && h <= maxWordGridSide);
 
 /// Atlas data formats: an image with one of these next to it (same stem)
 /// is a texture atlas of unrelated sprites, not an animation.
@@ -608,6 +753,7 @@ List<String> animationCandidates(Iterable<String> files, {int limit = 400}) {
         candidates,
         overrides: overrides,
         maxWordScans: tileWordScans,
+        maxWordPixels: tileWordPixels,
         atlases: atlasImages(files),
       ).where((a) => a.kind != AnimKind.gif).toList(),
     );
@@ -731,8 +877,10 @@ List<int> _evenCellCounts(List<bool> empty) {
 /// time, for the tile animation; the detail page allows [detailWordScans].
 const tileWordScans = 8;
 
-/// Largest image (in pixels) a word-based pixel check decodes.
-const maxWordScanPixels = 1500000;
+/// Most pixels the word-based pixel checks decode per pack when its detail
+/// page loads (the ship sheets are 6–8 MP each), and at scan time.
+const detailWordPixels = 256000000;
+const tileWordPixels = 32000000;
 
 /// Most pixel checks of files with an animation word per pack when its
 /// detail page loads.
@@ -752,6 +900,16 @@ const detailWordScans = 256;
   final w = image.width;
   final h = image.height;
   final alpha = Uint8List(w * h);
+  if (image.format == img.Format.uint8 &&
+      image.numChannels == 4 &&
+      !image.hasPalette) {
+    // RGBA bytes: much faster than iterating pixels on big sheets.
+    final bytes = image.toUint8List();
+    for (var i = 0, j = 3; i < alpha.length; i++, j += 4) {
+      alpha[i] = bytes[j];
+    }
+    return (alpha, w, h);
+  }
   var i = 0;
   for (final px in image) {
     alpha[i++] = px.a.toInt();
@@ -843,6 +1001,266 @@ SpriteAnim? detectSheetByPixels(
     cols: cols,
     rows: rows,
   );
+}
+
+/// Decodes [rel] and applies [gapGrid]. Cells left empty at the end of
+/// the grid (a 4×4 sheet of 15 frames) don't count: the frame total is the
+/// used cells then.
+SpriteAnim? detectSheetByGaps(
+  String packPath,
+  String rel, {
+  int maxCells = maxSheetFrames * 4,
+  bool allowTwo = true,
+}) => _sheetByGaps(packPath, rel, maxCells: maxCells, allowTwo: allowTwo)?.anim;
+
+/// [detectSheetByGaps], also giving the grid's evenly cut axes
+/// ([gapGrid]).
+({SpriteAnim anim, int evenAxes})? _sheetByGaps(
+  String packPath,
+  String rel, {
+  int maxCells = maxSheetFrames * 4,
+  bool allowTwo = true,
+}) {
+  final decoded = _alphaOf(packPath, rel);
+  if (decoded == null) return null;
+  final (alpha, w, h) = decoded;
+  final cell = gapGrid(alpha, w, h, maxCells: maxCells, allowTwo: allowTwo);
+  if (cell == null) return null;
+  final (:fw, :fh, :evenAxes) = cell;
+  final cols = w ~/ fw;
+  final rows = h ~/ fh;
+  final used = usedCells(alpha, w, fw, fh, cols, rows);
+  return (
+    anim: SpriteAnim(
+      path: rel,
+      kind: AnimKind.sheet,
+      frameW: fw,
+      frameH: fh,
+      cols: cols,
+      rows: rows,
+      frameTotal: used >= 2 && used < cols * rows ? used : null,
+    ),
+    evenAxes: evenAxes,
+  );
+}
+
+/// Frame size from fully transparent gaps, for files with an animation
+/// word. Frames needn't be square.
+///
+/// Per axis: when the runs between transparent lines are evenly spaced
+/// and the cut lines are transparent, their count (an evenly cut axis);
+/// otherwise (a gap inside one frame, like a ship's sails, or a frame in
+/// two parts) every cell count whose cut lines are transparent and that
+/// leaves at least two cells with something in them, or one cell.
+///
+/// The column count decides first: the most columns for which the
+/// squarest row count keeps frames between 1:2 and 2:1 (128×224 flames,
+/// not 256×224 pairs of them; 160×160 frames, not 160×80 halves split at
+/// the shadow), so the row cut is checked against the column cut. When
+/// none does, the squarest of all. [evenAxes] (0–2) tells how sure the
+/// grid is ([borrowGrid]). Null when that leaves under three cells (two
+/// are too often one sprite with a gap in the middle) unless both axes are
+/// evenly cut and [allowTwo]; null over [maxCells].
+({int fw, int fh, int evenAxes})? gapGrid(
+  Uint8List alpha,
+  int w,
+  int h, {
+  int maxCells = maxSheetFrames * 4,
+  bool allowTwo = true,
+}) {
+  final colEmpty = List.generate(w, (x) {
+    for (var y = 0; y < h; y++) {
+      if (alpha[y * w + x] != 0) return false;
+    }
+    return true;
+  });
+  final rowEmpty = List.generate(h, (y) {
+    final o = y * w;
+    for (var x = 0; x < w; x++) {
+      if (alpha[o + x] != 0) return false;
+    }
+    return true;
+  });
+  final xs = _gapCounts(colEmpty)..sort((a, b) => b.compareTo(a));
+  final ys = _gapCounts(rowEmpty);
+  double skew(int nx, int ny) => math.log((w / nx) / (h / ny)).abs();
+  (int, int)? squarestRow(int nx) {
+    (int, int)? best;
+    for (final ny in ys) {
+      if (nx * ny > maxCells) continue;
+      if (best == null || skew(nx, ny) < skew(best.$1, best.$2) - 1e-9) {
+        best = (nx, ny);
+      }
+    }
+    return best;
+  }
+
+  (int, int)? best;
+  for (final nx in xs) {
+    final pick = squarestRow(nx);
+    if (pick != null && skew(pick.$1, pick.$2) <= math.ln2 + 1e-9) {
+      best = pick;
+      break;
+    }
+  }
+  if (best == null) {
+    for (final nx in xs) {
+      final pick = squarestRow(nx);
+      if (pick == null) continue;
+      if (best == null ||
+          skew(pick.$1, pick.$2) < skew(best.$1, best.$2) - 1e-9) {
+        best = pick;
+      }
+    }
+  }
+  if (best == null) return null;
+  final evenAxes =
+      (_evenPitch(colEmpty) != null ? 1 : 0) +
+      (_evenPitch(rowEmpty) != null ? 1 : 0);
+  final cells = best.$1 * best.$2;
+  if (cells < 2 || cells == 2 && !(allowTwo && evenAxes == 2)) return null;
+  return (fw: w ~/ best.$1, fh: h ~/ best.$2, evenAxes: evenAxes);
+}
+
+/// Cell counts along one axis for [gapGrid]; [empty] marks fully
+/// transparent lines.
+List<int> _gapCounts(List<bool> empty) {
+  final length = empty.length;
+  final pitch = _evenPitch(empty);
+  if (pitch != null) return [length ~/ pitch];
+  final out = [1];
+  for (var n = 2; n <= maxSheetFrames; n++) {
+    if (length % n != 0) continue;
+    final cell = length ~/ n;
+    if (cell < 4) break;
+    var ok = true;
+    for (var k = 1; k < n && ok; k++) {
+      final b = k * cell;
+      ok = empty[b - 1] || empty[b] || (b + 1 < length && empty[b + 1]);
+    }
+    if (!ok) continue;
+    var filled = 0;
+    for (var k = 0; k < n; k++) {
+      for (var i = k * cell; i < (k + 1) * cell; i++) {
+        if (!empty[i]) {
+          filled++;
+          break;
+        }
+      }
+    }
+    if (filled >= 2) out.add(n);
+  }
+  return out;
+}
+
+/// [_pitch] when every cut line between its cells is transparent too
+/// (±1 px): runs that merely start in their own cells can still cross the
+/// cuts.
+int? _evenPitch(List<bool> empty) {
+  final cell = _pitch(empty);
+  if (cell == null) return null;
+  final length = empty.length;
+  for (var b = cell; b < length; b += cell) {
+    if (!(empty[b - 1] || empty[b] || (b + 1 < length && empty[b + 1]))) {
+      return null;
+    }
+  }
+  return cell;
+}
+
+/// Cells of a [cols]×[rows] grid of [fw]×[fh] in [alpha] (row width [w])
+/// up to the last one with something in it, row by row; [cols] × [rows]
+/// when an empty cell comes before a used one.
+int usedCells(Uint8List alpha, int w, int fw, int fh, int cols, int rows) {
+  bool filled(int c, int r) {
+    for (var y = r * fh; y < (r + 1) * fh; y++) {
+      final o = y * w;
+      for (var x = c * fw; x < (c + 1) * fw; x++) {
+        if (alpha[o + x] != 0) return true;
+      }
+    }
+    return false;
+  }
+
+  final total = cols * rows;
+  var used = 0;
+  var gap = false;
+  for (var i = 0; i < total; i++) {
+    if (filled(i % cols, i ~/ cols)) {
+      if (gap) return total;
+      used++;
+    } else {
+      gap = true;
+    }
+  }
+  return used;
+}
+
+/// Whether the one-row strip guess [guess] is really one wide picture: its
+/// opaque pixels run across at least half of the frame cuts, each over a
+/// quarter of the image's non-empty rows, and the frames' opaque boxes
+/// don't look alike (sizes within a fifth of a frame and the same frame
+/// edges touched). `supply_bags_1.png` (96×32) is one prop, a strip of
+/// three separate frames is not.
+bool runsAcrossCuts(String packPath, SpriteAnim guess) {
+  final decoded = _alphaOf(packPath, guess.path);
+  if (decoded == null) return false;
+  final (alpha, w, h) = decoded;
+  return picturesAcrossCuts(alpha, w, h, guess.frameW);
+}
+
+/// [runsAcrossCuts] on decoded [alpha] cut every [fw] pixels.
+bool picturesAcrossCuts(Uint8List alpha, int w, int h, int fw) {
+  if (fw <= 0 || w % fw != 0 || w ~/ fw < 2) return false;
+  final n = w ~/ fw;
+  var opaqueRows = 0;
+  for (var y = 0; y < h; y++) {
+    final o = y * w;
+    for (var x = 0; x < w; x++) {
+      if (alpha[o + x] != 0) {
+        opaqueRows++;
+        break;
+      }
+    }
+  }
+  if (opaqueRows == 0) return false;
+  var crossed = 0;
+  for (var k = 1; k < n; k++) {
+    final x = k * fw;
+    var rows = 0;
+    for (var y = 0; y < h; y++) {
+      if (alpha[y * w + x - 1] != 0 && alpha[y * w + x] != 0) rows++;
+    }
+    if (rows * 4 >= opaqueRows) crossed++;
+  }
+  if (crossed * 2 < n - 1) return false;
+  // Opaque boxes per frame: (width, height, touches left, touches right).
+  final boxes = <(int, int, bool, bool)>[];
+  for (var k = 0; k < n; k++) {
+    var x0 = fw, x1 = -1, y0 = h, y1 = -1;
+    for (var y = 0; y < h; y++) {
+      final o = y * w + k * fw;
+      for (var x = 0; x < fw; x++) {
+        if (alpha[o + x] != 0) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    if (x1 >= 0) boxes.add((x1 - x0 + 1, y1 - y0 + 1, x0 == 0, x1 == fw - 1));
+  }
+  if (boxes.length < 2) return false;
+  final first = boxes.first;
+  final alike = boxes.every(
+    (b) =>
+        (b.$1 - first.$1).abs() * 5 <= fw &&
+        (b.$2 - first.$2).abs() * 5 <= h &&
+        b.$3 == first.$3 &&
+        b.$4 == first.$4,
+  );
+  return !alike;
 }
 
 const _pixelScanWords = {
