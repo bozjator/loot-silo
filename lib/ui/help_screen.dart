@@ -67,8 +67,10 @@ class HelpScreen extends StatelessWidget {
               ]),
               const _Section('Import', [
                 _P(
-                  'Import folder (Ctrl+I) and Import archive (Ctrl+O, or drop '
-                  'files on the window) copy packs into the library and check '
+                  'The import button in the top bar (next to Help) opens a '
+                  'menu: Import folder (Ctrl+I) and Import archive (Ctrl+O, '
+                  'or drop files on the window) copy packs into the library '
+                  'and check '
                   'every copied file against its SHA-1. The original folder or '
                   'archive is never changed. Archives are zip, tar, tar.gz, 7z '
                   'and rar (7z and rar need 7zz, 7z or unrar installed).',
@@ -145,8 +147,9 @@ class HelpScreen extends StatelessWidget {
                   'Zoom: the mouse wheel over the Edit preview, or the −, + '
                       'and reset buttons shown on hover (1×–8×; reset is '
                       'Auto, the fit). Cards then use that zoom.',
-                  '"Not an animation" moves a file to Images; Restore brings '
-                      'it back.',
+                  '"Not an animation" asks first, then moves a file to '
+                      'Images; Restore (or Undo on the message) brings it '
+                      'back.',
                   '"Make animation…" on an image marks it as a sheet; "Back '
                       'to image" undoes that.',
                   'Combine frame files: the button after a folder\'s name '
@@ -255,7 +258,8 @@ class HelpScreen extends StatelessWidget {
                   'Other files rows. Click it again to unstar.',
                 ),
                 _P(
-                  'The Favorites chip in the dashboard filter bar lists '
+                  'The Favorites chip (★ and a count) in the dashboard '
+                  'filter bar lists '
                   'starred packs and packs with starred files (in the '
                   'Expanded view, the folders holding them); its count '
                   'follows the other filters. In the Files view it lists the '

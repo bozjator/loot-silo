@@ -113,21 +113,14 @@ void main() {
       () => Future<void>.delayed(Duration(milliseconds: 300)),
     );
     await tester.pump();
-    // M33: both import buttons are the same kind and height.
+    // M45: one import icon in the app bar, no import buttons.
     final bar = find.byType(AppBar);
-    final folder = find.descendant(
-      of: bar,
-      matching: find.widgetWithText(OutlinedButton, 'Import folder'),
-    );
-    final archive = find.descendant(
-      of: bar,
-      matching: find.widgetWithText(OutlinedButton, 'Import archive'),
-    );
-    expect(folder, findsOneWidget);
-    expect(archive, findsOneWidget);
-    expect(tester.getSize(folder).height, tester.getSize(archive).height);
     expect(
-      find.descendant(of: bar, matching: find.byType(FilledButton)),
+      find.descendant(of: bar, matching: find.byTooltip('Import')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: bar, matching: find.byType(OutlinedButton)),
       findsNothing,
     );
     await tester.tap(find.byTooltip('Settings (Ctrl+,)'));

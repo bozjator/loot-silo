@@ -59,11 +59,21 @@ void main() {
     final text = pageText(tester);
     expect(find.text('Favorites'), findsOneWidget);
     expect(text, contains('on image and animation cards'));
-    expect(text, contains('The Favorites chip in the dashboard filter bar'));
+    expect(text, contains('The Favorites chip (★ and a count) in the'));
     expect(text, contains('In the Files view it lists the starred files'));
     expect(text, contains('Favorites chip on a pack page'));
     expect(text, contains('asset_pack.json'));
     expect(text, contains('Click a star'));
+  });
+
+  testWidgets('M45: import menu and the Not an animation confirmation', (
+    tester,
+  ) async {
+    await pumpHelp(tester);
+    final text = pageText(tester);
+    expect(text, contains('The import button in the top bar'));
+    expect(text, contains('"Not an animation" asks first'));
+    expect(text, isNot(contains('Favorites (')));
   });
 
   testWidgets('M37: Play all and how Loop works with it', (tester) async {

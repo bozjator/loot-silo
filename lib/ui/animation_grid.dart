@@ -16,6 +16,7 @@ import 'reveal.dart';
 import 'widgets/animated_sprite.dart';
 import 'widgets/item_card.dart';
 import 'widgets/pixel_image.dart';
+import 'widgets/tab_toolbar.dart';
 import 'widgets/thumb_size.dart';
 import 'shortcuts.dart';
 
@@ -121,28 +122,25 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-              child: Row(
-                children: [
-                  ItemsViewToggle(
-                    view: view,
-                    onChanged: settings.setAnimationsView,
-                  ),
-                  const SizedBox(width: 12),
-                  AnimateModeToggle(
-                    mode: mode,
-                    onChanged: settings.setDetailAnimateMode,
-                  ),
-                  const Spacer(),
-                  ThumbSizeSlider(
-                    width: detailControlWidth,
-                    range: animationThumbRange,
-                    value: size,
-                    onChanged: settings.setAnimationThumbSize,
-                  ),
-                ],
-              ),
+            TabToolbar(
+              children: [
+                ItemsViewToggle(
+                  view: view,
+                  onChanged: settings.setAnimationsView,
+                ),
+                const SizedBox(width: 12),
+                AnimateModeToggle(
+                  mode: mode,
+                  onChanged: settings.setDetailAnimateMode,
+                ),
+                const Spacer(),
+                ThumbSizeSlider(
+                  width: detailControlWidth,
+                  range: animationThumbRange,
+                  value: size,
+                  onChanged: settings.setAnimationThumbSize,
+                ),
+              ],
             ),
             Expanded(
               child: CtrlWheelResize(

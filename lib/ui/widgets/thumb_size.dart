@@ -191,6 +191,18 @@ const detailControlWidth = 260.0;
 /// chip), so they line up: a dense field's natural height.
 const detailControlHeight = 36.0;
 
+/// The chip density that paints a chip [detailControlHeight] tall.
+///
+/// A chip's outline isn't sized by the box around it: `RawChip` centres
+/// its own `Material` (label + padding + density) inside whatever it is
+/// given, so a compact chip in a 36 px `SizedBox` still paints 34 px, one
+/// pixel short at the top and bottom. A chip is 38 px at the standard
+/// density and each vertical step is 2 px, so −1 gives 36.
+const detailChipDensity = VisualDensity(
+  horizontal: -2,
+  vertical: (detailControlHeight - 38) / 2,
+);
+
 /// Width of the compact slider's track (the dashboard's).
 const compactSliderTrack = 140.0;
 

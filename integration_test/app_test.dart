@@ -132,6 +132,15 @@ Future<void> settleImages(WidgetTester tester) async {
   }
 }
 
+/// Opens the app bar's import menu and picks [item] ("Import folder" or
+/// "Import archive"; the menu adds "… (Ctrl+I)").
+Future<void> importFrom(WidgetTester tester, String item) async {
+  await tester.tap(find.byTooltip('Import'));
+  await tester.pump(const Duration(milliseconds: 400));
+  await tester.tap(find.textContaining('$item…'));
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
 /// Screenshot suffix for the m27 before/after comparison.
 const m27Phase = String.fromEnvironment('M27_PHASE', defaultValue: 'after');
 
@@ -264,7 +273,7 @@ void main() {
     copyTree('test/fixtures/library_src', src);
     await tester.pumpWidget(app(src));
     await pumpUntil(tester, find.text('Slimes'));
-    await tester.tap(find.text('Import folder').first);
+    await importFrom(tester, 'Import folder');
     await pumpUntil(tester, find.text('Import 7 packs'));
     await tester.pump(const Duration(milliseconds: 500));
     // One line per pack unless the path adds something.
@@ -298,7 +307,7 @@ void main() {
     // A folder inside the library: a plain explanation.
     pickedFolder = p.join(lib, 'HeroMaker');
     addTearDown(() => pickedFolder = null);
-    await tester.tap(find.text('Import folder').first);
+    await importFrom(tester, 'Import folder');
     await pumpUntil(tester, find.textContaining('This folder is inside'));
     expect(find.textContaining('Invalid argument'), findsNothing);
     await tester.pump(const Duration(seconds: 1));
@@ -1589,6 +1598,122 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump();
   });
 
+  testWidgets('m45: import menu, ★ chip height, confirm, Audio toolbar', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    File('test/fixtures/audio/tone.wav').copySync(p.join(pack, 'hit.wav'));
+    final strip = img.Image(width: 64, height: 16, numChannels: 4);
+    for (var f = 0; f < 4; f++) {
+      img.fillRect(
+        strip,
+        x1: f * 16 + 4,
+        y1: 4,
+        x2: f * 16 + 11,
+        y2: 11,
+        color: img.ColorRgba8(220, 120, 40, 255),
+      );
+    }
+    Directory(p.join(pack, 'fx')).createSync();
+    File(p.join(pack, 'fx', 'smoke_strip.png'))
+        .writeAsBytesSync(img.encodePng(strip));
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.pump(const Duration(milliseconds: 500));
+    // Dashboard: one import icon, its menu open.
+    final bar = find.byType(AppBar);
+    expect(
+      find.descendant(of: bar, matching: find.byType(OutlinedButton)),
+      findsNothing,
+    );
+    final chip = find.byKey(const ValueKey('favorites-chip'));
+    expect(find.descendant(of: chip, matching: find.text('0')), findsOneWidget);
+    await tester.tap(find.byTooltip('Import'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Import folder… (Ctrl+I)'), findsOneWidget);
+    expect(find.text('Import archive… (Ctrl+O)'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm45_import_menu', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.text('Import folder… (Ctrl+I)'), gone: true);
+
+    // Detail: the ★ chip and the search box paint one box.
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Audio ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    final detailChip = find.byKey(const ValueKey('detail-favorites-chip'));
+    final search = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    final chipBox = tester.getRect(
+      find.descendant(of: detailChip, matching: find.byType(Material)).first,
+    );
+    final fieldBox = tester.getRect(
+      find.descendant(of: search, matching: find.byType(InputDecorator)),
+    );
+    expect(chipBox.top, fieldBox.top);
+    expect(chipBox.bottom, fieldBox.bottom);
+    await settleImages(tester);
+    final shot = await captureScreenshot(
+      tester,
+      'm45_detail_toolbar',
+      settle: false,
+    );
+    // A 4× crop of the chip and the search box.
+    final area = chipBox.expandToInclude(fieldBox).inflate(8);
+    final full = img.decodePng(shot.readAsBytesSync())!;
+    final crop = img.copyCrop(
+      full,
+      x: area.left.floor(),
+      y: area.top.floor(),
+      width: area.width.ceil(),
+      height: area.height.ceil(),
+    );
+    File('screenshots/m45_detail_toolbar_zoom.png').writeAsBytesSync(
+      img.encodePng(
+        img.copyResize(
+          crop,
+          width: crop.width * 4,
+          interpolation: img.Interpolation.nearest,
+        ),
+      ),
+    );
+
+    // "Not an animation" asks first; Cancel keeps it.
+    await tester.tap(find.textContaining('Animations ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    final card = find.byType(ItemCard).first;
+    await pumpUntil(tester, card);
+    await hoverOver(tester, card);
+    await tester.tap(find.byTooltip('Edit animation').first);
+    await pumpUntil(tester, find.text('Not an animation'));
+    await tester.tap(find.text('Not an animation'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Mark as image'), findsOneWidget);
+    await captureScreenshot(tester, 'm45_not_animation_confirm', settle: false);
+    await tester.tap(find.text('Cancel'));
+    await pumpUntil(tester, find.text('Mark as image'), gone: true);
+    expect(find.text('Not an animation'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 800));
+    expect(
+      File(p.join(pack, 'asset_pack.json')).readAsStringSync(),
+      isNot(contains('smoke_strip')),
+    );
+
+    // Audio: its toolbar sits where the Images toolbar does.
+    Rect toolbarOf(Finder toggle) => tester.getRect(toggle);
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    final images = toolbarOf(find.text('Flat').last);
+    await tester.tap(find.textContaining('Audio ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    final audio = toolbarOf(find.text('Rows').last);
+    expect(audio.top, images.top);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm45_audio_toolbar', settle: false);
+  });
+
   testWidgets('m39: toolbars, Loop, slim bar, Settings (real, read-only)', (
     tester,
   ) async {
@@ -2502,9 +2627,9 @@ A **16×16** knight with *walk* and *idle* animations.
     final before = Directory(real).statSync().modified;
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
-    // Both import buttons are outlined, side by side.
-    expect(find.widgetWithText(OutlinedButton, 'Import folder'), findsOne);
-    expect(find.widgetWithText(OutlinedButton, 'Import archive'), findsOne);
+    // M45: one import icon with a menu replaced the two buttons.
+    expect(find.byTooltip('Import'), findsOne);
+    expect(find.widgetWithText(OutlinedButton, 'Import archive'), findsNothing);
 
     // A selected author shows as a filled chip.
     await tester.tap(find.text('Author'));
@@ -2932,7 +3057,7 @@ A **16×16** knight with *walk* and *idle* animations.
 
     await tester.pumpWidget(app(lib));
     await pumpUntil(tester, find.text('Slimes'));
-    await tester.tap(find.text('Import archive'));
+    await importFrom(tester, 'Import archive');
     await pumpUntil(tester, find.text('Import 2 packs'));
     await captureScreenshot(tester, 'm8_archive_review');
     await settleImages(tester);

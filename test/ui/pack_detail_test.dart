@@ -15,10 +15,12 @@ import 'package:assets_explorer/ui/pack_detail_screen.dart';
 import 'package:assets_explorer/ui/settings_screen.dart';
 import 'package:assets_explorer/ui/tabs.dart';
 import 'package:assets_explorer/ui/dashboard.dart';
+import 'package:assets_explorer/ui/folder_groups.dart';
 import 'package:assets_explorer/ui/track_player.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
 import 'package:assets_explorer/ui/widgets/item_card.dart';
 import 'package:assets_explorer/ui/widgets/pack_tile.dart';
+import 'package:assets_explorer/ui/widgets/tab_toolbar.dart';
 import 'package:assets_explorer/ui/widgets/thumb_size.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
@@ -1436,6 +1438,41 @@ void main() {
       expect(focus.hasFocus, isTrue);
     });
 
+    testWidgets('the import icon opens a menu with both imports (M45)', (
+      tester,
+    ) async {
+      await start(tester);
+      final bar = find.byType(AppBar);
+      final button = find.descendant(
+        of: bar,
+        matching: find.byTooltip('Import'),
+      );
+      expect(button, findsOneWidget);
+      // Same size as Help and Settings next to it.
+      final help = find.byTooltip('How Asset Explorer works (F1)');
+      expect(tester.getSize(button), tester.getSize(help));
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      final folder = find.text('Import folder… (Ctrl+I)');
+      final archive = find.text('Import archive… (Ctrl+O)');
+      expect(folder, findsOneWidget);
+      expect(archive, findsOneWidget);
+      // Esc closes the menu.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(folder, findsNothing);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      await tester.tap(folder);
+      await tester.pumpAndSettle();
+      expect(picked, ['Import folder']);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      await tester.tap(archive);
+      await tester.pumpAndSettle();
+      expect(picked, ['Import folder', 'archive']);
+    });
+
     testWidgets('import shortcuts skip an open dialog', (tester) async {
       await start(tester);
       // The sort menu is a popup route.
@@ -1522,11 +1559,44 @@ void main() {
       }
     });
 
-    testWidgets('Not an animation moves the file to Images and back', (
+    /// "Not an animation", confirmed in its dialog.
+    Future<void> markNotAnimation(WidgetTester tester) async {
+      await tester.tap(find.text('Not an animation'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-not-animation')));
+      await tester.pump();
+    }
+
+    testWidgets('Not an animation asks first; Cancel changes nothing (M45)', (
       tester,
     ) async {
       await openGrid(tester);
       await tester.tap(find.text('Not an animation'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Mark "Explosion(16x16)" as not an animation? It moves to the '
+          'Images tab; you can restore it there.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Mark as image'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(AnimationEditor), findsOneWidget);
+      expect(sidecar(), isNot(contains('animations')));
+      // Confirming marks it.
+      await markNotAnimation(tester);
+      await pumpUntil(tester, find.textContaining('listed as an image only'));
+      expect(sidecar(), contains('"fx/Explosion(16x16).png": false'));
+    });
+
+    testWidgets('Not an animation moves the file to Images and back', (
+      tester,
+    ) async {
+      await openGrid(tester);
+      await markNotAnimation(tester);
       await pumpUntil(tester, find.textContaining('listed as an image only'));
       await pumpUntilGone(tester, find.textContaining('Animations ('));
       expect(sidecar(), contains('"fx/Explosion(16x16).png": false'));
@@ -1610,7 +1680,7 @@ void main() {
 
     testWidgets('Undo on the snackbar restores the animation', (tester) async {
       await openGrid(tester);
-      await tester.tap(find.text('Not an animation'));
+      await markNotAnimation(tester);
       final undo = find.widgetWithText(SnackBarAction, 'Undo');
       await pumpUntil(tester, undo);
       // Let the snackbar slide in before tapping it.
@@ -1622,7 +1692,7 @@ void main() {
 
     testWidgets('the Undo snackbar hides by itself (M33)', (tester) async {
       await openGrid(tester);
-      await tester.tap(find.text('Not an animation'));
+      await markNotAnimation(tester);
       final undo = find.widgetWithText(SnackBarAction, 'Undo');
       await pumpUntil(tester, undo);
       final bar = tester.widget<SnackBar>(find.byType(SnackBar));
@@ -3048,7 +3118,7 @@ void main() {
       );
 
       const chip = ValueKey('favorites-chip');
-      expect(chipText(tester, chip), 'Favorites 1');
+      expect(chipText(tester, chip), '1');
       await tester.tap(find.byKey(chip));
       await tester.pump();
       expect(find.widgetWithText(PackTile, 'Slimes'), findsNothing);
@@ -3059,7 +3129,7 @@ void main() {
       await tester.pump();
       expect(sidecar().containsKey('favorite'), isFalse);
       expect(find.text('No packs match'), findsOneWidget);
-      expect(chipText(tester, chip), 'Favorites 0');
+      expect(chipText(tester, chip), '0');
     });
 
     testWidgets('header, image, audio and other-file stars; detail chip', (
@@ -3119,7 +3189,10 @@ void main() {
 
       // The detail chip: only starred files; tab counts follow.
       const chip = ValueKey('detail-favorites-chip');
-      expect(find.text('Favorites (3)'), findsOneWidget);
+      expect(
+        find.descendant(of: find.byKey(chip), matching: find.text('3')),
+        findsOneWidget,
+      );
       expect(find.text('Images (3)'), findsOneWidget);
       await tester.tap(find.byKey(chip));
       await tester.pumpAndSettle();
@@ -3192,6 +3265,118 @@ void main() {
       expect(find.text('1 file'), findsOneWidget);
       expect(find.textContaining('night'), findsWidgets);
       expect(find.textContaining('ther'), findsNothing);
+    });
+  });
+
+  group('Quick UI fixes (M45)', () {
+    final tone = File('test/fixtures/audio/tone.wav').readAsBytesSync();
+
+    testWidgets('Favorites chips show only the star and the count', (
+      tester,
+    ) async {
+      await openKnight(tester, files: const ['heroes/a.png'], open: false);
+      String label(Finder chip) => [
+        for (final e
+            in find
+                .descendant(of: chip, matching: find.byType(Text))
+                .evaluate())
+          (e.widget as Text).data,
+      ].join(' ');
+      final dashboard = find.byKey(const ValueKey('favorites-chip'));
+      expect(label(dashboard), '0');
+      expect(
+        find.descendant(of: dashboard, matching: find.byTooltip('Favorites')),
+        findsOneWidget,
+      );
+      // Selected at 0 still shows.
+      await tester.tap(dashboard);
+      await tester.pump();
+      expect(label(dashboard), '0');
+      await tester.tap(dashboard);
+      await tester.pump();
+
+      await tester.tap(find.text('Knight Pack'));
+      await pumpUntil(tester, find.byType(TabBar));
+      final detail = find.byKey(const ValueKey('detail-favorites-chip'));
+      expect(label(detail), '0');
+      expect(
+        find.descendant(
+          of: detail,
+          matching: find.byTooltip(
+            'Favorites: show only the starred files of this pack',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Favorites ('), findsNothing);
+    });
+
+    testWidgets('the detail chip and search box paint one height', (
+      tester,
+    ) async {
+      await openKnight(tester);
+      final search = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+      final chip = find.byKey(const ValueKey('detail-favorites-chip'));
+      // The painted boxes: the chip's Material (RawChip centres it inside
+      // the box it's given) and the field's outlined decorator.
+      final chipBox = tester.getRect(
+        find.descendant(of: chip, matching: find.byType(Material)).first,
+      );
+      final fieldBox = tester.getRect(
+        find.descendant(of: search, matching: find.byType(InputDecorator)),
+      );
+      expect(chipBox.height, detailControlHeight);
+      expect(fieldBox.height, detailControlHeight);
+      expect(chipBox.top, fieldBox.top);
+      expect(chipBox.bottom, fieldBox.bottom);
+    });
+
+    testWidgets('Audio and Images toolbars have one padding', (tester) async {
+      await openKnight(
+        tester,
+        files: const ['heroes/a.png'],
+        raw: {'theme.wav': tone},
+      );
+      ({double top, double gap, double height}) measure() {
+        final view = tester.getRect(find.byType(TabBarView));
+        // The shown tab's toolbar, and the list in the same column.
+        final toolbar = find.byWidgetPredicate((w) {
+          if (w is! TabToolbar) return false;
+          final r = tester.getRect(find.byWidget(w));
+          return r.left >= view.left && r.right <= view.right;
+        });
+        final bar = tester.getRect(toolbar);
+        final column = find
+            .ancestor(of: toolbar, matching: find.byType(Column))
+            .first;
+        final list = tester.getRect(
+          find.descendant(of: column, matching: find.byType(Scrollable)).first,
+        );
+        return (
+          top: bar.top - view.top,
+          gap: list.top - bar.bottom,
+          height: bar.height,
+        );
+      }
+
+      await tester.tap(find.textContaining('Images ('));
+      await tester.pumpAndSettle();
+      final images = measure();
+      final grid = tester.widget<GroupedGrid>(find.byType(GroupedGrid));
+      await tester.tap(find.textContaining('Audio ('));
+      await tester.pumpAndSettle();
+      final audio = measure();
+      expect(audio, images);
+      expect(images.height, tabToolbarHeight + tabToolbarPadding.vertical);
+      // The content's own top padding: the same small gap.
+      final rows = tester.widget<ListView>(find.byType(ListView).last);
+      expect(rows.padding!.resolve(TextDirection.ltr).top, tabContentGap);
+      expect(grid.padding.top, tabContentGap);
+      await tester.tap(find.text('Cards'));
+      await tester.pumpAndSettle();
+      final cards = tester.widget<GridView>(find.byType(GridView).last);
+      expect(cards.padding!.resolve(TextDirection.ltr).top, tabContentGap);
+      expect(measure(), audio);
     });
   });
 }

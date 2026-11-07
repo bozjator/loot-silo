@@ -291,6 +291,7 @@ class HomeScreen extends ConsumerWidget {
             onPressed: scanning ? null : rescan,
             icon: const Icon(Icons.refresh),
           ),
+          const _ImportMenu(),
           IconButton(
             tooltip: 'How Asset Explorer works (F1)',
             onPressed: () => openHelp(context),
@@ -301,21 +302,7 @@ class HomeScreen extends ConsumerWidget {
             onPressed: () => openSettings(context),
             icon: const Icon(Icons.settings_outlined),
           ),
-          const SizedBox(width: 4),
-          OutlinedButton.icon(
-            onPressed: () => importArchive(context, ref),
-            icon: const Icon(Icons.archive_outlined),
-            label: const Text('Import archive'),
-          ),
           const SizedBox(width: 8),
-          // Same button kind as Import archive: a tonal fill read as a
-          // selected tab.
-          OutlinedButton.icon(
-            onPressed: () => importFolder(context, ref),
-            icon: const Icon(Icons.drive_folder_upload_outlined),
-            label: const Text('Import folder'),
-          ),
-          const SizedBox(width: 12),
         ],
       ),
       body: DropZone(
@@ -354,6 +341,38 @@ class HomeScreen extends ConsumerWidget {
           _ => const Center(child: Text('Scanning library…')),
         },
       ),
+    );
+  }
+}
+
+/// The app bar's import button: one icon with a menu for a folder or
+/// archives. The shortcuts and drag-and-drop work without it.
+class _ImportMenu extends ConsumerWidget {
+  const _ImportMenu();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return PopupMenuButton<void Function()>(
+      key: const ValueKey('import-menu'),
+      tooltip: 'Import',
+      icon: const Icon(Icons.download_outlined),
+      onSelected: (action) => action(),
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: () => importFolder(context, ref),
+          child: ListTile(
+            leading: const Icon(Icons.drive_folder_upload_outlined),
+            title: Text('Import folder… (${AppKeys.importFolder.keys})'),
+          ),
+        ),
+        PopupMenuItem(
+          value: () => importArchive(context, ref),
+          child: ListTile(
+            leading: const Icon(Icons.archive_outlined),
+            title: Text('Import archive… (${AppKeys.importArchive.keys})'),
+          ),
+        ),
+      ],
     );
   }
 }

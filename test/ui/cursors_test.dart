@@ -46,6 +46,10 @@ void main() {
         items: const [DropdownMenuItem(value: 1, child: Text('one'))],
         onChanged: (_) {},
       ),
+      'PopupMenuButton': PopupMenuButton<int>(
+        icon: const Icon(Icons.download_outlined),
+        itemBuilder: (_) => const [PopupMenuItem(value: 1, child: Text('x'))],
+      ),
       'Chip delete': Chip(
         label: const Text('x'),
         deleteIcon: deleteIcon,
@@ -78,5 +82,21 @@ void main() {
         reason: name,
       );
     }
+    // The items of an open popup menu (the app bar's import menu).
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: withClickCursors(ThemeData()),
+        home: Scaffold(body: Center(child: controls['PopupMenuButton'])),
+      ),
+    );
+    await tester.tap(find.byIcon(Icons.download_outlined));
+    await tester.pumpAndSettle();
+    await mouse.moveTo(tester.getCenter(find.text('x').last));
+    await tester.pump();
+    expect(
+      RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+      SystemMouseCursors.click,
+      reason: 'PopupMenuItem',
+    );
   });
 }

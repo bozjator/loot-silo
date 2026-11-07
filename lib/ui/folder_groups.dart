@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../state/settings.dart';
 import 'cursors.dart';
 import 'format.dart';
+import 'widgets/tab_toolbar.dart';
 
 /// Items (by index) that share a parent folder; `''` is the pack root.
 typedef FolderGroup = ({String folder, List<int> items});
@@ -120,7 +121,7 @@ class GroupedGrid extends StatelessWidget {
     required this.gridDelegate,
     required this.itemBuilder,
     this.physics,
-    this.padding = const EdgeInsets.fromLTRB(16, 4, 16, 16),
+    this.padding = const EdgeInsets.fromLTRB(16, tabContentGap, 16, 16),
     this.folderAction,
   });
 

@@ -36,6 +36,7 @@ import 'text_preview_dialog.dart';
 import 'track_player.dart';
 import 'widgets/animated_sprite.dart';
 import 'widgets/favorite_star.dart';
+import 'widgets/tab_toolbar.dart';
 import 'widgets/item_card.dart';
 import 'widgets/meta_dialogs.dart';
 import 'widgets/pack_tile.dart' show iconForTypes;
@@ -450,12 +451,11 @@ class _BodyState extends State<_Body> {
           ),
           showCheckmark: false,
           tooltip: favorites
-              ? 'Show all files'
-              : 'Show only the starred files of this pack',
-          label: Text(
-            'Favorites (${formatCount(widget.favoriteFiles.length)})',
-          ),
-          visualDensity: VisualDensity.compact,
+              ? 'Favorites: show all files'
+              : 'Favorites: show only the starred files of this pack',
+          // Only the star and the count: `★ 12`.
+          label: Text(formatCount(widget.favoriteFiles.length)),
+          visualDensity: detailChipDensity,
           selected: favorites,
           onSelected: (on) => setState(() => _onlyFavorites = on),
         ),
@@ -1769,33 +1769,30 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
     final column = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-          child: Row(
-            children: [
-              ItemsViewToggle(view: view, onChanged: settings.setImagesView),
-              if (contents.hiddenAnimations case final hidden
-                  when hidden.isNotEmpty) ...[
-                const SizedBox(width: 12),
-                TextButton.icon(
-                  icon: const Icon(Icons.motion_photos_off_outlined, size: 18),
-                  label: Text('${hidden.length} marked not an animation'),
-                  onPressed: () => showDialog<void>(
-                    context: context,
-                    builder: (_) =>
-                        _HiddenAnimationsDialog(pack: pack, hidden: hidden),
-                  ),
+        TabToolbar(
+          children: [
+            ItemsViewToggle(view: view, onChanged: settings.setImagesView),
+            if (contents.hiddenAnimations case final hidden
+                when hidden.isNotEmpty) ...[
+              const SizedBox(width: 12),
+              TextButton.icon(
+                icon: const Icon(Icons.motion_photos_off_outlined, size: 18),
+                label: Text('${hidden.length} marked not an animation'),
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) =>
+                      _HiddenAnimationsDialog(pack: pack, hidden: hidden),
                 ),
-              ],
-              const Spacer(),
-              ThumbSizeSlider(
-                width: detailControlWidth,
-                range: imageThumbRange,
-                value: size,
-                onChanged: settings.setImageThumbSize,
               ),
             ],
-          ),
+            const Spacer(),
+            ThumbSizeSlider(
+              width: detailControlWidth,
+              range: imageThumbRange,
+              value: size,
+              onChanged: settings.setImageThumbSize,
+            ),
+          ],
         ),
         if (_busy) const LinearProgressIndicator(),
         if (_selected.isNotEmpty)
@@ -2338,6 +2335,33 @@ class _AnimationEditorState extends State<AnimationEditor> {
   /// buttons are disabled, Save shows a spinner, and Close / Esc wait.
   bool _saving = false;
 
+  /// "Not an animation", after a confirmation; Cancel changes nothing.
+  Future<void> _confirmNotAnimation() async {
+    final name = prettyName(p.basename(widget.detected.path));
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Not an animation?'),
+        content: Text(
+          'Mark "$name" as not an animation? It moves to the Images tab; '
+          'you can restore it there.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-not-animation'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Mark as image'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) await _runSave(widget.onNotAnimation);
+  }
+
   /// Runs [save] with the buttons locked; ignores a second click meanwhile.
   Future<void> _runSave(Future<void> Function() save) async {
     if (_saving) return;
@@ -2658,9 +2682,7 @@ class _AnimationEditorState extends State<AnimationEditor> {
                             ),
                           if (!widget.isNew)
                             TextButton.icon(
-                              onPressed: _saving
-                                  ? null
-                                  : () => _runSave(widget.onNotAnimation),
+                              onPressed: _saving ? null : _confirmNotAnimation,
                               icon: const Icon(Icons.image_outlined, size: 18),
                               label: const Text('Not an animation'),
                             ),
@@ -3220,54 +3242,48 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Like Images / Animations: view options left, controls right.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            child: Row(
-              children: [
-                _AudioViewToggle(
-                  view: view,
-                  onChanged: ref.read(settingsProvider.notifier).setAudioView,
+          TabToolbar(
+            children: [
+              _AudioViewToggle(
+                view: view,
+                onChanged: ref.read(settingsProvider.notifier).setAudioView,
+              ),
+              const Spacer(),
+              Tooltip(
+                message: _all
+                    ? 'Stop playing all (Shift+Space)'
+                    : 'Play every sound shown, in order (Shift+Space)',
+                child: FilledButton.tonalIcon(
+                  key: const ValueKey('play-all'),
+                  onPressed: audio.isEmpty ? null : _playAll,
+                  icon: Icon(_all ? Icons.stop : Icons.playlist_play, size: 18),
+                  label: Text(_all ? 'Stop' : 'Play all'),
                 ),
-                const Spacer(),
-                Tooltip(
-                  message: _all
-                      ? 'Stop playing all (Shift+Space)'
-                      : 'Play every sound shown, in order (Shift+Space)',
+              ),
+              const SizedBox(width: 8),
+              // The same button type as Play all, so both have one
+              // shape; on = the filled primary colour.
+              Tooltip(
+                message: _all
+                    ? 'Repeat the whole list'
+                    : 'Repeat the playing sound',
+                child: Semantics(
+                  toggled: loop,
                   child: FilledButton.tonalIcon(
-                    key: const ValueKey('play-all'),
-                    onPressed: audio.isEmpty ? null : _playAll,
-                    icon: Icon(
-                      _all ? Icons.stop : Icons.playlist_play,
-                      size: 18,
-                    ),
-                    label: Text(_all ? 'Stop' : 'Play all'),
+                    key: const ValueKey('loop'),
+                    style: loop
+                        ? FilledButton.styleFrom(
+                            backgroundColor: theme.colorScheme.primary,
+                            foregroundColor: theme.colorScheme.onPrimary,
+                          )
+                        : null,
+                    onPressed: () => _setLoop(!loop),
+                    icon: const Icon(Icons.repeat, size: 18),
+                    label: const Text('Loop'),
                   ),
                 ),
-                const SizedBox(width: 8),
-                // The same button type as Play all, so both have one
-                // shape; on = the filled primary colour.
-                Tooltip(
-                  message: _all
-                      ? 'Repeat the whole list'
-                      : 'Repeat the playing sound',
-                  child: Semantics(
-                    toggled: loop,
-                    child: FilledButton.tonalIcon(
-                      key: const ValueKey('loop'),
-                      style: loop
-                          ? FilledButton.styleFrom(
-                              backgroundColor: theme.colorScheme.primary,
-                              foregroundColor: theme.colorScheme.onPrimary,
-                            )
-                          : null,
-                      onPressed: () => _setLoop(!loop),
-                      icon: const Icon(Icons.repeat, size: 18),
-                      label: const Text('Loop'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
           Expanded(
             child: switch (view) {
@@ -3297,7 +3313,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     Set<String> favorites,
   ) => ListView.builder(
     controller: _scroll,
-    padding: const EdgeInsets.symmetric(vertical: 8),
+    padding: const EdgeInsets.only(top: tabContentGap, bottom: 8),
     itemCount: audio.length,
     itemBuilder: (context, i) {
       final rel = audio[i];
@@ -3357,7 +3373,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   ) => GridView.builder(
     key: const PageStorageKey('audio-cards'),
     controller: _scroll,
-    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+    padding: const EdgeInsets.fromLTRB(16, tabContentGap, 16, 16),
     gridDelegate: ThumbGridDelegate(
       maxTileWidth: 220,
       // Room for the button and, while a long track plays, its seek bar.

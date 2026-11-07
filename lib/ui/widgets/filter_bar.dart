@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/type_classifier.dart';
 import '../../state/dashboard.dart';
 import '../cursors.dart';
+import '../format.dart';
 import 'favorite_star.dart';
 
 /// Search box, type chips, author / tag / source menus and sorting.
@@ -175,23 +176,13 @@ class FilterBar extends StatelessWidget {
                           color: FavoriteStar.color,
                         ),
                         showCheckmark: false,
-                        label: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Favorites',
-                              style: facets.favorites == 0
-                                  ? TextStyle(color: dim)
-                                  : null,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${facets.favorites}',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: dim,
-                              ),
-                            ),
-                          ],
+                        tooltip: 'Favorites',
+                        // Only the star and the count: `★ 12`.
+                        label: Text(
+                          formatCount(facets.favorites),
+                          style: facets.favorites == 0
+                              ? TextStyle(color: dim)
+                              : null,
                         ),
                         visualDensity: VisualDensity.compact,
                         selected: query.favorites,
