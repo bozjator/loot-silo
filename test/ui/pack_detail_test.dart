@@ -3379,6 +3379,161 @@ void main() {
       expect(measure(), audio);
     });
   });
+
+  group('Expand / collapse all folders (M46)', () {
+    img.Image solid(int w, int h, int shade) {
+      final image = img.Image(width: w, height: h, numChannels: 4);
+      img.fill(image, color: img.ColorRgba8(shade, 120, 200, 255));
+      return image;
+    }
+
+    final fold = find.byKey(const ValueKey('fold-all'));
+    IconData icon(WidgetTester tester) => tester
+        .widget<Icon>(find.descendant(of: fold, matching: find.byType(Icon)))
+        .icon!;
+
+    /// Opens [tab] ("Images" or "Animations") in By folder view.
+    Future<void> open(
+      WidgetTester tester,
+      String tab,
+      Map<String, img.Image> images,
+    ) async {
+      await openKnight(
+        tester,
+        files: const [],
+        images: images,
+        size: const Size(1400, 1600),
+      );
+      await tester.tap(find.textContaining('$tab ('));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(fold, findsNothing, reason: 'hidden in Flat view');
+      await tester.tap(find.text('By folder').first);
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    for (final (tab, files, key) in [
+      (
+        'Images',
+        {
+          'a/k1.png': solid(8, 8, 10),
+          'a/k2.png': solid(8, 8, 20),
+          'b/z1.png': solid(8, 8, 30),
+        },
+        'image:a/k1.png',
+      ),
+      (
+        'Animations',
+        {
+          'a/run_strip.png': solid(64, 16, 10),
+          'b/jump_strip.png': solid(64, 16, 30),
+        },
+        'a/run_strip.png',
+      ),
+    ]) {
+      testWidgets('$tab: collapse all, expand all, icon and tooltip', (
+        tester,
+      ) async {
+        await open(tester, tab, files);
+        final card = find.byKey(ValueKey(key));
+        expect(fold, findsOneWidget);
+        expect(icon(tester), Icons.unfold_less);
+        expect(find.byTooltip('Collapse all folders'), findsOneWidget);
+        expect(card, findsOneWidget);
+        final cards = find.byType(ItemCard).evaluate().length;
+
+        await tester.tap(fold);
+        await tester.pump();
+        expect(find.byType(ItemCard), findsNothing);
+        expect(icon(tester), Icons.unfold_more);
+        expect(find.byTooltip('Expand all folders'), findsOneWidget);
+        // The folder headers stay.
+        expect(find.text('A'), findsOneWidget);
+        expect(find.text('B'), findsOneWidget);
+
+        await tester.tap(fold);
+        await tester.pump();
+        expect(card, findsOneWidget);
+        expect(find.byType(ItemCard), findsNWidgets(cards));
+        expect(icon(tester), Icons.unfold_less);
+
+        // One folder open is enough for "Collapse all".
+        await tester.tap(fold);
+        await tester.pump();
+        await tester.tap(find.text('B'));
+        await tester.pump();
+        expect(icon(tester), Icons.unfold_less);
+
+        // Back in Flat view the button goes away.
+        await tester.tap(find.text('Flat').first);
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(fold, findsNothing);
+      });
+    }
+
+    testWidgets('a selection survives Collapse all; focus mode ends', (
+      tester,
+    ) async {
+      await open(tester, 'Images', {
+        'a/k1.png': solid(8, 8, 10),
+        'a/k2.png': solid(8, 8, 20),
+        'b/z1.png': solid(8, 8, 30),
+      });
+      final k2 = find.byKey(const ValueKey('image:a/k2.png'));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.tap(k2);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(find.text('1 selected'), findsOneWidget);
+      // Focus a card, then fold everything away.
+      await tester.tap(find.byKey(const ValueKey('image:b/z1.png')));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        tester
+            .widget<ItemCard>(find.byKey(const ValueKey('image:b/z1.png')))
+            .focused,
+        isTrue,
+      );
+      await tester.tap(fold);
+      await tester.pump();
+      expect(find.text('1 selected'), findsOneWidget);
+      await tester.tap(fold);
+      await tester.pump();
+      expect(tester.widget<ItemCard>(k2).selected, isTrue);
+      expect([
+        for (final e in find.byType(ItemCard).evaluate())
+          if ((e.widget as ItemCard).focused) e,
+      ], isEmpty);
+    });
+
+    testWidgets('acts on the folders the search shows', (tester) async {
+      await open(tester, 'Images', {
+        'a/k1.png': solid(8, 8, 10),
+        'b/z1.png': solid(8, 8, 30),
+      });
+      // Fold B, then search for A's file only: A is the one folder shown.
+      await tester.tap(find.text('B'));
+      await tester.pump();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search files (Ctrl+F)'),
+        'k1',
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(icon(tester), Icons.unfold_less);
+      await tester.tap(fold);
+      await tester.pump();
+      expect(find.byType(ItemCard), findsNothing);
+      // Expanding again opens A only: B stays folded after the search.
+      await tester.tap(fold);
+      await tester.pump();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search files (Ctrl+F)'),
+        '',
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byKey(const ValueKey('image:a/k1.png')), findsOneWidget);
+      expect(find.byKey(const ValueKey('image:b/z1.png')), findsNothing);
+    });
+  });
 }
 
 const previewBoxWidthForTest = 440.0;

@@ -76,6 +76,14 @@ void main() {
     expect(text, isNot(contains('Favorites (')));
   });
 
+  testWidgets('M46: collapse / expand all folders', (tester) async {
+    await pumpHelp(tester);
+    expect(
+      pageText(tester),
+      contains('the button next to the view switch collapses every'),
+    );
+  });
+
   testWidgets('M37: Play all and how Loop works with it', (tester) async {
     await pumpHelp(tester);
     final text = pageText(tester);

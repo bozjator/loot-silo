@@ -110,6 +110,47 @@ class ItemsViewToggle extends StatelessWidget {
   );
 }
 
+/// Whether any folder of [rels] is open (not in [collapsed]).
+bool anyFolderOpen(List<String> rels, Set<String> collapsed) =>
+    groupByFolder(rels).any((g) => !collapsed.contains(g.folder));
+
+/// Collapses every folder of [rels] when any is open, else expands them
+/// all. Only the folders of [rels] (the ones shown) change.
+void toggleAllFolders(List<String> rels, Set<String> collapsed) {
+  final folders = [for (final g in groupByFolder(rels)) g.folder];
+  if (folders.any((f) => !collapsed.contains(f))) {
+    collapsed.addAll(folders);
+  } else {
+    collapsed.removeAll(folders);
+  }
+}
+
+/// "Collapse all" / "Expand all" next to [ItemsViewToggle], for the By
+/// folder view: collapses when any folder of [rels] is open.
+class FoldAllButton extends StatelessWidget {
+  const FoldAllButton({
+    super.key,
+    required this.rels,
+    required this.collapsed,
+    required this.onPressed,
+  });
+
+  final List<String> rels;
+  final Set<String> collapsed;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final open = anyFolderOpen(rels, collapsed);
+    return IconButton(
+      key: const ValueKey('fold-all'),
+      tooltip: open ? 'Collapse all folders' : 'Expand all folders',
+      icon: Icon(open ? Icons.unfold_less : Icons.unfold_more),
+      onPressed: rels.isEmpty ? null : onPressed,
+    );
+  }
+}
+
 /// A grid of [rels], flat or as collapsible per-folder sections.
 class GroupedGrid extends StatelessWidget {
   const GroupedGrid({

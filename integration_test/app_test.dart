@@ -1714,6 +1714,56 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm45_audio_toolbar', settle: false);
   });
 
+  testWidgets('m46: By folder view after Collapse all', (tester) async {
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    var shade = 0;
+    for (final rel in [
+      'heroes/red/a.png',
+      'heroes/red/b.png',
+      'heroes/blue/c.png',
+      'props/d.png',
+    ]) {
+      final sprite = img.Image(width: 32, height: 32, numChannels: 4);
+      img.fillCircle(
+        sprite,
+        x: 16,
+        y: 16,
+        radius: 12,
+        color: img.ColorRgba8(60 + shade, 160, 220 - shade, 255),
+      );
+      shade += 50;
+      File(p.join(pack, rel))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(img.encodePng(sprite));
+    }
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    final fold = find.byKey(const ValueKey('fold-all'));
+    expect(fold, findsNothing);
+    await tester.tap(find.text('By folder').first);
+    await pumpUntil(tester, fold);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm46_by_folder_open', settle: false);
+    await tester.tap(fold);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(ItemCard), findsNothing);
+    expect(find.byTooltip('Expand all folders'), findsOneWidget);
+    await captureScreenshot(tester, 'm46_collapsed_all', settle: false);
+    // Every folder header is on screen once folded.
+    for (final title in ['Pack root', 'Heroes', 'Props']) {
+      expect(find.text(title), findsOneWidget, reason: title);
+    }
+    await tester.tap(fold);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(ItemCard), findsWidgets);
+    expect(find.byTooltip('Collapse all folders'), findsOneWidget);
+  });
+
   testWidgets('m39: toolbars, Loop, slim bar, Settings (real, read-only)', (
     tester,
   ) async {

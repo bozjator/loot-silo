@@ -235,7 +235,9 @@ class HelpScreen extends StatelessWidget {
                   'Shift-click select images instead of focusing them, in '
                   'the Flat and By folder views alike; Shift selects a range '
                   'in on-screen order, across folders. Folding a folder or '
-                  'switching views keeps the selection.',
+                  'switching views keeps the selection. In the By folder '
+                  'view, the button next to the view switch collapses every '
+                  'folder shown (or expands them all when all are folded).',
                 ),
                 _P(
                   'Audio tab: click a sound (or Space) to play or stop it; '

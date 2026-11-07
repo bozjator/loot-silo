@@ -128,6 +128,22 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                   view: view,
                   onChanged: settings.setAnimationsView,
                 ),
+                if (view == ItemsView.folders) ...[
+                  const SizedBox(width: 4),
+                  FoldAllButton(
+                    rels: paths,
+                    collapsed: _collapsed,
+                    onPressed: () => setState(() {
+                      toggleAllFolders(paths, _collapsed);
+                      // A card folded out of sight can't stay focused.
+                      final i = _focused;
+                      if (i != null &&
+                          !visibleOrder(paths, view, _collapsed).contains(i)) {
+                        _focused = null;
+                      }
+                    }),
+                  ),
+                ],
                 const SizedBox(width: 12),
                 AnimateModeToggle(
                   mode: mode,

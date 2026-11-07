@@ -1772,6 +1772,20 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
         TabToolbar(
           children: [
             ItemsViewToggle(view: view, onChanged: settings.setImagesView),
+            if (view == ItemsView.folders) ...[
+              const SizedBox(width: 4),
+              FoldAllButton(
+                rels: images,
+                collapsed: _collapsed,
+                onPressed: () => setState(() {
+                  toggleAllFolders(images, _collapsed);
+                  // A card folded out of sight can't stay focused.
+                  if (_focused case final rel? when !_shown().contains(rel)) {
+                    _focused = null;
+                  }
+                }),
+              ),
+            ],
             if (contents.hiddenAnimations case final hidden
                 when hidden.isNotEmpty) ...[
               const SizedBox(width: 12),
