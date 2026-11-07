@@ -136,11 +136,13 @@ class HelpScreen extends StatelessWidget {
                   '"Make animation…" on an image marks it as a sheet; "Back '
                       'to image" undoes that.',
                   'Combine frame files: the button after a folder\'s name '
-                      '(By folder), or select images in Flat view (Ctrl/'
-                      'Shift-click). It asks first, then shows the strip in '
-                      'Edit. Only Save writes <folder>_animation.png next to '
-                      'them (asking before replacing one); Cancel or Esc '
-                      'writes nothing. The frame files stay.',
+                      '(By folder), or select images (the checkbox, or Ctrl/'
+                      'Shift-click, in either view) and use the selection '
+                      'bar. The strip opens in Edit straight away, with a '
+                      'file name field (<folder>_animation to start with). '
+                      'Only Save writes it next to the frames (asking before '
+                      'replacing a file); Cancel or Esc writes nothing. The '
+                      'frame files stay.',
                 ]),
               ]),
               const _Section('Search', [
@@ -209,9 +211,11 @@ class HelpScreen extends StatelessWidget {
                   '(top right) and its icons over the footer: Edit (animations) '
                   'or Make animation… (images), Open image (the viewer, in '
                   'on-screen order) and Show in file manager. Image cards '
-                  'show the image size under the name. In the Flat view, '
-                  'Ctrl-click or Shift-click select images instead of '
-                  'focusing them.',
+                  'show the image size under the name. Ctrl-click or '
+                  'Shift-click select images instead of focusing them, in '
+                  'the Flat and By folder views alike; Shift selects a range '
+                  'in on-screen order, across folders. Folding a folder or '
+                  'switching views keeps the selection.',
                 ),
                 _P(
                   'Audio tab: click a sound (or Space) to play or stop it; '

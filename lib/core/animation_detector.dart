@@ -73,6 +73,7 @@ class SpriteAnim {
   /// Changing the frame size drops a [frameTotal] override, since cols and
   /// rows are recomputed from it.
   SpriteAnim copyWith({
+    String? path,
     int? frameW,
     int? frameH,
     double? fps,
@@ -85,7 +86,7 @@ class SpriteAnim {
     final sheetH = this.frameH * rows;
     final newRows = kind == AnimKind.sheet && fh > 0 ? sheetH ~/ fh : rows;
     return SpriteAnim(
-      path: path,
+      path: path ?? this.path,
       kind: kind,
       frameW: fw,
       frameH: fh,

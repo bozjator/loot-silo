@@ -92,8 +92,20 @@ void main() {
     expect(text, contains('no cropping'));
     expect(text, contains('Wheel over the Edit preview'));
     expect(text, contains('mouse wheel over the Edit preview'));
-    expect(text, contains('Only Save writes <folder>_animation.png'));
+    expect(text, contains('Only Save writes it'));
     expect(text, isNot(contains('and zoom.')));
+  });
+
+  testWidgets('M41: selection in both views, no confirm, a file name', (
+    tester,
+  ) async {
+    await pumpHelp(tester);
+    final text = pageText(tester);
+    expect(text, contains('in either view'));
+    expect(text, contains('opens in Edit straight away'));
+    expect(text, contains('file name field'));
+    expect(text, isNot(contains('It asks first')));
+    expect(text, contains('Ctrl / Shift-click images'));
   });
 
   test('keys are described as printed on the keyboard', () {

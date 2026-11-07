@@ -1722,6 +1722,74 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m41: select in By folder, combine, rename, Save (temp copy)', (
+    tester,
+  ) async {
+    const explosion =
+        '../assets_library/Kenney/Kenney Game Assets 1 version 42/2D assets/'
+        'Smoke Particles/PNG/Explosion';
+    if (!Directory(explosion).existsSync()) return;
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    copyTree(explosion, p.join(pack, 'fx', 'Explosion'));
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('By folder'));
+    await tester.pump(const Duration(milliseconds: 500));
+    final scrollable = find
+        .descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    Future<void> clickWith(LogicalKeyboardKey key, String name) async {
+      final card = find.byKey(ValueKey('image:fx/Explosion/$name'));
+      await tester.scrollUntilVisible(card, 300, scrollable: scrollable);
+      await tester.ensureVisible(card);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.sendKeyDownEvent(key);
+      await tester.tap(card);
+      await tester.sendKeyUpEvent(key);
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    // Ctrl on the first frame, Shift on the fourth: four selected.
+    await clickWith(LogicalKeyboardKey.controlLeft, 'explosion00.png');
+    await clickWith(LogicalKeyboardKey.shiftLeft, 'explosion03.png');
+    expect(find.text('4 selected'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm41_by_folder_selection', settle: false);
+
+    await tester.tap(find.text('Combine 4 images into animation'));
+    await pumpUntil(tester, find.text('Apply size'));
+    final name = find.byKey(const ValueKey('combine-name'));
+    expect(
+      tester.widget<TextField>(name).controller!.text,
+      'Explosion_animation',
+    );
+    await tester.enterText(name, 'boom');
+    await tester.pump(const Duration(milliseconds: 300));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm41_named_strip', settle: false);
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.text('Back to image'));
+    expect(
+      File(p.join(pack, 'fx', 'Explosion', 'boom.png')).existsSync(),
+      isTrue,
+    );
+    expect(
+      File(p.join(pack, 'fx', 'Explosion', 'Explosion_animation.png'))
+          .existsSync(),
+      isFalse,
+    );
+    await tester.tap(find.text('Close'));
+    await pumpUntil(tester, find.textContaining('Animations (1)'));
+  });
+
   testWidgets('m26: saved rows in the editor (real, unsaved)', (tester) async {
     final real = p.canonicalize('../assets_library');
     if (!Directory(real).existsSync()) return;
@@ -1926,9 +1994,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm28_folder_header', settle: false);
 
     await tester.tap(combine);
-    // M35: asks first, then previews; Save writes.
-    await pumpUntil(tester, find.text('Continue'));
-    await tester.tap(find.text('Continue'));
+    // M41: straight to the preview; Save writes.
     await pumpUntil(tester, find.text('Apply size'));
     await settleImages(tester);
     await captureScreenshot(tester, 'm28_combined_editor', settle: false);
@@ -1976,9 +2042,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm28_selection_bar', settle: false);
   });
 
-  testWidgets('m35: combine Pixel explosion — confirm, preview, Save', (
-    tester,
-  ) async {
+  testWidgets('m35: combine Pixel explosion — preview, Save', (tester) async {
     const pixel =
         '../assets_library/Kenney/Kenney Game Assets 1 version 42/2D assets/'
         'Explosion Pack/PNG/Pixel explosion';
@@ -2017,18 +2081,10 @@ A **16×16** knight with *walk* and *idle* animations.
     await settleImages(tester);
     await captureScreenshot(tester, 'm35_folder_header', settle: false);
 
+    // No confirmation since M41: the preview opens directly.
     await tester.tap(combine);
-    await pumpUntil(tester, find.byKey(const ValueKey('combine-confirm')));
-    expect(
-      find.textContaining(
-        'Combine 9 images from Pixel explosion into one animation?',
-        findRichText: true,
-      ),
-      findsOneWidget,
-    );
-    await captureScreenshot(tester, 'm35_combine_confirm', settle: false);
-    await tester.tap(find.text('Continue'));
     await pumpUntil(tester, find.text('Apply size'));
+    expect(find.byKey(const ValueKey('combine-confirm')), findsNothing);
     expect(find.text('Sheet · 96×91 frames · 9 × 1 · 9 frames'), findsOne);
     await tester.pump(const Duration(milliseconds: 500));
     await settleImages(tester);
@@ -2043,8 +2099,6 @@ A **16×16** knight with *walk* and *idle* animations.
 
     // Again, zoom with the wheel, then Save.
     await tester.tap(combine);
-    await pumpUntil(tester, find.text('Continue'));
-    await tester.tap(find.text('Continue'));
     await pumpUntil(tester, find.text('Apply size'));
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(

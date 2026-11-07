@@ -220,7 +220,7 @@ const mouseHelp = [
   ),
   MouseHelp('Wheel over the Frames field', 'Step through counts that fit'),
   MouseHelp('Wheel over the Edit preview', 'Zoom (−, +, reset on hover)'),
-  MouseHelp('Ctrl / Shift-click images (Flat)', 'Select frames to combine'),
+  MouseHelp('Ctrl / Shift-click images', 'Select frames to combine'),
 ];
 
 /// The mouse back button, offered to the focused widget before the app

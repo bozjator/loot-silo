@@ -1608,8 +1608,9 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
   }
 
   /// Combines [rels] into one strip ([combinedName]); [unique] picks a free
-  /// name, otherwise Save asks before replacing. Asks first, builds the strip
-  /// in memory and opens it in the Edit dialog; only Save writes anything.
+  /// name, otherwise Save asks before replacing. Builds the strip in memory
+  /// and opens it in the Edit dialog right away (no confirmation: only Save
+  /// writes anything, under the name typed there).
   Future<void> _combine(List<String> rels, {required bool unique}) async {
     if (rels.length < 2 || _busy || !packExists(pack.path)) return;
     final taken = {
@@ -1617,51 +1618,10 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
       ...contents.other,
     }.where((r) => File(p.join(pack.path, r)).existsSync()).toSet();
     final out = combinedName(rels, taken: taken, unique: unique);
-    final folder = p.posix.dirname(out);
-    final from = folder == '.'
-        ? prettyName(pack.title, isFile: false)
-        : prettyName(p.posix.basename(folder), isFile: false);
     final messenger = ScaffoldMessenger.maybeOf(context);
     // The tab may be rebuilt meanwhile; the dialog opens from the
     // navigator, which stays.
     final navigator = Navigator.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        key: const ValueKey('combine-confirm'),
-        title: const Text('Combine into animation'),
-        content: Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: 'Combine ${rels.length} images from '),
-              TextSpan(
-                text: from,
-                style: const TextStyle(fontStyle: FontStyle.italic),
-              ),
-              const TextSpan(text: ' into one animation?\n\nSaved as '),
-              TextSpan(
-                text: out,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const TextSpan(
-                text: ' when you press Save. Nothing is written before.',
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
     setState(() => _busy = true);
     final CombinedStripImage strip;
     try {
@@ -1736,9 +1696,11 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
           ),
         ),
         if (_busy) const LinearProgressIndicator(),
-        if (_selected.isNotEmpty && view == ItemsView.flat)
+        if (_selected.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            key: const ValueKey('selection-bar'),
+            // Space below, like above, before the grid's own padding.
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: Row(
               children: [
                 Text('${_selected.length} selected'),
@@ -1827,7 +1789,6 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
       itemBuilder: (context, i) {
         final rel = images[i];
         final file = File(p.join(pack.path, rel));
-        final flat = view == ItemsView.flat;
         final selected = _selected.contains(rel);
         final canAnimate =
             !_animated.contains(rel) &&
@@ -1852,19 +1813,22 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
           onToggleStar: () =>
               ref.read(favoritesProvider.notifier).toggleFile(pack.id, rel),
           showLeading: selected,
-          leading: flat
-              ? Checkbox(
-                  key: ValueKey('select:$rel'),
-                  mouseCursor: clickCursor,
-                  value: selected,
-                  onChanged: (_) => _toggle(rel),
-                )
-              : null,
+          // An icon toggle, the size of the other card icons.
+          leading: IconButton(
+            key: ValueKey('select:$rel'),
+            tooltip: selected ? 'Deselect' : 'Select (Ctrl-click)',
+            iconSize: 18,
+            visualDensity: VisualDensity.compact,
+            isSelected: selected,
+            icon: const Icon(Icons.check_box_outline_blank),
+            selectedIcon: const Icon(Icons.check_box),
+            onPressed: () => _toggle(rel),
+          ),
           onTap: () {
             final keys = HardwareKeyboard.instance;
-            if (flat && keys.isShiftPressed) {
+            if (keys.isShiftPressed) {
               _selectRange(shown, rel);
-            } else if (flat && keys.isControlPressed) {
+            } else if (keys.isControlPressed) {
               _toggle(rel);
             } else {
               _focus(_focused == rel ? null : rel);
@@ -1951,11 +1915,19 @@ class _AnimationEditorDialog extends ConsumerStatefulWidget {
 class _AnimationEditorDialogState
     extends ConsumerState<_AnimationEditorDialog> {
   PackRow get pack => widget.pack;
-  String get path => widget.path;
+
+  /// Where the animation is: [_AnimationEditorDialog.path], or for a
+  /// combined strip the name typed into the file name field once saved.
+  late String path = widget.path;
 
   /// The unsaved strip; null once saved (or for files on disk).
   late Uint8List? _bytes = widget.bytes;
   var _saved = false;
+
+  /// The combined strip's file name, without `.png`.
+  late final _name = TextEditingController(
+    text: p.posix.basenameWithoutExtension(widget.path),
+  );
 
   /// Takes the keyboard focus once shown, so Esc closes this dialog even
   /// when it opened while the Combine confirmation was still closing.
@@ -1972,17 +1944,30 @@ class _AnimationEditorDialogState
   @override
   void dispose() {
     _focus.dispose();
+    _name.dispose();
     super.dispose();
   }
 
-  /// Asks before a combined strip replaces an existing file.
-  Future<bool> _confirmReplace() async {
-    if (!File(p.join(pack.path, path)).existsSync()) return true;
+  /// Where Save writes the combined strip: [_name] next to the frames.
+  String get _target {
+    final folder = p.posix.dirname(widget.path);
+    // A typed ".png" isn't doubled.
+    final stem = _name.text.trim().replaceFirst(
+      RegExp(r'\.png$', caseSensitive: false),
+      '',
+    );
+    final file = '$stem.png';
+    return folder == '.' ? file : p.posix.join(folder, file);
+  }
+
+  /// Asks before a combined strip replaces an existing file at [rel].
+  Future<bool> _confirmReplace(String rel) async {
+    if (!File(p.join(pack.path, rel)).existsSync()) return true;
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Replace animation?'),
-        content: Text('$path already exists. Replace it?'),
+        content: Text('$rel already exists. Replace it?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -2032,8 +2017,21 @@ class _AnimationEditorDialogState
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      if (bytes != null)
+                        _FileNameField(
+                          controller: _name,
+                          onChanged: () => setState(() {}),
+                        ),
                       AnimationEditor(
-                        key: ValueKey('$path:${bytes != null}'),
+                        // The same editor while the name is typed.
+                        key: ValueKey(
+                          '${bytes != null ? widget.path : path}:'
+                          '${bytes != null}',
+                        ),
+                        saveBlocked:
+                            bytes != null &&
+                            fileNameProblem(_name.text) != null,
+                        newPath: bytes != null ? _target : null,
                         packPath: pack.path,
                         detected: detected,
                         current: current,
@@ -2044,16 +2042,29 @@ class _AnimationEditorDialogState
                           if (!packExists(pack.path)) return;
                           final library = ref.read(libraryProvider.notifier);
                           if (bytes != null) {
-                            if (anim == null || !await _confirmReplace()) {
+                            if (fileNameProblem(_name.text) != null) return;
+                            final target = _target;
+                            if (anim == null ||
+                                !await _confirmReplace(target)) {
                               return;
                             }
-                            saveCombinedStrip(pack.path, bytes, detected, anim);
+                            saveCombinedStrip(
+                              pack.path,
+                              bytes,
+                              detected.copyWith(path: target),
+                              anim.copyWith(path: target),
+                            );
                             // The same path may be cached from an older file.
-                            await FileImage(File(p.join(pack.path, path)))
+                            await FileImage(File(p.join(pack.path, target)))
                                 .evict();
                             _saved = true;
                             await library.reload();
-                            if (mounted) setState(() => _bytes = null);
+                            if (mounted) {
+                              setState(() {
+                                path = target;
+                                _bytes = null;
+                              });
+                            }
                             return;
                           }
                           saveAnimationOverride(
@@ -2085,6 +2096,44 @@ class _AnimationEditorDialogState
       ),
     );
   }
+}
+
+/// Why [name] can't be a file name (without `.png`), or null when it can.
+String? fileNameProblem(String name) {
+  final n = name.trim();
+  if (n.isEmpty) return 'Enter a file name';
+  if (n == '.' || n == '..' || n.startsWith('.')) {
+    return 'The name can\'t start with a dot';
+  }
+  if (RegExp(r'[/\\<>:"|?*\x00-\x1f]').hasMatch(n)) {
+    return 'Not allowed: / \\ < > : " | ? *';
+  }
+  return null;
+}
+
+/// The file name of a combined strip before it is saved; `.png` is added.
+class _FileNameField extends StatelessWidget {
+  const _FileNameField({required this.controller, required this.onChanged});
+
+  final TextEditingController controller;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+    child: TextField(
+      key: const ValueKey('combine-name'),
+      controller: controller,
+      onChanged: (_) => onChanged(),
+      decoration: InputDecoration(
+        isDense: true,
+        labelText: 'File name',
+        suffixText: '.png',
+        border: const OutlineInputBorder(),
+        errorText: fileNameProblem(controller.text),
+      ),
+    ),
+  );
 }
 
 /// How long a snack bar with Undo stays before it hides by itself.
@@ -2137,7 +2186,16 @@ class AnimationEditor extends StatefulWidget {
     this.isNew = false,
     this.manual = false,
     this.bytes,
+    this.saveBlocked = false,
+    this.newPath,
   });
+
+  /// Save stays disabled (the new file's name isn't valid).
+  final bool saveBlocked;
+
+  /// An unsaved strip: where Save will write it (the name being typed),
+  /// shown as the title and path.
+  final String? newPath;
 
   /// The encoded sheet when it isn't on disk yet (a combined strip shown
   /// before Save); [SpriteAnim.path] is then where Save will write it.
@@ -2265,6 +2323,7 @@ class _AnimationEditorState extends State<AnimationEditor> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final a = _anim;
+    final shownPath = widget.newPath ?? a.path;
     final isSheet = a.kind == AnimKind.sheet;
     final dirty = widget.isNew || a != widget.current;
     final overridden = widget.manual || widget.current != widget.detected;
@@ -2315,7 +2374,10 @@ class _AnimationEditorState extends State<AnimationEditor> {
                         children: [
                           Expanded(
                             child: SelectableText(
-                              prettyName(a.label, isFile: false),
+                              prettyName(
+                                p.posix.basenameWithoutExtension(shownPath),
+                                isFile: false,
+                              ),
                               style: theme.textTheme.titleMedium,
                             ),
                           ),
@@ -2338,7 +2400,7 @@ class _AnimationEditorState extends State<AnimationEditor> {
                         children: [
                           Flexible(
                             child: SelectableText(
-                              a.path,
+                              shownPath,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
@@ -2454,7 +2516,7 @@ class _AnimationEditorState extends State<AnimationEditor> {
                         runSpacing: 8,
                         children: [
                           FilledButton(
-                            onPressed: dirty && !_saving
+                            onPressed: dirty && !_saving && !widget.saveBlocked
                                 ? () => _runSave(() => widget.onSave(a))
                                 : null,
                             child: Row(
