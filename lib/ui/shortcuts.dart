@@ -130,6 +130,10 @@ abstract final class AppKeys {
   static const playStop = KeyBinding('Audio: play or stop the selected sound', [
     SingleActivator(LogicalKeyboardKey.space),
   ]);
+  static const playAll = KeyBinding(
+    'Audio: play all shown sounds in order, or stop',
+    [SingleActivator(LogicalKeyboardKey.space, shift: true)],
+  );
   static const seekBack = KeyBinding('Audio: back 5 s while playing', [
     SingleActivator(LogicalKeyboardKey.arrowLeft),
   ]);
@@ -181,6 +185,7 @@ const shortcutSections = <(String, List<KeyBinding>)>[
       AppKeys.focusNext,
       AppKeys.leaveFocus,
       AppKeys.playStop,
+      AppKeys.playAll,
       AppKeys.seekBack,
       AppKeys.seekForward,
       AppKeys.framesUp,

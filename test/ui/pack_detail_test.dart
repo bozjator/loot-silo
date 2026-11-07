@@ -651,6 +651,162 @@ void main() {
     });
   });
 
+  group('Play all (M37)', () {
+    late _FakePlayer fake;
+
+    Future<void> open(
+      WidgetTester tester, {
+      List<String> files = const ['sfx/a.wav', 'sfx/b.wav', 'sfx/c.wav'],
+    }) async {
+      fake = _FakePlayer();
+      await openKnight(
+        tester,
+        files: files,
+        types: ['sfx'],
+        overrides: [
+          trackPlayerFactoryProvider.overrideWithValue(() => fake),
+          audioDurationProvider.overrideWithValue(
+            (path) async => const Duration(seconds: 1),
+          ),
+        ],
+      );
+      await tester.pump();
+    }
+
+    List<String> played() => [for (final f in fake.played) p.basename(f)];
+    Finder button(String label) => find.widgetWithText(FilledButton, label);
+
+    /// The sound ends; the next one starts after the gap.
+    Future<void> finish(WidgetTester tester) async {
+      fake.complete.add(null);
+      await tester.pump();
+      await tester.pump(playAllGap);
+      await tester.pump();
+    }
+
+    testWidgets('plays the list in order with a gap, then stops', (
+      tester,
+    ) async {
+      await open(tester);
+      await tester.tap(button('Play all'));
+      await tester.pump();
+      expect(played(), ['a.wav']);
+      expect(button('Stop'), findsOneWidget);
+      expect(fake.looping, isFalse);
+      // Nothing during the gap.
+      fake.complete.add(null);
+      await tester.pump();
+      await tester.pump(playAllGap - const Duration(milliseconds: 50));
+      expect(played(), ['a.wav']);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(played(), ['a.wav', 'b.wav']);
+      // The playing row is the selected (highlighted) one.
+      final row = tester.widget<ListTile>(
+        find.ancestor(of: find.text('b.wav'), matching: find.byType(ListTile)),
+      );
+      expect(row.selected, isTrue);
+      await finish(tester);
+      expect(played(), ['a.wav', 'b.wav', 'c.wav']);
+      // After the last one the run ends.
+      await finish(tester);
+      expect(played(), hasLength(3));
+      expect(button('Play all'), findsOneWidget);
+    });
+
+    testWidgets('follows the search: only the shown sounds', (tester) async {
+      await open(
+        tester,
+        files: const ['sfx/hit_1.wav', 'sfx/door.wav', 'sfx/hit_2.wav'],
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search files (Ctrl+F)'),
+        'hit',
+      );
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
+      await tester.pump();
+      expect(find.text('door.wav'), findsNothing);
+      await tester.tap(button('Play all'));
+      await tester.pump();
+      await finish(tester);
+      await finish(tester);
+      expect(played(), ['hit_1.wav', 'hit_2.wav']);
+    });
+
+    testWidgets('a click in the middle continues from there', (tester) async {
+      await open(
+        tester,
+        files: const ['sfx/a.wav', 'sfx/b.wav', 'sfx/c.wav', 'sfx/d.wav'],
+      );
+      await tester.tap(button('Play all'));
+      await tester.pump();
+      await tester.tap(find.text('c.wav'));
+      await tester.pump();
+      expect(played(), ['a.wav', 'c.wav']);
+      expect(button('Stop'), findsOneWidget);
+      await finish(tester);
+      expect(played(), ['a.wav', 'c.wav', 'd.wav']);
+    });
+
+    testWidgets('Stop, Space and a click on the playing row end it', (
+      tester,
+    ) async {
+      await open(tester);
+      // Stop button.
+      await tester.tap(button('Play all'));
+      await tester.pump();
+      await tester.tap(button('Stop'));
+      await tester.pump();
+      expect(button('Play all'), findsOneWidget);
+      await finish(tester);
+      expect(played(), ['a.wav']);
+      // Space (the run starts from the last played one, a.wav).
+      await tester.tap(button('Play all'));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(button('Play all'), findsOneWidget);
+      await finish(tester);
+      expect(played(), ['a.wav', 'a.wav']);
+      // Shift+Space starts it; a click on the playing row stops it.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+      expect(button('Stop'), findsOneWidget);
+      await tester.tap(find.text('a.wav'));
+      await tester.pump();
+      expect(button('Play all'), findsOneWidget);
+      await finish(tester);
+      expect(played(), ['a.wav', 'a.wav', 'a.wav']);
+    });
+
+    testWidgets('Loop repeats the whole list, not one sound', (tester) async {
+      await open(tester, files: const ['sfx/a.wav', 'sfx/b.wav']);
+      await tester.tap(find.widgetWithText(FilterChip, 'Loop'));
+      await tester.pump();
+      await tester.tap(button('Play all'));
+      await tester.pump();
+      // The player doesn't loop the sound itself during the run.
+      expect(fake.looping, isFalse);
+      expect(
+        tester
+            .widget<FilterChip>(find.widgetWithText(FilterChip, 'Loop'))
+            .tooltip,
+        'Repeat the whole list',
+      );
+      await finish(tester);
+      await finish(tester);
+      await finish(tester);
+      expect(played(), ['a.wav', 'b.wav', 'a.wav', 'b.wav']);
+      // Stopped, a single sound loops again.
+      await tester.tap(button('Stop'));
+      await tester.pump();
+      await tester.tap(find.text('b.wav'));
+      await tester.pump();
+      expect(fake.looping, isTrue);
+    });
+  });
+
   group('Audio cards', () {
     final lengths = {
       'music/long_theme.ogg': const Duration(minutes: 1, seconds: 40),

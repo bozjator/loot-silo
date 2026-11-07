@@ -200,6 +200,17 @@ class HelpScreen extends StatelessWidget {
                   'clicking it takes you back to the dashboard. Esc and the '
                   'mouse back button go back as well.',
                 ),
+                _P(
+                  'Audio tab: click a sound (or Space) to play or stop it; '
+                  'Loop repeats it. Play all (Shift+Space) plays every sound '
+                  'shown, in order (the file search and folder filter '
+                  'apply), with a short pause between them, starting from '
+                  'the selected one. The playing sound is highlighted and '
+                  'scrolled into view. Clicking another sound continues from '
+                  'there; Stop, Space or a click on the playing sound ends '
+                  'it. While Play all runs, Loop repeats the whole list '
+                  'instead of one sound.',
+                ),
               ]),
               _Section('Keyboard & mouse', [
                 for (final (where, keys) in shortcutSections) ...[

@@ -2659,6 +2659,9 @@ class _AudioTab extends ConsumerStatefulWidget {
 /// playing; shorter sounds show only their length.
 const seekBarMinLength = Duration(seconds: 10);
 
+/// Play all: the pause between two tracks, so short sounds are told apart.
+const playAllGap = Duration(milliseconds: 300);
+
 class _AudioTabState extends ConsumerState<_AudioTab> {
   // Created on first play so tests and silent browsing never touch audio.
   TrackPlayer? _player;
@@ -2676,6 +2679,18 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   final _lengths = <String, Future<Duration?>>{};
   final _known = <String, Duration>{};
 
+  /// Play all is running: each finished track starts the next one in the
+  /// shown order (search and folder filter applied), after [playAllGap].
+  /// With Loop on, the list starts over at the end; the player itself then
+  /// never loops (so its per-pass completions can't skip tracks).
+  var _all = false;
+  Timer? _gap;
+  final _scroll = ScrollController();
+
+  /// Rows / cards by path, to scroll the playing one into view.
+  final _itemKeys = <String, GlobalKey>{};
+  GlobalKey _keyFor(String rel) => _itemKeys.putIfAbsent(rel, GlobalKey.new);
+
   TrackPlayer _ensurePlayer() {
     final existing = _player;
     if (existing != null) return existing;
@@ -2683,6 +2698,10 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     _subs
       ..add(
         player.onComplete.listen((_) {
+          if (_all) {
+            if (mounted) _next();
+            return;
+          }
           // Looping players report each pass as complete; they keep playing.
           if (_player?.looping ?? false) return;
           if (mounted) setState(() => _playing = null);
@@ -2703,30 +2722,122 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     return _player = player;
   }
 
+  /// A click on a row / card: stops it when it's playing (ending Play
+  /// all), otherwise plays it; a running Play all continues from there.
   Future<void> _toggle(String rel) async {
-    final player = _ensurePlayer();
     _keys.requestFocus();
     _selected = rel;
     if (_playing == rel) {
-      await player.stop();
-      setState(() => _playing = null);
+      _all = false;
+      _gap?.cancel();
+      await _ensurePlayer().stop();
+      if (mounted) setState(() => _playing = null);
       return;
     }
+    await _start(rel);
+  }
+
+  Future<void> _start(String rel) async {
+    final player = _ensurePlayer();
+    _gap?.cancel();
     setState(() {
       _playing = rel;
+      _selected = rel;
       _position = Duration.zero;
       _length = null;
     });
+    if (_all) _reveal(rel);
     try {
       await player.stop();
-      await player.setLoop(ref.read(settingsProvider).audioLoop);
+      await player.setLoop(!_all && ref.read(settingsProvider).audioLoop);
       await player.play(p.join(widget.pack.path, rel));
     } on Object catch (e) {
       if (!mounted) return;
-      setState(() => _playing = null);
+      setState(() {
+        _playing = null;
+        _all = false;
+      });
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Could not play $rel: $e')));
     }
+  }
+
+  /// "Play all" / "Stop" (Shift+Space): starts from the selected or last
+  /// played sound when it is shown, else from the first.
+  Future<void> _playAll() async {
+    if (_all) return _stopAll();
+    final audio = widget.contents.audio;
+    if (audio.isEmpty) return;
+    final from = [_selected, _playing].firstWhere(
+      (r) => r != null && audio.contains(r),
+      orElse: () => audio.first,
+    )!;
+    _keys.requestFocus();
+    _all = true;
+    await _start(from);
+  }
+
+  Future<void> _stopAll() async {
+    _all = false;
+    _gap?.cancel();
+    if (mounted) setState(() => _playing = null);
+    await _player?.stop();
+  }
+
+  /// Play all: the track after the one that just ended, after a short gap;
+  /// past the end, the first again with Loop on, else the run ends.
+  void _next() {
+    final audio = widget.contents.audio;
+    final at = _playing == null ? -1 : audio.indexOf(_playing!);
+    var next = at + 1;
+    if (next >= audio.length) {
+      if (audio.isEmpty || !ref.read(settingsProvider).audioLoop) {
+        _all = false;
+        setState(() => _playing = null);
+        return;
+      }
+      next = 0;
+    }
+    final rel = audio[next];
+    setState(() {
+      _playing = null;
+      _selected = rel;
+    });
+    _gap?.cancel();
+    _gap = Timer(playAllGap, () {
+      if (mounted && _all) _start(rel);
+    });
+  }
+
+  /// Scrolls [rel]'s row or card into view (estimating first when it
+  /// isn't built yet).
+  void _reveal(String rel) {
+    void show() {
+      final context = _itemKeys[rel]?.currentContext;
+      if (context == null || !context.mounted) return;
+      Scrollable.ensureVisible(
+        context,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 200),
+      );
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_itemKeys[rel]?.currentContext != null) return show();
+      if (!_scroll.hasClients) return;
+      final audio = widget.contents.audio;
+      final i = audio.indexOf(rel);
+      if (i < 0) return;
+      final pos = _scroll.position;
+      final estimate =
+          (pos.maxScrollExtent + pos.viewportDimension) * i / audio.length -
+          pos.viewportDimension / 2;
+      _scroll.jumpTo(estimate.clamp(0.0, pos.maxScrollExtent));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) show();
+      });
+    });
   }
 
   Future<void> _seek(Duration to) async {
@@ -2743,6 +2854,15 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   /// Space plays / stops the selected row; ←/→ seek 5 s while playing.
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is KeyUpEvent) return KeyEventResult.ignored;
+    if (AppKeys.playAll.pressed(event)) {
+      _playAll();
+      return KeyEventResult.handled;
+    }
+    // Space ends a running Play all.
+    if (_all && AppKeys.playStop.pressed(event)) {
+      _stopAll();
+      return KeyEventResult.handled;
+    }
     if (AppKeys.playStop.pressed(event)) {
       final rel = _selected ?? _playing;
       if (rel == null) return KeyEventResult.ignored;
@@ -2762,14 +2882,17 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     return KeyEventResult.ignored;
   }
 
-  /// Turning loop off lets the current sound finish its pass.
+  /// Turning loop off lets the current sound finish its pass. During
+  /// Play all, Loop repeats the list, not the sound.
   void _setLoop(bool on) {
     ref.read(settingsProvider.notifier).setAudioLoop(on);
-    _player?.setLoop(on);
+    if (!_all) _player?.setLoop(on);
   }
 
   @override
   void dispose() {
+    _gap?.cancel();
+    _scroll.dispose();
     for (final s in _subs) {
       s.cancel();
     }
@@ -2807,11 +2930,28 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
                   onChanged: ref.read(settingsProvider.notifier).setAudioView,
                 ),
                 const Spacer(),
+                Tooltip(
+                  message: _all
+                      ? 'Stop playing all (Shift+Space)'
+                      : 'Play every sound shown, in order (Shift+Space)',
+                  child: FilledButton.tonalIcon(
+                    key: const ValueKey('play-all'),
+                    onPressed: audio.isEmpty ? null : _playAll,
+                    icon: Icon(
+                      _all ? Icons.stop : Icons.playlist_play,
+                      size: 18,
+                    ),
+                    label: Text(_all ? 'Stop' : 'Play all'),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 FilterChip(
                   mouseCursor: clickCursor,
                   avatar: const Icon(Icons.repeat, size: 18),
                   label: const Text('Loop'),
-                  tooltip: 'Repeat the playing sound',
+                  tooltip: _all
+                      ? 'Repeat the whole list'
+                      : 'Repeat the playing sound',
                   selected: loop,
                   showCheckmark: false,
                   onSelected: _setLoop,
@@ -2845,6 +2985,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     List<String> audio,
     Future<Duration?> Function(String) readLength,
   ) => ListView.builder(
+    controller: _scroll,
     padding: const EdgeInsets.symmetric(vertical: 8),
     itemCount: audio.length,
     itemBuilder: (context, i) {
@@ -2873,13 +3014,21 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
         ),
         onTap: () => _toggle(rel),
       );
-      if (!playing || !_seekable(rel)) return tile;
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          tile,
-          _SeekBar(position: _position, length: _lengthOf(rel)!, onSeek: _seek),
-        ],
+      return KeyedSubtree(
+        key: _keyFor(rel),
+        child: !playing || !_seekable(rel)
+            ? tile
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  tile,
+                  _SeekBar(
+                    position: _position,
+                    length: _lengthOf(rel)!,
+                    onSeek: _seek,
+                  ),
+                ],
+              ),
       );
     },
   );
@@ -2889,6 +3038,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     Future<Duration?> Function(String) readLength,
   ) => GridView.builder(
     key: const PageStorageKey('audio-cards'),
+    controller: _scroll,
     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
     gridDelegate: ThumbGridDelegate(
       maxTileWidth: 220,
@@ -2900,17 +3050,20 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     itemBuilder: (context, i) {
       final rel = audio[i];
       final playing = _playing == rel;
-      return _AudioCard(
-        key: ValueKey(rel),
-        rel: rel,
-        packPath: widget.pack.path,
-        length: readLength(rel),
-        selected: _selected == rel,
-        playing: playing,
-        position: playing ? _position : null,
-        playingLength: playing ? _lengthOf(rel) : null,
-        onToggle: () => _toggle(rel),
-        onSeek: _seek,
+      return KeyedSubtree(
+        key: _keyFor(rel),
+        child: _AudioCard(
+          key: ValueKey(rel),
+          rel: rel,
+          packPath: widget.pack.path,
+          length: readLength(rel),
+          selected: _selected == rel,
+          playing: playing,
+          position: playing ? _position : null,
+          playingLength: playing ? _lengthOf(rel) : null,
+          onToggle: () => _toggle(rel),
+          onSeek: _seek,
+        ),
       );
     },
   );

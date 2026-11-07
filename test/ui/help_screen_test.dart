@@ -54,6 +54,15 @@ void main() {
     expect(text, contains('F1'));
   });
 
+  testWidgets('M37: Play all and how Loop works with it', (tester) async {
+    await pumpHelp(tester);
+    final text = pageText(tester);
+    expect(text, contains('Play all (Shift+Space)'));
+    expect(text, contains('Loop repeats the whole list'));
+    expect(text, contains(AppKeys.playAll.label));
+    expect(AppKeys.playAll.keys, 'Shift+Space');
+  });
+
   testWidgets('M36: header icons, hover delay, Dashboard tab', (tester) async {
     await pumpHelp(tester);
     final text = pageText(tester);

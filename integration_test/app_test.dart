@@ -1415,6 +1415,61 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m37: Play all on a real SFX pack (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    final fake = _FakeTrackPlayer();
+    fakePlayer = () => fake;
+    addTearDown(() => fakePlayer = null);
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField), '16-BIT Achievements');
+    await pumpUntil(tester, find.text('16-BIT Achievements SFX Pack 1'));
+    await tester.tap(find.text('16-BIT Achievements SFX Pack 1'));
+    await pumpUntil(tester, find.widgetWithText(FilledButton, 'Play all'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Play all'));
+    await tester.pump();
+    expect(find.widgetWithText(FilledButton, 'Stop'), findsOneWidget);
+    // Three sounds end; the fourth plays (no audio under xvfb: a fake).
+    for (var i = 0; i < 3; i++) {
+      fake.complete.add(null);
+      await tester.pump();
+      await tester.pump(playAllGap + const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    expect(fake.played, hasLength(4));
+    expect(fake.played.toSet(), hasLength(4));
+    expect(fake.looping, isFalse);
+    final fourth = p.basename(fake.played.last);
+    final row = tester.widget<ListTile>(
+      find.ancestor(of: find.text(fourth), matching: find.byType(ListTile)),
+    );
+    expect(row.selected, isTrue);
+    await captureScreenshot(tester, 'm37_play_all_rows', settle: false);
+
+    // Cards: the run goes on; the playing card is shown.
+    await tester.tap(find.text('Cards'));
+    await tester.pump(const Duration(milliseconds: 300));
+    fake.complete.add(null);
+    await tester.pump();
+    await tester.pump(playAllGap + const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(fake.played, hasLength(5));
+    await captureScreenshot(tester, 'm37_play_all_cards', settle: false);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Stop'));
+    await tester.pump();
+    expect(find.widgetWithText(FilledButton, 'Play all'), findsOneWidget);
+    await tester.tap(find.text('Rows'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m26: frame grid, saved rows, editor layout (real, unsaved)', (
     tester,
   ) async {
@@ -2625,12 +2680,14 @@ const villageInteriors = 'Epic RPG World - Village(interiors) V1.3';
 /// Records seeks; the test pushes positions.
 class _FakeTrackPlayer implements TrackPlayer {
   final seeks = <Duration>[];
+  final played = <String>[];
   @override
   var looping = false;
   final position = StreamController<Duration>.broadcast();
+  final complete = StreamController<void>.broadcast();
 
   @override
-  Future<void> play(String path) async {}
+  Future<void> play(String path) async => played.add(path);
   @override
   Future<void> stop() async {}
   @override
@@ -2642,7 +2699,7 @@ class _FakeTrackPlayer implements TrackPlayer {
   @override
   Stream<Duration> get onDuration => const Stream.empty();
   @override
-  Stream<void> get onComplete => const Stream.empty();
+  Stream<void> get onComplete => complete.stream;
   @override
   Future<void> dispose() async {}
 }
