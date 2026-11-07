@@ -42,6 +42,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:path/path.dart' as p;
 
 import '../test/helpers/fs.dart';
+import '../test/helpers/logo.dart';
 import 'screenshot_helper.dart';
 
 class MemoryKeyStore implements KeyStore {
@@ -1773,8 +1774,15 @@ A **16×16** knight with *walk* and *idle* animations.
     // No settings file yet: the first-start screen.
     await tester.pumpWidget(app(lib, restart: true));
     await pumpUntil(tester, find.text('Choose a library folder'));
-    // The app bar name; since M49 the name and slogan below are the logo.
-    expect(find.text('Loot Silo'), findsOneWidget);
+    // The app bar name; since M52 the logo below shows it too, as text.
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('Loot Silo'),
+      ),
+      findsOneWidget,
+    );
+    expectLockup(tester);
     expect(
       find.bySemanticsLabel('Loot Silo. Your game assets. At a glance.'),
       findsOneWidget,
@@ -1796,7 +1804,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm48_dashboard', settle: false);
   });
 
-  testWidgets('m49: logo on first start, app bar, About and Help', (
+  testWidgets('m49/m52: one logo on first start, About and Help', (
     tester,
   ) async {
     copyTree('test/fixtures/managed', lib);
@@ -1809,9 +1817,10 @@ A **16×16** knight with *walk* and *idle* animations.
       await tester.pumpWidget(app(lib, restart: true));
       await pumpUntil(tester, find.text('Choose a library folder'));
       await pumpUntil(tester, logo);
+      expectLockup(tester);
       await settleImages(tester);
       expect(find.byKey(const ValueKey('app-bar-icon')), findsOneWidget);
-      await captureScreenshot(tester, 'm49_first_start_$name', settle: false);
+      await captureScreenshot(tester, 'm52_first_start_$name', settle: false);
 
       await tester.tap(find.text('Choose folder'));
       await pumpUntil(tester, find.text('Knight Pack'));
@@ -1834,17 +1843,18 @@ A **16×16** knight with *walk* and *idle* animations.
         scrollable: list,
       );
       await tester.pump(const Duration(milliseconds: 300));
-      expect(logo, findsOneWidget);
+      expectLockup(tester);
       await settleImages(tester);
-      await captureScreenshot(tester, 'm49_about_$name', settle: false);
+      await captureScreenshot(tester, 'm52_about_$name', settle: false);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await pumpUntil(tester, find.byType(SettingsScreen), gone: true);
 
       // Help: the logo at the top.
       await tester.tap(find.byTooltip('How Loot Silo works (F1)'));
       await pumpUntil(tester, logo);
+      expectLockup(tester);
       await settleImages(tester);
-      await captureScreenshot(tester, 'm49_help_$name', settle: false);
+      await captureScreenshot(tester, 'm52_help_$name', settle: false);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await pumpUntil(tester, logo, gone: true);
       File(p.join(tmp.path, 'settings.json')).deleteSync();

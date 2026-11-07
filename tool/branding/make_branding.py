@@ -2,12 +2,15 @@
 """Builds the Loot Silo branding assets from ../app_logos (read-only).
 
 Run from the repo root:  python3 tool/branding/make_branding.py
-Needs Pillow. Writes assets/branding/*.png, the Linux/macOS/Windows icons.
+Needs Pillow and the Flutter SDK's Roboto (Apache License 2.0), found through
+FLUTTER_ROOT or the `flutter` on PATH. Writes assets/branding/*.png and the
+Linux/macOS/Windows icons.
 """
 import os
+import shutil
 import sys
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(ROOT, '..', 'app_logos')
@@ -20,9 +23,12 @@ RADIUS = 120
 # A square around the silo (inside the icon, above its text), for the
 # small icon.
 SILO = (191, 127, 593, 529)
-# The wide logo: the right half of the transparent sheet. Specks of other
-# art inside this box are dropped by [logo_wide].
-WIDE = (720, 250, 1774, 700)
+# The README logo's colours: a warm gold name and a mid-grey slogan, each
+# with a dark outline, so both read on GitHub's white and near-black
+# (#0d1117) backgrounds.
+NAME_FILL = (255, 196, 61, 255)
+SLOGAN_FILL = (139, 149, 165, 255)
+OUTLINE = (20, 24, 36, 255)
 
 
 def rounded_mask(size, radius, inset=1.0, scale=4):
@@ -62,30 +68,48 @@ def icon_small(sheet):
     return crop
 
 
-def logo_wide(sheet):
-    crop = sheet.crop(WIDE)
-    alpha = crop.getchannel('A').point(lambda a: 255 if a > 8 else 0)
-    w, h = crop.size
-    # Keep the longest run of non-empty columns and of rows: the logo.
-    # A speck cut off by an empty column or row is other art.
-    cols = longest_run([alpha.crop((x, 0, x + 1, h)).getbbox() is not None
-                        for x in range(w)])
-    rows = longest_run([alpha.crop((0, y, w, y + 1)).getbbox() is not None
-                        for y in range(h)])
-    return crop.crop((cols[0], rows[0], cols[1], rows[1]))
+def roboto(weight):
+    """The Flutter SDK's Roboto-<weight>.ttf."""
+    root = os.environ.get('FLUTTER_ROOT')
+    if not root and shutil.which('flutter'):
+        root = os.path.dirname(os.path.dirname(os.path.realpath(shutil.which('flutter'))))
+    if not root:
+        sys.exit('Set FLUTTER_ROOT (Roboto comes from the Flutter SDK).')
+    return os.path.join(root, 'bin', 'cache', 'artifacts', 'material_fonts',
+                        f'Roboto-{weight}.ttf')
 
 
-def longest_run(flags):
-    """(start, end) of the longest run of True in [flags], end exclusive."""
-    best, start = (0, 0), None
-    for i, f in enumerate(flags + [False]):
-        if f and start is None:
-            start = i
-        elif not f and start is not None:
-            if i - start > best[1] - best[0]:
-                best = (start, i)
-            start = None
-    return best
+def logo_readme(small, scale=2):
+    """The app's logo lockup, as AppLogo draws it: the app icon's silo, then
+    "Loot Silo" over the slogan. Transparent, trimmed to its content."""
+    icon_side = 160 * scale
+    gap = 28 * scale
+    name_font = ImageFont.truetype(roboto('Bold'), 92 * scale)
+    slogan_font = ImageFont.truetype(roboto('Medium'), 34 * scale)
+    stroke = 3 * scale
+    name, slogan = 'Loot Silo', 'Your game assets. At a glance.'
+
+    def box(text, font, st):
+        l, t, r, b = font.getbbox(text, stroke_width=st)
+        return l, t, r - l, b - t
+
+    nl, nt, nw, nh = box(name, name_font, stroke)
+    sl, stp, sw, sh = box(slogan, slogan_font, scale)
+    line_gap = 14 * scale
+    text_h = nh + line_gap + sh
+    height = max(icon_side, text_h)
+    width = icon_side + gap + max(nw, sw)
+    out = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+    out.paste(small.resize((icon_side, icon_side), Image.LANCZOS),
+              (0, (height - icon_side) // 2), small.resize((icon_side, icon_side), Image.LANCZOS))
+    draw = ImageDraw.Draw(out)
+    x = icon_side + gap
+    y = (height - text_h) // 2
+    draw.text((x - nl, y - nt), name, font=name_font, fill=NAME_FILL,
+              stroke_width=stroke, stroke_fill=OUTLINE)
+    draw.text((x - sl, y + nh + line_gap - stp), slogan, font=slogan_font,
+              fill=SLOGAN_FILL, stroke_width=scale, stroke_fill=OUTLINE)
+    return out.crop(out.getbbox())
 
 
 def save(img, name, size=None):
@@ -99,9 +123,6 @@ def save(img, name, size=None):
 def main():
     os.makedirs(OUT, exist_ok=True)
     sheet = Image.open(os.path.join(SRC, 'LootSilo Game Asset Branding.png')).convert('RGB')
-    wide_src = Image.open(
-        os.path.join(SRC, 'a_clean_vector_3d_styled_game_tech_logo_image_on_a.png')
-    ).convert('RGBA')
 
     full = icon_full(sheet)
     small = icon_small(sheet)
@@ -110,7 +131,7 @@ def main():
     save(small, 'icon_small.png', 64)
     for s in (16, 24, 32, 48, 64, 128, 256):
         save(small, f'icon_small_{s}.png', s)
-    save(logo_wide(wide_src), 'logo_wide.png')
+    save(logo_readme(small), 'logo_readme.png')
 
     # Platform icons: the small variant up to 64 px, the full one above.
     def best(size):

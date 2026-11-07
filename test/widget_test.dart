@@ -17,6 +17,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+import 'helpers/logo.dart';
+
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   late Directory tmp;
@@ -54,12 +56,8 @@ void main() {
       ),
       findsOneWidget,
     );
-    final logo = find.byKey(const ValueKey('app-logo'));
-    expect(logo, findsOneWidget);
-    expect(
-      tester.widget<Image>(logo).semanticLabel,
-      'Loot Silo. Your game assets. At a glance.',
-    );
+    // M52: the lockup with the app icon's silo.
+    expectLockup(tester);
     expect(
       tester.widget<MaterialApp>(find.byType(MaterialApp)).title,
       'Loot Silo',
@@ -189,6 +187,7 @@ void main() {
       ),
       findsOneWidget,
     );
+    expectLockup(tester);
     expect(find.text('How Loot Silo works'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Dark'), -300, scrollable: list);
 

@@ -215,13 +215,10 @@ class SettingsScreen extends ConsumerWidget {
               const ListTile(
                 leading: Icon(Icons.info_outline),
                 title: SelectableText(appVersionLabel),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(appSlogan),
-                    SizedBox(height: 8),
-                    ProjectLinks(),
-                  ],
+                // The slogan is in the logo above.
+                subtitle: Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: ProjectLinks(),
                 ),
               ),
               const SizedBox(height: 24),

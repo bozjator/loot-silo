@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/branding/logo_wide.png" alt="Loot Silo" width="480">
+  <img src="assets/branding/logo_readme.png" alt="Loot Silo — Your game assets. At a glance." width="520">
 </p>
 
 <p align="center"><b>Your game assets. At a glance.</b></p>

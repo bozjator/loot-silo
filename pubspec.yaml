@@ -81,7 +81,7 @@ flutter:
   assets:
     - assets/branding/icon_small.png
     - assets/branding/icon_full.png
-    - assets/branding/logo_wide.png
+    - assets/branding/icon_small_256.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

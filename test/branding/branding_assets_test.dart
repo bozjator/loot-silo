@@ -44,23 +44,39 @@ void main() {
     );
   });
 
-  test('the wide logo is trimmed: something on every edge', () {
-    final logo = load(Branding.logoWide);
-    expect(logo.width, greaterThan(logo.height * 2));
+  test('the README logo is the lockup: trimmed, transparent, wide', () {
+    final logo = load(Branding.logoReadme);
+    expect(logo.width, greaterThan(logo.height * 3));
     bool any(Iterable<(int, int)> pixels) =>
         pixels.any((p) => logo.getPixel(p.$1, p.$2).a > 8);
     final w = logo.width, h = logo.height;
+    // Trimmed: something on every edge.
     expect(any([for (var x = 0; x < w; x++) (x, 0)]), isTrue);
     expect(any([for (var x = 0; x < w; x++) (x, h - 1)]), isTrue);
     expect(any([for (var y = 0; y < h; y++) (0, y)]), isTrue);
     expect(any([for (var y = 0; y < h; y++) (w - 1, y)]), isTrue);
-    // Transparent background (a corner).
+    // Transparent around the icon's rounded corner and right of the text.
     expect(logo.getPixel(0, 0).a, 0);
-    // No stray speck of the neighbouring art: no empty column or row
-    // between an edge and the logo itself.
-    bool column(int x) => any([for (var y = 0; y < h; y++) (x, y)]);
-    bool row(int y) => any([for (var x = 0; x < w; x++) (x, y)]);
-    expect([for (var x = 0; x < w; x++) column(x)], everyElement(isTrue));
-    expect([for (var y = 0; y < h; y++) row(y)], everyElement(isTrue));
+    expect(logo.getPixel(w - 1, h - 1).a, 0);
+    // The app icon's silo on the left: the same picture as icon_small.
+    final small = img.copyResize(
+      load('assets/branding/icon_small_256.png'),
+      width: h,
+      height: h,
+    );
+    final mid = logo.getPixel(h ~/ 2, h ~/ 2);
+    final ref = small.getPixel(h ~/ 2, h ~/ 2);
+    expect((mid.r - ref.r).abs(), lessThan(24));
+    expect((mid.g - ref.g).abs(), lessThan(24));
+    expect((mid.b - ref.b).abs(), lessThan(24));
+  });
+
+  test('the old gamepad logo is gone; the lockup icon is bundled', () {
+    expect(File('assets/branding/logo_wide.png').existsSync(), isFalse);
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    expect(pubspec, contains(Branding.iconLarge));
+    expect(pubspec, isNot(contains('logo_wide')));
+    expect(load(Branding.iconLarge).width, 256);
+    expect(File('README.md').readAsStringSync(), contains(Branding.logoReadme));
   });
 }

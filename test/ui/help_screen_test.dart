@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../helpers/logo.dart';
+
 void main() {
   /// Every selectable paragraph on the page, joined.
   String pageText(WidgetTester tester) => [
@@ -110,6 +112,7 @@ void main() {
       tester.getTopLeft(logo).dy,
       lessThan(tester.getTopLeft(find.text('Library layout')).dy),
     );
+    expectLockup(tester);
   });
 
   testWidgets('M37: Play all and how Loop works with it', (tester) async {

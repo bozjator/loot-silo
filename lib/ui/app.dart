@@ -247,7 +247,7 @@ class HomeScreen extends ConsumerWidget {
       return Scaffold(
         appBar: AppBar(title: const AppBarTitle()),
         body: _Message(
-          header: const AppLogo(height: 140),
+          header: const AppLogo(height: 112),
           icon: Icons.folder_special_outlined,
           title: 'Choose a library folder',
           body:
