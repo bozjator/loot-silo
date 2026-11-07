@@ -9,6 +9,7 @@ import '../state/dashboard.dart' show knownAuthors, knownTags;
 import '../state/providers.dart';
 import 'format.dart';
 import 'widgets/meta_dialogs.dart';
+import 'widgets/overflow_text.dart';
 import 'cursors.dart';
 
 /// Top-level so the isolate closure captures nothing but its arguments.
@@ -425,9 +426,8 @@ class _ItemRow extends StatelessWidget {
                   Row(
                     children: [
                       Flexible(
-                        child: Text(
+                        child: OverflowText(
                           item.title,
-                          overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodyMedium,
                         ),
                       ),
@@ -439,11 +439,7 @@ class _ItemRow extends StatelessWidget {
                   ),
                   // The source path, when it says more than the title.
                   if (item.sourceRel != '.' && item.sourceRel != item.title)
-                    Text(
-                      item.sourceRel,
-                      overflow: TextOverflow.ellipsis,
-                      style: muted,
-                    ),
+                    OverflowText(item.sourceRel, style: muted),
                 ],
               ),
             ),
@@ -528,7 +524,10 @@ class _ItemRow extends StatelessWidget {
             Expanded(
               flex: _colTarget,
               child: item.importedAs != null && !item.selected
-                  ? Text('Already imported as ${item.importedAs}', style: muted)
+                  ? OverflowText(
+                      'Already imported as ${item.importedAs}',
+                      style: muted,
+                    )
                   : Row(
                       children: [
                         if (renamed)
@@ -543,9 +542,9 @@ class _ItemRow extends StatelessWidget {
                             ),
                           ),
                         Flexible(
-                          child: Text(
+                          child: OverflowText(
                             target ?? '—',
-                            overflow: TextOverflow.ellipsis,
+                            key: const ValueKey('import-target'),
                             style: small?.copyWith(fontFamily: 'monospace'),
                           ),
                         ),

@@ -589,7 +589,7 @@ void main() {
     await pumpUntil(tester, find.text('Loop'));
     // Let the tab slide in before tapping.
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.widgetWithText(FilterChip, 'Loop'));
+    await tester.tap(find.byKey(const ValueKey('loop')));
     await tester.pump(const Duration(milliseconds: 300));
     final settings = File(p.join(tmp.path, 'settings.json'));
     expect(settings.readAsStringSync(), contains('"audio_loop": true'));
@@ -1359,7 +1359,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
     await tester.tap(find.text('music-loop-bundle-chiptune'));
     // Opens straight on Audio: the Loop chip shows without a tab tap.
-    await pumpUntil(tester, find.widgetWithText(FilterChip, 'Loop'));
+    await pumpUntil(tester, find.byKey(const ValueKey('loop')));
     final length = find.textContaining(RegExp(r'^\d+:\d\d$'));
     await pumpUntil(tester, length);
     await tester.pump(const Duration(milliseconds: 500));
@@ -1394,7 +1394,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.enterText(find.byType(TextField), '16-BIT Achievements');
     await pumpUntil(tester, find.text('16-BIT Achievements SFX Pack 1'));
     await tester.tap(find.text('16-BIT Achievements SFX Pack 1'));
-    await pumpUntil(tester, find.widgetWithText(FilterChip, 'Loop'));
+    await pumpUntil(tester, find.byKey(const ValueKey('loop')));
     await tester.tap(find.text('Cards'));
     await pumpUntil(tester, find.textContaining(RegExp(r'^\d+:\d\d$')));
     await tester.pump(const Duration(milliseconds: 500));
@@ -1554,6 +1554,87 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.text('Packs'));
     await tester.tap(find.byKey(const ValueKey('favorites-chip')));
     await tester.pump();
+  });
+
+  testWidgets('m39: toolbars, Loop, slim bar, Settings (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm39_dashboard_slider', settle: false);
+
+    // Audio toolbar: Play all and Loop, one shape.
+    await tester.enterText(find.byType(TextField).first, '16-BIT Achievements');
+    await pumpUntil(tester, find.text('16-BIT Achievements SFX Pack 1'));
+    await tester.tap(find.text('16-BIT Achievements SFX Pack 1'));
+    final loop = find.byKey(const ValueKey('loop'));
+    await pumpUntil(tester, loop);
+    await tester.pump(const Duration(milliseconds: 500));
+    final play = find.byKey(const ValueKey('play-all'));
+    expect(tester.getSize(loop).height, tester.getSize(play).height);
+    // The search box and the Favorites chip: one height.
+    final search = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    final chip = find.byKey(const ValueKey('detail-favorites-chip'));
+    expect(tester.getSize(search).height, tester.getSize(chip).height);
+    await captureScreenshot(tester, 'm39_audio_toolbar', settle: false);
+
+    // A sprite pack: the detail toolbar, then the slim bar.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.byType(PackDetailScreen), gone: true);
+    await tester.pump(const Duration(milliseconds: 500));
+    final dashSearch = find.widgetWithText(TextField, '16-BIT Achievements');
+    await tester.tap(dashSearch);
+    await tester.pump();
+    await tester.enterText(dashSearch, 'Epic RPG World');
+    await tester.pump(const Duration(milliseconds: 300));
+    const village = 'Epic RPG World - The Village V2.2';
+    final tile = find.descendant(
+      of: find.byType(PackTile),
+      matching: find.text(village),
+    );
+    await pumpUntil(tester, tile);
+    await tester.tap(tile);
+    await pumpUntil(tester, find.textContaining('Animations ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm39_detail_toolbar', settle: false);
+    await tester.tap(find.byTooltip('Unpin header — show it on hover (H)'));
+    await tester.pump(const Duration(milliseconds: 300));
+    final icons = tester.getRect(find.byKey(const ValueKey('header-actions')));
+    final bar = tester.getRect(
+      find
+          .ancestor(
+            of: find.text('Hover for details'),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    expect(icons.right, closeTo(bar.right - 8, 0.5));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm39_slim_bar', settle: false);
+
+    // Settings: Help right above About.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.byType(PackDetailScreen), gone: true);
+    await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
+    await pumpUntil(tester, find.text('Keyboard shortcuts'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.scrollUntilVisible(
+      find.text('About'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      tester.getTopLeft(find.text('Help')).dy,
+      lessThan(tester.getTopLeft(find.text('About')).dy),
+    );
+    await captureScreenshot(tester, 'm39_settings_help', settle: false);
+    expect(Directory(real).statSync().modified, before);
   });
 
   testWidgets('m26: saved rows in the editor (real, unsaved)', (tester) async {

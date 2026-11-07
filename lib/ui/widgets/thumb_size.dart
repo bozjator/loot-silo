@@ -176,6 +176,28 @@ class CtrlWheelResize extends StatelessWidget {
 /// slider in the tab toolbars right under it, so the two line up.
 const detailControlWidth = 260.0;
 
+/// Height of the pack detail toolbar's controls (search box, Favorites
+/// chip), so they line up: a dense field's natural height.
+const detailControlHeight = 36.0;
+
+/// Width of the compact slider's track (the dashboard's).
+const compactSliderTrack = 140.0;
+
+/// The default 2 px division dot, reported as 1 px wide. Flutter paints the
+/// dots only when they are three reported widths apart: the dashboard's 17
+/// steps on [compactSliderTrack] are about 5 px apart, so with the real
+/// width they were left out, while the detail page's wider track showed
+/// them.
+class _DenseTickMarkShape extends RoundSliderTickMarkShape {
+  const _DenseTickMarkShape();
+
+  @override
+  Size getPreferredSize({
+    required SliderThemeData sliderTheme,
+    required bool isEnabled,
+  }) => const Size.square(1);
+}
+
 /// Compact thumbnail size slider for a toolbar.
 class ThumbSizeSlider extends StatelessWidget {
   const ThumbSizeSlider({
@@ -190,8 +212,8 @@ class ThumbSizeSlider extends StatelessWidget {
   final double value;
   final ValueChanged<double> onChanged;
 
-  /// The whole slider's width, icons included; a compact 140 px track when
-  /// null.
+  /// The whole slider's width, icons included; a compact
+  /// [compactSliderTrack] when null.
   final double? width;
 
   @override
@@ -204,14 +226,18 @@ class ThumbSizeSlider extends StatelessWidget {
         children: [
           const Icon(Icons.photo_size_select_small, size: 18),
           _track(
-            Slider(
-              mouseCursor: WidgetStateMouseCursor.clickable,
-              min: range.min,
-              max: range.max,
-              divisions: ((range.max - range.min) / range.step).round(),
-              value: range.clamp(value),
-              label: '${value.round()} px',
-              onChanged: onChanged,
+            SliderTheme(
+              data: SliderTheme.of(context)
+                  .copyWith(tickMarkShape: const _DenseTickMarkShape()),
+              child: Slider(
+                mouseCursor: WidgetStateMouseCursor.clickable,
+                min: range.min,
+                max: range.max,
+                divisions: ((range.max - range.min) / range.step).round(),
+                value: range.clamp(value),
+                label: '${value.round()} px',
+                onChanged: onChanged,
+              ),
             ),
           ),
           const Icon(Icons.photo_size_select_large, size: 22),
@@ -221,6 +247,6 @@ class ThumbSizeSlider extends StatelessWidget {
   );
 
   Widget _track(Widget slider) => width == null
-      ? SizedBox(width: 140, child: slider)
+      ? SizedBox(width: compactSliderTrack, child: slider)
       : Expanded(child: slider);
 }

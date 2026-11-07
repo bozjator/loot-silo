@@ -343,7 +343,11 @@ class _BodyState extends State<_Body> {
       padding: const EdgeInsets.fromLTRB(12, 6, 16, 6),
       child: SizedBox(
         width: detailControlWidth,
+        height: detailControlHeight,
         child: TextField(
+          expands: true,
+          maxLines: null,
+          textAlignVertical: TextAlignVertical.center,
           key: _fieldKey,
           controller: _searchText,
           focusNode: _searchFocus,
@@ -353,7 +357,16 @@ class _BodyState extends State<_Body> {
           },
           decoration: InputDecoration(
             isDense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
             prefixIcon: const Icon(Icons.search, size: 20),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 36,
+              minHeight: detailControlHeight,
+            ),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 36,
+              minHeight: detailControlHeight,
+            ),
             hintText: 'Search files (Ctrl+F)',
             border: const OutlineInputBorder(),
             suffixIcon: ValueListenableBuilder(
@@ -362,6 +375,7 @@ class _BodyState extends State<_Body> {
                   ? const SizedBox.shrink()
                   : IconButton(
                       tooltip: 'Clear search (Esc)',
+                      visualDensity: VisualDensity.compact,
                       icon: const Icon(Icons.close, size: 18),
                       onPressed: _clearSearch,
                     ),
@@ -372,22 +386,28 @@ class _BodyState extends State<_Body> {
     );
     final favoritesChip = Padding(
       padding: const EdgeInsets.only(left: 8),
-      child: FilterChip(
-        key: const ValueKey('detail-favorites-chip'),
-        mouseCursor: clickCursor,
-        avatar: Icon(
-          favorites ? Icons.star : Icons.star_border,
-          size: 18,
-          color: FavoriteStar.color,
+      child: SizedBox(
+        height: detailControlHeight,
+        child: FilterChip(
+          key: const ValueKey('detail-favorites-chip'),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          mouseCursor: clickCursor,
+          avatar: Icon(
+            favorites ? Icons.star : Icons.star_border,
+            size: 18,
+            color: FavoriteStar.color,
+          ),
+          showCheckmark: false,
+          tooltip: favorites
+              ? 'Show all files'
+              : 'Show only the starred files of this pack',
+          label: Text(
+            'Favorites (${formatCount(widget.favoriteFiles.length)})',
+          ),
+          visualDensity: VisualDensity.compact,
+          selected: favorites,
+          onSelected: (on) => setState(() => _onlyFavorites = on),
         ),
-        showCheckmark: false,
-        tooltip: favorites
-            ? 'Show all files'
-            : 'Show only the starred files of this pack',
-        label: Text('Favorites (${formatCount(widget.favoriteFiles.length)})'),
-        visualDensity: VisualDensity.compact,
-        selected: favorites,
-        onSelected: (on) => setState(() => _onlyFavorites = on),
       ),
     );
     final tabArea = <Widget>[
@@ -835,23 +855,31 @@ class _SlimHeader extends StatelessWidget {
           const SizedBox(width: 4),
           _PackStar(packId: pack.id),
           const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              [
-                pack.author ?? 'Unknown author',
-                if (pack.types.isNotEmpty) pack.types.join(', '),
-                '${formatCount(pack.fileCount)} files',
-                formatBytes(pack.totalBytes),
-              ].join(' · '),
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium,
+          // One Expanded for everything before the icons: a Flexible text
+          // next to a Spacer would split the free space with it and leave
+          // the icons in the middle of the bar.
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    [
+                      pack.author ?? 'Unknown author',
+                      if (pack.types.isNotEmpty) pack.types.join(', '),
+                      '${formatCount(pack.fileCount)} files',
+                      formatBytes(pack.totalBytes),
+                    ].join(' · '),
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(Icons.unfold_more, size: 16, color: muted?.color),
+                const SizedBox(width: 4),
+                Text('Hover for details', style: muted),
+              ],
             ),
           ),
-          const SizedBox(width: 12),
-          Icon(Icons.unfold_more, size: 16, color: muted?.color),
-          const SizedBox(width: 4),
-          Text('Hover for details', style: muted),
-          const Spacer(),
           actions,
         ],
       ),
@@ -2967,6 +2995,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   @override
   Widget build(BuildContext context) {
     final audio = widget.contents.audio;
+    final theme = Theme.of(context);
     final loop = ref.watch(settingsProvider.select((s) => s.audioLoop));
     final read = ref.watch(audioDurationProvider);
     Future<Duration?> readLength(String rel) => _lengths.putIfAbsent(
@@ -3011,16 +3040,27 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                FilterChip(
-                  mouseCursor: clickCursor,
-                  avatar: const Icon(Icons.repeat, size: 18),
-                  label: const Text('Loop'),
-                  tooltip: _all
+                // The same button type as Play all, so both have one
+                // shape; on = the filled primary colour.
+                Tooltip(
+                  message: _all
                       ? 'Repeat the whole list'
                       : 'Repeat the playing sound',
-                  selected: loop,
-                  showCheckmark: false,
-                  onSelected: _setLoop,
+                  child: Semantics(
+                    toggled: loop,
+                    child: FilledButton.tonalIcon(
+                      key: const ValueKey('loop'),
+                      style: loop
+                          ? FilledButton.styleFrom(
+                              backgroundColor: theme.colorScheme.primary,
+                              foregroundColor: theme.colorScheme.onPrimary,
+                            )
+                          : null,
+                      onPressed: () => _setLoop(!loop),
+                      icon: const Icon(Icons.repeat, size: 18),
+                      label: const Text('Loop'),
+                    ),
+                  ),
                 ),
               ],
             ),

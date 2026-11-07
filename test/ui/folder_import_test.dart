@@ -93,6 +93,31 @@ void main() {
     expect(find.text('.'), findsNothing);
   });
 
+  testWidgets('a cut library folder shows in full on hover (M39)', (
+    tester,
+  ) async {
+    const name =
+        'An Extremely Long Pack Folder Name That Cannot Possibly Fit '
+        'Into The Library Folder Column Of The Review';
+    final src = p.join(tmp.path, name);
+    copyTree('test/fixtures/library_src/sfx/Loose Sounds', src);
+    await openReview(tester, src);
+    await pumpUntil(tester, find.text('Import 1 packs'));
+    final cell = find.byKey(const ValueKey('import-target'));
+    expect(cell, findsOneWidget);
+    final text = tester.widget<Text>(
+      find.descendant(of: cell, matching: find.byType(Text)),
+    );
+    expect(text.data, endsWith(name));
+    expect(text.maxLines, 1);
+    // Cut, so the whole text is in a tooltip around it.
+    final tip = find.ancestor(
+      of: find.descendant(of: cell, matching: find.byType(Text)),
+      matching: find.byType(Tooltip),
+    );
+    expect(tester.widget<Tooltip>(tip.first).message, text.data);
+  });
+
   testWidgets('author picker: library authors with counts, add new', (
     tester,
   ) async {

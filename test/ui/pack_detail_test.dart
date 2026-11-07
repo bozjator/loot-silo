@@ -479,6 +479,116 @@ void main() {
     expect(find.textContaining('Animations ('), findsOneWidget);
   });
 
+  group('Quick UI fixes (M39)', () {
+    final tone = File('test/fixtures/audio/tone.wav').readAsBytesSync();
+
+    testWidgets('search box and Favorites chip have one height', (
+      tester,
+    ) async {
+      await openKnight(tester);
+      final search = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+      final chip = find.byKey(const ValueKey('detail-favorites-chip'));
+      final field = tester.getRect(search);
+      expect(field.height, detailControlHeight);
+      expect(tester.getSize(chip).height, detailControlHeight);
+      expect(tester.getRect(chip).center.dy, field.center.dy);
+      // Typing shows the clear button; the height stays.
+      await tester.enterText(search, 'knight');
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(tester.getSize(search).height, detailControlHeight);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Loop is shaped like Play all', (tester) async {
+      await openKnight(
+        tester,
+        files: const [],
+        raw: {'theme.wav': tone},
+        types: ['music'],
+      );
+      final play = find.byKey(const ValueKey('play-all'));
+      final loop = find.byKey(const ValueKey('loop'));
+      expect(tester.widget(play).runtimeType, tester.widget(loop).runtimeType);
+      expect(tester.getSize(loop).height, tester.getSize(play).height);
+      expect(tester.getRect(loop).center.dy, tester.getRect(play).center.dy);
+      ShapeBorder? shape(Finder f) => tester
+          .widget<Material>(
+            find.descendant(of: f, matching: find.byType(Material)).first,
+          )
+          .shape;
+      expect(shape(loop), shape(play));
+      // A toggle: on is saved, and the shape stays.
+      await tester.tap(loop);
+      await tester.pump();
+      expect(store.load().audioLoop, isTrue);
+      expect(shape(loop), shape(play));
+    });
+
+    testWidgets('Settings: Help sits right above About', (tester) async {
+      await openKnight(tester, open: false);
+      await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.scrollUntilVisible(
+        find.text('About'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      final shortcuts = tester.getTopLeft(find.text('Keyboard shortcuts')).dy;
+      final help = tester.getTopLeft(find.text('Help')).dy;
+      final entry = tester.getTopLeft(find.text('How Asset Explorer works')).dy;
+      final about = tester.getTopLeft(find.text('About')).dy;
+      expect(shortcuts, lessThan(help));
+      expect(help, lessThan(entry));
+      expect(entry, lessThan(about));
+    });
+
+    testWidgets('dashboard slider is wide enough for its dots', (tester) async {
+      await openKnight(tester, open: false);
+      final slider = find.descendant(
+        of: find.byType(ThumbSizeSlider),
+        matching: find.byType(Slider),
+      );
+      final s = tester.widget<Slider>(slider);
+      expect(s.divisions, 17);
+      // Flutter paints the dots only when they are at least three reported
+      // dot widths apart, on the track inside 24 px of thumb room a side,
+      // less the 4 px track height.
+      final theme = SliderTheme.of(tester.element(slider));
+      final dot = theme.tickMarkShape!
+          .getPreferredSize(sliderTheme: theme, isEnabled: true)
+          .width;
+      final track = tester.getSize(slider).width - 2 * 24 - 4;
+      expect(track / s.divisions!, greaterThanOrEqualTo(3 * dot));
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final width in [1024.0, 1800.0]) {
+      testWidgets('slim bar icons at the far right (${width.round()} px)', (
+        tester,
+      ) async {
+        await openKnight(tester, size: Size(width, 800));
+        tester.takeException();
+        await tester.tap(find.byTooltip('Unpin header — show it on hover (H)'));
+        await tester.pump();
+        final bar = tester.getRect(
+          find
+              .ancestor(
+                of: find.text('Hover for details'),
+                matching: find.byType(Container),
+              )
+              .first,
+        );
+        final icons = tester.getRect(
+          find.byKey(const ValueKey('header-actions')),
+        );
+        // The bar's right padding is 8 px.
+        expect(icons.right, closeTo(bar.right - 8, 0.5));
+      });
+    }
+  });
+
   group('Audio tab', () {
     final tone = File('test/fixtures/audio/tone.wav').readAsBytesSync();
 
@@ -520,7 +630,7 @@ void main() {
         types: ['music'],
       );
       final rows = tester.getRect(find.text('Rows'));
-      final loop = tester.getRect(find.widgetWithText(FilterChip, 'Loop'));
+      final loop = tester.getRect(find.byKey(const ValueKey('loop')));
       expect(rows.right, lessThan(loop.left));
       // Same left edge as the Images / Animations toggles (16 px in).
       expect(rows.left, lessThan(200));
@@ -785,18 +895,13 @@ void main() {
 
     testWidgets('Loop repeats the whole list, not one sound', (tester) async {
       await open(tester, files: const ['sfx/a.wav', 'sfx/b.wav']);
-      await tester.tap(find.widgetWithText(FilterChip, 'Loop'));
+      await tester.tap(find.byKey(const ValueKey('loop')));
       await tester.pump();
       await tester.tap(button('Play all'));
       await tester.pump();
       // The player doesn't loop the sound itself during the run.
       expect(fake.looping, isFalse);
-      expect(
-        tester
-            .widget<FilterChip>(find.widgetWithText(FilterChip, 'Loop'))
-            .tooltip,
-        'Repeat the whole list',
-      );
+      expect(find.byTooltip('Repeat the whole list'), findsOneWidget);
       await finish(tester);
       await finish(tester);
       await finish(tester);
@@ -2352,7 +2457,10 @@ void main() {
     await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
     await settle();
     final entry = find.text('How Asset Explorer works');
+    // Help sits near the end, right above About (M39).
     await tester.scrollUntilVisible(entry, 200);
+    await tester.ensureVisible(entry);
+    await settle();
     await tester.tap(entry);
     await settle();
     expect(find.byType(HelpScreen), findsOneWidget);

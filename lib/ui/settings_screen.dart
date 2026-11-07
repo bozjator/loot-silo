@@ -151,17 +151,6 @@ class SettingsScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              section('Help'),
-              ListTile(
-                leading: const Icon(Icons.help_outline),
-                title: const Text('How Asset Explorer works'),
-                subtitle: const Text(
-                  'Library layout, import, animations, search, previews, '
-                  'every shortcut (F1)',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => openHelp(context),
-              ),
               section('Keyboard shortcuts'),
               for (final k in shortcutSections.first.$2)
                 ListTile(
@@ -178,6 +167,17 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   title: Text(k.label),
                 ),
+              section('Help'),
+              ListTile(
+                leading: const Icon(Icons.help_outline),
+                title: const Text('How Asset Explorer works'),
+                subtitle: const Text(
+                  'Library layout, import, animations, search, previews, '
+                  'every shortcut (F1)',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => openHelp(context),
+              ),
               section('About'),
               const ListTile(
                 leading: Icon(Icons.info_outline),
