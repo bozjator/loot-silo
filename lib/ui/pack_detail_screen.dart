@@ -35,6 +35,7 @@ import 'text_preview_dialog.dart';
 import 'track_player.dart';
 import 'widgets/animated_sprite.dart';
 import 'widgets/favorite_star.dart';
+import 'widgets/item_card.dart';
 import 'widgets/meta_dialogs.dart';
 import 'widgets/pack_tile.dart' show iconForTypes;
 import 'widgets/pixel_image.dart';
@@ -1508,6 +1509,53 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
   String? _anchor;
   var _busy = false;
 
+  /// Focus mode: the clicked card (by path); the others dim.
+  String? _focused;
+  final _keys = FocusNode(debugLabel: 'images');
+
+  /// Image sizes read from the file headers, for the card footers.
+  final _dims = <String, (int, int)?>{};
+
+  @override
+  void dispose() {
+    _keys.dispose();
+    super.dispose();
+  }
+
+  void _focus(String? rel) {
+    setState(() => _focused = rel);
+    _keys.requestFocus();
+  }
+
+  /// The images in on-screen order.
+  List<String> _shown() => [
+    for (final i in visibleOrder(
+      contents.images,
+      ref.read(settingsProvider).imagesView,
+      _collapsed,
+    ))
+      contents.images[i],
+  ];
+
+  /// Esc and arrows act only while a card is focused; otherwise Esc goes on
+  /// to the app and closes the page.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    final focused = _focused;
+    if (event is KeyUpEvent || focused == null) return KeyEventResult.ignored;
+    final order = _shown();
+    final at = order.indexOf(focused);
+    if (AppKeys.leaveFocus.accepts(event)) {
+      _focus(null);
+    } else if (AppKeys.focusPrevious.accepts(event) && at >= 0) {
+      _focus(order[math.max(0, at - 1)]);
+    } else if (AppKeys.focusNext.accepts(event) && at >= 0) {
+      _focus(order[math.min(order.length - 1, at + 1)]);
+    } else {
+      return KeyEventResult.ignored;
+    }
+    return KeyEventResult.handled;
+  }
+
   PackRow get pack => widget.pack;
   PackContents get contents => widget.contents;
 
@@ -1524,6 +1572,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
     if (!identical(old.contents, contents)) {
       _animated = _animatedFiles();
       _selected.retainAll(contents.images);
+      if (!contents.images.contains(_focused)) _focused = null;
     }
   }
 
@@ -1655,7 +1704,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
     );
     final view = ref.watch(settingsProvider.select((s) => s.imagesView));
     final settings = ref.read(settingsProvider.notifier);
-    return Column(
+    final column = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
@@ -1718,10 +1767,20 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
           child: CtrlWheelResize(
             onSteps: (n) =>
                 settings.setImageThumbSize(imageThumbRange.nudge(size, n)),
-            child: _imageGrid(context, images, size, view, favorites),
+            // Taps that miss every card clear the focus.
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _focus(null),
+              child: _imageGrid(context, images, size, view, favorites),
+            ),
           ),
         ),
       ],
+    );
+    return BackHandler(
+      enabled: _focused != null,
+      onBack: () => _focus(null),
+      child: Focus(focusNode: _keys, onKeyEvent: _onKey, child: column),
     );
   }
 
@@ -1739,9 +1798,13 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
       rels: images,
       view: view,
       collapsed: _collapsed,
-      onToggleFolder: (f) => setState(
-        () => _collapsed.contains(f) ? _collapsed.remove(f) : _collapsed.add(f),
-      ),
+      onToggleFolder: (f) => setState(() {
+        if (!_collapsed.remove(f)) _collapsed.add(f);
+        // A card folded out of sight can't stay focused.
+        if (_focused case final rel? when !_shown().contains(rel)) {
+          _focused = null;
+        }
+      }),
       physics: const CtrlWheelPhysics(),
       folderAction: (folder, items) => items.length < 2
           ? null
@@ -1754,11 +1817,11 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
                       for (final i in items) images[i],
                     ], unique: false),
             ),
-      // A square image over a one-line file name.
+      // A square image over a title and a size line, like animations.
       gridDelegate: ThumbGridDelegate(
         maxTileWidth: size,
         imageAspect: 1,
-        footer: (_) => 26,
+        footer: (_) => itemCardFooter,
         spacing: 8,
       ),
       itemBuilder: (context, i) {
@@ -1770,11 +1833,24 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
             !_animated.contains(rel) &&
             p.extension(rel).toLowerCase() == '.png';
         final shown = [for (final j in order) images[j]];
-        final starred = favorites.contains(rel);
-        return _HoverReveal(
-          path: file.path,
-          starred: starred,
-          star: fileStar(ref, pack.id, rel, starred: starred),
+        final dims = _dims.putIfAbsent(rel, () => readImageSize(file.path));
+        // Plain click focuses; Ctrl/Shift-click select in the Flat view.
+        return ItemCard(
+          key: ValueKey('image:$rel'),
+          path: rel,
+          title: prettyName(p.basename(rel)),
+          details: switch (dims) {
+            (final w, final h) => '$w×$h',
+            null => p.extension(rel).replaceFirst('.', '').toUpperCase(),
+          },
+          stagePadding: 6,
+          stage: (_) => PixelImage(file),
+          focused: _focused == rel,
+          dimmed: _focused != null && _focused != rel,
+          selected: selected,
+          starred: favorites.contains(rel),
+          onToggleStar: () =>
+              ref.read(favoritesProvider.notifier).toggleFile(pack.id, rel),
           showLeading: selected,
           leading: flat
               ? Checkbox(
@@ -1784,70 +1860,34 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
                   onChanged: (_) => _toggle(rel),
                 )
               : null,
+          onTap: () {
+            final keys = HardwareKeyboard.instance;
+            if (flat && keys.isShiftPressed) {
+              _selectRange(shown, rel);
+            } else if (flat && keys.isControlPressed) {
+              _toggle(rel);
+            } else {
+              _focus(_focused == rel ? null : rel);
+            }
+          },
           actions: [
             if (canAnimate)
-              IconButton(
+              CardIconButton(
                 tooltip: 'Make animation…',
-                mouseCursor: clickCursor,
-                icon: const Icon(Icons.animation, size: 18),
+                icon: Icons.animation,
                 onPressed: () => _makeAnimation(rel),
               ),
-          ],
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            margin: EdgeInsets.zero,
-            shape: selected
-                ? RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 2,
-                    ),
-                  )
-                : null,
-            child: InkWell(
-              mouseCursor: clickCursor,
-              onTap: () {
-                final keys = HardwareKeyboard.instance;
-                if (flat && keys.isShiftPressed) {
-                  _selectRange(shown, rel);
-                } else if (flat && keys.isControlPressed) {
-                  _toggle(rel);
-                } else {
-                  showImageViewer(
-                    context,
-                    packPath: pack.path,
-                    images: shown,
-                    index: order.indexOf(i),
-                    sizes: contents.sizes,
-                  );
-                }
-              },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: PixelImage(file),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-                    child: Tooltip(
-                      message: rel,
-                      child: Text(
-                        p.basename(rel),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                    ),
-                  ),
-                ],
+            OpenImageButton(
+              onPressed: () => showImageViewer(
+                context,
+                packPath: pack.path,
+                images: shown,
+                index: math.max(0, order.indexOf(i)),
+                sizes: contents.sizes,
               ),
             ),
-          ),
+            RevealButton(file.path),
+          ],
         );
       },
     );
@@ -3544,99 +3584,6 @@ class _FilesTab extends ConsumerWidget {
         '.aseprite' || '.ase' || '.psd' || '.kra' => Icons.brush_outlined,
         _ => Icons.insert_drive_file_outlined,
       };
-}
-
-/// Shows a [RevealButton] in the top-right corner of [child] while the
-/// mouse is over it, so small image cards stay uncluttered.
-class _HoverReveal extends StatefulWidget {
-  const _HoverReveal({
-    required this.path,
-    required this.child,
-    this.actions = const [],
-    this.leading,
-    this.showLeading = false,
-    this.star,
-    this.starred = false,
-  });
-
-  final String path;
-  final Widget child;
-
-  /// The favorites star, in the image's bottom-right corner (above the
-  /// one-line file name), so the top row keeps room for the checkbox:
-  /// shown on hover, always when [starred].
-  final Widget? star;
-  final bool starred;
-
-  /// More hover buttons, before the reveal button.
-  final List<Widget> actions;
-
-  /// A top-left control (the selection checkbox): shown on hover, or always
-  /// with [showLeading].
-  final Widget? leading;
-  final bool showLeading;
-
-  @override
-  State<_HoverReveal> createState() => _HoverRevealState();
-}
-
-class _HoverRevealState extends State<_HoverReveal> {
-  var _hover = false;
-
-  @override
-  Widget build(BuildContext context) => MouseRegion(
-    onEnter: (_) => setState(() => _hover = true),
-    onExit: (_) => setState(() => _hover = false),
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        widget.child,
-        if (widget.leading case final leading?
-            when _hover || widget.showLeading)
-          Positioned(
-            top: 2,
-            left: 2,
-            child: Material(
-              color: Theme.of(context).colorScheme.surface
-                  .withValues(alpha: 0.85),
-              shape: const CircleBorder(),
-              child: leading,
-            ),
-          ),
-        if (widget.star case final star? when _hover || widget.starred)
-          Positioned(
-            bottom: 30,
-            right: 2,
-            child: Material(
-              color: Theme.of(context).colorScheme.surface
-                  .withValues(alpha: 0.85),
-              shape: const CircleBorder(),
-              child: star,
-            ),
-          ),
-        if (_hover)
-          Positioned(
-            top: 2,
-            right: 2,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final a in [...widget.actions, RevealButton(widget.path)])
-                  Padding(
-                    padding: const EdgeInsets.only(left: 2),
-                    child: Material(
-                      color: Theme.of(context).colorScheme.surface
-                          .withValues(alpha: 0.85),
-                      shape: const CircleBorder(),
-                      child: a,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-      ],
-    ),
-  );
 }
 
 /// The star toggle of one file of [packId].

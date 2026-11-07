@@ -6,6 +6,7 @@ import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/animation_grid.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:assets_explorer/ui/reveal.dart';
+import 'package:assets_explorer/ui/shortcuts.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -159,6 +160,21 @@ void main() {
     // Nothing focused: Esc goes on to the app.
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     expect(escapedToApp, 1);
+  });
+
+  testWidgets('the mouse back button leaves focus mode first (M40)', (
+    tester,
+  ) async {
+    await pumpGrid(tester);
+    // Nothing focused: the app gets the back button.
+    expect(offerBack(), isFalse);
+    await tester.tap(find.text('Knight idle'));
+    await tester.pump();
+    expect(opacityOf(tester, 'Knight walk'), 0.35);
+    expect(offerBack(), isTrue);
+    await tester.pump();
+    expect(opacityOf(tester, 'Knight walk'), 1);
+    expect(offerBack(), isFalse);
   });
 
   testWidgets('clicking empty space clears focus; Edit reports the card', (

@@ -9,13 +9,12 @@ import 'package:path/path.dart' as p;
 import '../core/animation_detector.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
-import 'cursors.dart';
 import 'folder_groups.dart';
 import 'format.dart';
 import 'image_viewer.dart';
 import 'reveal.dart';
 import 'widgets/animated_sprite.dart';
-import 'widgets/favorite_star.dart';
+import 'widgets/item_card.dart';
 import 'widgets/pixel_image.dart';
 import 'widgets/thumb_size.dart';
 import 'shortcuts.dart';
@@ -113,94 +112,98 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
     final paths = [for (final a in anims) a.path];
     // The viewer steps through the animations in on-screen order.
     final order = visibleOrder(paths, view, _collapsed);
-    return Focus(
-      focusNode: _keys,
-      onKeyEvent: _onKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            child: Row(
-              children: [
-                ItemsViewToggle(
-                  view: view,
-                  onChanged: settings.setAnimationsView,
-                ),
-                const SizedBox(width: 12),
-                AnimateModeToggle(
-                  mode: mode,
-                  onChanged: settings.setDetailAnimateMode,
-                ),
-                const Spacer(),
-                ThumbSizeSlider(
-                  width: detailControlWidth,
-                  range: animationThumbRange,
-                  value: size,
-                  onChanged: settings.setAnimationThumbSize,
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: CtrlWheelResize(
-              onSteps: (n) => settings.setAnimationThumbSize(
-                animationThumbRange.nudge(size, n),
-              ),
-              // Taps that miss every card clear the focus.
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _focus(null),
-                child: GroupedGrid(
-                  key: PageStorageKey('animations:${widget.gridId}'),
-                  rels: [for (final a in anims) a.path],
-                  view: view,
-                  collapsed: _collapsed,
-                  onToggleFolder: (f) => setState(() {
-                    if (!_collapsed.remove(f)) _collapsed.add(f);
-                    // A card folded out of sight can't stay focused.
-                    final i = _focused;
-                    if (i != null &&
-                        !visibleOrder(paths, view, _collapsed).contains(i)) {
-                      _focused = null;
-                    }
-                  }),
-                  physics: const CtrlWheelPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  // A square stage over a title and a details line.
-                  gridDelegate: ThumbGridDelegate(
-                    maxTileWidth: size,
-                    imageAspect: 1,
-                    footer: (_) => 64,
+    return BackHandler(
+      enabled: _focused != null,
+      onBack: () => _focus(null),
+      child: Focus(
+        focusNode: _keys,
+        onKeyEvent: _onKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Row(
+                children: [
+                  ItemsViewToggle(
+                    view: view,
+                    onChanged: settings.setAnimationsView,
                   ),
-                  // Only built (so only playing) while on screen.
-                  itemBuilder: (context, i) => _AnimationTile(
-                    key: ValueKey(anims[i].path),
-                    packPath: widget.packPath,
-                    anim: anims[i],
-                    edited: anims[i] != widget.detected[i],
-                    focused: _focused == i,
-                    dimmed: _focused != null && _focused != i,
-                    playAll: mode == AnimateMode.all,
-                    onTap: () => _focus(_focused == i ? null : i),
-                    onEdit: () => widget.onEdit(anims[i]),
-                    starred: widget.favoriteFiles.contains(anims[i].path),
-                    onToggleStar: widget.onToggleFavorite == null
-                        ? null
-                        : () => widget.onToggleFavorite!(anims[i].path),
-                    onOpen: () => showImageViewer(
-                      context,
+                  const SizedBox(width: 12),
+                  AnimateModeToggle(
+                    mode: mode,
+                    onChanged: settings.setDetailAnimateMode,
+                  ),
+                  const Spacer(),
+                  ThumbSizeSlider(
+                    width: detailControlWidth,
+                    range: animationThumbRange,
+                    value: size,
+                    onChanged: settings.setAnimationThumbSize,
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: CtrlWheelResize(
+                onSteps: (n) => settings.setAnimationThumbSize(
+                  animationThumbRange.nudge(size, n),
+                ),
+                // Taps that miss every card clear the focus.
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _focus(null),
+                  child: GroupedGrid(
+                    key: PageStorageKey('animations:${widget.gridId}'),
+                    rels: [for (final a in anims) a.path],
+                    view: view,
+                    collapsed: _collapsed,
+                    onToggleFolder: (f) => setState(() {
+                      if (!_collapsed.remove(f)) _collapsed.add(f);
+                      // A card folded out of sight can't stay focused.
+                      final i = _focused;
+                      if (i != null &&
+                          !visibleOrder(paths, view, _collapsed).contains(i)) {
+                        _focused = null;
+                      }
+                    }),
+                    physics: const CtrlWheelPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    // A square stage over a title and a details line.
+                    gridDelegate: ThumbGridDelegate(
+                      maxTileWidth: size,
+                      imageAspect: 1,
+                      footer: (_) => itemCardFooter,
+                    ),
+                    // Only built (so only playing) while on screen.
+                    itemBuilder: (context, i) => _AnimationTile(
+                      key: ValueKey(anims[i].path),
                       packPath: widget.packPath,
-                      images: [for (final j in order) paths[j]],
-                      index: math.max(0, order.indexOf(i)),
-                      sizes: widget.sizes,
+                      anim: anims[i],
+                      edited: anims[i] != widget.detected[i],
+                      focused: _focused == i,
+                      dimmed: _focused != null && _focused != i,
+                      playAll: mode == AnimateMode.all,
+                      onTap: () => _focus(_focused == i ? null : i),
+                      onEdit: () => widget.onEdit(anims[i]),
+                      starred: widget.favoriteFiles.contains(anims[i].path),
+                      onToggleStar: widget.onToggleFavorite == null
+                          ? null
+                          : () => widget.onToggleFavorite!(anims[i].path),
+                      onOpen: () => showImageViewer(
+                        context,
+                        packPath: widget.packPath,
+                        images: [for (final j in order) paths[j]],
+                        index: math.max(0, order.indexOf(i)),
+                        sizes: widget.sizes,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -240,10 +243,11 @@ class AnimateModeToggle extends StatelessWidget {
   );
 }
 
-/// One animation in the grid. Plays when [focused], or when not [dimmed]
-/// and either [playAll] or hovered. Its icons (edit, open, reveal) fade in
-/// on hover; an edited animation keeps a dot in the stage corner.
-class _AnimationTile extends StatefulWidget {
+/// One animation in the grid ([ItemCard]). Plays when [focused], or when
+/// not [dimmed] and either [playAll] or hovered. Its icons (edit, open,
+/// reveal) fade in on hover; an edited animation keeps a dot in the stage's
+/// top-left corner.
+class _AnimationTile extends StatelessWidget {
   const _AnimationTile({
     super.key,
     required this.packPath,
@@ -262,7 +266,7 @@ class _AnimationTile extends StatefulWidget {
   final String packPath;
   final SpriteAnim anim;
 
-  /// The favorites star in the stage's top-left corner: shown on hover,
+  /// The favorites star in the stage's top-right corner: shown on hover,
   /// always when [starred]; none without [onToggleStar].
   final bool starred;
   final VoidCallback? onToggleStar;
@@ -277,194 +281,54 @@ class _AnimationTile extends StatefulWidget {
   final VoidCallback onOpen;
 
   @override
-  State<_AnimationTile> createState() => _AnimationTileState();
-}
-
-class _AnimationTileState extends State<_AnimationTile> {
-  var _hover = false;
-
-  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final a = widget.anim;
-    final packPath = widget.packPath;
-    final playing =
-        widget.focused || !widget.dimmed && (widget.playAll || _hover);
-    const duration = Duration(milliseconds: 200);
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: AnimatedOpacity(
-        duration: duration,
-        opacity: widget.dimmed ? 0.35 : 1,
-        child: AnimatedScale(
-          duration: duration,
-          scale: widget.focused ? 1.04 : 1,
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: widget.focused
-                  ? BorderSide(color: scheme.primary, width: 2)
-                  : BorderSide.none,
-            ),
-            child: InkWell(
-              mouseCursor: clickCursor,
-              onTap: widget.onTap,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: ColoredBox(
-                      color: scheme.surfaceContainerHighest,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: a.kind == AnimKind.gif
-                                ? PixelImage(
-                                    File(p.join(packPath, a.path)),
-                                    animate: playing,
-                                  )
-                                : AnimatedSprite(
-                                    packPath: packPath,
-                                    anim: a,
-                                    playing: playing,
-                                  ),
-                          ),
-                          if (widget.onToggleStar case final toggle?
-                              when _hover || widget.starred)
-                            Positioned(
-                              top: 2,
-                              left: 2,
-                              child: Material(
-                                color: scheme.surface.withValues(alpha: 0.85),
-                                shape: const CircleBorder(),
-                                child: FavoriteStar(
-                                  key: ValueKey('star:${a.path}'),
-                                  starred: widget.starred,
-                                  onPressed: toggle,
-                                ),
-                              ),
-                            ),
-                          if (widget.edited)
-                            Positioned(
-                              top: 6,
-                              right: 6,
-                              child: Tooltip(
-                                message: 'Edited',
-                                child: Container(
-                                  key: const ValueKey('edited-badge'),
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: scheme.primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // The icons overlay the title only while hovered, so
-                  // titles get the full width the rest of the time.
-                  Stack(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
-                        child: Tooltip(
-                          message: a.path,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                prettyName(a.label, isFile: false),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.titleSmall,
-                              ),
-                              Text(
-                                switch (a.kind) {
-                                  AnimKind.sheet =>
-                                    '${a.frameW}×${a.frameH} · '
-                                        '${a.frameCount} frames · '
-                                        '${a.fps.round()} fps',
-                                  AnimKind.gif => 'GIF',
-                                },
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // Hidden (and not clickable) until hovered; clicks on
-                      // the title focus the card.
-                      Positioned(
-                        top: 0,
-                        right: 2,
-                        bottom: 0,
-                        child: IgnorePointer(
-                          ignoring: !_hover,
-                          child: AnimatedOpacity(
-                            key: const ValueKey('card-icons'),
-                            duration: const Duration(milliseconds: 150),
-                            opacity: _hover ? 1 : 0,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    scheme.surfaceContainerLow.withValues(
-                                      alpha: 0,
-                                    ),
-                                    scheme.surfaceContainerLow,
-                                  ],
-                                  stops: const [0, 0.2],
-                                ),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 16),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (a.kind != AnimKind.gif)
-                                      IconButton(
-                                        tooltip: widget.edited
-                                            ? 'Edit animation (edited)'
-                                            : 'Edit animation',
-                                        iconSize: 18,
-                                        visualDensity: VisualDensity.compact,
-                                        color: widget.edited
-                                            ? scheme.primary
-                                            : null,
-                                        icon: const Icon(Icons.tune),
-                                        onPressed: widget.onEdit,
-                                      ),
-                                    OpenImageButton(onPressed: widget.onOpen),
-                                    RevealButton(p.join(packPath, a.path)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+    final scheme = Theme.of(context).colorScheme;
+    final a = anim;
+    return ItemCard(
+      path: a.path,
+      focused: focused,
+      dimmed: dimmed,
+      onTap: onTap,
+      starred: starred,
+      onToggleStar: onToggleStar,
+      title: prettyName(a.label, isFile: false),
+      details: switch (a.kind) {
+        AnimKind.sheet =>
+          '${a.frameW}×${a.frameH} · ${a.frameCount} frames · '
+              '${a.fps.round()} fps',
+        AnimKind.gif => 'GIF',
+      },
+      stage: (hover) {
+        final playing = focused || !dimmed && (playAll || hover);
+        return a.kind == AnimKind.gif
+            ? PixelImage(File(p.join(packPath, a.path)), animate: playing)
+            : AnimatedSprite(packPath: packPath, anim: a, playing: playing);
+      },
+      badge: edited
+          ? Tooltip(
+              message: 'Edited',
+              child: Container(
+                key: const ValueKey('edited-badge'),
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: scheme.primary,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
+            )
+          : null,
+      actions: [
+        if (a.kind != AnimKind.gif)
+          CardIconButton(
+            tooltip: edited ? 'Edit animation (edited)' : 'Edit animation',
+            color: edited ? scheme.primary : null,
+            icon: Icons.tune,
+            onPressed: onEdit,
           ),
-        ),
-      ),
+        OpenImageButton(onPressed: onOpen),
+        RevealButton(p.join(packPath, a.path)),
+      ],
     );
   }
 }
@@ -476,11 +340,9 @@ class OpenImageButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => IconButton(
+  Widget build(BuildContext context) => CardIconButton(
     tooltip: 'Open image',
-    iconSize: 18,
-    visualDensity: VisualDensity.compact,
-    icon: const Icon(Icons.open_in_full),
+    icon: Icons.open_in_full,
     onPressed: onPressed,
   );
 }

@@ -8,6 +8,7 @@ import 'package:assets_explorer/state/dashboard.dart';
 import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:assets_explorer/ui/app.dart';
+import 'package:assets_explorer/ui/format.dart';
 import 'package:assets_explorer/ui/help_screen.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:assets_explorer/ui/pack_detail_screen.dart';
@@ -16,6 +17,7 @@ import 'package:assets_explorer/ui/tabs.dart';
 import 'package:assets_explorer/ui/dashboard.dart';
 import 'package:assets_explorer/ui/track_player.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
+import 'package:assets_explorer/ui/widgets/item_card.dart';
 import 'package:assets_explorer/ui/widgets/pack_tile.dart';
 import 'package:assets_explorer/ui/widgets/thumb_size.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
@@ -182,6 +184,19 @@ void main() {
     await tester.pump();
   }
 
+  /// Opens image [rel] in the viewer through its card's Open image icon
+  /// (a click focuses the card since M40).
+  Future<void> openImage(WidgetTester tester, String rel) async {
+    final card = find.byKey(ValueKey('image:$rel'));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(card));
+    await tester.pump();
+    await tester.tap(
+      find.descendant(of: card, matching: find.byTooltip('Open image')),
+    );
+    await mouse.removePointer();
+  }
+
   testWidgets('unpinned header is a slim bar; hover shows it floating', (
     tester,
   ) async {
@@ -241,12 +256,15 @@ void main() {
     expect(find.text('Heroes / Knight red'), findsOneWidget);
 
     // Root: knight.png, z_root.png; archer/c, d; knight_red/a, b.
-    await tester.tap(find.text('z_root.png'));
+    await openImage(tester, 'z_root.png');
     await tester.pumpAndSettle();
     expect(find.text('2 / 6'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
-    expect(find.text('C'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(ImageViewer), matching: find.text('C')),
+      findsOneWidget,
+    );
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(find.byType(ImageViewer), findsNothing);
@@ -254,7 +272,7 @@ void main() {
     // Folding a folder takes its images out of the viewer's list.
     await tester.tap(find.text('Heroes / Archer'));
     await tester.pump();
-    await tester.tap(find.text('a.png'));
+    await openImage(tester, 'heroes/knight_red/a.png');
     await tester.pumpAndSettle();
     expect(find.text('3 / 4'), findsOneWidget);
   });
@@ -280,8 +298,8 @@ void main() {
     expect(find.byTooltip('Show the whole pack'), findsOneWidget);
     await tester.tap(find.textContaining('Images ('));
     await tester.pumpAndSettle();
-    expect(find.text('e.png'), findsOneWidget);
-    expect(find.text('c.png'), findsNothing);
+    expect(find.byKey(const ValueKey('image:Mage/e.png')), findsOneWidget);
+    expect(find.byKey(const ValueKey('image:Archer/c.png')), findsNothing);
 
     await tester.tap(find.text('Show whole pack'));
     await tester.pumpAndSettle();
@@ -477,6 +495,141 @@ void main() {
     }
     expect(find.text('Apply size'), findsNothing);
     expect(find.textContaining('Animations ('), findsOneWidget);
+  });
+
+  group('Image cards (M40)', () {
+    Finder card(String rel) => find.byKey(ValueKey('image:$rel'));
+    ItemCard cardOf(WidgetTester tester, String rel) =>
+        tester.widget<ItemCard>(card(rel));
+    String? focused(WidgetTester tester) => [
+      for (final e in find.byType(ItemCard).evaluate())
+        if ((e.widget as ItemCard).focused) (e.widget as ItemCard).path,
+    ].singleOrNull;
+
+    Future<void> openImagesTab(WidgetTester tester) async {
+      await openKnight(tester);
+      await tester.tap(find.textContaining('Images ('));
+      await tester.pumpAndSettle();
+    }
+
+    Future<TestGesture> hoverCard(WidgetTester tester, String rel) async {
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(card(rel)));
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      return mouse;
+    }
+
+    testWidgets('a click focuses; arrows move; Esc, back, empty space leave', (
+      tester,
+    ) async {
+      await openImagesTab(tester);
+      await tester.tap(card('z_root.png'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(focused(tester), 'z_root.png');
+      expect(find.byType(ImageViewer), findsNothing);
+      expect(cardOf(tester, 'heroes/archer/c.png').dimmed, isTrue);
+      expect(cardOf(tester, 'z_root.png').dimmed, isFalse);
+
+      // ←/→ follow the on-screen order (Flat: sorted paths).
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      final before = focused(tester);
+      expect(before, isNot('z_root.png'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(focused(tester), 'z_root.png');
+
+      // Esc leaves focus mode; the page stays.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(focused(tester), isNull);
+      expect(find.byType(PackDetailScreen), findsOneWidget);
+
+      // The mouse back button too, before it would close the page.
+      await tester.tap(card('z_root.png'));
+      await tester.pump(const Duration(milliseconds: 300));
+      final back = await tester.startGesture(
+        const Offset(5, 895),
+        kind: PointerDeviceKind.mouse,
+        buttons: kBackMouseButton,
+      );
+      await back.up();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(focused(tester), isNull);
+      expect(find.byType(PackDetailScreen), findsOneWidget);
+
+      // A click on the focused card, or on empty space, leaves it too.
+      await tester.tap(card('z_root.png'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(card('z_root.png'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(focused(tester), isNull);
+      await tester.tap(card('z_root.png'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tapAt(const Offset(1300, 880));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(focused(tester), isNull);
+    });
+
+    testWidgets('Open image starts the viewer at that image', (tester) async {
+      await openImagesTab(tester);
+      await openImage(tester, 'z_root.png');
+      await pumpUntil(tester, find.byType(ImageViewer));
+      final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
+      expect(viewer.images[viewer.initialIndex], 'z_root.png');
+    });
+
+    testWidgets('star top right, footer size, icons all one size', (
+      tester,
+    ) async {
+      await openImagesTab(tester);
+      final rel = 'z_root.png';
+      // Footer: pretty title and the image size.
+      expect(
+        find.descendant(of: card(rel), matching: find.text('Z root')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: card(rel), matching: find.text('8×8')),
+        findsOneWidget,
+      );
+      final star = find.byKey(const ValueKey('star:z_root.png'));
+      expect(star, findsNothing);
+      await hoverCard(tester, rel);
+      expect(star, findsOneWidget);
+      // Top right of the card.
+      final box = tester.getRect(card(rel));
+      final at = tester.getRect(star);
+      expect(at.right, greaterThan(box.right - 40));
+      expect(at.top, lessThan(box.top + 40));
+      await tester.tap(star);
+      await tester.pump();
+      expect(cardOf(tester, rel).starred, isTrue);
+
+      Size icon(String tooltip) => tester.getSize(
+        find.descendant(of: card(rel), matching: find.byTooltip(tooltip)),
+      );
+      final open = icon('Open image');
+      expect(icon('Make animation…'), open);
+      expect(icon('Show in file manager'), open);
+    });
+
+    testWidgets('Ctrl-click selects without focusing', (tester) async {
+      await openImagesTab(tester);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.tap(card('z_root.png'));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(find.text('1 selected'), findsOneWidget);
+      expect(focused(tester), isNull);
+      expect(cardOf(tester, 'z_root.png').selected, isTrue);
+      // A plain click focuses and leaves the selection as it is.
+      await tester.tap(card('heroes/archer/c.png'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(focused(tester), 'heroes/archer/c.png');
+      expect(find.text('1 selected'), findsOneWidget);
+    });
   });
 
   group('Quick UI fixes (M39)', () {
@@ -1122,7 +1275,7 @@ void main() {
       await pumpUntil(tester, find.text('Show all files'));
       await tester.pump(const Duration(milliseconds: 500));
       // The detail lists the barrels; clicking one opens them in order.
-      await tester.tap(find.text('barrels_2.png'));
+      await openImage(tester, barrels[2]);
       await pumpUntil(tester, find.byType(ImageViewer));
       final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
       expect(viewer.images, barrels);
@@ -1658,7 +1811,12 @@ void main() {
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(
         location: tester.getCenter(
-          find.ancestor(of: find.text(name), matching: find.byType(Card)).first,
+          find
+              .ancestor(
+                of: find.text(prettyName(name)),
+                matching: find.byType(Card),
+              )
+              .first,
         ),
       );
       addTearDown(mouse.removePointer);
@@ -1675,7 +1833,12 @@ void main() {
       });
       expect(find.textContaining('Animations ('), findsNothing);
       final mouse = await hover(tester, 'panel.png');
-      await tester.tap(find.byTooltip('Make animation…'));
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('image:ui/panel.png')),
+          matching: find.byTooltip('Make animation…'),
+        ),
+      );
       await pumpUntil(tester, find.text('Apply size'));
       expect(find.text('Sheet · 16×16 frames · 4 × 1 · 4 frames'), findsOne);
       expect(find.text('Not an animation'), findsNothing);
@@ -1687,8 +1850,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       // Still on the Images tab after the rescan; the strip is listed under
       // Animations only (M34).
-      expect(find.text('portrait.png'), findsOneWidget);
-      expect(find.text('panel.png'), findsNothing);
+      expect(find.text('Portrait'), findsOneWidget);
+      expect(find.text('Panel'), findsNothing);
       await tester.tap(find.textContaining('Animations ('));
       final edit = find.byIcon(Icons.tune);
       // The tab slide takes several frames.
@@ -1711,7 +1874,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Apply size'), findsNothing, reason: 'dialog closed');
       // Back among the images.
-      expect(find.text('panel.png'), findsOneWidget);
+      expect(find.text('Panel'), findsOneWidget);
     });
 
     /// Every file under the pack with its bytes, to show nothing changed.
@@ -1822,7 +1985,7 @@ void main() {
       });
       Future<void> clickWith(LogicalKeyboardKey key, String name) async {
         await tester.sendKeyDownEvent(key);
-        await tester.tap(find.text(name));
+        await tester.tap(find.text(prettyName(name)));
         await tester.sendKeyUpEvent(key);
         await tester.pump();
       }
@@ -1940,9 +2103,9 @@ void main() {
       // No match in Other files: that tab goes.
       expect(find.textContaining('Other files'), findsNothing);
       expect(find.text('Matching “barrel”'), findsOneWidget);
-      expect(find.text('Barrels 0'), findsNothing); // not a card title
-      expect(find.text('barrels_0.png'), findsOneWidget);
-      expect(find.text('a.png'), findsNothing);
+      // Image cards show pretty titles (M40).
+      expect(find.text('Barrels 0'), findsOneWidget);
+      expect(find.byKey(const ValueKey('image:a.png')), findsNothing);
 
       // The open tab stays even without matches.
       await type(tester, 'sword');
@@ -2662,7 +2825,7 @@ void main() {
       final mouse = await hoverOver(
         tester,
         find
-            .ancestor(of: find.text('z_root.png'), matching: find.byType(Card))
+            .ancestor(of: find.text('Z root'), matching: find.byType(Card))
             .first,
       );
       expect(star, findsOneWidget);

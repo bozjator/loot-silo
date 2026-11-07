@@ -118,10 +118,10 @@ abstract final class AppKeys {
     'In the file search: clear it, then leave it',
     [SingleActivator(LogicalKeyboardKey.escape)],
   );
-  static const focusPrevious = KeyBinding('Focus mode: previous animation', [
+  static const focusPrevious = KeyBinding('Focus mode: previous card', [
     SingleActivator(LogicalKeyboardKey.arrowLeft),
   ]);
-  static const focusNext = KeyBinding('Focus mode: next animation', [
+  static const focusNext = KeyBinding('Focus mode: next card', [
     SingleActivator(LogicalKeyboardKey.arrowRight),
   ]);
   static const leaveFocus = KeyBinding('Leave focus mode', [
@@ -209,7 +209,11 @@ const mouseHelp = [
   ),
   MouseHelp('Click the Dashboard tab', 'Back to the dashboard from a pack'),
   MouseHelp('Click a star', 'Add a pack or file to favorites, or remove it'),
-  MouseHelp('Click an animation card', 'Focus mode: dim and pause the others'),
+  MouseHelp(
+    'Click an animation or image card',
+    'Focus mode: dim (and pause) the others',
+  ),
+  MouseHelp('Open image icon on a card', 'Show it in the image viewer'),
   MouseHelp(
     'Wheel in the image viewer',
     'Zoom; drag to pan, double-click fits',
@@ -218,3 +222,53 @@ const mouseHelp = [
   MouseHelp('Wheel over the Edit preview', 'Zoom (−, +, reset on hover)'),
   MouseHelp('Ctrl / Shift-click images (Flat)', 'Select frames to combine'),
 ];
+
+/// The mouse back button, offered to the focused widget before the app
+/// closes a page: in-page state (a focused card) is left first, as Esc does.
+class BackIntent extends Intent {
+  const BackIntent();
+}
+
+/// Takes the mouse back button ([BackIntent]) while [enabled].
+class BackHandler extends StatelessWidget {
+  const BackHandler({
+    super.key,
+    required this.enabled,
+    required this.onBack,
+    required this.child,
+  });
+
+  final bool enabled;
+  final VoidCallback onBack;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Actions(
+    actions: {BackIntent: _BackAction(enabled, onBack)},
+    child: child,
+  );
+}
+
+class _BackAction extends Action<BackIntent> {
+  _BackAction(this.enabled, this.onBack);
+
+  final bool enabled;
+  final VoidCallback onBack;
+
+  @override
+  bool isEnabled(BackIntent intent) => enabled;
+
+  @override
+  Object? invoke(BackIntent intent) {
+    onBack();
+    return true;
+  }
+}
+
+/// Offers the mouse back button to the focused widget; true when it took
+/// it.
+bool offerBack() {
+  final context = FocusManager.instance.primaryFocus?.context;
+  return context != null &&
+      Actions.maybeInvoke(context, const BackIntent()) == true;
+}

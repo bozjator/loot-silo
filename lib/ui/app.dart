@@ -127,7 +127,7 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
       // search handle Esc first.
       builder: (context, child) => Listener(
         onPointerDown: (event) {
-          if (event.buttons & kBackMouseButton != 0) _back();
+          if (event.buttons & kBackMouseButton != 0 && !offerBack()) _back();
         },
         child: CallbackShortcuts(
           bindings: {...AppKeys.back.bind(_back), ..._appShortcuts},

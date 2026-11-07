@@ -19,6 +19,7 @@ import 'package:assets_explorer/ui/track_player.dart';
 import 'package:assets_explorer/ui/widgets/favorite_star.dart';
 import 'package:assets_explorer/ui/widgets/pack_tile.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
+import 'package:assets_explorer/ui/widgets/item_card.dart';
 import 'package:assets_explorer/ui/reveal.dart';
 import 'package:assets_explorer/ui/settings_screen.dart';
 import 'package:assets_explorer/ui/tabs.dart';
@@ -102,6 +103,19 @@ Future<void> pumpUntil(
 /// Gives file images time to decode on real threads.
 /// Moves a mouse over [finder] (card icons only take clicks while hovered)
 /// and leaves it there until the test ends.
+/// Opens image [rel] in the viewer through its card's Open image icon (a
+/// click focuses the card since M40).
+Future<void> openImageCard(WidgetTester tester, String rel) async {
+  final card = find.byKey(ValueKey('image:$rel'));
+  final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  await mouse.addPointer(location: tester.getCenter(card));
+  await tester.pump();
+  await tester.tap(
+    find.descendant(of: card, matching: find.byTooltip('Open image')),
+  );
+  await mouse.removePointer();
+}
+
 Future<void> hoverOver(WidgetTester tester, Finder finder) async {
   final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
   await mouse.addPointer(location: tester.getCenter(finder));
@@ -656,7 +670,13 @@ void main() {
     await captureScreenshot(tester, 'm12_viewer_carousel', settle: false);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await settleImages(tester);
-    expect(find.text('Knight mockup'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(ImageViewer),
+        matching: find.text('Knight mockup'),
+      ),
+      findsOneWidget,
+    );
     await captureScreenshot(tester, 'm12_viewer_mockup', settle: false);
 
     // The mouse back button closes it like Esc.
@@ -666,14 +686,16 @@ void main() {
       buttons: kBackMouseButton,
     );
     await mouse.up();
+    // Frees the mouse for the card hover below.
+    await mouse.removePointer();
     await pumpUntil(tester, find.byType(ImageViewer), seconds: 5, gone: true);
     expect(find.text('Knight Pack'), findsWidgets);
 
     await tester.tap(find.textContaining('Images ('));
     await tester.pump(const Duration(milliseconds: 500));
     await settleImages(tester);
-    await tester.tap(find.text('wide_ui-panorama.png'));
-    await pumpUntil(tester, find.text('Wide ui panorama'));
+    await openImageCard(tester, 'fx/wide_ui-panorama.png');
+    await pumpUntil(tester, find.byType(ImageViewer));
     await settleImages(tester);
     expect(find.textContaining('4000 × 200 px'), findsOneWidget);
     await captureScreenshot(tester, 'm12_viewer_strip', settle: false);
@@ -686,7 +708,13 @@ void main() {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
         await tester.pump();
       }
-      expect(find.text(title), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(ImageViewer),
+          matching: find.text(title),
+        ),
+        findsOneWidget,
+      );
       await settleImages(tester);
       await captureScreenshot(tester, shot, settle: false);
     }
@@ -711,13 +739,11 @@ void main() {
     await tester.tap(find.textContaining('Images ('));
     await tester.pump(const Duration(milliseconds: 500));
     await settleImages(tester);
+    // Since M40 a click focuses; the Open image icon opens the viewer.
+    final first = find.byType(ItemCard).first;
+    await hoverOver(tester, first);
     await tester.tap(
-      find
-          .descendant(
-            of: find.byType(CustomScrollView),
-            matching: find.byType(Card),
-          )
-          .first,
+      find.descendant(of: first, matching: find.byTooltip('Open image')),
     );
     await pumpUntil(tester, find.byType(ImageViewer));
     await settleImages(tester);
@@ -780,10 +806,16 @@ A **16×16** knight with *walk* and *idle* animations.
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await mouse.addPointer(location: Offset.zero);
     addTearDown(mouse.removePointer);
-    await mouse.moveTo(tester.getCenter(find.text('knight.png')));
+    final knight = find.byKey(const ValueKey('image:knight.png'));
+    await mouse.moveTo(tester.getCenter(knight));
     await tester.pump();
     await captureScreenshot(tester, 'm13_image_hover', settle: false);
-    await tester.tap(find.byTooltip('Show in file manager').last);
+    await tester.tap(
+      find.descendant(
+        of: knight,
+        matching: find.byTooltip('Show in file manager'),
+      ),
+    );
     expect(revealed.last, p.join(pack, 'knight.png'));
     await mouse.moveTo(Offset.zero);
 
@@ -1513,10 +1545,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, find.textContaining('Images ('));
     await tester.tap(find.textContaining('Images ('));
     await tester.pump(const Duration(milliseconds: 500));
-    final cards = find.ancestor(
-      of: find.textContaining('.png'),
-      matching: find.byType(Card),
-    );
+    final cards = find.byType(ItemCard);
     await pumpUntil(tester, cards);
     for (final i in [0, 2]) {
       await g.moveTo(tester.getCenter(cards.at(i)));
@@ -1634,6 +1663,62 @@ A **16×16** knight with *walk* and *idle* animations.
       lessThan(tester.getTopLeft(find.text('About')).dy),
     );
     await captureScreenshot(tester, 'm39_settings_help', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m40: image cards — focus mode and hover icons (real)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField).first, 'Epic RPG World');
+    const village = 'Epic RPG World - The Village V2.2';
+    final tile = find.descendant(
+      of: find.byType(PackTile),
+      matching: find.text(village),
+    );
+    await pumpUntil(tester, tile);
+    await tester.tap(tile);
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    final cards = find.byType(ItemCard);
+    await pumpUntil(tester, cards);
+    await settleImages(tester);
+
+    // Hover icons on the second card.
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(cards.at(1)));
+    addTearDown(mouse.removePointer);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      find.descendant(of: cards.at(1), matching: find.byTooltip('Open image')),
+      findsOneWidget,
+    );
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm40_hover_icons', settle: false);
+
+    // A click focuses the third card; the others dim.
+    await tester.tap(cards.at(2));
+    await mouse.moveTo(const Offset(1430, 890));
+    await tester.pump(const Duration(milliseconds: 400));
+    final third = tester.widget<ItemCard>(cards.at(2));
+    expect(third.focused, isTrue);
+    expect(tester.widget<ItemCard>(cards.at(0)).dimmed, isTrue);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm40_focused_card', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<ItemCard>(cards.at(3)).focused, isTrue);
+    // Esc leaves focus mode; the page stays.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<ItemCard>(cards.at(3)).focused, isFalse);
+    expect(find.byType(PackDetailScreen), findsOneWidget);
     expect(Directory(real).statSync().modified, before);
   });
 
@@ -1824,6 +1909,17 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.text('By folder'));
     await tester.pump(const Duration(milliseconds: 500));
     final combine = find.text('Combine into animation');
+    // Taller cards (M40) can put the folder below the built area.
+    await tester.scrollUntilVisible(
+      combine,
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.ensureVisible(combine);
     await tester.pump(const Duration(milliseconds: 300));
     await settleImages(tester);
@@ -1857,8 +1953,21 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.text('Flat'));
     await tester.pump(const Duration(milliseconds: 500));
     for (final name in ['explosion00.png', 'explosion01.png']) {
+      final card = find.byKey(ValueKey('image:fx/Explosion/$name'));
+      await tester.scrollUntilVisible(
+        card,
+        300,
+        scrollable: find
+            .descendant(
+              of: find.byType(CustomScrollView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.ensureVisible(card);
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.tap(find.text(name));
+      await tester.tap(card);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pump();
     }
@@ -1892,6 +2001,17 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.text('By folder'));
     await tester.pump(const Duration(milliseconds: 500));
     final combine = find.text('Combine into animation');
+    // Taller cards (M40) can put the folder below the built area.
+    await tester.scrollUntilVisible(
+      combine,
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.ensureVisible(combine);
     await tester.pump(const Duration(milliseconds: 300));
     await settleImages(tester);

@@ -201,6 +201,19 @@ class HelpScreen extends StatelessWidget {
                   'mouse back button go back as well.',
                 ),
                 _P(
+                  'Animations and Images tabs: the cards work alike. Click a '
+                  'card to focus it: it is outlined and the others dim (and '
+                  'pause). ←/→ move the focus in on-screen order; Esc, the '
+                  'mouse back button, a click on empty space or on the '
+                  'focused card leave it. On hover, a card shows its star '
+                  '(top right) and its icons over the footer: Edit (animations) '
+                  'or Make animation… (images), Open image (the viewer, in '
+                  'on-screen order) and Show in file manager. Image cards '
+                  'show the image size under the name. In the Flat view, '
+                  'Ctrl-click or Shift-click select images instead of '
+                  'focusing them.',
+                ),
+                _P(
                   'Audio tab: click a sound (or Space) to play or stop it; '
                   'Loop repeats it. Play all (Shift+Space) plays every sound '
                   'shown, in order (the file search and folder filter '
