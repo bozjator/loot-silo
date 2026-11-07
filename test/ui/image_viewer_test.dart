@@ -154,7 +154,14 @@ void main() {
       await open(tester, ['hero.png']);
       await drawn(tester);
       await tester.pump();
-      // A 32 px sprite fills the viewer's height exactly (no whole steps).
+      // M50: it opens at 1:1.
+      expect(find.text('1×'), findsOneWidget);
+      expect(tester.getRect(find.byType(RawImage)).width, closeTo(32, 0.5));
+
+      // Fit: a 32 px sprite fills the viewer's height exactly (no whole
+      // steps).
+      await tester.tap(find.text('Fit'));
+      await tester.pump();
       final fit = zoomShown(tester);
       expect(fit, greaterThan(10));
       final area = tester.getSize(find.byType(InteractiveViewer));
@@ -198,6 +205,48 @@ void main() {
       await tester.tap(find.text('Fit'));
       await tester.pump();
       expect(zoomShown(tester), fit);
+    });
+
+    testWidgets('opens at 1:1, or at the fit when bigger than the window '
+        '(M50), and so does each next image', (tester) async {
+      png('tiny.png', 16, 16);
+      png('huge.png', 4000, 4000);
+      png('small.png', 40, 20);
+      await open(tester, ['tiny.png', 'huge.png', 'small.png']);
+      await drawn(tester);
+      await tester.pump();
+      expect(zoomShown(tester), 1.0);
+      final tiny = tester.getRect(find.byType(RawImage));
+      expect(tiny.size, const Size(16, 16));
+      // Centred in the image area.
+      final area = tester.getRect(find.byType(InteractiveViewer));
+      expect(tiny.center.dx, closeTo(area.center.dx, 0.5));
+      expect(tiny.center.dy, closeTo(area.center.dy, 0.5));
+
+      // Zoomed in, then the next image: the rule again, not the zoom.
+      await tester.tap(find.text('Fit'));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      await drawn(tester);
+      await tester.pump();
+      final fit = zoomShown(tester);
+      expect(fit, lessThan(1));
+      final huge = tester.getRect(find.byType(RawImage));
+      // Never cropped: the whole image is inside the area.
+      expect(huge.height, closeTo(area.height - 32, 0.5));
+      expect(
+        area.contains(huge.topLeft) &&
+            area.contains(huge.bottomRight - const Offset(1, 1)),
+        isTrue,
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      await drawn(tester);
+      await tester.pump();
+      expect(zoomShown(tester), 1.0);
+      expect(tester.getRect(find.byType(RawImage)).size, const Size(40, 20));
     });
 
     test('zoom labels', () {

@@ -420,7 +420,7 @@ class _BodyState extends State<_Body> {
               minHeight: detailControlHeight,
             ),
             hintText: 'Search files (Ctrl+F)',
-            border: const OutlineInputBorder(),
+            border: const OutlineInputBorder(borderRadius: detailControlRadius),
             suffixIcon: ValueListenableBuilder(
               valueListenable: _searchText,
               builder: (context, value, _) => value.text.isEmpty
@@ -456,6 +456,9 @@ class _BodyState extends State<_Body> {
           // Only the star and the count: `★ 12`.
           label: Text(formatCount(widget.favoriteFiles.length)),
           visualDensity: detailChipDensity,
+          shape: const RoundedRectangleBorder(
+            borderRadius: detailControlRadius,
+          ),
           selected: favorites,
           onSelected: (on) => setState(() => _onlyFavorites = on),
         ),

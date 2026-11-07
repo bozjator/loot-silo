@@ -20,6 +20,7 @@ import 'package:loot_silo/ui/widgets/favorite_star.dart';
 import 'package:loot_silo/ui/widgets/pack_tile.dart';
 import 'package:loot_silo/ui/widgets/animated_sprite.dart';
 import 'package:loot_silo/ui/widgets/item_card.dart';
+import 'package:loot_silo/ui/widgets/measure_size.dart';
 import 'package:loot_silo/ui/reveal.dart';
 import 'package:loot_silo/ui/settings_screen.dart';
 import 'package:loot_silo/ui/tabs.dart';
@@ -1850,6 +1851,105 @@ A **16×16** knight with *walk* and *idle* animations.
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
     }
+  });
+
+  testWidgets('m50: slider width, end icons, viewer 1:1, About links', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    final coin = img.Image(width: 16, height: 16, numChannels: 4);
+    img.fillCircle(
+      coin,
+      x: 8,
+      y: 8,
+      radius: 6,
+      color: img.ColorRgba8(240, 190, 40, 255),
+    );
+    Directory(p.join(pack, 'items')).createSync();
+    File(p.join(pack, 'items', 'coin.png'))
+        .writeAsBytesSync(img.encodePng(coin));
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.pump(const Duration(milliseconds: 500));
+    // The size slider is as wide as the app bar's icons, under them.
+    final icons = tester.getRect(
+      find
+          .ancestor(
+            of: find.byTooltip('itch.io'),
+            matching: find.byType(MeasureSize),
+          )
+          .first,
+    );
+    final slider = find.byKey(const ValueKey('dashboard-size-slider'));
+    expect(tester.getRect(slider).width, icons.width);
+    expect(tester.getRect(slider).right, icons.right);
+    await tester.tap(
+      find.descendant(of: slider, matching: find.byTooltip('Larger')),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(Dashboard)),
+    );
+    expect(container.read(settingsProvider).dashboardTileSize, 260);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm50_dashboard_top_row', settle: false);
+
+    // Detail: the search box's corners match the ★ chip's.
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await pumpUntil(tester, find.byKey(const ValueKey('image:items/coin.png')));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm50_detail_toolbar', settle: false);
+
+    // A 16 px coin opens at 1:1, not blown up to the window.
+    await openImageCard(tester, 'items/coin.png');
+    await pumpUntil(tester, find.byType(ImageViewer));
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('1×'), findsOneWidget);
+    expect(
+      tester
+          .getRect(
+            find.descendant(
+              of: find.byType(ImageViewer),
+              matching: find.byType(RawImage),
+            ),
+          )
+          .width,
+      closeTo(16, 0.5),
+    );
+    await captureScreenshot(tester, 'm50_viewer_small', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.byType(ImageViewer), gone: true);
+
+    // Settings → About (Ctrl+, works from the pack page): the two links.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await pumpUntil(tester, find.byType(SettingsScreen));
+    await tester.pump(const Duration(milliseconds: 500));
+    final list = find
+        .descendant(
+          of: find.byType(SettingsScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('link:itch.io')),
+      300,
+      scrollable: list,
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('link:GitHub')), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm50_about', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.byType(SettingsScreen), gone: true);
   });
 
   testWidgets('m39: toolbars, Loop, slim bar, Settings (real, read-only)', (

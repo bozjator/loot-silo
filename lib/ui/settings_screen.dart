@@ -9,6 +9,7 @@ import 'itch_screen.dart';
 import 'help_screen.dart';
 import 'shortcuts.dart';
 import 'widgets/branding.dart';
+import 'widgets/project_links.dart';
 
 /// Keyboard shortcuts, listed on the settings screen.
 class SettingsScreen extends ConsumerWidget {
@@ -202,7 +203,14 @@ class SettingsScreen extends ConsumerWidget {
               const ListTile(
                 leading: Icon(Icons.info_outline),
                 title: SelectableText(appVersionLabel),
-                subtitle: Text(appSlogan),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(appSlogan),
+                    SizedBox(height: 8),
+                    ProjectLinks(),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
             ],

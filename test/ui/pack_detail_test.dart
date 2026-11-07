@@ -19,6 +19,9 @@ import 'package:loot_silo/ui/folder_groups.dart';
 import 'package:loot_silo/ui/track_player.dart';
 import 'package:loot_silo/ui/widgets/animated_sprite.dart';
 import 'package:loot_silo/ui/widgets/item_card.dart';
+import 'package:loot_silo/ui/widgets/measure_size.dart';
+import 'package:loot_silo/ui/widgets/project_links.dart';
+import 'package:loot_silo/version.dart';
 import 'package:loot_silo/ui/widgets/pack_tile.dart';
 import 'package:loot_silo/ui/widgets/tab_toolbar.dart';
 import 'package:loot_silo/ui/widgets/thumb_size.dart';
@@ -33,6 +36,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
+import '../helpers/fonts.dart';
 import '../helpers/fs.dart';
 
 class _NoKey implements KeyStore {
@@ -105,7 +109,9 @@ void main() {
   /// Opens Knight Pack, with images in the root and two sub-folders.
   Future<void> openKnight(
     WidgetTester tester, {
-    Size size = const Size(1400, 900),
+    // Wide enough for the dashboard's top row in the test font, whose
+    // glyphs are about twice as wide as the app's.
+    Size size = const Size(1600, 900),
     List<String> files = const [
       'heroes/knight_red/a.png',
       'heroes/knight_red/b.png',
@@ -247,7 +253,7 @@ void main() {
   testWidgets('images by folder; the viewer follows the grouped order', (
     tester,
   ) async {
-    await openKnight(tester, size: const Size(1400, 1600));
+    await openKnight(tester, size: const Size(1600, 1600));
     await tester.tap(find.textContaining('Images ('));
     await tester.pumpAndSettle();
     await tester.tap(find.text('By folder'));
@@ -1490,7 +1496,7 @@ void main() {
     /// A 4×2 grid of 16 px cells, opened in the Edit dialog.
     Future<void> openGrid(
       WidgetTester tester, {
-      Size size = const Size(1400, 900),
+      Size size = const Size(1600, 900),
     }) async {
       final sheet = img.Image(width: 64, height: 32, numChannels: 4);
       img.fill(sheet, color: img.ColorRgba8(220, 120, 40, 255));
@@ -1874,7 +1880,7 @@ void main() {
       WidgetTester tester,
       Map<String, img.Image> images, {
       bool byFolder = false,
-      Size size = const Size(1400, 900),
+      Size size = const Size(1600, 900),
     }) async {
       await openKnight(tester, files: const [], images: images, size: size);
       await tester.tap(find.textContaining('Images ('));
@@ -2092,7 +2098,7 @@ void main() {
           'fx/puff/taken.png': solid(8, 8, 30),
         },
         byFolder: true,
-        size: const Size(1400, 1600),
+        size: const Size(1600, 1600),
       );
       final before = snapshot();
       await tester.tap(find.text('Combine into animation'));
@@ -2233,7 +2239,7 @@ void main() {
           'b/z2.png': solid(8, 8, 40),
         },
         byFolder: true,
-        size: const Size(1400, 1600),
+        size: const Size(1600, 1600),
       );
       // A plain click focuses, it doesn't select.
       await clickWith(tester, null, 'a/k1.png');
@@ -3463,7 +3469,7 @@ void main() {
         tester,
         files: const [],
         images: images,
-        size: const Size(1400, 1600),
+        size: const Size(1600, 1600),
       );
       await tester.tap(find.textContaining('$tab ('));
       await tester.pump(const Duration(milliseconds: 500));
@@ -3593,6 +3599,171 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byKey(const ValueKey('image:a/k1.png')), findsOneWidget);
       expect(find.byKey(const ValueKey('image:b/z1.png')), findsNothing);
+    });
+  });
+
+  group('Quick UI fixes (M50)', () {
+    // Real Roboto, not the test font's wide boxes, so the 1024 px top row
+    // measures like the app's. Last group in the file: earlier tests keep
+    // the test font.
+    setUpAll(loadAppFonts);
+    Rect actionsRow(WidgetTester tester) => tester.getRect(
+      find
+          .ancestor(
+            of: find.byTooltip('itch.io'),
+            matching: find.byType(MeasureSize),
+          )
+          .first,
+    );
+    final slider = find.byKey(const ValueKey('dashboard-size-slider'));
+
+    testWidgets('the dashboard slider is as wide as the app bar icons', (
+      tester,
+    ) async {
+      await openKnight(tester, open: false);
+      await tester.pump();
+      final icons = actionsRow(tester);
+      final row = tester.getRect(slider);
+      expect(row.width, icons.width);
+      // Six icon buttons; lined up under them.
+      expect(icons.width, greaterThan(200));
+      expect(row.right, icons.right);
+      // Labels at this width.
+      expect(find.text('Expanded'), findsOneWidget);
+    });
+
+    testWidgets('the top row fits at 1024 px: view toggle icons only', (
+      tester,
+    ) async {
+      await openKnight(tester, open: false, size: const Size(1024, 600));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Expanded'), findsNothing);
+      expect(tester.getSize(slider).width, actionsRow(tester).width);
+      final search = find.widgetWithText(
+        TextField,
+        'Search packs, authors, tags, file names   ( / )',
+      );
+      expect(tester.getSize(search).width, greaterThan(200));
+      // The facet menus are icons too, with their names as tooltips.
+      expect(find.text('Author'), findsNothing);
+      expect(find.byTooltip('Author'), findsOneWidget);
+      // The segments still switch, by icon.
+      await tester.tap(find.byIcon(Icons.view_comfy_alt_outlined));
+      await tester.pump();
+      expect(store.load().dashboardView, DashboardView.expanded);
+    });
+
+    testWidgets('slider end icons step the size, disabled at the ends', (
+      tester,
+    ) async {
+      await openKnight(tester, open: false);
+      await tester.pump();
+      final smaller = find.descendant(
+        of: slider,
+        matching: find.byTooltip('Smaller'),
+      );
+      final larger = find.descendant(
+        of: slider,
+        matching: find.byTooltip('Larger'),
+      );
+      await tester.tap(larger);
+      await tester.pump();
+      expect(store.load().dashboardTileSize, 240 + dashboardTileRange.step);
+      await tester.tap(smaller);
+      await tester.pump();
+      await tester.tap(smaller);
+      await tester.pump();
+      expect(store.load().dashboardTileSize, 240 - dashboardTileRange.step);
+      IconButton button(Finder f) => tester.widget<IconButton>(
+        find.ancestor(of: f, matching: find.byType(IconButton)).first,
+      );
+      for (var i = 0; i < 30; i++) {
+        if (button(smaller).onPressed == null) break;
+        await tester.tap(smaller);
+        await tester.pump();
+      }
+      expect(store.load().dashboardTileSize, dashboardTileRange.min);
+      expect(button(smaller).onPressed, isNull);
+      expect(button(larger).onPressed, isNotNull);
+    });
+
+    testWidgets('detail search box and Favorites chip share a radius', (
+      tester,
+    ) async {
+      await openKnight(tester);
+      final field = tester.widget<TextField>(
+        find.widgetWithText(TextField, 'Search files (Ctrl+F)'),
+      );
+      final border = field.decoration!.border! as OutlineInputBorder;
+      final chip = tester.widget<FilterChip>(
+        find.byKey(const ValueKey('detail-favorites-chip')),
+      );
+      final shape = chip.shape! as RoundedRectangleBorder;
+      expect(border.borderRadius, shape.borderRadius);
+      expect(border.borderRadius, detailControlRadius);
+    });
+
+    testWidgets('About and Help link to GitHub and itch.io', (tester) async {
+      final launched = <Uri>[];
+      await openKnight(
+        tester,
+        open: false,
+        overrides: [
+          urlLauncherProvider.overrideWithValue((uri) async {
+            launched.add(uri);
+            return true;
+          }),
+        ],
+      );
+      await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
+      await tester.pumpAndSettle();
+      final list = find
+          .descendant(
+            of: find.byType(SettingsScreen),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('link:itch.io')),
+        300,
+        scrollable: list,
+      );
+      expect(
+        find.textContaining('Star the project on ', findRichText: true),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Download it on ', findRichText: true),
+        findsOneWidget,
+      );
+      // No URL text shown.
+      expect(find.textContaining('https://', findRichText: true), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('link:GitHub')));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.byKey(const ValueKey('link:itch.io')));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(launched, [Uri.parse(appGitHubUrl), Uri.parse(appItchUrl)]);
+      expect(appGitHubUrl, 'https://github.com/bozjator/loot-silo');
+      expect(appItchUrl, 'https://bozjator.itch.io/loot-silo');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+      await tester.pumpAndSettle();
+      final help = find
+          .descendant(
+            of: find.byType(HelpScreen),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('link:GitHub')),
+        600,
+        scrollable: help,
+      );
+      await tester.tap(find.byKey(const ValueKey('link:GitHub')));
+      expect(launched.last, Uri.parse(appGitHubUrl));
     });
   });
 }

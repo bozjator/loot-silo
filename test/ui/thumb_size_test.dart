@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:loot_silo/core/library_index.dart';
 import 'package:loot_silo/state/settings.dart';
+import 'package:loot_silo/ui/cursors.dart';
 import 'package:loot_silo/ui/widgets/pack_tile.dart';
 import 'package:loot_silo/ui/widgets/thumb_size.dart';
 import 'package:flutter/gestures.dart';
@@ -193,6 +194,50 @@ void main() {
     // where the fixed grid footer was 120 px.
     expect(height(4) - image, lessThan(90));
     expect(height(0), greaterThan(height(4) + 30));
+  });
+
+  testWidgets('end icons step one size, disabled at the ends (M50)', (
+    tester,
+  ) async {
+    var value = imageThumbRange.max - imageThumbRange.step;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: StatefulBuilder(
+              builder: (context, setState) => ThumbSizeSlider(
+                range: imageThumbRange,
+                value: value,
+                onChanged: (v) => setState(() => value = v),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    IconButton button(String tooltip) => tester.widget<IconButton>(
+      find.ancestor(
+        of: find.byTooltip(tooltip),
+        matching: find.byType(IconButton),
+      ),
+    );
+    await tester.tap(find.byTooltip('Larger'));
+    await tester.pump();
+    expect(value, imageThumbRange.max);
+    expect(button('Larger').onPressed, isNull);
+    expect(button('Smaller').onPressed, isNotNull);
+    await tester.tap(find.byTooltip('Smaller'));
+    await tester.pump();
+    expect(value, imageThumbRange.max - imageThumbRange.step);
+    value = imageThumbRange.min;
+    await tester.tap(find.byTooltip('Larger'));
+    await tester.pump();
+    value = imageThumbRange.min;
+    (tester.element(find.byType(StatefulBuilder)) as StatefulElement)
+        .markNeedsBuild();
+    await tester.pump();
+    expect(button('Smaller').onPressed, isNull);
+    expect(button('Smaller').mouseCursor, clickCursor);
   });
 
   testWidgets('Ctrl + wheel resizes instead of scrolling', (tester) async {

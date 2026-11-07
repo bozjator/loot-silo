@@ -16,6 +16,23 @@ import 'widgets/filter_bar.dart';
 import 'widgets/thumb_size.dart';
 import 'widgets/pack_tile.dart';
 
+/// Width of the app bar's row of icon buttons, measured when it lays out
+/// (null before that). The dashboard's size slider is made as wide.
+final appBarActionsWidthProvider =
+    NotifierProvider<AppBarActionsWidth, double?>(AppBarActionsWidth.new);
+
+class AppBarActionsWidth extends Notifier<double?> {
+  @override
+  double? build() => null;
+
+  void set(double width) => state = width;
+}
+
+/// Below this dashboard width the view toggle and the Author, Tag and
+/// Source menus show only their icons (each keeps its tooltip), so the
+/// search box keeps room at the 1024 px minimum.
+const viewLabelsMinWidth = 1200.0;
+
 /// The pack grid with search, filters, sorting and bundle browsing.
 class Dashboard extends ConsumerStatefulWidget {
   const Dashboard({super.key});
@@ -189,203 +206,232 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final settings = ref.read(settingsProvider.notifier);
     final tabsNotifier = ref.read(tabsProvider.notifier);
     final favorites = ref.watch(favoritesProvider);
+    final sliderWidth = ref.watch(appBarActionsWidthProvider);
+    // Larger text needs a wider window for the labels.
+    final labelsMinWidth = MediaQuery.textScalerOf(context)
+        .scale(viewLabelsMinWidth);
 
-    return Focus(
-      focusNode: _gridFocus,
-      autofocus: true,
-      onKeyEvent: _onKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          FilterBar(
-            query: query,
-            facets: ref.watch(facetsProvider),
-            resultCount: filesView ? files.length : tiles.length,
-            resultUnit: switch (view) {
-              DashboardView.packs => 'pack',
-              DashboardView.expanded => 'tile',
-              DashboardView.files => 'file',
-            },
-            searchController: _search,
-            searchFocus: _searchFocus,
-            onLeaveSearch: _gridFocus.requestFocus,
-            onText: notifier.setText,
-            onToggleType: notifier.toggleType,
-            onToggleAuthor: notifier.toggleAuthor,
-            onToggleTag: notifier.toggleTag,
-            onToggleSource: notifier.toggleSource,
-            onSort: notifier.setSort,
-            onToggleFavorites: notifier.toggleFavorites,
-            onClear: () {
-              _search.clear();
-              notifier.clearFilters();
-            },
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ViewToggle(view: view, onChanged: settings.setDashboardView),
-                const SizedBox(width: 12),
-                // File results use the image card size.
-                if (filesView)
-                  ThumbSizeSlider(
-                    range: imageThumbRange,
-                    value: imageSize,
-                    onChanged: settings.setImageThumbSize,
-                  )
-                else
-                  ThumbSizeSlider(
-                    range: dashboardTileRange,
-                    value: tileSize,
-                    onChanged: settings.setDashboardTileSize,
-                  ),
-              ],
-            ),
-          ),
-          if (bundle != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: () => notifier.openBundle(null),
-                    icon: const Icon(Icons.arrow_back),
-                    label: const Text('All packs'),
-                  ),
-                  const Icon(Icons.chevron_right, size: 18),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      '${bundle.title} · ${bundle.author ?? ''}',
-                      style: theme.textTheme.titleSmall,
-                      overflow: TextOverflow.ellipsis,
+    return LayoutBuilder(
+      builder: (context, box) {
+        final narrow = box.maxWidth < labelsMinWidth;
+        return Focus(
+          focusNode: _gridFocus,
+          autofocus: true,
+          onKeyEvent: _onKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FilterBar(
+                query: query,
+                facets: ref.watch(facetsProvider),
+                resultCount: filesView ? files.length : tiles.length,
+                resultUnit: switch (view) {
+                  DashboardView.packs => 'pack',
+                  DashboardView.expanded => 'tile',
+                  DashboardView.files => 'file',
+                },
+                searchController: _search,
+                searchFocus: _searchFocus,
+                onLeaveSearch: _gridFocus.requestFocus,
+                onText: notifier.setText,
+                onToggleType: notifier.toggleType,
+                onToggleAuthor: notifier.toggleAuthor,
+                onToggleTag: notifier.toggleTag,
+                onToggleSource: notifier.toggleSource,
+                onSort: notifier.setSort,
+                onToggleFavorites: notifier.toggleFavorites,
+                compact: narrow,
+                onClear: () {
+                  _search.clear();
+                  notifier.clearFilters();
+                },
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ViewToggle(
+                      view: view,
+                      labels: !narrow,
+                      onChanged: settings.setDashboardView,
                     ),
-                  ),
-                  TextButton.icon(
-                    onPressed: () => openPackDetail(
-                      context,
-                      bundle.id,
-                      returnFocus: _gridFocus,
-                    ),
-                    icon: const Icon(Icons.info_outline, size: 18),
-                    label: const Text('Bundle details'),
-                  ),
-                ],
-              ),
-            ),
-          if (filesView && (fileSearch?.capped ?? false))
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: Text(
-                'Showing the first ${LibraryIndex.fileHitLimit} of '
-                '${fileSearch!.total} matching files — refine the search '
-                'to see the rest',
-                style: theme.textTheme.bodySmall,
-              ),
-            ),
-          Expanded(
-            child: filesView
-                ? _filesBody(
-                    searching: searching,
-                    favorites: query.favorites,
-                    loaded: visibleFiles?.hasValue ?? false,
-                    files: files,
-                    size: imageSize,
-                    search: search,
-                  )
-                : tiles.isEmpty && visible.hasValue
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.search_off, size: 48),
-                        const SizedBox(height: 8),
-                        const Text('No packs match'),
-                        TextButton(
-                          onPressed: () {
-                            _search.clear();
-                            notifier.clearFilters();
-                          },
-                          child: const Text('Clear search and filters'),
-                        ),
-                      ],
-                    ),
-                  )
-                : CtrlWheelResize(
-                    onSteps: (n) => settings.setDashboardTileSize(
-                      dashboardTileRange.nudge(tileSize, n),
-                    ),
-                    child: ThumbRows(
-                      // Root and each bundle keep their own scroll position.
-                      key: PageStorageKey(
-                        'grid:${query.bundleId}:${view.name}',
+                    const SizedBox(width: 12),
+                    // File results use the image card size. As wide as the app
+                    // bar's icons above it.
+                    if (filesView)
+                      ThumbSizeSlider(
+                        key: const ValueKey('dashboard-size-slider'),
+                        range: imageThumbRange,
+                        value: imageSize,
+                        width: sliderWidth,
+                        onChanged: settings.setImageThumbSize,
+                      )
+                    else
+                      ThumbSizeSlider(
+                        key: const ValueKey('dashboard-size-slider'),
+                        range: dashboardTileRange,
+                        value: tileSize,
+                        width: sliderWidth,
+                        onChanged: settings.setDashboardTileSize,
                       ),
-                      physics: const CtrlWheelPhysics(),
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                      maxTileWidth: tileSize,
-                      itemCount: tiles.length,
-                      itemBuilder: (context, i) {
-                        final DashboardTile(:tile, :pack, :folder) = tiles[i];
-                        return OpenInNewTab(
-                          key: ValueKey(tiles[i].key),
-                          // Bundles open in place; their details have a
-                          // button.
-                          onOpenInNewTab: pack.isContainer
-                              ? null
-                              : () =>
-                                    tabsNotifier.open(pack.id, folder: folder),
-                          child: PackTile(
-                            pack: tile,
-                            subPackCount: subCounts[pack.id] ?? 0,
-                            alwaysAnimate: animateAll,
-                            starred:
-                                folder == null && favorites.isPack(pack.id),
-                            onToggleStar: folder == null
-                                ? () => ref
-                                      .read(favoritesProvider.notifier)
-                                      .togglePack(pack.id)
-                                : null,
-                            showTags: query.sort == PackSort.tags,
-                            fileMatches: folder == null
-                                ? fileMatchLine(
-                                    fileSearch?.counts[pack.id] ?? 0,
-                                    examples[pack.id] ?? const [],
-                                  )
-                                : null,
-                            fileMatchesTooltip: fileMatchTooltip(
-                              fileSearch?.counts[pack.id] ?? 0,
-                              examples[pack.id] ?? const [],
-                            ),
-                            onFileMatchesTap: () => openPackDetail(
-                              context,
-                              pack.id,
-                              search: search,
-                              returnFocus: _gridFocus,
-                            ),
-                            onTap: pack.isContainer
-                                ? () => notifier.openBundle(pack.id)
-                                : () => openPackDetail(
-                                    context,
-                                    pack.id,
-                                    folder: folder,
-                                    returnFocus: _gridFocus,
-                                  ),
-                          ),
-                        );
-                      },
-                    ),
+                  ],
+                ),
+              ),
+              if (bundle != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => notifier.openBundle(null),
+                        icon: const Icon(Icons.arrow_back),
+                        label: const Text('All packs'),
+                      ),
+                      const Icon(Icons.chevron_right, size: 18),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          '${bundle.title} · ${bundle.author ?? ''}',
+                          style: theme.textTheme.titleSmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => openPackDetail(
+                          context,
+                          bundle.id,
+                          returnFocus: _gridFocus,
+                        ),
+                        icon: const Icon(Icons.info_outline, size: 18),
+                        label: const Text('Bundle details'),
+                      ),
+                    ],
                   ),
+                ),
+              if (filesView && (fileSearch?.capped ?? false))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                  child: Text(
+                    'Showing the first ${LibraryIndex.fileHitLimit} of '
+                    '${fileSearch!.total} matching files — refine the search '
+                    'to see the rest',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              Expanded(
+                child: filesView
+                    ? _filesBody(
+                        searching: searching,
+                        favorites: query.favorites,
+                        loaded: visibleFiles?.hasValue ?? false,
+                        files: files,
+                        size: imageSize,
+                        search: search,
+                      )
+                    : tiles.isEmpty && visible.hasValue
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.search_off, size: 48),
+                            const SizedBox(height: 8),
+                            const Text('No packs match'),
+                            TextButton(
+                              onPressed: () {
+                                _search.clear();
+                                notifier.clearFilters();
+                              },
+                              child: const Text('Clear search and filters'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : CtrlWheelResize(
+                        onSteps: (n) => settings.setDashboardTileSize(
+                          dashboardTileRange.nudge(tileSize, n),
+                        ),
+                        child: ThumbRows(
+                          // Root and each bundle keep their own scroll position.
+                          key: PageStorageKey(
+                            'grid:${query.bundleId}:${view.name}',
+                          ),
+                          physics: const CtrlWheelPhysics(),
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                          maxTileWidth: tileSize,
+                          itemCount: tiles.length,
+                          itemBuilder: (context, i) {
+                            final DashboardTile(:tile, :pack, :folder) =
+                                tiles[i];
+                            return OpenInNewTab(
+                              key: ValueKey(tiles[i].key),
+                              // Bundles open in place; their details have a
+                              // button.
+                              onOpenInNewTab: pack.isContainer
+                                  ? null
+                                  : () => tabsNotifier.open(
+                                      pack.id,
+                                      folder: folder,
+                                    ),
+                              child: PackTile(
+                                pack: tile,
+                                subPackCount: subCounts[pack.id] ?? 0,
+                                alwaysAnimate: animateAll,
+                                starred:
+                                    folder == null && favorites.isPack(pack.id),
+                                onToggleStar: folder == null
+                                    ? () => ref
+                                          .read(favoritesProvider.notifier)
+                                          .togglePack(pack.id)
+                                    : null,
+                                showTags: query.sort == PackSort.tags,
+                                fileMatches: folder == null
+                                    ? fileMatchLine(
+                                        fileSearch?.counts[pack.id] ?? 0,
+                                        examples[pack.id] ?? const [],
+                                      )
+                                    : null,
+                                fileMatchesTooltip: fileMatchTooltip(
+                                  fileSearch?.counts[pack.id] ?? 0,
+                                  examples[pack.id] ?? const [],
+                                ),
+                                onFileMatchesTap: () => openPackDetail(
+                                  context,
+                                  pack.id,
+                                  search: search,
+                                  returnFocus: _gridFocus,
+                                ),
+                                onTap: pack.isContainer
+                                    ? () => notifier.openBundle(pack.id)
+                                    : () => openPackDetail(
+                                        context,
+                                        pack.id,
+                                        folder: folder,
+                                        returnFocus: _gridFocus,
+                                      ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
 /// Packs or Expanded (one tile per character folder and the like).
 class _ViewToggle extends StatelessWidget {
-  const _ViewToggle({required this.view, required this.onChanged});
+  const _ViewToggle({
+    required this.view,
+    required this.labels,
+    required this.onChanged,
+  });
 
   final DashboardView view;
+
+  /// False: icons only (narrow windows).
+  final bool labels;
   final ValueChanged<DashboardView> onChanged;
 
   @override
@@ -395,24 +441,28 @@ class _ViewToggle extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
     ),
-    segments: const [
+    segments: [
       ButtonSegment(
         value: DashboardView.packs,
-        icon: Icon(Icons.grid_view, size: 18),
-        label: Text('Packs'),
-        tooltip: 'One tile per pack',
+        icon: const Icon(Icons.grid_view, size: 18),
+        label: labels ? const Text('Packs') : null,
+        tooltip: labels ? 'One tile per pack' : 'Packs: one tile per pack',
       ),
       ButtonSegment(
         value: DashboardView.expanded,
-        icon: Icon(Icons.view_comfy_alt_outlined, size: 18),
-        label: Text('Expanded'),
-        tooltip: 'One tile per sub-folder of packs that are collections',
+        icon: const Icon(Icons.view_comfy_alt_outlined, size: 18),
+        label: labels ? const Text('Expanded') : null,
+        tooltip:
+            '${labels ? '' : 'Expanded: '}One tile per sub-folder of packs '
+            'that are collections',
       ),
       ButtonSegment(
         value: DashboardView.files,
-        icon: Icon(Icons.insert_drive_file_outlined, size: 18),
-        label: Text('Files'),
-        tooltip: 'Files whose names match the search',
+        icon: const Icon(Icons.insert_drive_file_outlined, size: 18),
+        label: labels ? const Text('Files') : null,
+        tooltip: labels
+            ? 'Files whose names match the search'
+            : 'Files: files whose names match the search',
       ),
     ],
     selected: {view},

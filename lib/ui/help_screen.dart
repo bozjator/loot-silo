@@ -6,6 +6,7 @@ import '../core/sidecar.dart' show authorFileName, packFileName;
 import '../version.dart';
 import 'shortcuts.dart';
 import 'widgets/branding.dart';
+import 'widgets/project_links.dart';
 
 /// Opens the Help page over everything (from the app bar, Settings or F1).
 void openHelp(BuildContext context) =>
@@ -253,6 +254,15 @@ class HelpScreen extends StatelessWidget {
                   'folder shown (or expands them all when all are folded).',
                 ),
                 _P(
+                  'The image viewer opens each image at 1:1 (actual pixels, '
+                  'as in a game); an image bigger than the window opens '
+                  'fitted instead. Fit and 1:1 in its toolbar switch, the '
+                  'wheel zooms, drag pans and a double-click fits. The '
+                  'thumbnail size sliders (dashboard, Images, Animations) '
+                  'step one size smaller or larger with the small and big '
+                  'icons at their ends.',
+                ),
+                _P(
                   'Audio tab: click a sound (or Space) to play or stop it; '
                   'Loop repeats it. Play all (Shift+Space) plays every sound '
                   'shown, in order (the file search and folder filter '
@@ -325,6 +335,8 @@ class HelpScreen extends StatelessWidget {
                 ),
               ]),
               const Divider(height: 32),
+              const ProjectLinks(textAlign: TextAlign.center),
+              const SizedBox(height: 12),
               Text(
                 appVersionLabel,
                 key: const ValueKey('help-version'),

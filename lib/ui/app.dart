@@ -21,6 +21,7 @@ import 'session.dart';
 import '../version.dart';
 import 'shortcuts.dart';
 import 'widgets/branding.dart';
+import 'widgets/measure_size.dart';
 import 'cursors.dart';
 
 /// Root widget of Loot Silo.
@@ -274,38 +275,55 @@ class HomeScreen extends ConsumerWidget {
         title: const AppBarTitle(),
         bottom: tabStrip(ref, progress: scanning),
         actions: [
-          IconButton(
-            tooltip: 'itch.io',
-            onPressed: () => Navigator.of(
-              context,
-              rootNavigator: true,
-            ).push(MaterialPageRoute<void>(builder: (_) => const ItchScreen())),
-            icon: const Icon(Icons.storefront_outlined),
-          ),
-          IconButton(
-            tooltip: 'Credits',
-            onPressed: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute<void>(builder: (_) => const CreditsScreen()),
+          // Measured: the dashboard's size slider is as wide as this row.
+          MeasureSize(
+            onSize: (s) =>
+                ref.read(appBarActionsWidthProvider.notifier).set(s.width),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'itch.io',
+                  onPressed: () =>
+                      Navigator.of(context, rootNavigator: true).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const ItchScreen(),
+                        ),
+                      ),
+                  icon: const Icon(Icons.storefront_outlined),
+                ),
+                IconButton(
+                  tooltip: 'Credits',
+                  onPressed: () =>
+                      Navigator.of(context, rootNavigator: true).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const CreditsScreen(),
+                        ),
+                      ),
+                  icon: const Icon(Icons.receipt_long_outlined),
+                ),
+                IconButton(
+                  tooltip: 'Rescan library (F5)',
+                  onPressed: scanning ? null : rescan,
+                  icon: const Icon(Icons.refresh),
+                ),
+                const _ImportMenu(),
+                IconButton(
+                  tooltip: 'How Loot Silo works (F1)',
+                  onPressed: () => openHelp(context),
+                  icon: const Icon(Icons.help_outline),
+                ),
+                IconButton(
+                  tooltip: 'Settings (Ctrl+,)',
+                  onPressed: () => openSettings(context),
+                  icon: const Icon(Icons.settings_outlined),
+                ),
+              ],
             ),
-            icon: const Icon(Icons.receipt_long_outlined),
           ),
-          IconButton(
-            tooltip: 'Rescan library (F5)',
-            onPressed: scanning ? null : rescan,
-            icon: const Icon(Icons.refresh),
-          ),
-          const _ImportMenu(),
-          IconButton(
-            tooltip: 'How Loot Silo works (F1)',
-            onPressed: () => openHelp(context),
-            icon: const Icon(Icons.help_outline),
-          ),
-          IconButton(
-            tooltip: 'Settings (Ctrl+,)',
-            onPressed: () => openSettings(context),
-            icon: const Icon(Icons.settings_outlined),
-          ),
-          const SizedBox(width: 8),
+          // The dashboard's 16 px side padding, so the slider lines up
+          // under the icons.
+          const SizedBox(width: 16),
         ],
       ),
       body: DropZone(

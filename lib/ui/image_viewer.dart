@@ -31,8 +31,9 @@ Future<void> showImageViewer(
   ),
 );
 
-/// Near full-window image viewer: fits the image keeping its proportions,
-/// wheel zoom both ways (down to [minViewerZoom] actual pixels, below the
+/// Near full-window image viewer. Each image opens at **1:1** (actual
+/// pixels, so small sprites aren't blown up), or at the fit when it is
+/// bigger than the window (never cropped); wheel zoom both ways (down to [minViewerZoom] actual pixels, below the
 /// fit) and drag to pan, prev/next by button or ←/→ within the list it was
 /// opened from. The toolbar shows the zoom ("4×") with **1:1** (actual
 /// size, as in game) and **Fit** (also double-click).
@@ -84,6 +85,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   /// area; from the last layout.
   var _fitScale = 1.0;
   var _viewport = Size.zero;
+
+  /// The shown image hasn't been laid out yet: its first layout picks 1:1
+  /// or the fit.
+  var _opening = true;
   final _dims = <String, (int, int)?>{};
 
   @override
@@ -132,6 +137,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     setState(() {
       _index = next;
       _transform.value = Matrix4.identity();
+      _opening = true;
     });
   }
 
@@ -274,6 +280,19 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                             inner.width / dims.$1,
                             inner.height / dims.$2,
                           );
+                          if (_opening) {
+                            _opening = false;
+                            // 1:1 when it fits, else stay at the fit. No
+                            // rebuild of this state mid-layout: the toolbar
+                            // catches up after the frame, below.
+                            _transform.removeListener(_zoomed);
+                            _fitScale = fit;
+                            if (fit >= 1) _zoomTo(1);
+                            _transform.addListener(_zoomed);
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) setState(() {});
+                            });
+                          }
                           if (fit != _fitScale) {
                             _fitScale = fit;
                             // The toolbar was built before this layout.

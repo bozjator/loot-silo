@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import '../cursors.dart';
+
 /// Allowed thumbnail sizes, in logical pixels of tile width.
 typedef SizeRange = ({double min, double max, double step});
 
@@ -191,6 +193,11 @@ const detailControlWidth = 260.0;
 /// chip), so they line up: a dense field's natural height.
 const detailControlHeight = 36.0;
 
+/// Corner radius of the pack detail toolbar's controls: the search box and
+/// the Favorites chip next to it use this one value (a Material 3 chip's
+/// own 8 px), so their corners match.
+const detailControlRadius = BorderRadius.all(Radius.circular(8));
+
 /// The chip density that paints a chip [detailControlHeight] tall.
 ///
 /// A chip's outline isn't sized by the box around it: `RawChip` centres
@@ -221,7 +228,9 @@ class _DenseTickMarkShape extends RoundSliderTickMarkShape {
   }) => const Size.square(1);
 }
 
-/// Compact thumbnail size slider for a toolbar.
+/// Compact thumbnail size slider for a toolbar. The small icon on the left
+/// makes thumbnails one step smaller, the big one on the right one step
+/// larger.
 class ThumbSizeSlider extends StatelessWidget {
   const ThumbSizeSlider({
     super.key,
@@ -240,36 +249,83 @@ class ThumbSizeSlider extends StatelessWidget {
   final double? width;
 
   @override
-  Widget build(BuildContext context) => Tooltip(
-    message: 'Thumbnail size (Ctrl + mouse wheel)',
-    child: SizedBox(
+  Widget build(BuildContext context) {
+    final v = range.clamp(value);
+    return SizedBox(
       width: width,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.photo_size_select_small, size: 18),
+          _EndButton(
+            key: const ValueKey('thumb-smaller'),
+            tooltip: 'Smaller',
+            icon: Icons.photo_size_select_small,
+            size: 18,
+            onPressed: v > range.min
+                ? () => onChanged(range.nudge(v, -1))
+                : null,
+          ),
           _track(
-            SliderTheme(
-              data: SliderTheme.of(context)
-                  .copyWith(tickMarkShape: const _DenseTickMarkShape()),
-              child: Slider(
-                mouseCursor: WidgetStateMouseCursor.clickable,
-                min: range.min,
-                max: range.max,
-                divisions: ((range.max - range.min) / range.step).round(),
-                value: range.clamp(value),
-                label: '${value.round()} px',
-                onChanged: onChanged,
+            Tooltip(
+              message: 'Thumbnail size (Ctrl + mouse wheel)',
+              child: SliderTheme(
+                data: SliderTheme.of(context)
+                    .copyWith(tickMarkShape: const _DenseTickMarkShape()),
+                child: Slider(
+                  mouseCursor: WidgetStateMouseCursor.clickable,
+                  min: range.min,
+                  max: range.max,
+                  divisions: ((range.max - range.min) / range.step).round(),
+                  value: v,
+                  label: '${value.round()} px',
+                  onChanged: onChanged,
+                ),
               ),
             ),
           ),
-          const Icon(Icons.photo_size_select_large, size: 22),
+          _EndButton(
+            key: const ValueKey('thumb-larger'),
+            tooltip: 'Larger',
+            icon: Icons.photo_size_select_large,
+            size: 22,
+            onPressed: v < range.max
+                ? () => onChanged(range.nudge(v, 1))
+                : null,
+          ),
         ],
       ),
-    ),
-  );
+    );
+  }
 
   Widget _track(Widget slider) => width == null
       ? SizedBox(width: compactSliderTrack, child: slider)
       : Expanded(child: slider);
+}
+
+/// One of the slider's end icons as a small button, no wider than the
+/// icon plus a little room for its hover highlight.
+class _EndButton extends StatelessWidget {
+  const _EndButton({
+    super.key,
+    required this.tooltip,
+    required this.icon,
+    required this.size,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final double size;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: tooltip,
+    onPressed: onPressed,
+    mouseCursor: clickCursor,
+    icon: Icon(icon, size: size),
+    padding: const EdgeInsets.all(3),
+    constraints: const BoxConstraints(),
+    style: const ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+  );
 }

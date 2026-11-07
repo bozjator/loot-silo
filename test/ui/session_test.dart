@@ -94,7 +94,8 @@ void main() {
   Future<ProviderContainer> start(WidgetTester tester) async {
     final index = LibraryIndex(NativeDatabase.memory());
     addTearDown(index.close);
-    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    // Wide enough for the dashboard's top row in the test font.
+    await tester.binding.setSurfaceSize(const Size(1600, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       ProviderScope(

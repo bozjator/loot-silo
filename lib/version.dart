@@ -15,3 +15,10 @@ const appBuild = 1;
 /// "Loot Silo 1.0.0 (build 1)": Settings' About line and the Help
 /// footer.
 const appVersionLabel = '$appName $appVersion (build $appBuild)';
+
+/// The project's source code ("Star the project on GitHub").
+const appGitHubUrl = 'https://github.com/bozjator/loot-silo';
+
+/// The app's download page ("Download it on itch.io"). A placeholder until
+/// the page exists.
+const appItchUrl = 'https://bozjator.itch.io/loot-silo';

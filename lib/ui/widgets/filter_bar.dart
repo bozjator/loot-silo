@@ -26,6 +26,7 @@ class FilterBar extends StatelessWidget {
     required this.onClear,
     this.onToggleFavorites,
     this.trailing,
+    this.compact = false,
   });
 
   final DashboardQuery query;
@@ -52,6 +53,11 @@ class FilterBar extends StatelessWidget {
 
   /// Shown after the sort menu, e.g. the tile size slider.
   final Widget? trailing;
+
+  /// Narrow window: the Author, Tag and Source menus show only their icons
+  /// (with a count badge when something is selected), so the search box
+  /// keeps its room.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +110,7 @@ class FilterBar extends StatelessWidget {
               const SizedBox(width: 12),
               _FacetMenu(
                 label: 'Author',
+                compact: compact,
                 icon: Icons.person_outline,
                 values: facets.authors,
                 selected: query.authors,
@@ -111,6 +118,7 @@ class FilterBar extends StatelessWidget {
               ),
               _FacetMenu(
                 label: 'Tag',
+                compact: compact,
                 icon: Icons.sell_outlined,
                 values: facets.tags,
                 selected: query.tags,
@@ -118,6 +126,7 @@ class FilterBar extends StatelessWidget {
               ),
               _FacetMenu(
                 label: 'Source',
+                compact: compact,
                 icon: Icons.input,
                 values: facets.sources,
                 selected: query.sources,
@@ -253,10 +262,12 @@ class _FacetMenu extends StatelessWidget {
     required this.values,
     required this.selected,
     required this.onToggle,
+    required this.compact,
   });
 
   final String label;
   final IconData icon;
+  final bool compact;
   final List<(String, int)> values;
   final Set<String> selected;
   final ValueChanged<String> onToggle;
@@ -285,13 +296,28 @@ class _FacetMenu extends StatelessWidget {
             ),
           ),
       ],
-      builder: (context, controller, _) => TextButton.icon(
-        onPressed: values.isEmpty
+      builder: (context, controller, _) {
+        final onPressed = values.isEmpty
             ? null
-            : () => controller.isOpen ? controller.close() : controller.open(),
-        icon: Icon(icon, size: 18),
-        label: Text(selected.isEmpty ? label : '$label · ${selected.length}'),
-      ),
+            : () => controller.isOpen ? controller.close() : controller.open();
+        if (compact) {
+          return IconButton(
+            tooltip: label,
+            color: Theme.of(context).colorScheme.primary,
+            onPressed: onPressed,
+            icon: Badge(
+              isLabelVisible: selected.isNotEmpty,
+              label: Text('${selected.length}'),
+              child: Icon(icon, size: 18),
+            ),
+          );
+        }
+        return TextButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 18),
+          label: Text(selected.isEmpty ? label : '$label · ${selected.length}'),
+        );
+      },
     );
   }
 }

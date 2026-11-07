@@ -202,6 +202,7 @@ const mouseHelp = [
   MouseHelp('Right-click a pack', 'Menu with "Open in new tab"'),
   MouseHelp('Middle-click a tab', 'Close it'),
   MouseHelp('Ctrl + wheel over a grid', 'Bigger or smaller thumbnails'),
+  MouseHelp('Click a size slider\'s end icon', 'One size smaller or larger'),
   MouseHelp('Hover a dashboard tile', 'Play its animation'),
   MouseHelp(
     'Rest on the slim header bar',
@@ -216,7 +217,7 @@ const mouseHelp = [
   MouseHelp('Open image icon on a card', 'Show it in the image viewer'),
   MouseHelp(
     'Wheel in the image viewer',
-    'Zoom; drag to pan, double-click fits',
+    'Zoom (opens at 1:1); drag to pan, double-click fits',
   ),
   MouseHelp('Wheel over the Frames field', 'Step through counts that fit'),
   MouseHelp('Ctrl + wheel over All previews', 'Fewer or more columns'),
