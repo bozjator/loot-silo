@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:assets_explorer/core/text_preview.dart';
+import 'package:loot_silo/core/text_preview.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_test/flutter_test.dart';
 

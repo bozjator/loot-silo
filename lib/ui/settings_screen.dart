@@ -24,7 +24,7 @@ class SettingsScreen extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text('Switch library?'),
         content: Text(
-          'Asset Explorer will manage $path: it writes pack and author '
+          'Loot Silo will manage $path: it writes pack and author '
           'files there when you import or edit. Nothing is moved from the '
           'current library.',
         ),
@@ -79,7 +79,7 @@ class SettingsScreen extends ConsumerWidget {
                 title: Text(settings.libraryPath ?? 'Not chosen'),
                 subtitle: Text(
                   packCount == null
-                      ? 'The folder Asset Explorer manages (Author/Pack)'
+                      ? 'The folder Loot Silo manages (Author/Pack)'
                       : '$packCount packs, ${library!.packs.length} '
                             'including bundle contents',
                 ),
@@ -182,7 +182,7 @@ class SettingsScreen extends ConsumerWidget {
               section('Help'),
               ListTile(
                 leading: const Icon(Icons.help_outline),
-                title: const Text('How Asset Explorer works'),
+                title: const Text('How Loot Silo works'),
                 subtitle: const Text(
                   'Library layout, import, animations, search, previews, '
                   'every shortcut (F1)',
@@ -194,6 +194,7 @@ class SettingsScreen extends ConsumerWidget {
               const ListTile(
                 leading: Icon(Icons.info_outline),
                 title: SelectableText(appVersionLabel),
+                subtitle: Text(appSlogan),
               ),
               const SizedBox(height: 24),
             ],

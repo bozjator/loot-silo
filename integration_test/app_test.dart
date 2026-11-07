@@ -3,29 +3,29 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/itch/itch_api.dart';
-import 'package:assets_explorer/itch/itch_key.dart';
-import 'package:assets_explorer/state/dashboard.dart';
-import 'package:assets_explorer/state/itch.dart';
-import 'package:assets_explorer/state/providers.dart';
-import 'package:assets_explorer/state/settings.dart';
-import 'package:assets_explorer/ui/app.dart';
-import 'package:assets_explorer/ui/dashboard.dart';
-import 'package:assets_explorer/ui/help_screen.dart';
-import 'package:assets_explorer/ui/image_viewer.dart';
-import 'package:assets_explorer/ui/pack_detail_screen.dart';
-import 'package:assets_explorer/ui/track_player.dart';
-import 'package:assets_explorer/ui/widgets/favorite_star.dart';
-import 'package:assets_explorer/ui/widgets/pack_tile.dart';
-import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
-import 'package:assets_explorer/ui/widgets/item_card.dart';
-import 'package:assets_explorer/ui/reveal.dart';
-import 'package:assets_explorer/ui/settings_screen.dart';
-import 'package:assets_explorer/ui/tabs.dart';
-import 'package:assets_explorer/ui/text_preview_dialog.dart';
-import 'package:assets_explorer/ui/widgets/thumb_size.dart';
-import 'package:assets_explorer/version.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/itch/itch_api.dart';
+import 'package:loot_silo/itch/itch_key.dart';
+import 'package:loot_silo/state/dashboard.dart';
+import 'package:loot_silo/state/itch.dart';
+import 'package:loot_silo/state/providers.dart';
+import 'package:loot_silo/state/settings.dart';
+import 'package:loot_silo/ui/app.dart';
+import 'package:loot_silo/ui/dashboard.dart';
+import 'package:loot_silo/ui/help_screen.dart';
+import 'package:loot_silo/ui/image_viewer.dart';
+import 'package:loot_silo/ui/pack_detail_screen.dart';
+import 'package:loot_silo/ui/track_player.dart';
+import 'package:loot_silo/ui/widgets/favorite_star.dart';
+import 'package:loot_silo/ui/widgets/pack_tile.dart';
+import 'package:loot_silo/ui/widgets/animated_sprite.dart';
+import 'package:loot_silo/ui/widgets/item_card.dart';
+import 'package:loot_silo/ui/reveal.dart';
+import 'package:loot_silo/ui/settings_screen.dart';
+import 'package:loot_silo/ui/tabs.dart';
+import 'package:loot_silo/ui/text_preview_dialog.dart';
+import 'package:loot_silo/ui/widgets/thumb_size.dart';
+import 'package:loot_silo/version.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -216,7 +216,7 @@ void main() {
             (name) async => p.join(tmp.path, name),
           ),
         ],
-        child: const AssetsExplorerApp(),
+        child: const LootSiloApp(),
       ),
     );
   }
@@ -1762,6 +1762,32 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(ItemCard), findsWidgets);
     expect(find.byTooltip('Collapse all folders'), findsOneWidget);
+  });
+
+  testWidgets('m48: Loot Silo on the first-start screen and dashboard', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    // No settings file yet: the first-start screen.
+    await tester.pumpWidget(app(lib, restart: true));
+    await pumpUntil(tester, find.text('Choose a library folder'));
+    expect(find.text('Loot Silo'), findsNWidgets(2));
+    expect(find.text('Your game assets. At a glance.'), findsOneWidget);
+    await captureScreenshot(tester, 'm48_first_start', settle: false);
+    await tester.tap(find.text('Choose folder'));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('Loot Silo'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('How Loot Silo works (F1)'), findsOneWidget);
+    await settleImages(tester);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm48_dashboard', settle: false);
   });
 
   testWidgets('m39: toolbars, Loop, slim bar, Settings (real, read-only)', (

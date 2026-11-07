@@ -1,6 +1,6 @@
-import 'package:assets_explorer/core/file_search.dart';
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/core/library_scanner.dart';
+import 'package:loot_silo/core/file_search.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/core/library_scanner.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';

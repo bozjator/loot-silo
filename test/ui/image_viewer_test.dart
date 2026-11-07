@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:assets_explorer/state/providers.dart';
-import 'package:assets_explorer/state/settings.dart';
-import 'package:assets_explorer/ui/image_viewer.dart';
-import 'package:assets_explorer/ui/reveal.dart';
-import 'package:assets_explorer/ui/widgets/pixel_image.dart';
+import 'package:loot_silo/state/providers.dart';
+import 'package:loot_silo/state/settings.dart';
+import 'package:loot_silo/ui/image_viewer.dart';
+import 'package:loot_silo/ui/reveal.dart';
+import 'package:loot_silo/ui/widgets/pixel_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

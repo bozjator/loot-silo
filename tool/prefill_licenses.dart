@@ -5,9 +5,9 @@
 //   dart run tool/prefill_licenses.dart <INDEX.md> <library> [--write]
 import 'dart:io';
 
-import 'package:assets_explorer/core/author_resolver.dart';
-import 'package:assets_explorer/core/pack_editor.dart';
-import 'package:assets_explorer/core/sidecar.dart';
+import 'package:loot_silo/core/author_resolver.dart';
+import 'package:loot_silo/core/pack_editor.dart';
+import 'package:loot_silo/core/sidecar.dart';
 import 'package:path/path.dart' as p;
 
 void main(List<String> args) {

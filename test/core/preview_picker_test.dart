@@ -1,6 +1,6 @@
-import 'package:assets_explorer/core/fs_tree.dart';
-import 'package:assets_explorer/core/preview_picker.dart';
-import 'package:assets_explorer/core/sidecar.dart';
+import 'package:loot_silo/core/fs_tree.dart';
+import 'package:loot_silo/core/preview_picker.dart';
+import 'package:loot_silo/core/sidecar.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 List<(String, FileEntry)> files(Map<String, int> m) => [

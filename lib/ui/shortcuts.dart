@@ -67,7 +67,7 @@ String describeActivator(ShortcutActivator activator) {
 
 /// Every keyboard shortcut in the app.
 abstract final class AppKeys {
-  // Anywhere (bound above the navigator, in AssetsExplorerApp).
+  // Anywhere (bound above the navigator, in LootSiloApp).
   static const back = KeyBinding(
     'Back: close a dialog or page, leave a bundle',
     [SingleActivator(LogicalKeyboardKey.escape)],

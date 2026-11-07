@@ -1,5 +1,5 @@
-import 'package:assets_explorer/state/settings.dart';
-import 'package:assets_explorer/ui/folder_groups.dart';
+import 'package:loot_silo/state/settings.dart';
+import 'package:loot_silo/ui/folder_groups.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

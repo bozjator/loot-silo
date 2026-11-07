@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:assets_explorer/core/animation_detector.dart';
-import 'package:assets_explorer/core/pack_editor.dart';
-import 'package:assets_explorer/core/sidecar.dart';
+import 'package:loot_silo/core/animation_detector.dart';
+import 'package:loot_silo/core/pack_editor.dart';
+import 'package:loot_silo/core/sidecar.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;

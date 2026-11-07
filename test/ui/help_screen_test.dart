@@ -1,6 +1,6 @@
-import 'package:assets_explorer/core/animation_detector.dart';
-import 'package:assets_explorer/ui/help_screen.dart';
-import 'package:assets_explorer/ui/shortcuts.dart';
+import 'package:loot_silo/core/animation_detector.dart';
+import 'package:loot_silo/ui/help_screen.dart';
+import 'package:loot_silo/ui/shortcuts.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -91,6 +91,18 @@ void main() {
     final text = pageText(tester);
     expect(text, contains('A sheet can take its cell size from other'));
     expect(text, contains('starting from the best guess'));
+  });
+
+  testWidgets('M48: the Help title says Loot Silo', (tester) async {
+    await pumpHelp(tester);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('How Loot Silo works'),
+      ),
+      findsOneWidget,
+    );
+    expect(pageText(tester), isNot(contains('Asset Explorer')));
   });
 
   testWidgets('M37: Play all and how Loop works with it', (tester) async {

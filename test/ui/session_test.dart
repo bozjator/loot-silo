@@ -1,14 +1,14 @@
 import 'dart:io';
 
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/state/dashboard.dart';
-import 'package:assets_explorer/state/itch.dart';
-import 'package:assets_explorer/state/providers.dart';
-import 'package:assets_explorer/state/settings.dart';
-import 'package:assets_explorer/ui/app.dart';
-import 'package:assets_explorer/ui/session.dart';
-import 'package:assets_explorer/ui/settings_screen.dart';
-import 'package:assets_explorer/ui/tabs.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/state/dashboard.dart';
+import 'package:loot_silo/state/itch.dart';
+import 'package:loot_silo/state/providers.dart';
+import 'package:loot_silo/state/settings.dart';
+import 'package:loot_silo/ui/app.dart';
+import 'package:loot_silo/ui/session.dart';
+import 'package:loot_silo/ui/settings_screen.dart';
+import 'package:loot_silo/ui/tabs.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -104,7 +104,7 @@ void main() {
           keyStoreProvider.overrideWithValue(_NoKey()),
           envKeyProvider.overrideWithValue(() => null),
         ],
-        child: const AssetsExplorerApp(),
+        child: const LootSiloApp(),
       ),
     );
     final c = ProviderScope.containerOf(tester.element(find.byType(TabsHost)));

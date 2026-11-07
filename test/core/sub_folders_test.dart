@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:assets_explorer/core/fs_tree.dart';
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/core/library_scanner.dart';
-import 'package:assets_explorer/core/sub_folders.dart';
+import 'package:loot_silo/core/fs_tree.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/core/library_scanner.dart';
+import 'package:loot_silo/core/sub_folders.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';

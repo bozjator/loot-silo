@@ -1,4 +1,4 @@
-import 'package:assets_explorer/ui/format.dart';
+import 'package:loot_silo/ui/format.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

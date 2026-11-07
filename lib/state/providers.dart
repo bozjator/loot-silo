@@ -55,7 +55,7 @@ final archivePickerProvider = Provider<ArchivePicker>(
 /// Where archives are unpacked before import; outside the library so the
 /// importer can copy from it. Overridden in `main` with the app cache.
 final extractRootProvider = Provider<String>(
-  (ref) => p.join(Directory.systemTemp.path, 'assets_explorer_extract'),
+  (ref) => p.join(Directory.systemTemp.path, 'loot_silo_extract'),
 );
 
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(

@@ -15,7 +15,7 @@ void openHelp(BuildContext context) =>
       ),
     );
 
-/// How Asset Explorer works: plain text in sections. The word lists come
+/// How Loot Silo works: plain text in sections. The word lists come
 /// from the animation detector and the shortcuts from [shortcutSections],
 /// so the page follows the code.
 class HelpScreen extends StatelessWidget {
@@ -27,7 +27,7 @@ class HelpScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('How Asset Explorer works')),
+      appBar: AppBar(title: const Text('How Loot Silo works')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 900),
@@ -36,7 +36,7 @@ class HelpScreen extends StatelessWidget {
             children: [
               const _Section('Library layout', [
                 _P(
-                  'The library is one folder that Asset Explorer manages, '
+                  'The library is one folder that Loot Silo manages, '
                   'arranged as <Author>/<Pack>. Each author folder holds '
                   '$authorFileName; each pack folder may hold $packFileName. '
                   'Both are plain text you can edit by hand; the app rewrites '

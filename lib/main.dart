@@ -30,7 +30,7 @@ Future<void> main() async {
         libraryIndexProvider.overrideWithValue(index),
         extractRootProvider.overrideWithValue(p.join(cache.path, 'extract')),
       ],
-      child: const AssetsExplorerApp(),
+      child: const LootSiloApp(),
     ),
   );
 }

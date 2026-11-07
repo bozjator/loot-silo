@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:assets_explorer/core/sidecar.dart';
+import 'package:loot_silo/core/sidecar.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

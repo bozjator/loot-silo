@@ -1,4 +1,4 @@
-# Asset Explorer
+# Loot Silo
 
 ## Data compatibility
 

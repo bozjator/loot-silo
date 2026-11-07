@@ -1,7 +1,7 @@
 // Read-only scan report: `dart run tool/scan_report.dart <folder>`.
 import 'dart:io';
 
-import 'package:assets_explorer/core/library_scanner.dart';
+import 'package:loot_silo/core/library_scanner.dart';
 
 void main(List<String> args) {
   final r = scanLibrary(args.single);

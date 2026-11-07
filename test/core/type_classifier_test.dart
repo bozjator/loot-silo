@@ -1,5 +1,5 @@
-import 'package:assets_explorer/core/fs_tree.dart';
-import 'package:assets_explorer/core/type_classifier.dart';
+import 'package:loot_silo/core/fs_tree.dart';
+import 'package:loot_silo/core/type_classifier.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 (String, FileEntry) f(String rel, [int size = 1000]) =>

@@ -3,8 +3,8 @@
 // so two runs can be diffed before and after a detector change.
 import 'dart:io';
 
-import 'package:assets_explorer/core/library_scanner.dart';
-import 'package:assets_explorer/core/pack_editor.dart';
+import 'package:loot_silo/core/library_scanner.dart';
+import 'package:loot_silo/core/pack_editor.dart';
 
 void main(List<String> args) {
   final packs = scanLibrary(args.single).packs;

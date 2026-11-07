@@ -18,18 +18,19 @@ import 'settings_screen.dart';
 import 'tabs.dart';
 import 'help_screen.dart';
 import 'session.dart';
+import '../version.dart';
 import 'shortcuts.dart';
 import 'cursors.dart';
 
-/// Root widget of Asset Explorer.
-class AssetsExplorerApp extends ConsumerStatefulWidget {
-  const AssetsExplorerApp({super.key});
+/// Root widget of Loot Silo.
+class LootSiloApp extends ConsumerStatefulWidget {
+  const LootSiloApp({super.key});
 
   @override
-  ConsumerState<AssetsExplorerApp> createState() => _AppState();
+  ConsumerState<LootSiloApp> createState() => _AppState();
 }
 
-class _AppState extends ConsumerState<AssetsExplorerApp> {
+class _AppState extends ConsumerState<LootSiloApp> {
   final _navigator = GlobalKey<NavigatorState>();
   final _top = TopRoute();
 
@@ -115,7 +116,7 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
   Widget build(BuildContext context) {
     final theme = ref.watch(settingsProvider.select((s) => s.theme));
     return MaterialApp(
-      title: 'Asset Explorer',
+      title: appName,
       debugShowCheckedModeBanner: false,
       navigatorKey: _navigator,
       navigatorObservers: [_top],
@@ -245,12 +246,13 @@ class HomeScreen extends ConsumerWidget {
     );
     if (libraryPath == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Asset Explorer')),
+        appBar: AppBar(title: const Text(appName)),
         body: _Message(
+          header: const _NameAndSlogan(),
           icon: Icons.folder_special_outlined,
           title: 'Choose a library folder',
           body:
-              'Asset Explorer keeps your packs in one folder it manages, '
+              'Loot Silo keeps your packs in one folder it manages, '
               'organised as Author/Pack.',
           action: FilledButton.icon(
             onPressed: () => _chooseLibrary(context, ref),
@@ -265,10 +267,10 @@ class HomeScreen extends ConsumerWidget {
     final scanning = library.isLoading;
     void rescan() => rescanLibrary(ref);
 
-    // Ctrl+I/O/R, F5 and Ctrl+, are bound app-wide (AssetsExplorerApp).
+    // Ctrl+I/O/R, F5 and Ctrl+, are bound app-wide (LootSiloApp).
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Asset Explorer'),
+        title: const Text(appName),
         bottom: tabStrip(ref, progress: scanning),
         actions: [
           IconButton(
@@ -293,7 +295,7 @@ class HomeScreen extends ConsumerWidget {
           ),
           const _ImportMenu(),
           IconButton(
-            tooltip: 'How Asset Explorer works (F1)',
+            tooltip: 'How Loot Silo works (F1)',
             onPressed: () => openHelp(context),
             icon: const Icon(Icons.help_outline),
           ),
@@ -446,8 +448,11 @@ class _Message extends StatelessWidget {
     required this.title,
     required this.body,
     this.action,
+    this.header,
   });
 
+  /// Shown above the icon (the first-start screen's name and slogan).
+  final Widget? header;
   final IconData icon;
   final String title;
   final String body;
@@ -462,6 +467,7 @@ class _Message extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (header != null) ...[header!, const SizedBox(height: 32)],
             Icon(icon, size: 64, color: theme.colorScheme.primary),
             const SizedBox(height: 16),
             Text(title, style: theme.textTheme.titleLarge),
@@ -471,6 +477,28 @@ class _Message extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Loot Silo" and its slogan, for the first-start screen.
+class _NameAndSlogan extends StatelessWidget {
+  const _NameAndSlogan();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Text(appName, style: theme.textTheme.displaySmall),
+        const SizedBox(height: 4),
+        Text(
+          appSlogan,
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }

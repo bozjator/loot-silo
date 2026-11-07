@@ -2,11 +2,11 @@
 // Skipped automatically where that folder does not exist.
 import 'dart:io';
 
-import 'package:assets_explorer/core/animation_detector.dart';
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/core/library_scanner.dart';
-import 'package:assets_explorer/core/library_service.dart';
-import 'package:assets_explorer/core/pack_editor.dart';
+import 'package:loot_silo/core/animation_detector.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/core/library_scanner.dart';
+import 'package:loot_silo/core/library_service.dart';
+import 'package:loot_silo/core/pack_editor.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';

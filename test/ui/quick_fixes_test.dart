@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:assets_explorer/core/animation_detector.dart';
-import 'package:assets_explorer/state/dashboard.dart';
-import 'package:assets_explorer/ui/help_screen.dart';
-import 'package:assets_explorer/ui/pack_detail_screen.dart';
-import 'package:assets_explorer/ui/widgets/filter_bar.dart';
-import 'package:assets_explorer/version.dart';
+import 'package:loot_silo/core/animation_detector.dart';
+import 'package:loot_silo/state/dashboard.dart';
+import 'package:loot_silo/ui/help_screen.dart';
+import 'package:loot_silo/ui/pack_detail_screen.dart';
+import 'package:loot_silo/ui/widgets/filter_bar.dart';
+import 'package:loot_silo/version.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,7 +21,7 @@ void main() {
     ).firstMatch(pubspec)!;
     expect(appVersion, m[1]);
     expect(appBuild, int.parse(m[2]!));
-    expect(appVersionLabel, 'Asset Explorer $appVersion (build $appBuild)');
+    expect(appVersionLabel, 'Loot Silo $appVersion (build $appBuild)');
   });
 
   testWidgets('the Help page ends with the version', (tester) async {
@@ -33,7 +33,7 @@ void main() {
       find.byKey(const ValueKey('help-version')),
     );
     expect(footer.data, appVersionLabel);
-    expect(footer.data, matches(RegExp(r'^Asset Explorer \d+\.\d+\.\d+')));
+    expect(footer.data, matches(RegExp(r'^Loot Silo \d+\.\d+\.\d+')));
   });
 
   group('filter bar', () {

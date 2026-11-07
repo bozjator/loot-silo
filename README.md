@@ -1,4 +1,4 @@
-# assets_explorer
+# Loot Silo
 
 A new Flutter project.
 

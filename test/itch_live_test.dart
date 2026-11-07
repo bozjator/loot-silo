@@ -6,8 +6,8 @@ library;
 
 import 'dart:io';
 
-import 'package:assets_explorer/itch/itch_api.dart';
-import 'package:assets_explorer/itch/itch_key.dart';
+import 'package:loot_silo/itch/itch_api.dart';
+import 'package:loot_silo/itch/itch_key.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

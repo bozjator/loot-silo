@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/state/providers.dart';
-import 'package:assets_explorer/state/settings.dart';
-import 'package:assets_explorer/ui/folder_import_screen.dart';
-import 'package:assets_explorer/ui/widgets/meta_dialogs.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/state/providers.dart';
+import 'package:loot_silo/state/settings.dart';
+import 'package:loot_silo/ui/folder_import_screen.dart';
+import 'package:loot_silo/ui/widgets/meta_dialogs.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';

@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/state/dashboard.dart';
-import 'package:assets_explorer/state/favorites.dart';
-import 'package:assets_explorer/state/providers.dart';
-import 'package:assets_explorer/state/settings.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/state/dashboard.dart';
+import 'package:loot_silo/state/favorites.dart';
+import 'package:loot_silo/state/providers.dart';
+import 'package:loot_silo/state/settings.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

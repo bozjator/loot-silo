@@ -1,13 +1,13 @@
 import 'dart:io';
 
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/state/itch.dart';
-import 'package:assets_explorer/state/dashboard.dart';
-import 'package:assets_explorer/state/providers.dart';
-import 'package:assets_explorer/state/settings.dart';
-import 'package:assets_explorer/ui/app.dart';
-import 'package:assets_explorer/ui/settings_screen.dart';
-import 'package:assets_explorer/version.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/state/itch.dart';
+import 'package:loot_silo/state/dashboard.dart';
+import 'package:loot_silo/state/providers.dart';
+import 'package:loot_silo/state/settings.dart';
+import 'package:loot_silo/ui/app.dart';
+import 'package:loot_silo/ui/settings_screen.dart';
+import 'package:loot_silo/version.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,10 +36,25 @@ void main() {
           libraryIndexProvider.overrideWithValue(index),
           directoryPickerProvider.overrideWithValue((_) async => tmp.path),
         ],
-        child: const AssetsExplorerApp(),
+        child: const LootSiloApp(),
       ),
     );
     expect(find.text('Choose a library folder'), findsOneWidget);
+    // M48: the name and slogan, in the app bar and over the message.
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('Loot Silo'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Loot Silo'), findsNWidgets(2));
+    expect(find.text('Your game assets. At a glance.'), findsOneWidget);
+    expect(
+      tester.widget<MaterialApp>(find.byType(MaterialApp)).title,
+      'Loot Silo',
+    );
+    expect(find.textContaining('Asset Explorer'), findsNothing);
     await tester.tap(find.text('Choose folder'));
     await tester.pump();
     expect(store.load().libraryPath, tmp.path);
@@ -106,7 +121,7 @@ void main() {
           keyStoreProvider.overrideWithValue(_NoKey()),
           envKeyProvider.overrideWithValue(() => null),
         ],
-        child: const AssetsExplorerApp(),
+        child: const LootSiloApp(),
       ),
     );
     await tester.runAsync(
@@ -146,6 +161,9 @@ void main() {
       scrollable: list,
     );
     expect(find.text(appVersionLabel), findsOneWidget);
+    expect(appVersionLabel, startsWith('Loot Silo '));
+    expect(find.text(appSlogan), findsOneWidget);
+    expect(find.text('How Loot Silo works'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Dark'), -300, scrollable: list);
 
     await tester.tap(find.text('Dark'));
@@ -184,7 +202,7 @@ void main() {
           keyStoreProvider.overrideWithValue(_NoKey()),
           envKeyProvider.overrideWithValue(() => null),
         ],
-        child: const AssetsExplorerApp(),
+        child: const LootSiloApp(),
       ),
     );
     await tester.runAsync(
@@ -229,7 +247,7 @@ void main() {
           libraryIndexProvider.overrideWithValue(index),
           directoryPickerProvider.overrideWithValue((_) async => tmp.path),
         ],
-        child: const AssetsExplorerApp(),
+        child: const LootSiloApp(),
       ),
     );
     await tester.pump();

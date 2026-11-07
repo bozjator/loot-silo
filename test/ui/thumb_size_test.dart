@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/state/settings.dart';
-import 'package:assets_explorer/ui/widgets/pack_tile.dart';
-import 'package:assets_explorer/ui/widgets/thumb_size.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/state/settings.dart';
+import 'package:loot_silo/ui/widgets/pack_tile.dart';
+import 'package:loot_silo/ui/widgets/thumb_size.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';

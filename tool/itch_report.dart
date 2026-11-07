@@ -5,11 +5,11 @@
 //   ITCH_ENV_FILE=~/.config/…/app.env dart run tool/itch_report.dart <library>
 import 'dart:io';
 
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/core/library_scanner.dart';
-import 'package:assets_explorer/itch/itch_api.dart';
-import 'package:assets_explorer/itch/itch_key.dart';
-import 'package:assets_explorer/itch/itch_matcher.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/core/library_scanner.dart';
+import 'package:loot_silo/itch/itch_api.dart';
+import 'package:loot_silo/itch/itch_key.dart';
+import 'package:loot_silo/itch/itch_matcher.dart';
 
 Future<void> main(List<String> args) async {
   final key = keyFromEnvironment();

@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:assets_explorer/ui/reveal.dart';
-import 'package:assets_explorer/ui/text_preview_dialog.dart';
+import 'package:loot_silo/ui/reveal.dart';
+import 'package:loot_silo/ui/text_preview_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

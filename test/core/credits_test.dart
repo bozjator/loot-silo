@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:assets_explorer/core/credits.dart';
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/core/pack_editor.dart';
-import 'package:assets_explorer/core/sidecar.dart';
+import 'package:loot_silo/core/credits.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/core/pack_editor.dart';
+import 'package:loot_silo/core/sidecar.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 

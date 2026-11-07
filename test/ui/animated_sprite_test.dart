@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:assets_explorer/core/animation_detector.dart';
-import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
+import 'package:loot_silo/core/animation_detector.dart';
+import 'package:loot_silo/ui/widgets/animated_sprite.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;

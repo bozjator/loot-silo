@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/core/library_service.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/core/library_service.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';

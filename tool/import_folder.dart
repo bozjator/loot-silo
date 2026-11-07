@@ -3,7 +3,7 @@
 // Uses the same core as the review screen; the source is only read.
 import 'dart:io';
 
-import 'package:assets_explorer/install/folder_importer.dart';
+import 'package:loot_silo/install/folder_importer.dart';
 
 Future<void> main(List<String> args) async {
   final [source, library] = args;

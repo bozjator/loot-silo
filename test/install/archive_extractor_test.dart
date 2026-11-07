@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
-import 'package:assets_explorer/core/sidecar.dart';
-import 'package:assets_explorer/install/archive_extractor.dart';
-import 'package:assets_explorer/install/folder_importer.dart';
+import 'package:loot_silo/core/sidecar.dart';
+import 'package:loot_silo/install/archive_extractor.dart';
+import 'package:loot_silo/install/folder_importer.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 

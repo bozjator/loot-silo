@@ -2,26 +2,26 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/state/itch.dart';
-import 'package:assets_explorer/state/dashboard.dart';
-import 'package:assets_explorer/state/providers.dart';
-import 'package:assets_explorer/state/settings.dart';
-import 'package:assets_explorer/ui/app.dart';
-import 'package:assets_explorer/ui/format.dart';
-import 'package:assets_explorer/ui/help_screen.dart';
-import 'package:assets_explorer/ui/image_viewer.dart';
-import 'package:assets_explorer/ui/pack_detail_screen.dart';
-import 'package:assets_explorer/ui/settings_screen.dart';
-import 'package:assets_explorer/ui/tabs.dart';
-import 'package:assets_explorer/ui/dashboard.dart';
-import 'package:assets_explorer/ui/folder_groups.dart';
-import 'package:assets_explorer/ui/track_player.dart';
-import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
-import 'package:assets_explorer/ui/widgets/item_card.dart';
-import 'package:assets_explorer/ui/widgets/pack_tile.dart';
-import 'package:assets_explorer/ui/widgets/tab_toolbar.dart';
-import 'package:assets_explorer/ui/widgets/thumb_size.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/state/itch.dart';
+import 'package:loot_silo/state/dashboard.dart';
+import 'package:loot_silo/state/providers.dart';
+import 'package:loot_silo/state/settings.dart';
+import 'package:loot_silo/ui/app.dart';
+import 'package:loot_silo/ui/format.dart';
+import 'package:loot_silo/ui/help_screen.dart';
+import 'package:loot_silo/ui/image_viewer.dart';
+import 'package:loot_silo/ui/pack_detail_screen.dart';
+import 'package:loot_silo/ui/settings_screen.dart';
+import 'package:loot_silo/ui/tabs.dart';
+import 'package:loot_silo/ui/dashboard.dart';
+import 'package:loot_silo/ui/folder_groups.dart';
+import 'package:loot_silo/ui/track_player.dart';
+import 'package:loot_silo/ui/widgets/animated_sprite.dart';
+import 'package:loot_silo/ui/widgets/item_card.dart';
+import 'package:loot_silo/ui/widgets/pack_tile.dart';
+import 'package:loot_silo/ui/widgets/tab_toolbar.dart';
+import 'package:loot_silo/ui/widgets/thumb_size.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -160,7 +160,7 @@ void main() {
           envKeyProvider.overrideWithValue(() => null),
           ...overrides,
         ],
-        child: const AssetsExplorerApp(),
+        child: const LootSiloApp(),
       ),
     );
     await pumpUntil(tester, find.text('Knight Pack'));
@@ -692,7 +692,7 @@ void main() {
       );
       final shortcuts = tester.getTopLeft(find.text('Keyboard shortcuts')).dy;
       final help = tester.getTopLeft(find.text('Help')).dy;
-      final entry = tester.getTopLeft(find.text('How Asset Explorer works')).dy;
+      final entry = tester.getTopLeft(find.text('How Loot Silo works')).dy;
       final about = tester.getTopLeft(find.text('About')).dy;
       expect(shortcuts, lessThan(help));
       expect(help, lessThan(entry));
@@ -1449,7 +1449,7 @@ void main() {
       );
       expect(button, findsOneWidget);
       // Same size as Help and Settings next to it.
-      final help = find.byTooltip('How Asset Explorer works (F1)');
+      final help = find.byTooltip('How Loot Silo works (F1)');
       expect(tester.getSize(button), tester.getSize(help));
       await tester.tap(button);
       await tester.pumpAndSettle();
@@ -2848,7 +2848,7 @@ void main() {
       }
     }
 
-    await tester.tap(find.byTooltip('How Asset Explorer works (F1)'));
+    await tester.tap(find.byTooltip('How Loot Silo works (F1)'));
     await settle();
     expect(find.byType(HelpScreen), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -2888,7 +2888,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
     await settle();
-    final entry = find.text('How Asset Explorer works');
+    final entry = find.text('How Loot Silo works');
     // Help sits near the end, right above About (M39).
     await tester.scrollUntilVisible(entry, 200);
     await tester.ensureVisible(entry);

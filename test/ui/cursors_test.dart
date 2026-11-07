@@ -1,4 +1,4 @@
-import 'package:assets_explorer/ui/cursors.dart';
+import 'package:loot_silo/ui/cursors.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';

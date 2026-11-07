@@ -1,11 +1,11 @@
 import 'dart:io';
 
-import 'package:assets_explorer/core/animation_detector.dart';
-import 'package:assets_explorer/core/library_index.dart';
-import 'package:assets_explorer/state/dashboard.dart';
-import 'package:assets_explorer/ui/widgets/filter_bar.dart';
-import 'package:assets_explorer/ui/widgets/pack_tile.dart';
-import 'package:assets_explorer/ui/widgets/pixel_image.dart';
+import 'package:loot_silo/core/animation_detector.dart';
+import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/state/dashboard.dart';
+import 'package:loot_silo/ui/widgets/filter_bar.dart';
+import 'package:loot_silo/ui/widgets/pack_tile.dart';
+import 'package:loot_silo/ui/widgets/pixel_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
