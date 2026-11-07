@@ -212,6 +212,29 @@ class HelpScreen extends StatelessWidget {
                   'instead of one sound.',
                 ),
               ]),
+              const _Section('Favorites', [
+                _P(
+                  'Star packs and single files to find them again. The star '
+                  'sits on a dashboard tile (shown on hover, always once '
+                  'starred), next to the title in a pack\'s header, on image '
+                  'and animation cards, on audio rows and cards, and on '
+                  'Other files rows. Click it again to unstar.',
+                ),
+                _P(
+                  'The Favorites chip in the dashboard filter bar lists '
+                  'starred packs and packs with starred files (in the '
+                  'Expanded view, the folders holding them); its count '
+                  'follows the other filters. In the Files view it lists the '
+                  'starred files, all of them without a search. The '
+                  'Favorites chip on a pack page shows only that pack\'s '
+                  'starred files, and the tab counts follow.',
+                ),
+                _P(
+                  'Stars are saved in the pack\'s asset_pack.json '
+                  '(favorite and favorite_files), so they move with the '
+                  'pack and survive a rescan.',
+                ),
+              ]),
               _Section('Keyboard & mouse', [
                 for (final (where, keys) in shortcutSections) ...[
                   _P(where),

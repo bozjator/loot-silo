@@ -82,6 +82,25 @@ class PackContents {
     );
   }
 
+  /// Only the files in [keep] (the starred ones).
+  PackContents only(Set<String> keep) {
+    List<String> kept(List<String> l) => [
+      for (final f in l)
+        if (keep.contains(f)) f,
+    ];
+    return PackContents(
+      images: kept(images),
+      audio: kept(audio),
+      other: kept(other),
+      detected: [
+        for (final a in detected)
+          if (keep.contains(a.path)) a,
+      ],
+      sizes: sizes,
+      sidecar: sidecar,
+    );
+  }
+
   bool _hidden(SpriteAnim a) => isNotAnimation(sidecar?.animations[a.path]);
 
   /// [detected] minus the files marked "Not an animation"; parallel to
@@ -190,6 +209,8 @@ PackSidecar updatePackSidecar(
     usedIn: old.usedIn,
     isContainer: old.isContainer,
     animations: old.animations,
+    favorite: old.favorite,
+    favoriteFiles: old.favoriteFiles,
     extra: old.extra,
   );
   next.write(packPath);
@@ -246,6 +267,29 @@ PackSidecar setNotAnimation(String packPath, String rel, {bool hidden = true}) {
 /// True when [packPath] still exists; the detail view checks before
 /// writing so a vanished folder isn't recreated by a sidecar write.
 bool packExists(String packPath) => Directory(packPath).existsSync();
+
+/// Stars or unstars the pack (`favorite`), keeping every other key.
+PackSidecar setFavoritePack(String packPath, {required bool favorite}) {
+  final old = PackSidecar.read(packPath) ?? const PackSidecar();
+  final next = old.copyWith(favorite: favorite);
+  next.write(packPath);
+  return next;
+}
+
+/// Stars or unstars one file ([rel], relative to the pack) in
+/// `favorite_files`, keeping every other key; the list stays sorted.
+PackSidecar setFavoriteFile(
+  String packPath,
+  String rel, {
+  required bool favorite,
+}) {
+  final old = PackSidecar.read(packPath) ?? const PackSidecar();
+  final files = {...old.favoriteFiles}..remove(rel);
+  if (favorite) files.add(rel);
+  final next = old.copyWith(favoriteFiles: files.toList()..sort());
+  next.write(packPath);
+  return next;
+}
 
 /// Adds or removes [game] from the pack's `used_in` list.
 PackSidecar setUsedIn(String packPath, String game, {required bool used}) {

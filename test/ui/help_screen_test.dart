@@ -54,6 +54,18 @@ void main() {
     expect(text, contains('F1'));
   });
 
+  testWidgets('M38: Favorites section', (tester) async {
+    await pumpHelp(tester);
+    final text = pageText(tester);
+    expect(find.text('Favorites'), findsOneWidget);
+    expect(text, contains('on image and animation cards'));
+    expect(text, contains('The Favorites chip in the dashboard filter bar'));
+    expect(text, contains('In the Files view it lists the starred files'));
+    expect(text, contains('Favorites chip on a pack page'));
+    expect(text, contains('asset_pack.json'));
+    expect(text, contains('Click a star'));
+  });
+
   testWidgets('M37: Play all and how Loop works with it', (tester) async {
     await pumpHelp(tester);
     final text = pageText(tester);

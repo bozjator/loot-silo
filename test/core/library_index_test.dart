@@ -32,6 +32,22 @@ void main() {
     );
   });
 
+  test('stores favorites and updates them without a rescan (M38)', () async {
+    final knight = (await index.allPacks()).firstWhere(
+      (p) => p.title == 'Knight Pack v1.0',
+    );
+    expect(knight.favorite, isFalse);
+    expect(knight.favoriteFiles, isEmpty);
+    await index.setFavorites(
+      knight.id,
+      favorite: true,
+      files: ['Knight/idle_0.png'],
+    );
+    final after = (await index.allPacks()).firstWhere((p) => p.id == knight.id);
+    expect(after.favorite, isTrue);
+    expect(after.favoriteFiles, ['Knight/idle_0.png']);
+  });
+
   test('replacing a scan does not duplicate rows', () async {
     await index.replaceScan(scan);
     expect(await index.allPacks(), hasLength(scan.packs.length));

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:assets_explorer/core/library_index.dart';
 import 'package:assets_explorer/state/dashboard.dart';
+import 'package:assets_explorer/state/favorites.dart';
 import 'package:assets_explorer/state/providers.dart';
 import 'package:assets_explorer/state/settings.dart';
 import 'package:drift/native.dart';
@@ -33,6 +34,8 @@ PackRow pack(
   tags: tags,
   source: source,
   usedIn: const [],
+  favorite: false,
+  favoriteFiles: const [],
   fileCount: files,
   totalBytes: bytes,
 );
@@ -570,6 +573,121 @@ void main() {
       expect(
         filterFileHits(hits, vfxOnly, PackSort.relevance).map((t) => t.pack.id),
         everyElement('k/kenney'),
+      );
+    });
+  });
+
+  group('favorites (M38)', () {
+    // Knights starred; a Buttons file (in the bundle) and a zap file starred.
+    const fav = Favorites(
+      packs: {'A/Knights'},
+      files: {
+        'B/Bundle/Buttons': {'ui/ok.png'},
+        'c/zap': {'zap.wav', 'b.wav'},
+      },
+    );
+    List<String> favIds(DashboardQuery q) => [
+      for (final p in applyQuery(packs, q, null, favorites: fav)) p.id,
+    ];
+
+    test('Packs view: starred packs or packs with starred files', () {
+      expect(favIds(const DashboardQuery(favorites: true)), [
+        'B/Bundle/Buttons',
+        'A/Knights',
+        'c/zap',
+      ]);
+      expect(const DashboardQuery(favorites: true).isFlat, isTrue);
+      // Other filters still apply.
+      expect(favIds(const DashboardQuery(favorites: true, types: {'sfx'})), [
+        'c/zap',
+      ]);
+      // Off: favorites change nothing.
+      expect(favIds(const DashboardQuery()), ids(const DashboardQuery()));
+    });
+
+    test('the count follows the other filters', () {
+      expect(
+        Facets.forQuery(
+          packs,
+          const DashboardQuery(),
+          null,
+          favorites: fav,
+        ).favorites,
+        3,
+      );
+      expect(
+        Facets.forQuery(
+          packs,
+          const DashboardQuery(types: {'character', 'sfx'}),
+          null,
+          favorites: fav,
+        ).favorites,
+        2,
+      );
+      // Its own selection doesn't change its count.
+      expect(
+        Facets.forQuery(
+          packs,
+          const DashboardQuery(favorites: true),
+          null,
+          favorites: fav,
+        ).favorites,
+        3,
+      );
+    });
+
+    test('Files view: only starred files; all of them without search', () {
+      List<String> files(DashboardQuery q, List<FileHit>? hits) => [
+        for (final t in favoriteFileTiles(hits, packs, q, fav))
+          '${t.pack.id}:${t.relPath}',
+      ];
+      expect(files(const DashboardQuery(favorites: true), null), [
+        'c/zap:b.wav',
+        'B/Bundle/Buttons:ui/ok.png',
+        'c/zap:zap.wav',
+      ]);
+      const hits = [
+        (packId: 'c/zap', relPath: 'zap.wav'),
+        (packId: 'c/zap', relPath: 'zip.wav'),
+        (packId: 'A/Knights', relPath: 'knight.png'),
+      ];
+      // A search: its hits, starred ones only (a starred pack's other
+      // files aren't starred files).
+      expect(files(const DashboardQuery(text: 'z', favorites: true), hits), [
+        'c/zap:zap.wav',
+      ]);
+      expect(
+        files(const DashboardQuery(types: {'ui'}, favorites: true), null),
+        ['B/Bundle/Buttons:ui/ok.png'],
+      );
+      // Off: no search lists nothing, as before.
+      expect(files(const DashboardQuery(), null), isEmpty);
+      expect(files(const DashboardQuery(text: 'z'), hits), hasLength(3));
+    });
+
+    test('Expanded view keeps the folders holding starred files', () {
+      SubFolderRow sub(String packId, String folder) => SubFolderRow(
+        packId: packId,
+        folder: folder,
+        fileCount: 1,
+        totalBytes: 1,
+      );
+      final list = [pack('A/Knights'), pack('P/Banner'), pack('Q/Root')];
+      final subs = {
+        'A/Knights': [sub('A/Knights', 'x'), sub('A/Knights', 'y')],
+        'P/Banner': [sub('P/Banner', 'Wolf'), sub('P/Banner', 'Bat')],
+        'Q/Root': [sub('Q/Root', 'm'), sub('Q/Root', 'n')],
+      };
+      const f = Favorites(
+        packs: {'A/Knights'},
+        files: {
+          'P/Banner': {'Wolf/run.png'},
+          'Q/Root': {'top.png'},
+        },
+      );
+      expect(
+        [for (final t in favoriteFolders(expandPacks(list, subs), f)) t.key],
+        ['A/Knights/x', 'A/Knights/y', 'P/Banner/Wolf', 'Q/Root/m', 'Q/Root/n'],
       );
     });
   });

@@ -39,6 +39,8 @@ PackRow row({
   types: types,
   tags: const [],
   usedIn: const [],
+  favorite: false,
+  favoriteFiles: const [],
   preview: preview,
   previewAnim: anim,
   fileCount: 42,

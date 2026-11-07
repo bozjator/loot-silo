@@ -79,6 +79,48 @@ void main() {
     expect(json['source'], 'imported');
   });
 
+  group('favorites (M38)', () {
+    test('star writes keep every other key', () {
+      File(p.join(tmp.path, packFileName)).writeAsStringSync(
+        jsonEncode({
+          'title': 'Orcs',
+          'tags': ['orc'],
+          'animations': {'walk.png': false},
+          'future_field': 7,
+        }),
+      );
+      setFavoritePack(tmp.path, favorite: true);
+      setFavoriteFile(tmp.path, 'b/z.png', favorite: true);
+      setFavoriteFile(tmp.path, 'a.wav', favorite: true);
+      expect(sidecarJson(), {
+        'title': 'Orcs',
+        'tags': ['orc'],
+        'animations': {'walk.png': false},
+        'favorite': true,
+        'favorite_files': ['a.wav', 'b/z.png'],
+        'future_field': 7,
+      });
+      // A title edit keeps the stars.
+      updatePackSidecar(tmp.path, title: 'Orc army');
+      expect(sidecarJson()['favorite'], isTrue);
+      expect(sidecarJson()['favorite_files'], ['a.wav', 'b/z.png']);
+      setFavoriteFile(tmp.path, 'b/z.png', favorite: false);
+      setFavoritePack(tmp.path, favorite: false);
+      final json = sidecarJson();
+      expect(json.containsKey('favorite'), isFalse);
+      expect(json['favorite_files'], ['a.wav']);
+      expect(json['future_field'], 7);
+      expect(json['title'], 'Orc army');
+    });
+
+    test('starring creates a sidecar when missing', () {
+      setFavoriteFile(tmp.path, 'x.png', favorite: true);
+      expect(sidecarJson(), {
+        'favorite_files': ['x.png'],
+      });
+    });
+  });
+
   test('updatePackSidecar creates a sidecar when missing', () {
     updatePackSidecar(tmp.path, title: 'New name');
     expect(sidecarJson(), {'title': 'New name'});

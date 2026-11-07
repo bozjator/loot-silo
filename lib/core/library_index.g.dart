@@ -138,6 +138,31 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
         type: DriftSqlType.string,
         requiredDuringInsert: true,
       ).withConverter<List<String>>($PacksTable.$converterusedIn);
+  static const VerificationMeta _favoriteMeta = const VerificationMeta(
+    'favorite',
+  );
+  @override
+  late final GeneratedColumn<bool> favorite = GeneratedColumn<bool>(
+    'favorite',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("favorite" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<List<String>, String>
+  favoriteFiles = GeneratedColumn<String>(
+    'favorite_files',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  ).withConverter<List<String>>($PacksTable.$converterfavoriteFiles);
   static const VerificationMeta _previewMeta = const VerificationMeta(
     'preview',
   );
@@ -195,6 +220,8 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     itchGameId,
     itchUrl,
     usedIn,
+    favorite,
+    favoriteFiles,
     preview,
     previewAnim,
     fileCount,
@@ -281,6 +308,12 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
       context.handle(
         _itchUrlMeta,
         itchUrl.isAcceptableOrUnknown(data['itch_url']!, _itchUrlMeta),
+      );
+    }
+    if (data.containsKey('favorite')) {
+      context.handle(
+        _favoriteMeta,
+        favorite.isAcceptableOrUnknown(data['favorite']!, _favoriteMeta),
       );
     }
     if (data.containsKey('preview')) {
@@ -372,6 +405,16 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
           data['${effectivePrefix}used_in'],
         )!,
       ),
+      favorite: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}favorite'],
+      )!,
+      favoriteFiles: $PacksTable.$converterfavoriteFiles.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}favorite_files'],
+        )!,
+      ),
       preview: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}preview'],
@@ -404,6 +447,8 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
       const StringListConverter();
   static TypeConverter<List<String>, String> $converterusedIn =
       const StringListConverter();
+  static TypeConverter<List<String>, String> $converterfavoriteFiles =
+      const StringListConverter();
   static TypeConverter<SpriteAnim, String> $converterpreviewAnim =
       const SpriteAnimConverter();
   static TypeConverter<SpriteAnim?, String?> $converterpreviewAnimn =
@@ -429,10 +474,16 @@ class PackRow extends DataClass implements Insertable<PackRow> {
   /// Games this pack is credited in (sidecar `used_in`).
   final List<String> usedIn;
 
+  /// Starred pack (sidecar `favorite`).
+  final bool favorite;
+
+  /// Starred files, relative to [path] (sidecar `favorite_files`).
+  final List<String> favoriteFiles;
+
   /// Preview image relative to [path].
   final String? preview;
 
-  /// [SpriteAnim] JSON when the preview is a sheet or sequence.
+  /// [SpriteAnim] JSON when the preview is a sprite sheet.
   final SpriteAnim? previewAnim;
   final int fileCount;
   final int totalBytes;
@@ -450,6 +501,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     this.itchGameId,
     this.itchUrl,
     required this.usedIn,
+    required this.favorite,
+    required this.favoriteFiles,
     this.preview,
     this.previewAnim,
     required this.fileCount,
@@ -489,6 +542,12 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     {
       map['used_in'] = Variable<String>(
         $PacksTable.$converterusedIn.toSql(usedIn),
+      );
+    }
+    map['favorite'] = Variable<bool>(favorite);
+    {
+      map['favorite_files'] = Variable<String>(
+        $PacksTable.$converterfavoriteFiles.toSql(favoriteFiles),
       );
     }
     if (!nullToAbsent || preview != null) {
@@ -531,6 +590,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           ? const Value.absent()
           : Value(itchUrl),
       usedIn: Value(usedIn),
+      favorite: Value(favorite),
+      favoriteFiles: Value(favoriteFiles),
       preview: preview == null && nullToAbsent
           ? const Value.absent()
           : Value(preview),
@@ -561,6 +622,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       itchGameId: serializer.fromJson<int?>(json['itchGameId']),
       itchUrl: serializer.fromJson<String?>(json['itchUrl']),
       usedIn: serializer.fromJson<List<String>>(json['usedIn']),
+      favorite: serializer.fromJson<bool>(json['favorite']),
+      favoriteFiles: serializer.fromJson<List<String>>(json['favoriteFiles']),
       preview: serializer.fromJson<String?>(json['preview']),
       previewAnim: serializer.fromJson<SpriteAnim?>(json['previewAnim']),
       fileCount: serializer.fromJson<int>(json['fileCount']),
@@ -584,6 +647,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       'itchGameId': serializer.toJson<int?>(itchGameId),
       'itchUrl': serializer.toJson<String?>(itchUrl),
       'usedIn': serializer.toJson<List<String>>(usedIn),
+      'favorite': serializer.toJson<bool>(favorite),
+      'favoriteFiles': serializer.toJson<List<String>>(favoriteFiles),
       'preview': serializer.toJson<String?>(preview),
       'previewAnim': serializer.toJson<SpriteAnim?>(previewAnim),
       'fileCount': serializer.toJson<int>(fileCount),
@@ -605,6 +670,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     Value<int?> itchGameId = const Value.absent(),
     Value<String?> itchUrl = const Value.absent(),
     List<String>? usedIn,
+    bool? favorite,
+    List<String>? favoriteFiles,
     Value<String?> preview = const Value.absent(),
     Value<SpriteAnim?> previewAnim = const Value.absent(),
     int? fileCount,
@@ -623,6 +690,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     itchGameId: itchGameId.present ? itchGameId.value : this.itchGameId,
     itchUrl: itchUrl.present ? itchUrl.value : this.itchUrl,
     usedIn: usedIn ?? this.usedIn,
+    favorite: favorite ?? this.favorite,
+    favoriteFiles: favoriteFiles ?? this.favoriteFiles,
     preview: preview.present ? preview.value : this.preview,
     previewAnim: previewAnim.present ? previewAnim.value : this.previewAnim,
     fileCount: fileCount ?? this.fileCount,
@@ -647,6 +716,10 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           : this.itchGameId,
       itchUrl: data.itchUrl.present ? data.itchUrl.value : this.itchUrl,
       usedIn: data.usedIn.present ? data.usedIn.value : this.usedIn,
+      favorite: data.favorite.present ? data.favorite.value : this.favorite,
+      favoriteFiles: data.favoriteFiles.present
+          ? data.favoriteFiles.value
+          : this.favoriteFiles,
       preview: data.preview.present ? data.preview.value : this.preview,
       previewAnim: data.previewAnim.present
           ? data.previewAnim.value
@@ -674,6 +747,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           ..write('itchGameId: $itchGameId, ')
           ..write('itchUrl: $itchUrl, ')
           ..write('usedIn: $usedIn, ')
+          ..write('favorite: $favorite, ')
+          ..write('favoriteFiles: $favoriteFiles, ')
           ..write('preview: $preview, ')
           ..write('previewAnim: $previewAnim, ')
           ..write('fileCount: $fileCount, ')
@@ -697,6 +772,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     itchGameId,
     itchUrl,
     usedIn,
+    favorite,
+    favoriteFiles,
     preview,
     previewAnim,
     fileCount,
@@ -719,6 +796,8 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           other.itchGameId == this.itchGameId &&
           other.itchUrl == this.itchUrl &&
           other.usedIn == this.usedIn &&
+          other.favorite == this.favorite &&
+          other.favoriteFiles == this.favoriteFiles &&
           other.preview == this.preview &&
           other.previewAnim == this.previewAnim &&
           other.fileCount == this.fileCount &&
@@ -739,6 +818,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
   final Value<int?> itchGameId;
   final Value<String?> itchUrl;
   final Value<List<String>> usedIn;
+  final Value<bool> favorite;
+  final Value<List<String>> favoriteFiles;
   final Value<String?> preview;
   final Value<SpriteAnim?> previewAnim;
   final Value<int> fileCount;
@@ -758,6 +839,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     this.itchGameId = const Value.absent(),
     this.itchUrl = const Value.absent(),
     this.usedIn = const Value.absent(),
+    this.favorite = const Value.absent(),
+    this.favoriteFiles = const Value.absent(),
     this.preview = const Value.absent(),
     this.previewAnim = const Value.absent(),
     this.fileCount = const Value.absent(),
@@ -778,6 +861,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     this.itchGameId = const Value.absent(),
     this.itchUrl = const Value.absent(),
     required List<String> usedIn,
+    this.favorite = const Value.absent(),
+    this.favoriteFiles = const Value.absent(),
     this.preview = const Value.absent(),
     this.previewAnim = const Value.absent(),
     required int fileCount,
@@ -806,6 +891,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Expression<int>? itchGameId,
     Expression<String>? itchUrl,
     Expression<String>? usedIn,
+    Expression<bool>? favorite,
+    Expression<String>? favoriteFiles,
     Expression<String>? preview,
     Expression<String>? previewAnim,
     Expression<int>? fileCount,
@@ -826,6 +913,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       if (itchGameId != null) 'itch_game_id': itchGameId,
       if (itchUrl != null) 'itch_url': itchUrl,
       if (usedIn != null) 'used_in': usedIn,
+      if (favorite != null) 'favorite': favorite,
+      if (favoriteFiles != null) 'favorite_files': favoriteFiles,
       if (preview != null) 'preview': preview,
       if (previewAnim != null) 'preview_anim': previewAnim,
       if (fileCount != null) 'file_count': fileCount,
@@ -848,6 +937,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Value<int?>? itchGameId,
     Value<String?>? itchUrl,
     Value<List<String>>? usedIn,
+    Value<bool>? favorite,
+    Value<List<String>>? favoriteFiles,
     Value<String?>? preview,
     Value<SpriteAnim?>? previewAnim,
     Value<int>? fileCount,
@@ -868,6 +959,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       itchGameId: itchGameId ?? this.itchGameId,
       itchUrl: itchUrl ?? this.itchUrl,
       usedIn: usedIn ?? this.usedIn,
+      favorite: favorite ?? this.favorite,
+      favoriteFiles: favoriteFiles ?? this.favoriteFiles,
       preview: preview ?? this.preview,
       previewAnim: previewAnim ?? this.previewAnim,
       fileCount: fileCount ?? this.fileCount,
@@ -924,6 +1017,14 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
         $PacksTable.$converterusedIn.toSql(usedIn.value),
       );
     }
+    if (favorite.present) {
+      map['favorite'] = Variable<bool>(favorite.value);
+    }
+    if (favoriteFiles.present) {
+      map['favorite_files'] = Variable<String>(
+        $PacksTable.$converterfavoriteFiles.toSql(favoriteFiles.value),
+      );
+    }
     if (preview.present) {
       map['preview'] = Variable<String>(preview.value);
     }
@@ -960,6 +1061,8 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
           ..write('itchGameId: $itchGameId, ')
           ..write('itchUrl: $itchUrl, ')
           ..write('usedIn: $usedIn, ')
+          ..write('favorite: $favorite, ')
+          ..write('favoriteFiles: $favoriteFiles, ')
           ..write('preview: $preview, ')
           ..write('previewAnim: $previewAnim, ')
           ..write('fileCount: $fileCount, ')
@@ -1958,6 +2061,8 @@ typedef $$PacksTableCreateCompanionBuilder = PacksCompanion Function({
   Value<int?> itchGameId,
   Value<String?> itchUrl,
   required List<String> usedIn,
+  Value<bool> favorite,
+  Value<List<String>> favoriteFiles,
   Value<String?> preview,
   Value<SpriteAnim?> previewAnim,
   required int fileCount,
@@ -1978,6 +2083,8 @@ typedef $$PacksTableUpdateCompanionBuilder = PacksCompanion Function({
   Value<int?> itchGameId,
   Value<String?> itchUrl,
   Value<List<String>> usedIn,
+  Value<bool> favorite,
+  Value<List<String>> favoriteFiles,
   Value<String?> preview,
   Value<SpriteAnim?> previewAnim,
   Value<int> fileCount,
@@ -2058,6 +2165,17 @@ class $$PacksTableFilterComposer extends Composer<_$LibraryIndex, $PacksTable> {
   ColumnWithTypeConverterFilters<List<String>, List<String>, String>
   get usedIn => $composableBuilder(
     column: $table.usedIn,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<bool> get favorite => $composableBuilder(
+    column: $table.favorite,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<List<String>, List<String>, String>
+  get favoriteFiles => $composableBuilder(
+    column: $table.favoriteFiles,
     builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 
@@ -2157,6 +2275,16 @@ class $$PacksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get favorite => $composableBuilder(
+    column: $table.favorite,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get favoriteFiles => $composableBuilder(
+    column: $table.favoriteFiles,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get preview => $composableBuilder(
     column: $table.preview,
     builder: (column) => ColumnOrderings(column),
@@ -2230,6 +2358,15 @@ class $$PacksTableAnnotationComposer
   GeneratedColumnWithTypeConverter<List<String>, String> get usedIn =>
       $composableBuilder(column: $table.usedIn, builder: (column) => column);
 
+  GeneratedColumn<bool> get favorite =>
+      $composableBuilder(column: $table.favorite, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<List<String>, String> get favoriteFiles =>
+      $composableBuilder(
+        column: $table.favoriteFiles,
+        builder: (column) => column,
+      );
+
   GeneratedColumn<String> get preview =>
       $composableBuilder(column: $table.preview, builder: (column) => column);
 
@@ -2289,6 +2426,8 @@ class $$PacksTableTableManager
                 Value<int?> itchGameId = const Value.absent(),
                 Value<String?> itchUrl = const Value.absent(),
                 Value<List<String>> usedIn = const Value.absent(),
+                Value<bool> favorite = const Value.absent(),
+                Value<List<String>> favoriteFiles = const Value.absent(),
                 Value<String?> preview = const Value.absent(),
                 Value<SpriteAnim?> previewAnim = const Value.absent(),
                 Value<int> fileCount = const Value.absent(),
@@ -2308,6 +2447,8 @@ class $$PacksTableTableManager
                 itchGameId: itchGameId,
                 itchUrl: itchUrl,
                 usedIn: usedIn,
+                favorite: favorite,
+                favoriteFiles: favoriteFiles,
                 preview: preview,
                 previewAnim: previewAnim,
                 fileCount: fileCount,
@@ -2329,6 +2470,8 @@ class $$PacksTableTableManager
                 Value<int?> itchGameId = const Value.absent(),
                 Value<String?> itchUrl = const Value.absent(),
                 required List<String> usedIn,
+                Value<bool> favorite = const Value.absent(),
+                Value<List<String>> favoriteFiles = const Value.absent(),
                 Value<String?> preview = const Value.absent(),
                 Value<SpriteAnim?> previewAnim = const Value.absent(),
                 required int fileCount,
@@ -2348,6 +2491,8 @@ class $$PacksTableTableManager
                 itchGameId: itchGameId,
                 itchUrl: itchUrl,
                 usedIn: usedIn,
+                favorite: favorite,
+                favoriteFiles: favoriteFiles,
                 preview: preview,
                 previewAnim: previewAnim,
                 fileCount: fileCount,

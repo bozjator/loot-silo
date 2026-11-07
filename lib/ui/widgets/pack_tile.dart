@@ -7,6 +7,7 @@ import '../../core/library_index.dart';
 import '../../state/dashboard.dart';
 import '../format.dart';
 import 'animated_sprite.dart';
+import 'favorite_star.dart';
 import 'pixel_image.dart';
 import '../cursors.dart';
 
@@ -38,6 +39,8 @@ class PackTile extends StatefulWidget {
     this.fileMatches,
     this.fileMatchesTooltip,
     this.onFileMatchesTap,
+    this.starred = false,
+    this.onToggleStar,
   });
 
   final PackRow pack;
@@ -56,6 +59,11 @@ class PackTile extends StatefulWidget {
   /// The full list behind [fileMatches], shown on hover.
   final String? fileMatchesTooltip;
   final VoidCallback? onFileMatchesTap;
+
+  /// The favorites star in the preview's top-right corner: shown on hover,
+  /// always when [starred]; none without [onToggleStar].
+  final bool starred;
+  final VoidCallback? onToggleStar;
 
   @override
   State<PackTile> createState() => _PackTileState();
@@ -114,6 +122,21 @@ class _PackTileState extends State<PackTile> {
                       child: _Pill(
                         icon: Icons.folder_copy_outlined,
                         text: 'Bundle · $subPackCount',
+                      ),
+                    ),
+                  if (widget.onToggleStar case final toggle?
+                      when _hover || widget.starred)
+                    Positioned(
+                      right: 4,
+                      top: 4,
+                      child: Material(
+                        color: scheme.surface.withValues(alpha: 0.85),
+                        shape: const CircleBorder(),
+                        child: FavoriteStar(
+                          key: const ValueKey('pack-star'),
+                          starred: widget.starred,
+                          onPressed: toggle,
+                        ),
                       ),
                     ),
                 ],

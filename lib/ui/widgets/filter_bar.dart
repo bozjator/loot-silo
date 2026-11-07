@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/type_classifier.dart';
 import '../../state/dashboard.dart';
 import '../cursors.dart';
+import 'favorite_star.dart';
 
 /// Search box, type chips, author / tag / source menus and sorting.
 class FilterBar extends StatelessWidget {
@@ -22,6 +23,7 @@ class FilterBar extends StatelessWidget {
     required this.onToggleSource,
     required this.onSort,
     required this.onClear,
+    this.onToggleFavorites,
     this.trailing,
   });
 
@@ -43,6 +45,9 @@ class FilterBar extends StatelessWidget {
   final ValueChanged<String> onToggleSource;
   final ValueChanged<PackSort> onSort;
   final VoidCallback onClear;
+
+  /// Shows the Favorites chip (first among the chips) when set.
+  final VoidCallback? onToggleFavorites;
 
   /// Shown after the sort menu, e.g. the tile size slider.
   final Widget? trailing;
@@ -160,6 +165,38 @@ class FilterBar extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
+                    if (onToggleFavorites case final toggle?)
+                      FilterChip(
+                        key: const ValueKey('favorites-chip'),
+                        mouseCursor: clickCursor,
+                        avatar: Icon(
+                          query.favorites ? Icons.star : Icons.star_border,
+                          size: 18,
+                          color: FavoriteStar.color,
+                        ),
+                        showCheckmark: false,
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Favorites',
+                              style: facets.favorites == 0
+                                  ? TextStyle(color: dim)
+                                  : null,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${facets.favorites}',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: dim,
+                              ),
+                            ),
+                          ],
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        selected: query.favorites,
+                        onSelected: (_) => toggle(),
+                      ),
                     // Types no pack in view has are hidden, unless
                     // selected (then dimmed, at 0).
                     for (final t in AssetType.values)

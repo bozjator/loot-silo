@@ -15,6 +15,7 @@ import 'format.dart';
 import 'image_viewer.dart';
 import 'reveal.dart';
 import 'widgets/animated_sprite.dart';
+import 'widgets/favorite_star.dart';
 import 'widgets/pixel_image.dart';
 import 'widgets/thumb_size.dart';
 import 'shortcuts.dart';
@@ -33,6 +34,8 @@ class AnimationGrid extends ConsumerStatefulWidget {
     required this.detected,
     required this.onEdit,
     this.sizes = const {},
+    this.favoriteFiles = const {},
+    this.onToggleFavorite,
   });
 
   /// Keys the scroll position; the pack id.
@@ -46,6 +49,11 @@ class AnimationGrid extends ConsumerStatefulWidget {
 
   /// File sizes for the image viewer's info line.
   final Map<String, int> sizes;
+
+  /// Starred files; each card has a star toggle when [onToggleFavorite]
+  /// is set.
+  final Set<String> favoriteFiles;
+  final ValueChanged<String>? onToggleFavorite;
 
   @override
   ConsumerState<AnimationGrid> createState() => _AnimationGridState();
@@ -176,6 +184,10 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                     playAll: mode == AnimateMode.all,
                     onTap: () => _focus(_focused == i ? null : i),
                     onEdit: () => widget.onEdit(anims[i]),
+                    starred: widget.favoriteFiles.contains(anims[i].path),
+                    onToggleStar: widget.onToggleFavorite == null
+                        ? null
+                        : () => widget.onToggleFavorite!(anims[i].path),
                     onOpen: () => showImageViewer(
                       context,
                       packPath: widget.packPath,
@@ -243,10 +255,17 @@ class _AnimationTile extends StatefulWidget {
     required this.onTap,
     required this.onEdit,
     required this.onOpen,
+    this.starred = false,
+    this.onToggleStar,
   });
 
   final String packPath;
   final SpriteAnim anim;
+
+  /// The favorites star in the stage's top-left corner: shown on hover,
+  /// always when [starred]; none without [onToggleStar].
+  final bool starred;
+  final VoidCallback? onToggleStar;
 
   /// Has a sidecar override.
   final bool edited;
@@ -316,6 +335,21 @@ class _AnimationTileState extends State<_AnimationTile> {
                                     playing: playing,
                                   ),
                           ),
+                          if (widget.onToggleStar case final toggle?
+                              when _hover || widget.starred)
+                            Positioned(
+                              top: 2,
+                              left: 2,
+                              child: Material(
+                                color: scheme.surface.withValues(alpha: 0.85),
+                                shape: const CircleBorder(),
+                                child: FavoriteStar(
+                                  key: ValueKey('star:${a.path}'),
+                                  starred: widget.starred,
+                                  onPressed: toggle,
+                                ),
+                              ),
+                            ),
                           if (widget.edited)
                             Positioned(
                               top: 6,

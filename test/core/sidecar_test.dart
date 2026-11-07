@@ -74,10 +74,30 @@ void main() {
         animations: {
           'walk.png': {'fps': 8},
         },
+        favorite: true,
+        favoriteFiles: ['a/b.png', 'c.wav'],
         extra: {'k': 'v'},
       );
       sc.write(tmp.path);
       expect(PackSidecar.read(tmp.path)!.toJson(), sc.toJson());
+    });
+
+    test('favorites round-trip; unstarred leaves no keys', () {
+      final json = const PackSidecar(
+        favorite: true,
+        favoriteFiles: ['x.png'],
+      ).toJson();
+      expect(json, {
+        'favorite': true,
+        'favorite_files': ['x.png'],
+      });
+      final back = PackSidecar.fromJson(json);
+      expect(back.favorite, isTrue);
+      expect(back.favoriteFiles, ['x.png']);
+      expect(back.extra, isEmpty);
+      expect(const PackSidecar(title: 't').copyWith(favorite: false).toJson(), {
+        'title': 't',
+      });
     });
 
     test('empty sidecar writes an empty object', () {

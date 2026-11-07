@@ -21,6 +21,8 @@ void main() {
     types: const [],
     tags: const [],
     usedIn: usedIn,
+    favorite: false,
+    favoriteFiles: const [],
     fileCount: 1,
     totalBytes: 1,
   );

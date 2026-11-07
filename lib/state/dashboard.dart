@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import '../core/library_index.dart';
 import '../core/type_classifier.dart';
 import '../ui/format.dart';
+import 'favorites.dart';
 import 'providers.dart';
 import 'settings.dart';
 
@@ -37,6 +38,7 @@ class DashboardQuery {
     this.sources = const {},
     this.sort = PackSort.relevance,
     this.bundleId,
+    this.favorites = false,
   });
 
   final String text;
@@ -49,7 +51,12 @@ class DashboardQuery {
   /// When set, the grid shows this bundle's sub-packs.
   final String? bundleId;
 
+  /// Only starred packs, packs with starred files, or (Files view) starred
+  /// files.
+  final bool favorites;
+
   bool get hasFilters =>
+      favorites ||
       types.isNotEmpty ||
       authors.isNotEmpty ||
       tags.isNotEmpty ||
@@ -66,6 +73,7 @@ class DashboardQuery {
     Set<String>? sources,
     PackSort? sort,
     String? Function()? bundleId,
+    bool? favorites,
   }) => DashboardQuery(
     text: text ?? this.text,
     types: types ?? this.types,
@@ -74,6 +82,7 @@ class DashboardQuery {
     sources: sources ?? this.sources,
     sort: sort ?? this.sort,
     bundleId: bundleId != null ? bundleId() : this.bundleId,
+    favorites: favorites ?? this.favorites,
   );
 }
 
@@ -122,6 +131,7 @@ class DashboardQueryNotifier extends Notifier<DashboardQuery> {
       state = state.copyWith(tags: _toggle(state.tags, v));
   void toggleSource(String v) =>
       state = state.copyWith(sources: _toggle(state.sources, v));
+  void toggleFavorites() => state = state.copyWith(favorites: !state.favorites);
 
   /// Only [author]'s packs: the search, the other filters and an open
   /// bundle are cleared, so the grid lists all of them (the sort stays).
@@ -195,6 +205,7 @@ final visibleFilesProvider = Provider<AsyncValue<List<FileTile>>>((ref) {
   final library = ref.watch(libraryProvider);
   final files = ref.watch(fileSearchProvider);
   final q = ref.watch(dashboardQueryProvider);
+  final favorites = ref.watch(favoritesProvider);
   return switch ((library, files)) {
     (AsyncValue(:final error?, :final stackTrace), _) ||
     (
@@ -202,25 +213,57 @@ final visibleFilesProvider = Provider<AsyncValue<List<FileTile>>>((ref) {
       AsyncValue(:final error?, :final stackTrace),
     ) => AsyncError(error, stackTrace ?? StackTrace.current),
     (AsyncValue(value: final lib?), AsyncValue(hasValue: true, :final value)) =>
-      AsyncData(
-        value == null
-            ? const []
-            : filterFileHits(
-                value.hits,
-                applyQuery(lib.packs, q, null),
-                q.sort,
-              ),
-      ),
+      AsyncData(favoriteFileTiles(value?.hits, lib.packs, q, favorites)),
     _ => const AsyncLoading(),
   };
 });
 
-/// The dashboard's filter menus and chips.
-enum Facet { type, author, tag, source }
+/// The Files view's tiles for [hits] (null without search text). With the
+/// Favorites filter only starred files are kept, and without search text
+/// every starred file is listed. The filters apply to the files' packs as
+/// to pack tiles, the Favorites filter excepted: a starred file's pack
+/// needn't be starred.
+List<FileTile> favoriteFileTiles(
+  List<FileHit>? hits,
+  List<PackRow> packs,
+  DashboardQuery q,
+  Favorites favorites,
+) {
+  if (!q.favorites) {
+    if (hits == null) return const [];
+    return filterFileHits(hits, applyQuery(packs, q, null), q.sort);
+  }
+  final starred = [
+    for (final h in hits ?? favorites.allFiles)
+      if (favorites.isFile(h.packId, h.relPath)) h,
+  ];
+  // Every pack passes the Favorites filter here; the other filters apply.
+  final allowed = applyQuery(
+    packs,
+    q,
+    null,
+    favorites: Favorites(packs: {for (final p in packs) p.id}),
+  );
+  // Best match means nothing without a search: list them by name.
+  final sort = hits == null && q.sort == PackSort.relevance
+      ? PackSort.title
+      : q.sort;
+  return filterFileHits(starred, allowed, sort);
+}
 
-/// Whether [p] passes [q]'s type / author / tag / source filters, leaving
-/// out [skip] (a facet's own counts ignore its own selection).
-bool passesFacets(PackRow p, DashboardQuery q, {Facet? skip}) =>
+/// The dashboard's filter menus and chips.
+enum Facet { type, author, tag, source, favorite }
+
+/// Whether [p] passes [q]'s type / author / tag / source / favorites
+/// filters, leaving out [skip] (a facet's own counts ignore its own
+/// selection).
+bool passesFacets(
+  PackRow p,
+  DashboardQuery q, {
+  Facet? skip,
+  Favorites favorites = Favorites.none,
+}) =>
+    (skip == Facet.favorite || !q.favorites || favorites.hasAny(p.id)) &&
     (skip == Facet.type || q.types.isEmpty || p.types.any(q.types.contains)) &&
     (skip == Facet.author ||
         q.authors.isEmpty ||
@@ -234,8 +277,9 @@ bool passesFacets(PackRow p, DashboardQuery q, {Facet? skip}) =>
 List<PackRow> applyQuery(
   List<PackRow> packs,
   DashboardQuery q,
-  List<String>? hits,
-) {
+  List<String>? hits, {
+  Favorites favorites = Favorites.none,
+}) {
   Iterable<PackRow> out;
   if (q.bundleId != null && !q.isFlat) {
     out = packs.where((p) => p.parentId == q.bundleId);
@@ -251,7 +295,7 @@ List<PackRow> applyQuery(
     final hitSet = hits.toSet();
     out = out.where((p) => hitSet.contains(p.id));
   }
-  out = out.where((p) => passesFacets(p, q));
+  out = out.where((p) => passesFacets(p, q, favorites: favorites));
 
   final list = out.toList();
   int byTitle(PackRow a, PackRow b) =>
@@ -371,6 +415,27 @@ List<SubFolderRow> _matchingOrAll(
   return hit.isEmpty ? subs : hit;
 }
 
+/// With the Favorites filter in the Expanded view: a pack that isn't
+/// starred itself keeps only the folders holding its starred files (all of
+/// them when none does, e.g. a starred file at the pack's top).
+List<DashboardTile> favoriteFolders(
+  List<DashboardTile> tiles,
+  Favorites favorites,
+) {
+  bool holds(DashboardTile t) =>
+      t.folder == null ||
+      favorites.isPack(t.pack.id) ||
+      favorites.filesOf(t.pack.id).any((f) => f.startsWith('${t.folder}/'));
+  final keeps = {
+    for (final t in tiles)
+      if (t.folder != null && holds(t)) t.pack.id,
+  };
+  return [
+    for (final t in tiles)
+      if (holds(t) || !keeps.contains(t.pack.id)) t,
+  ];
+}
+
 /// The dashboard grid's tiles: [visiblePacksProvider], split by folder in
 /// the Expanded view.
 final visibleTilesProvider = Provider<AsyncValue<List<DashboardTile>>>((ref) {
@@ -389,7 +454,12 @@ final visibleTilesProvider = Provider<AsyncValue<List<DashboardTile>>>((ref) {
       AsyncValue(:final error?, :final stackTrace),
     ) => AsyncError(error, stackTrace ?? StackTrace.current),
     (AsyncValue(value: final l?), AsyncValue(value: final s?)) => AsyncData(
-      expandPacks(l, s, searchText: text),
+      ref.watch(dashboardQueryProvider.select((q) => q.favorites))
+          ? favoriteFolders(
+              expandPacks(l, s, searchText: text),
+              ref.watch(favoritesProvider),
+            )
+          : expandPacks(l, s, searchText: text),
     ),
     _ => const AsyncLoading(),
   };
@@ -399,6 +469,7 @@ final visiblePacksProvider = Provider<AsyncValue<List<PackRow>>>((ref) {
   final library = ref.watch(libraryProvider);
   final hits = ref.watch(searchHitsProvider);
   final q = ref.watch(dashboardQueryProvider);
+  final favorites = ref.watch(favoritesProvider);
   return switch ((library, hits)) {
     (AsyncValue(:final error?, :final stackTrace), _) ||
     (
@@ -406,7 +477,7 @@ final visiblePacksProvider = Provider<AsyncValue<List<PackRow>>>((ref) {
       AsyncValue(:final error?, :final stackTrace),
     ) => AsyncError(error, stackTrace ?? StackTrace.current),
     (AsyncValue(value: final lib?), AsyncValue(hasValue: true, :final value)) =>
-      AsyncData(applyQuery(lib.packs, q, value)),
+      AsyncData(applyQuery(lib.packs, q, value, favorites: favorites)),
     _ => const AsyncLoading(),
   };
 });
@@ -418,7 +489,11 @@ class Facets {
     required this.authors,
     required this.tags,
     required this.sources,
+    this.favorites = 0,
   });
+
+  /// Packs that are starred or have a starred file.
+  final int favorites;
 
   final List<(String, int)> types;
   final List<(String, int)> authors;
@@ -466,8 +541,9 @@ class Facets {
   factory Facets.forQuery(
     List<PackRow> packs,
     DashboardQuery q,
-    List<String>? hits,
-  ) {
+    List<String>? hits, {
+    Favorites favorites = Favorites.none,
+  }) {
     Iterable<PackRow> base = packs;
     if (q.bundleId != null) {
       base = base.where((p) => p.parentId == q.bundleId);
@@ -478,8 +554,11 @@ class Facets {
     }
     final list = base.toList();
     Iterable<PackRow> without(Facet f) =>
-        list.where((p) => passesFacets(p, q, skip: f));
+        list.where((p) => passesFacets(p, q, skip: f, favorites: favorites));
     return Facets(
+      favorites: without(Facet.favorite)
+          .where((p) => favorites.hasAny(p.id))
+          .length,
       types: _count(without(Facet.type).expand((p) => p.types), q.types),
       authors: _count(_authors(without(Facet.author)), q.authors),
       tags: _count(without(Facet.tag).expand((p) => p.tags), q.tags),
@@ -516,5 +595,10 @@ final facetsProvider = Provider<Facets>((ref) {
   final hits = q.text.trim().isEmpty
       ? null
       : ref.watch(searchHitsProvider).value;
-  return Facets.forQuery(packs, q, hits);
+  return Facets.forQuery(
+    packs,
+    q,
+    hits,
+    favorites: ref.watch(favoritesProvider),
+  );
 });

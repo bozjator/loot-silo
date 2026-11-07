@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/dashboard.dart';
+import '../state/favorites.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
 import '../core/library_index.dart' show LibraryIndex;
@@ -82,19 +83,34 @@ class _DashboardState extends ConsumerState<Dashboard> {
   /// The Files view: a hint without search text, else the matching files.
   Widget _filesBody({
     required bool searching,
+    required bool favorites,
     required bool loaded,
     required List<FileTile> files,
     required double size,
     required SearchFilter search,
   }) {
-    if (!searching || (loaded && files.isEmpty)) {
+    final listing = searching || favorites;
+    if (!listing || (loaded && files.isEmpty)) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(searching ? Icons.search_off : Icons.manage_search, size: 48),
+            Icon(
+              !listing
+                  ? Icons.manage_search
+                  : favorites && !searching
+                  ? Icons.star_border
+                  : Icons.search_off,
+              size: 48,
+            ),
             const SizedBox(height: 8),
-            Text(searching ? 'No files match' : 'Type to search file names'),
+            Text(
+              !listing
+                  ? 'Type to search file names'
+                  : favorites && !searching
+                  ? 'No starred files'
+                  : 'No files match',
+            ),
           ],
         ),
       );
@@ -166,6 +182,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
     );
     final settings = ref.read(settingsProvider.notifier);
     final tabsNotifier = ref.read(tabsProvider.notifier);
+    final favorites = ref.watch(favoritesProvider);
 
     return Focus(
       focusNode: _gridFocus,
@@ -192,6 +209,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
             onToggleTag: notifier.toggleTag,
             onToggleSource: notifier.toggleSource,
             onSort: notifier.setSort,
+            onToggleFavorites: notifier.toggleFavorites,
             onClear: () {
               _search.clear();
               notifier.clearFilters();
@@ -262,6 +280,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
             child: filesView
                 ? _filesBody(
                     searching: searching,
+                    favorites: query.favorites,
                     loaded: visibleFiles?.hasValue ?? false,
                     files: files,
                     size: imageSize,
@@ -312,6 +331,13 @@ class _DashboardState extends ConsumerState<Dashboard> {
                             pack: tile,
                             subPackCount: subCounts[pack.id] ?? 0,
                             alwaysAnimate: animateAll,
+                            starred:
+                                folder == null && favorites.isPack(pack.id),
+                            onToggleStar: folder == null
+                                ? () => ref
+                                      .read(favoritesProvider.notifier)
+                                      .togglePack(pack.id)
+                                : null,
                             showTags: query.sort == PackSort.tags,
                             fileMatches: folder == null
                                 ? fileMatchLine(

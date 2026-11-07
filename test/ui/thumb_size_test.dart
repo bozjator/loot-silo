@@ -31,6 +31,8 @@ PackRow longPack(int i, {String? title}) => PackRow(
   types: const ['character', 'environment', 'tileset', 'ui', 'vfx'],
   tags: const ['zebra', 'Animals', 'a very long tag name indeed', 'cozy'],
   usedIn: const [],
+  favorite: false,
+  favoriteFiles: const [],
   preview: null,
   previewAnim: null,
   fileCount: 1,

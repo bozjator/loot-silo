@@ -55,6 +55,8 @@ PackRow pack(
   types: const [],
   tags: const [],
   usedIn: const [],
+  favorite: false,
+  favoriteFiles: const [],
   itchGameId: itchGameId,
   fileCount: 1,
   totalBytes: 1,

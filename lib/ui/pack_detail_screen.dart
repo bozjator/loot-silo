@@ -21,6 +21,7 @@ import '../core/text_preview.dart';
 import '../core/type_classifier.dart' show AssetType;
 import '../state/dashboard.dart'
     show DashboardQueryNotifier, dashboardQueryProvider, knownTags, sortedTags;
+import '../state/favorites.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
 import 'format.dart';
@@ -33,6 +34,7 @@ import 'tabs.dart';
 import 'text_preview_dialog.dart';
 import 'track_player.dart';
 import 'widgets/animated_sprite.dart';
+import 'widgets/favorite_star.dart';
 import 'widgets/meta_dialogs.dart';
 import 'widgets/pack_tile.dart' show iconForTypes;
 import 'widgets/pixel_image.dart';
@@ -75,6 +77,9 @@ class PackDetailScreen extends ConsumerWidget {
       );
     }
     final contents = ref.watch(packContentsProvider(packId));
+    final favoriteFiles = ref.watch(
+      favoritesProvider.select((f) => f.filesOf(packId)),
+    );
     final pinned = ref.watch(
       settingsProvider.select((s) => s.detailHeaderPinned),
     );
@@ -105,6 +110,7 @@ class PackDetailScreen extends ConsumerWidget {
             contents: value,
             pinned: pinned,
             onTogglePin: togglePin,
+            favoriteFiles: favoriteFiles,
             folder: folder,
             search: search,
             file: file,
@@ -125,6 +131,7 @@ class _Body extends StatefulWidget {
     required this.contents,
     required this.pinned,
     required this.onTogglePin,
+    this.favoriteFiles = const {},
     this.folder,
     this.search,
     this.file,
@@ -132,6 +139,9 @@ class _Body extends StatefulWidget {
 
   final PackRow pack;
   final PackContents contents;
+
+  /// The pack's starred files, for the Favorites chip.
+  final Set<String> favoriteFiles;
   final String? folder;
   final SearchFilter? search;
   final String? file;
@@ -165,6 +175,9 @@ class _BodyState extends State<_Body> {
   /// (e.g. the Animations tab after "Combine into animation").
   Type? _tab;
   late String? _folder = widget.folder;
+
+  /// The Favorites chip: only starred files in every tab.
+  var _onlyFavorites = false;
 
   /// The file-name search over every tab, seeded with the dashboard search
   /// the page was opened with. [_query] is what the tabs are filtered by;
@@ -273,15 +286,18 @@ class _BodyState extends State<_Body> {
         contents = base.matching(words, infix: true);
       }
     }
+    final favorites = _onlyFavorites;
+    if (favorites) contents = contents.only(widget.favoriteFiles);
+    final filtering = searching || favorites;
     // A tab without matches goes, unless it is the open one: it stays and
     // says so, so typing doesn't jump to another tab.
     final tabs = <(Type, String, Widget)>[];
     void add(Type kind, String label, int count, int all, Widget Function() t) {
-      if (count == 0 && !(searching && kind == _tab && all > 0)) return;
+      if (count == 0 && !(filtering && kind == _tab && all > 0)) return;
       tabs.add((
         kind,
         '$label (${formatCount(count)})',
-        count == 0 ? _NoMatches(query: _query) : t(),
+        count == 0 ? _NoMatches(query: _query, favorites: favorites) : t(),
       ));
     }
 
@@ -354,6 +370,26 @@ class _BodyState extends State<_Body> {
         ),
       ),
     );
+    final favoritesChip = Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: FilterChip(
+        key: const ValueKey('detail-favorites-chip'),
+        mouseCursor: clickCursor,
+        avatar: Icon(
+          favorites ? Icons.star : Icons.star_border,
+          size: 18,
+          color: FavoriteStar.color,
+        ),
+        showCheckmark: false,
+        tooltip: favorites
+            ? 'Show all files'
+            : 'Show only the starred files of this pack',
+        label: Text('Favorites (${formatCount(widget.favoriteFiles.length)})'),
+        visualDensity: VisualDensity.compact,
+        selected: favorites,
+        onSelected: (on) => setState(() => _onlyFavorites = on),
+      ),
+    );
     final tabArea = <Widget>[
       if (folder != null)
         _FolderBar(
@@ -362,10 +398,10 @@ class _BodyState extends State<_Body> {
         ),
       if (searching) _SearchFilterBar(text: _query, onShowAll: _clearSearch),
       if (tabs.isEmpty) ...[
-        Row(children: [const Spacer(), field]),
+        Row(children: [const Spacer(), favoritesChip, field]),
         Expanded(
-          child: searching
-              ? _NoMatches(query: _query)
+          child: filtering
+              ? _NoMatches(query: _query, favorites: favorites)
               : const Center(child: Text('No files')),
         ),
       ] else ...[
@@ -378,6 +414,7 @@ class _BodyState extends State<_Body> {
                 tabs: [for (final (_, label, _) in tabs) Tab(text: label)],
               ),
             ),
+            favoritesChip,
             field,
           ],
         ),
@@ -465,18 +502,28 @@ class _BodyState extends State<_Body> {
 
 /// An open tab whose files all miss the search.
 class _NoMatches extends StatelessWidget {
-  const _NoMatches({required this.query});
+  const _NoMatches({required this.query, this.favorites = false});
 
   final String query;
+
+  /// The Favorites chip is on: says nothing here is starred (matching the
+  /// search, if any).
+  final bool favorites;
 
   @override
   Widget build(BuildContext context) => Center(
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.search_off, size: 48),
+        Icon(favorites ? Icons.star_border : Icons.search_off, size: 48),
         const SizedBox(height: 8),
-        Text('No files match “${query.trim()}”'),
+        Text(
+          !favorites
+              ? 'No files match “${query.trim()}”'
+              : query.trim().isEmpty
+              ? 'No starred files'
+              : 'No starred files match “${query.trim()}”',
+        ),
       ],
     ),
   );
@@ -785,7 +832,9 @@ class _SlimHeader extends StatelessWidget {
       child: Row(
         children: [
           Icon(iconForTypes(pack.types), size: 18),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
+          _PackStar(packId: pack.id),
+          const SizedBox(width: 4),
           Flexible(
             child: Text(
               [
@@ -1119,6 +1168,8 @@ class _Info extends ConsumerWidget {
               Flexible(
                 child: Text(pack.title, style: theme.textTheme.headlineSmall),
               ),
+              const SizedBox(width: 4),
+              _PackStar(packId: pack.id),
               IconButton(
                 tooltip: 'Edit title',
                 icon: const Icon(Icons.edit, size: 18),
@@ -1568,6 +1619,9 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
   @override
   Widget build(BuildContext context) {
     final images = contents.images;
+    final favorites = ref.watch(
+      favoritesProvider.select((f) => f.filesOf(pack.id)),
+    );
     final size = imageThumbRange.clamp(
       ref.watch(settingsProvider.select((s) => s.imageThumbSize)),
     );
@@ -1636,7 +1690,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
           child: CtrlWheelResize(
             onSteps: (n) =>
                 settings.setImageThumbSize(imageThumbRange.nudge(size, n)),
-            child: _imageGrid(context, images, size, view),
+            child: _imageGrid(context, images, size, view, favorites),
           ),
         ),
       ],
@@ -1648,6 +1702,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
     List<String> images,
     double size,
     ItemsView view,
+    Set<String> favorites,
   ) {
     // The viewer steps through images in the order they're shown.
     final order = visibleOrder(images, view, _collapsed);
@@ -1687,8 +1742,11 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
             !_animated.contains(rel) &&
             p.extension(rel).toLowerCase() == '.png';
         final shown = [for (final j in order) images[j]];
+        final starred = favorites.contains(rel);
         return _HoverReveal(
           path: file.path,
+          starred: starred,
+          star: fileStar(ref, pack.id, rel, starred: starred),
           showLeading: selected,
           leading: flat
               ? Checkbox(
@@ -1768,16 +1826,21 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
   }
 }
 
-class _AnimationsTab extends StatelessWidget {
+class _AnimationsTab extends ConsumerWidget {
   const _AnimationsTab({required this.pack, required this.contents});
 
   final PackRow pack;
   final PackContents contents;
 
   @override
-  Widget build(BuildContext context) => AnimationGrid(
+  Widget build(BuildContext context, WidgetRef ref) => AnimationGrid(
     gridId: pack.id,
     packPath: pack.path,
+    favoriteFiles: ref.watch(
+      favoritesProvider.select((f) => f.filesOf(pack.id)),
+    ),
+    onToggleFavorite: (rel) =>
+        ref.read(favoritesProvider.notifier).toggleFile(pack.id, rel),
     animations: contents.animations,
     detected: contents.shownDetected,
     sizes: contents.sizes,
@@ -2914,6 +2977,9 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
       }),
     );
     final view = ref.watch(settingsProvider.select((s) => s.audioView));
+    final favorites = ref.watch(
+      favoritesProvider.select((f) => f.filesOf(widget.pack.id)),
+    );
     return Focus(
       focusNode: _keys,
       onKeyEvent: _onKey,
@@ -2961,8 +3027,8 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
           ),
           Expanded(
             child: switch (view) {
-              AudioView.rows => _rows(audio, readLength),
-              AudioView.cards => _cards(audio, readLength),
+              AudioView.rows => _rows(audio, readLength, favorites),
+              AudioView.cards => _cards(audio, readLength, favorites),
             },
           ),
         ],
@@ -2984,6 +3050,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   Widget _rows(
     List<String> audio,
     Future<Duration?> Function(String) readLength,
+    Set<String> favorites,
   ) => ListView.builder(
     controller: _scroll,
     padding: const EdgeInsets.symmetric(vertical: 8),
@@ -3009,6 +3076,12 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
             _TrackLength(future: readLength(rel)),
             const SizedBox(width: 16),
             Text(formatBytes(widget.contents.sizes[rel] ?? 0)),
+            fileStar(
+              ref,
+              widget.pack.id,
+              rel,
+              starred: favorites.contains(rel),
+            ),
             RevealButton(path),
           ],
         ),
@@ -3036,6 +3109,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   Widget _cards(
     List<String> audio,
     Future<Duration?> Function(String) readLength,
+    Set<String> favorites,
   ) => GridView.builder(
     key: const PageStorageKey('audio-cards'),
     controller: _scroll,
@@ -3063,6 +3137,12 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
           playingLength: playing ? _lengthOf(rel) : null,
           onToggle: () => _toggle(rel),
           onSeek: _seek,
+          star: fileStar(
+            ref,
+            widget.pack.id,
+            rel,
+            starred: favorites.contains(rel),
+          ),
         ),
       );
     },
@@ -3112,10 +3192,14 @@ class _AudioCard extends StatelessWidget {
     required this.playingLength,
     required this.onToggle,
     required this.onSeek,
+    this.star,
   });
 
   final String rel;
   final String packPath;
+
+  /// The favorites star, beside the reveal button.
+  final Widget? star;
   final Future<Duration?> length;
   final bool selected;
   final bool playing;
@@ -3199,7 +3283,10 @@ class _AudioCard extends StatelessWidget {
                   Positioned(
                     top: 0,
                     right: 0,
-                    child: RevealButton(p.join(packPath, rel)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [?star, RevealButton(p.join(packPath, rel))],
+                    ),
                   ),
                 ],
               ),
@@ -3362,15 +3449,18 @@ class _SeekBarState extends State<_SeekBar> {
   }
 }
 
-class _FilesTab extends StatelessWidget {
+class _FilesTab extends ConsumerWidget {
   const _FilesTab({required this.pack, required this.contents});
 
   final PackRow pack;
   final PackContents contents;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final files = contents.other;
+    final favorites = ref.watch(
+      favoritesProvider.select((f) => f.filesOf(pack.id)),
+    );
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: files.length,
@@ -3385,6 +3475,7 @@ class _FilesTab extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(formatBytes(contents.sizes[rel] ?? 0)),
+              fileStar(ref, pack.id, rel, starred: favorites.contains(rel)),
               RevealButton(p.join(pack.path, rel)),
             ],
           ),
@@ -3424,10 +3515,18 @@ class _HoverReveal extends StatefulWidget {
     this.actions = const [],
     this.leading,
     this.showLeading = false,
+    this.star,
+    this.starred = false,
   });
 
   final String path;
   final Widget child;
+
+  /// The favorites star, in the image's bottom-right corner (above the
+  /// one-line file name), so the top row keeps room for the checkbox:
+  /// shown on hover, always when [starred].
+  final Widget? star;
+  final bool starred;
 
   /// More hover buttons, before the reveal button.
   final List<Widget> actions;
@@ -3464,6 +3563,17 @@ class _HoverRevealState extends State<_HoverReveal> {
               child: leading,
             ),
           ),
+        if (widget.star case final star? when _hover || widget.starred)
+          Positioned(
+            bottom: 30,
+            right: 2,
+            child: Material(
+              color: Theme.of(context).colorScheme.surface
+                  .withValues(alpha: 0.85),
+              shape: const CircleBorder(),
+              child: star,
+            ),
+          ),
         if (_hover)
           Positioned(
             top: 2,
@@ -3486,5 +3596,32 @@ class _HoverRevealState extends State<_HoverReveal> {
           ),
       ],
     ),
+  );
+}
+
+/// The star toggle of one file of [packId].
+Widget fileStar(
+  WidgetRef ref,
+  String packId,
+  String rel, {
+  required bool starred,
+}) => FavoriteStar(
+  key: ValueKey('star:$rel'),
+  starred: starred,
+  onPressed: () => ref.read(favoritesProvider.notifier).toggleFile(packId, rel),
+);
+
+/// The pack's favorites star, beside the title in the header.
+class _PackStar extends ConsumerWidget {
+  const _PackStar({required this.packId});
+
+  final String packId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => FavoriteStar(
+    key: const ValueKey('header-star'),
+    starred: ref.watch(favoritesProvider.select((f) => f.isPack(packId))),
+    size: 22,
+    onPressed: () => ref.read(favoritesProvider.notifier).togglePack(packId),
   );
 }

@@ -52,6 +52,13 @@ class Packs extends Table {
   /// Games this pack is credited in (sidecar `used_in`).
   TextColumn get usedIn => text().map(const StringListConverter())();
 
+  /// Starred pack (sidecar `favorite`).
+  BoolColumn get favorite => boolean().withDefault(const Constant(false))();
+
+  /// Starred files, relative to [path] (sidecar `favorite_files`).
+  TextColumn get favoriteFiles =>
+      text().map(const StringListConverter()).withDefault(const Constant(''))();
+
   /// Preview image relative to [path].
   TextColumn get preview => text().nullable()();
 
@@ -110,7 +117,7 @@ class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("
@@ -181,6 +188,8 @@ class LibraryIndex extends _$LibraryIndex {
             tags: pk.tags,
             source: Value(pk.source?.name),
             usedIn: pk.sidecar?.usedIn ?? const [],
+            favorite: Value(pk.sidecar?.favorite ?? false),
+            favoriteFiles: Value(pk.sidecar?.favoriteFiles ?? const []),
             itchGameId: Value(pk.sidecar?.itchGameId),
             itchUrl: Value(pk.sidecar?.itchUrl),
             preview: Value(pk.preview),
@@ -253,6 +262,16 @@ class LibraryIndex extends _$LibraryIndex {
     }
     return words.join(' ');
   }
+
+  /// Stores a pack's stars after a toggle, so the next start (without a
+  /// rescan) has them too.
+  Future<void> setFavorites(
+    String packId, {
+    required bool favorite,
+    required List<String> files,
+  }) => (update(packs)..where((p) => p.id.equals(packId))).write(
+    PacksCompanion(favorite: Value(favorite), favoriteFiles: Value(files)),
+  );
 
   Future<List<PackRow>> allPacks() =>
       (select(packs)..orderBy([(p) => OrderingTerm.asc(p.title)])).get();

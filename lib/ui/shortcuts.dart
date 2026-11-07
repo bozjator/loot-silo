@@ -208,6 +208,7 @@ const mouseHelp = [
     'Show the full header (after a moment)',
   ),
   MouseHelp('Click the Dashboard tab', 'Back to the dashboard from a pack'),
+  MouseHelp('Click a star', 'Add a pack or file to favorites, or remove it'),
   MouseHelp('Click an animation card', 'Focus mode: dim and pause the others'),
   MouseHelp(
     'Wheel in the image viewer',

@@ -36,6 +36,8 @@ Future<void> main(List<String> args) async {
           types: pk.types,
           tags: pk.tags,
           usedIn: const [],
+          favorite: pk.sidecar?.favorite ?? false,
+          favoriteFiles: pk.sidecar?.favoriteFiles ?? const [],
           itchGameId: pk.sidecar?.itchGameId,
           fileCount: pk.files.length,
           totalBytes: pk.totalBytes,

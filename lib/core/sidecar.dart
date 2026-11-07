@@ -142,6 +142,8 @@ class PackSidecar {
     this.usedIn = const [],
     this.isContainer = false,
     this.animations = const {},
+    this.favorite = false,
+    this.favoriteFiles = const [],
     this.extra = const {},
   });
 
@@ -162,12 +164,19 @@ class PackSidecar {
   /// Per-file animation overrides keyed by path relative to the pack.
   final Map<String, Object?> animations;
 
+  /// Starred pack (`favorite`).
+  final bool favorite;
+
+  /// Starred files, relative to the pack (`favorite_files`).
+  final List<String> favoriteFiles;
+
   /// Unknown keys, preserved on write.
   final Map<String, Object?> extra;
 
   static const _known = {
     'title', 'types', 'tags', 'source', 'source_path', 'itch_game_id', //
     'itch_url', 'cover', 'notes', 'used_in', 'is_container', 'animations',
+    'favorite', 'favorite_files',
   };
 
   factory PackSidecar.fromJson(Map<String, Object?> json) {
@@ -188,6 +197,8 @@ class PackSidecar {
       isContainer: json['is_container'] == true,
       animations:
           (json['animations'] as Map?)?.cast<String, Object?>() ?? const {},
+      favorite: json['favorite'] == true,
+      favoriteFiles: strings(json['favorite_files']),
       extra: {
         for (final e in json.entries)
           if (!_known.contains(e.key)) e.key: e.value,
@@ -208,6 +219,8 @@ class PackSidecar {
     if (usedIn.isNotEmpty) 'used_in': usedIn,
     if (isContainer) 'is_container': true,
     if (animations.isNotEmpty) 'animations': animations,
+    if (favorite) 'favorite': true,
+    if (favoriteFiles.isNotEmpty) 'favorite_files': favoriteFiles,
     ...extra,
   };
 
@@ -239,6 +252,8 @@ class PackSidecar {
     int? itchGameId,
     String? itchUrl,
     String? cover,
+    bool? favorite,
+    List<String>? favoriteFiles,
   }) => PackSidecar(
     title: title ?? this.title,
     types: types ?? this.types,
@@ -252,6 +267,8 @@ class PackSidecar {
     usedIn: usedIn ?? this.usedIn,
     isContainer: isContainer ?? this.isContainer,
     animations: animations ?? this.animations,
+    favorite: favorite ?? this.favorite,
+    favoriteFiles: favoriteFiles ?? this.favoriteFiles,
     extra: extra,
   );
 }

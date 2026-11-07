@@ -16,6 +16,7 @@ import 'package:assets_explorer/ui/help_screen.dart';
 import 'package:assets_explorer/ui/image_viewer.dart';
 import 'package:assets_explorer/ui/pack_detail_screen.dart';
 import 'package:assets_explorer/ui/track_player.dart';
+import 'package:assets_explorer/ui/widgets/favorite_star.dart';
 import 'package:assets_explorer/ui/widgets/pack_tile.dart';
 import 'package:assets_explorer/ui/widgets/animated_sprite.dart';
 import 'package:assets_explorer/ui/reveal.dart';
@@ -1468,6 +1469,91 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.text('Rows'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m38: favorites — stars, dashboard and detail chips', (
+    tester,
+  ) async {
+    const pixel =
+        '../assets_library/Kenney/Kenney Game Assets 1 version 42/2D assets/'
+        'Explosion Pack/PNG/Pixel explosion';
+    if (!Directory(pixel).existsSync()) return;
+    // A temp copy: the real library is never written.
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    copyTree(pixel, p.join(pack, 'fx', 'Pixel explosion'));
+    Map<String, Object?> sidecar() =>
+        jsonDecode(File(p.join(pack, 'asset_pack.json')).readAsStringSync())
+            as Map<String, Object?>;
+    final fileStars = find.byWidgetPredicate(
+      (w) =>
+          w is FavoriteStar &&
+          w.key is ValueKey<String> &&
+          (w.key! as ValueKey<String>).value.startsWith('star:'),
+    );
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    final g = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await g.addPointer(
+      location: tester.getCenter(find.widgetWithText(PackTile, 'Knight Pack')),
+    );
+    addTearDown(g.removePointer);
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('pack-star')));
+    await tester.pump();
+    expect(sidecar()['favorite'], isTrue);
+    await g.moveTo(const Offset(1430, 890));
+    await tester.pump();
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm38_dashboard_star', settle: false);
+
+    // Pack page: star two images.
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    final cards = find.ancestor(
+      of: find.textContaining('.png'),
+      matching: find.byType(Card),
+    );
+    await pumpUntil(tester, cards);
+    for (final i in [0, 2]) {
+      await g.moveTo(tester.getCenter(cards.at(i)));
+      await tester.pump();
+      await tester.tap(fileStars.last);
+      await tester.pump();
+    }
+    expect(sidecar()['favorite_files'], hasLength(2));
+    expect(sidecar()['future_field'], 42);
+    await g.moveTo(const Offset(1430, 890));
+    await tester.pump();
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm38_detail_stars', settle: false);
+
+    await tester.tap(find.byKey(const ValueKey('detail-favorites-chip')));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Images (2)'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm38_detail_chip', settle: false);
+
+    // Dashboard: the Favorites chip, then the Files view.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.byKey(const ValueKey('favorites-chip')));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.byKey(const ValueKey('favorites-chip')));
+    await tester.pump();
+    expect(find.widgetWithText(PackTile, 'Slimes'), findsNothing);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm38_dashboard_chip', settle: false);
+    await tester.tap(find.text('Files'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('2 files'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm38_files_view', settle: false);
+    await tester.tap(find.text('Packs'));
+    await tester.tap(find.byKey(const ValueKey('favorites-chip')));
+    await tester.pump();
   });
 
   testWidgets('m26: frame grid, saved rows, editor layout (real, unsaved)', (

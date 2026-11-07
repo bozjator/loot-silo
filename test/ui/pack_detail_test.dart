@@ -113,6 +113,7 @@ void main() {
     Map<String, img.Image> images = const {},
     Map<String, List<int>> raw = const {},
     List<String>? types,
+    Map<String, Object?> sidecar = const {},
     List<Override> overrides = const [],
   }) async {
     final lib = p.join(tmp.path, 'library');
@@ -128,10 +129,12 @@ void main() {
         ..parent.createSync(recursive: true)
         ..writeAsBytesSync(bytes);
     }
-    if (types != null) {
-      final sidecar = File(p.join(pack, 'asset_pack.json'));
-      final json = jsonDecode(sidecar.readAsStringSync()) as Map;
-      sidecar.writeAsStringSync(jsonEncode({...json, 'types': types}));
+    if (types != null || sidecar.isNotEmpty) {
+      final file = File(p.join(pack, 'asset_pack.json'));
+      final json = jsonDecode(file.readAsStringSync()) as Map;
+      file.writeAsStringSync(
+        jsonEncode({...json, 'types': ?types, ...sidecar}),
+      );
     }
     for (final MapEntry(key: rel, value: image) in images.entries) {
       File(p.join(pack, rel))
@@ -2449,6 +2452,211 @@ void main() {
         ),
         findsNothing,
       );
+    });
+  });
+  group('Favorites (M38)', () {
+    Map<String, Object?> sidecar() => jsonDecode(
+      File(
+        p.join(
+          tmp.path,
+          'library',
+          'HeroMaker',
+          'Knight Pack',
+          'asset_pack.json',
+        ),
+      ).readAsStringSync(),
+    ) as Map<String, Object?>;
+
+    Future<TestGesture> hoverOver(WidgetTester tester, Finder f) async {
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(f));
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      return mouse;
+    }
+
+    String chipText(WidgetTester tester, Key key) => [
+      for (final e
+          in find
+              .descendant(of: find.byKey(key), matching: find.byType(Text))
+              .evaluate())
+        (e.widget as Text).data,
+    ].join(' ');
+
+    testWidgets('pack tile star on hover; dashboard chip filters packs', (
+      tester,
+    ) async {
+      await openKnight(tester, open: false);
+      await pumpUntil(tester, find.text('Slimes'));
+      final tile = find.widgetWithText(PackTile, 'Knight Pack');
+      final star = find.byKey(const ValueKey('pack-star'));
+      expect(star, findsNothing);
+      final mouse = await hoverOver(tester, tile);
+      expect(star, findsOneWidget);
+      await tester.tap(star);
+      await tester.pump();
+      expect(sidecar()['favorite'], isTrue);
+      // Other keys kept.
+      expect(sidecar()['future_field'], 42);
+      expect(sidecar()['used_in'], ['My Game']);
+      // Starred: shown without hover too.
+      await mouse.moveTo(const Offset(2, 890));
+      await tester.pump();
+      expect(star, findsOneWidget);
+      expect(
+        tester
+            .widget<Icon>(
+              find.descendant(of: star, matching: find.byType(Icon)),
+            )
+            .icon,
+        Icons.star,
+      );
+
+      const chip = ValueKey('favorites-chip');
+      expect(chipText(tester, chip), 'Favorites 1');
+      await tester.tap(find.byKey(chip));
+      await tester.pump();
+      expect(find.widgetWithText(PackTile, 'Slimes'), findsNothing);
+      expect(tile, findsOneWidget);
+      expect(find.text('1 pack'), findsOneWidget);
+      // Unstar: the filter now lists nothing.
+      await tester.tap(star);
+      await tester.pump();
+      expect(sidecar().containsKey('favorite'), isFalse);
+      expect(find.text('No packs match'), findsOneWidget);
+      expect(chipText(tester, chip), 'Favorites 0');
+    });
+
+    testWidgets('header, image, audio and other-file stars; detail chip', (
+      tester,
+    ) async {
+      await openKnight(
+        tester,
+        files: const ['heroes/a.png', 'z_root.png', 'sfx/hit.wav'],
+        raw: {'notes.txt': utf8.encode('hello')},
+        overrides: [
+          audioDurationProvider.overrideWithValue(
+            (path) async => const Duration(seconds: 1),
+          ),
+        ],
+      );
+      final header = find.byKey(const ValueKey('header-star'));
+      expect(header, findsOneWidget);
+      await tester.tap(header);
+      await tester.pump();
+      expect(sidecar()['favorite'], isTrue);
+
+      // Image card: on hover.
+      await tester.tap(find.textContaining('Images ('));
+      await tester.pumpAndSettle();
+      final star = find.byKey(const ValueKey('star:z_root.png'));
+      expect(star, findsNothing);
+      final mouse = await hoverOver(
+        tester,
+        find
+            .ancestor(of: find.text('z_root.png'), matching: find.byType(Card))
+            .first,
+      );
+      expect(star, findsOneWidget);
+      await tester.tap(star);
+      await tester.pump();
+      expect(sidecar()['favorite_files'], ['z_root.png']);
+      await mouse.moveTo(const Offset(2, 890));
+      await tester.pump();
+      expect(star, findsOneWidget);
+      expect(find.byKey(const ValueKey('star:heroes/a.png')), findsNothing);
+
+      // Audio row and Other files row: always there.
+      await tester.tap(find.textContaining('Audio ('));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('star:sfx/hit.wav')));
+      await tester.pump();
+      await tester.tap(find.textContaining('Other files ('));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('star:notes.txt')));
+      await tester.pump();
+      expect(sidecar()['favorite_files'], [
+        'notes.txt',
+        'sfx/hit.wav',
+        'z_root.png',
+      ]);
+      expect(sidecar()['future_field'], 42);
+
+      // The detail chip: only starred files; tab counts follow.
+      const chip = ValueKey('detail-favorites-chip');
+      expect(find.text('Favorites (3)'), findsOneWidget);
+      expect(find.text('Images (3)'), findsOneWidget);
+      await tester.tap(find.byKey(chip));
+      await tester.pumpAndSettle();
+      expect(find.text('Images (1)'), findsOneWidget);
+      expect(find.text('Audio (1)'), findsOneWidget);
+      expect(find.text('Other files (1)'), findsOneWidget);
+      // Unstarring the last other file empties the open tab, which stays.
+      await tester.tap(find.byKey(const ValueKey('star:notes.txt')));
+      await tester.pumpAndSettle();
+      expect(find.text('Other files (0)'), findsOneWidget);
+      expect(find.text('No starred files'), findsOneWidget);
+      await tester.tap(find.byKey(chip));
+      await tester.pumpAndSettle();
+      expect(find.text('Images (3)'), findsOneWidget);
+      expect(find.text('Other files (1)'), findsOneWidget);
+    });
+
+    testWidgets('audio cards and animation cards have stars', (tester) async {
+      final strip = img.Image(width: 64, height: 16, numChannels: 4);
+      img.fill(strip, color: img.ColorRgba8(40, 120, 200, 255));
+      await openKnight(
+        tester,
+        files: const ['sfx/hit.wav'],
+        images: {'fx/smoke_strip.png': strip},
+        overrides: [
+          audioDurationProvider.overrideWithValue(
+            (path) async => const Duration(seconds: 1),
+          ),
+        ],
+      );
+      await tester.tap(find.textContaining('Animations ('));
+      await tester.pumpAndSettle();
+      final anim = find.byKey(const ValueKey('star:fx/smoke_strip.png'));
+      expect(anim, findsNothing);
+      await hoverCard(tester);
+      expect(anim, findsOneWidget);
+      await tester.tap(anim);
+      await tester.pump();
+      expect(sidecar()['favorite_files'], ['fx/smoke_strip.png']);
+
+      await tester.tap(find.textContaining('Audio ('));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cards'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('star:sfx/hit.wav')));
+      await tester.pump();
+      expect(sidecar()['favorite_files'], [
+        'fx/smoke_strip.png',
+        'sfx/hit.wav',
+      ]);
+    });
+
+    testWidgets('Files view: the chip lists starred files without search', (
+      tester,
+    ) async {
+      // Starred before the scan: read from the sidecar.
+      await openKnight(
+        tester,
+        files: const ['other.png'],
+        open: false,
+        sidecar: {
+          'favorite_files': ['knight.png'],
+        },
+      );
+      await tester.tap(find.text('Files'));
+      await tester.pump();
+      expect(find.text('Type to search file names'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('favorites-chip')));
+      await tester.pump();
+      expect(find.text('1 file'), findsOneWidget);
+      expect(find.textContaining('night'), findsWidgets);
+      expect(find.textContaining('ther'), findsNothing);
     });
   });
 }
