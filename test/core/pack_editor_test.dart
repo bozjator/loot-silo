@@ -313,6 +313,38 @@ void main() {
     expect(chosen.anim, isNull);
   });
 
+  test('a combined strip of non-square frames plays as the cover (M53)', () {
+    for (var i = 1; i <= 3; i++) {
+      png('Planes/plane$i.png', 88, 73);
+    }
+    final strip = combineFrames(tmp.path, [
+      for (var i = 1; i <= 3; i++) 'Planes/plane$i.png',
+    ], 'Planes/plane_fly.png');
+    expect((strip.frameW, strip.frameH, strip.frames), (88, 73, 3));
+    final overrides = (sidecarJson()['animations'] as Map)
+        .cast<String, Object?>();
+    // As the sidecar cover (rank 1): the saved frames, not the whole strip.
+    final chosen = choosePreviewAnimation(
+      tmp.path,
+      ['Planes/plane_fly.png'],
+      preview: 'Planes/plane_fly.png',
+      rank: 1,
+      overrides: overrides,
+    );
+    expect(chosen.preview, 'Planes/plane_fly.png');
+    expect(chosen.anim, isNotNull);
+    expect((chosen.anim!.frameW, chosen.anim!.frameH), (88, 73));
+    expect(chosen.anim!.frameCount, 3);
+    // Without the manual mark the name finds no frames: a still image.
+    final plain = choosePreviewAnimation(
+      tmp.path,
+      ['Planes/plane_fly.png'],
+      preview: 'Planes/plane_fly.png',
+      rank: 1,
+    );
+    expect(plain.anim, isNull);
+  });
+
   test('zoom is saved as zoom and loaded back; Auto writes nothing', () {
     png('Hero/Idle.png', 128, 32);
     final detected = loadPackContents(tmp.path, [

@@ -943,7 +943,13 @@ List<String> animationCandidates(Iterable<String> files, {int limit = 400}) {
   }
   final size = readImageSize(p.join(packPath, preview));
   if (size == null) return (preview: preview, anim: null);
-  final sheet = detectSheet(preview, size.$1, size.$2);
+  var sheet = detectSheet(preview, size.$1, size.$2);
+  // A strip made with "Combine" / "Make animation" chosen as the cover:
+  // its saved frame size, as on the Animations tab, even where the name
+  // alone finds no frames (non-square frames).
+  if (sheet == null && manualAnimations(overrides).contains(preview)) {
+    sheet = guessStrip(preview, size.$1, size.$2);
+  }
   return (
     preview: preview,
     anim: sheet == null || isNotAnimation(overrides[preview])

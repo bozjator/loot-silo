@@ -218,7 +218,7 @@ class SettingsScreen extends ConsumerWidget {
                 // The slogan is in the logo above.
                 subtitle: Padding(
                   padding: EdgeInsets.only(top: 4),
-                  child: ProjectLinks(),
+                  child: ProjectLinks(license: true),
                 ),
               ),
               const SizedBox(height: 24),

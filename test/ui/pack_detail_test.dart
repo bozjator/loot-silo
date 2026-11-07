@@ -3748,6 +3748,20 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('link:itch.io')));
       await tester.pump(const Duration(milliseconds: 500));
       expect(launched, [Uri.parse(appGitHubUrl), Uri.parse(appItchUrl)]);
+      // M53: the license line under them.
+      expect(
+        find.textContaining(
+          'Free to use and change; not for resale.',
+          findRichText: true,
+        ),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(find.byKey(const ValueKey('link:license')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('link:license')));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(launched.last, Uri.parse(appLicenseUrl));
+      expect(appLicenseUrl, '$appGitHubUrl/blob/main/LICENSE');
       expect(appGitHubUrl, 'https://github.com/bozjator/loot-silo');
       expect(appItchUrl, 'https://bozjator.itch.io/loot-silo');
 
