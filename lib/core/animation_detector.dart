@@ -50,9 +50,8 @@ class SpriteAnim {
   /// set, frames past it in the last row are skipped.
   final int? frameTotal;
 
-  /// The grid row that plays (0-based), or [allRows]. Every row by default
-  /// (M34); sidecar key `rows` (`"all"` or a 1-based row number) saves a
-  /// single row.
+  /// The grid row that plays (0-based), or [allRows]. Every row by
+  /// default; sidecar key `rows` (a 1-based row number) saves a single row.
   final int playRow;
 
   /// Screen pixels per sprite pixel, or null for Auto: the trimmed frame
@@ -387,10 +386,9 @@ bool hasAnimationWord(String rel) => pathWords(rel).any(_isAnimWord);
 /// is checked for a grid of gaps ([detectSheetByPixels]). [atlases]
 /// ([atlasImages]) skip those checks. Run it in an isolate for big packs.
 /// Per-file [overrides] (the sidecar's `animations{}`) set frame size and
-/// fps. Files
-/// with saved edits there ([editedAnimations]), or listed in [manual],
-/// become one-row strips ([guessStrip]) when nothing else detects them
-/// ("Make animation…").
+/// fps. Files marked `manual` there ([manualAnimations]), or listed in
+/// [manual], become one-row strips ([guessStrip]) when nothing else detects
+/// them ("Make animation…").
 List<SpriteAnim> detectAnimations(
   String packPath,
   List<String> files, {
@@ -401,7 +399,7 @@ List<SpriteAnim> detectAnimations(
   int maxWordScans = 0,
   Set<String> atlases = const {},
 }) {
-  final made = {...manual, ...editedAnimations(overrides)};
+  final made = {...manual, ...manualAnimations(overrides)};
   final sizes = <String, (int, int)>{};
   final out = <SpriteAnim>[];
   var reads = 0;
@@ -487,15 +485,6 @@ Set<String> atlasImages(Iterable<String> files) {
   };
 }
 
-/// Files with saved edits in the sidecar's `animations{}` (any map, `manual`
-/// or not). They stay animations even when detection no longer finds them
-/// (M34 dropped sequences and the consensus grid), so saved work isn't
-/// lost: they start from [guessStrip] and the edits apply on top.
-Set<String> editedAnimations(Map<String, Object?> overrides) => {
-  for (final MapEntry(:key, :value) in overrides.entries)
-    if (value is Map) key,
-};
-
 /// Files the sidecar's `animations{}` marks `"manual": true`: made into
 /// animations by hand, not by detection.
 Set<String> manualAnimations(Map<String, Object?> overrides) => {
@@ -520,10 +509,10 @@ SpriteAnim guessStrip(String rel, int w, int h) {
 /// (`animations: {"<path>": false}`): it then only shows as an image.
 bool isNotAnimation(Object? override) => override == false;
 
-/// Applies a sidecar override `{frame_w, frame_h, fps, frames, rows}` to
-/// [a]. `frames` (total frame count, sheets only) is applied after the
-/// size; a count that doesn't fit the sheet is ignored. `rows` is `"all"`
-/// or a 1-based row number.
+/// Applies a sidecar override `{frame_w, frame_h, fps, frames, rows, zoom}`
+/// to [a]. `frames` (total frame count, sheets only) is applied after the
+/// size; a count that doesn't fit the sheet is ignored. `rows` is the
+/// 1-based row that plays; without it every row plays.
 SpriteAnim applyOverride(SpriteAnim a, Object? override) {
   if (override is! Map) return a;
   final rows = override['rows'];
@@ -534,11 +523,9 @@ SpriteAnim applyOverride(SpriteAnim a, Object? override) {
   );
   final n = (override['frames'] as num?)?.toInt();
   final sliced = n == null ? sized : sized.withFrameCount(n) ?? sized;
-  final rowed = switch (rows) {
-    'all' => sliced.copyWith(playRow: SpriteAnim.allRows),
-    num r when r >= 1 => sliced.copyWith(playRow: r.toInt() - 1),
-    _ => sliced,
-  };
+  final rowed = rows is num && rows >= 1
+      ? sliced.copyWith(playRow: rows.toInt() - 1)
+      : sliced;
   final zoom = (override['zoom'] as num?)?.toInt();
   return zoom != null && zoom >= 1 && zoom <= SpriteAnim.zoomSteps.last
       ? rowed.copyWith(zoom: zoom)

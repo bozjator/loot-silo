@@ -1556,24 +1556,13 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump();
   });
 
-  testWidgets('m26: frame grid, saved rows, editor layout (real, unsaved)', (
-    tester,
-  ) async {
+  testWidgets('m26: saved rows in the editor (real, unsaved)', (tester) async {
     final real = p.canonicalize('../assets_library');
     if (!Directory(real).existsSync()) return;
-    final sea = File(
-      p.join(
-        real,
-        'RafaelMatos',
-        'ERW - Sea Adventures (GL 2.0 expansion) V1.5',
-        'asset_pack.json',
-      ),
-    );
     final vfx = File(
       p.join(real, 'ashishlko11', 'Special Effects Vol.03', 'asset_pack.json'),
     );
-    if (!sea.existsSync() || !vfx.existsSync()) return;
-    final seaBefore = sea.readAsStringSync();
+    if (!vfx.existsSync()) return;
     final vfxBefore = vfx.readAsStringSync();
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
@@ -1621,31 +1610,8 @@ A **16×16** knight with *walk* and *idle* animations.
       await settleImages(tester);
     }
 
-    // islands-grass-tower-vfx: 640×640, really 4×4 frames of 160 px.
-    await openEditor(
-      'Sea Adventures',
-      'ERW - Sea Adventures (GL 2.0 expansion) V1.5',
-      RegExp('grass tower vfx', caseSensitive: false),
-    );
-    final frames = find.widgetWithText(TextField, 'Frames');
-    await tester.enterText(frames, '16');
-    await tester.pump();
-    expect(find.textContaining("Doesn't fit"), findsNothing);
-    await settleImages(tester);
-    await captureScreenshot(tester, 'm26_islands_16_frames', settle: false);
-    expect(find.textContaining('160×160 frames · 4 × 4 · 16 frames'), findsOne);
-    // − skips counts with no grid; the result always fits.
-    await tester.tap(find.byTooltip('Fewer frames'));
-    await tester.pump();
-    expect(find.textContaining("Doesn't fit"), findsNothing);
-    // Close without saving.
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Apply size'), findsNothing);
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    // Back on the dashboard, still filtered by the search.
-    await pumpUntil(tester, find.text('1 pack'));
-
+    // The frame-count grid search (islands 16 → 4×4) is covered by unit
+    // tests: the real islands image is no animation without a saved edit.
     // Special Effects Vol.03: All rows is the default (M34); one row makes
     // the dialog savable.
     await openEditor(
@@ -1667,7 +1633,6 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(sea.readAsStringSync(), seaBefore);
     expect(vfx.readAsStringSync(), vfxBefore);
   });
 

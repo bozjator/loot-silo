@@ -229,7 +229,7 @@ void main() {
     expect(c.carousel(null), ['mockups/mockup1.gif', 'mockups/mockup2.png']);
   });
 
-  test('the row choice is saved as rows: all or a 1-based number', () {
+  test('the row choice is saved as a 1-based rows number', () {
     png('fx/Explosion(32x32).png', 64, 64);
     final detected = loadPackContents(tmp.path, [
       ('fx/Explosion(32x32).png', 1),
@@ -249,17 +249,6 @@ void main() {
       detected.copyWith(playRow: SpriteAnim.allRows),
     );
     expect(sidecarJson().containsKey('animations'), isFalse);
-    // An old sidecar's explicit rows still apply.
-    File(p.join(tmp.path, 'asset_pack.json')).writeAsStringSync(
-      '{"animations": {"fx/Explosion(32x32).png": {"rows": 1}}}',
-    );
-    final old = loadPackContents(tmp.path, [('fx/Explosion(32x32).png', 1)]);
-    expect(old.animations.single.rowToPlay, 0);
-    File(p.join(tmp.path, 'asset_pack.json')).writeAsStringSync(
-      '{"animations": {"fx/Explosion(32x32).png": {"rows": "all"}}}',
-    );
-    final all = loadPackContents(tmp.path, [('fx/Explosion(32x32).png', 1)]);
-    expect(all.animations.single.rowToPlay, isNull);
   });
 
   test('"Not an animation" moves a file to the images only and back', () {

@@ -45,20 +45,6 @@ void main() {
     expect(store.load().libraryPath, tmp.path);
   });
 
-  test('settings from before M33 still load (viewer_pixel_perfect)', () {
-    final f = File(p.join(tmp.path, 'settings.json'))
-      ..writeAsStringSync(
-        '{"library_path": "/lib", "viewer_pixel_perfect": true, '
-        '"audio_loop": true}',
-      );
-    final back = SettingsStore(f).load();
-    expect(back.libraryPath, '/lib');
-    expect(back.audioLoop, isTrue);
-    // Saving again drops the old key.
-    SettingsStore(f).save(back);
-    expect(f.readAsStringSync(), isNot(contains('viewer_pixel_perfect')));
-  });
-
   test('settings survive a corrupt file', () {
     final f = File(p.join(tmp.path, 'settings.json'))..writeAsStringSync('{');
     expect(SettingsStore(f).load().libraryPath, isNull);

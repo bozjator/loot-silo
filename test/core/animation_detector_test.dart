@@ -115,9 +115,8 @@ void main() {
       expect((g.cols, g.rows), (4, 2));
       expect(g.playRow, SpriteAnim.allRows);
       expect(g.rowToPlay, isNull);
-      // A saved row still wins; "all" stays all.
+      // A saved row wins.
       expect(applyOverride(g, {'rows': 2}).rowToPlay, 1);
-      expect(applyOverride(g, {'rows': 'all'}).rowToPlay, isNull);
     });
 
     test('non-dividing hints and plain images are rejected', () {
@@ -173,24 +172,34 @@ void main() {
     });
   });
 
-  test('saved edits keep a file an animation detection no longer finds', () {
-    // Sea Adventures' tower VFX was only a consensus grid; its saved edits
-    // still apply.
+  test('only a manual mark makes an undetected image an animation', () {
     png('props/islands-update/islands-grass-tower-vfx.png', 640, 800);
     const rel = 'props/islands-update/islands-grass-tower-vfx.png';
     expect(detectAnimations(tmp.path, [rel]), isEmpty);
+    // Edits alone don't make it one.
+    expect(
+      detectAnimations(
+        tmp.path,
+        [rel],
+        overrides: {
+          rel: {'frame_h': 160, 'frames': 16},
+        },
+      ),
+      isEmpty,
+    );
     final a = detectAnimations(
       tmp.path,
       [rel],
       overrides: {
-        rel: {'frame_h': 160, 'frames': 16, 'rows': 'all'},
+        rel: {'manual': true, 'frame_h': 160, 'frames': 16},
       },
     ).single;
     expect((a.frameCount, a.rowToPlay), (16, null));
     expect(a.frameH * a.rows, 800);
     expect(
-      editedAnimations({
-        rel: {'fps': 4},
+      manualAnimations({
+        rel: {'manual': true},
+        'y.png': {'fps': 4},
         'x.png': false,
       }),
       {rel},
@@ -617,7 +626,6 @@ void main() {
       expect(first == islands, isFalse);
       // Size edits keep the row choice.
       expect(first.copyWith(frameW: 64).playRow, 0);
-      expect(applyOverride(islands, {'rows': 'all'}).rowToPlay, isNull);
       expect(applyOverride(islands, {'rows': 3}).rowToPlay, 2);
       expect(applyOverride(islands, {'rows': 'x'}), islands);
     });

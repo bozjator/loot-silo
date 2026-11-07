@@ -161,7 +161,7 @@ PackContents loadPackContents(String packPath, List<(String, int)> files) {
   final detected = detectAnimations(
     packPath,
     images,
-    manual: editedAnimations(sidecar?.animations ?? const {}),
+    manual: manualAnimations(sidecar?.animations ?? const {}),
     maxPixelScans: worthPixelScan(packPath) ? 24 : 0,
     maxWordScans: detailWordScans,
     atlases: atlasImages([for (final (rel, _) in files) rel]),
@@ -242,8 +242,8 @@ PackSidecar saveAnimationOverride(
       if (anim.frameH != detected.frameH) 'frame_h': anim.frameH,
       if (anim.fps != SpriteAnim.defaultFps) 'fps': anim.fps,
       'frames': ?anim.frameTotal,
-      if (anim.playRow != detected.playRow)
-        'rows': anim.playRow < 0 ? 'all' : anim.playRow + 1,
+      // Detection plays every row, so only a single row is saved.
+      if (anim.playRow >= 0) 'rows': anim.playRow + 1,
       if (anim.zoom != detected.zoom) 'zoom': ?anim.zoom,
     };
     if (o.isNotEmpty) animations[detected.path] = o;
