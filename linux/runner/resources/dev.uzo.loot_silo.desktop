@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Loot Silo
+Comment=Your game assets. At a glance.
+Exec=loot_silo
+Icon=dev.uzo.loot_silo
+Terminal=false
+Categories=Graphics;Development;
+StartupWMClass=dev.uzo.loot_silo

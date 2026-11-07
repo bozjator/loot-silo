@@ -1771,8 +1771,12 @@ A **16×16** knight with *walk* and *idle* animations.
     // No settings file yet: the first-start screen.
     await tester.pumpWidget(app(lib, restart: true));
     await pumpUntil(tester, find.text('Choose a library folder'));
-    expect(find.text('Loot Silo'), findsNWidgets(2));
-    expect(find.text('Your game assets. At a glance.'), findsOneWidget);
+    // The app bar name; since M49 the name and slogan below are the logo.
+    expect(find.text('Loot Silo'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Loot Silo. Your game assets. At a glance.'),
+      findsOneWidget,
+    );
     await captureScreenshot(tester, 'm48_first_start', settle: false);
     await tester.tap(find.text('Choose folder'));
     await pumpUntil(tester, find.text('Knight Pack'));
@@ -1788,6 +1792,64 @@ A **16×16** knight with *walk* and *idle* animations.
     await settleImages(tester);
     await settleImages(tester);
     await captureScreenshot(tester, 'm48_dashboard', settle: false);
+  });
+
+  testWidgets('m49: logo on first start, app bar, About and Help', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final logo = find.byKey(const ValueKey('app-logo'));
+    for (final theme in [ThemeChoice.light, ThemeChoice.dark]) {
+      final name = theme.name;
+      // A fresh start in this theme: no library yet.
+      SettingsStore(File(p.join(tmp.path, 'settings.json')))
+          .save(AppSettings(theme: theme));
+      await tester.pumpWidget(app(lib, restart: true));
+      await pumpUntil(tester, find.text('Choose a library folder'));
+      await pumpUntil(tester, logo);
+      await settleImages(tester);
+      expect(find.byKey(const ValueKey('app-bar-icon')), findsOneWidget);
+      await captureScreenshot(tester, 'm49_first_start_$name', settle: false);
+
+      await tester.tap(find.text('Choose folder'));
+      await pumpUntil(tester, find.text('Knight Pack'));
+      await settleImages(tester);
+      await captureScreenshot(tester, 'm49_app_bar_$name', settle: false);
+
+      // Settings → About.
+      await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
+      await pumpUntil(tester, find.byType(SettingsScreen));
+      await tester.pump(const Duration(milliseconds: 500));
+      final list = find
+          .descendant(
+            of: find.byType(SettingsScreen),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        find.text(appVersionLabel),
+        300,
+        scrollable: list,
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(logo, findsOneWidget);
+      await settleImages(tester);
+      await captureScreenshot(tester, 'm49_about_$name', settle: false);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await pumpUntil(tester, find.byType(SettingsScreen), gone: true);
+
+      // Help: the logo at the top.
+      await tester.tap(find.byTooltip('How Loot Silo works (F1)'));
+      await pumpUntil(tester, logo);
+      await settleImages(tester);
+      await captureScreenshot(tester, 'm49_help_$name', settle: false);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await pumpUntil(tester, logo, gone: true);
+      File(p.join(tmp.path, 'settings.json')).deleteSync();
+      // A new app, not the old one's providers.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    }
   });
 
   testWidgets('m39: toolbars, Loop, slim bar, Settings (real, read-only)', (
@@ -3070,13 +3132,21 @@ A **16×16** knight with *walk* and *idle* animations.
       tester.widget<Text>(realPacks()).data!,
     ); // e.g. "72 packs"
 
-    // Typing doesn't search until it pauses for 250 ms: keys 210 ms
-    // apart keep the full list.
+    // Typing doesn't search until it pauses for 250 ms: keys closer
+    // together keep the full list. The timer runs on the real clock and a
+    // frame of this dashboard can take 100+ ms here, so the pause between
+    // keys is short and the real gap is checked to be under the debounce.
     var typed = '';
+    final clock = Stopwatch()..start();
     for (final ch in 'barrels'.split('')) {
       typed += ch;
+      final gap = clock.elapsed;
       await tester.enterText(find.byType(TextField), typed);
-      await tester.pump(const Duration(milliseconds: 210));
+      clock.reset();
+      await tester.pump(const Duration(milliseconds: 50));
+      if (typed.length > 1) {
+        expect(gap, lessThan(DashboardQueryNotifier.searchDebounce));
+      }
       expect(all, findsOneWidget, reason: typed);
     }
     final line = find.byKey(const ValueKey('file-matches'));

@@ -5,6 +5,7 @@ import '../core/animation_detector.dart'
 import '../core/sidecar.dart' show authorFileName, packFileName;
 import '../version.dart';
 import 'shortcuts.dart';
+import 'widgets/branding.dart';
 
 /// Opens the Help page over everything (from the app bar, Settings or F1).
 void openHelp(BuildContext context) =>
@@ -34,6 +35,10 @@ class HelpScreen extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
             children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 16, bottom: 8),
+                child: Center(child: AppLogo(height: 120)),
+              ),
               const _Section('Library layout', [
                 _P(
                   'The library is one folder that Loot Silo manages, '

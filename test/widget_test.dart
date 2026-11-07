@@ -40,16 +40,26 @@ void main() {
       ),
     );
     expect(find.text('Choose a library folder'), findsOneWidget);
-    // M48: the name and slogan, in the app bar and over the message.
+    // M48/M49: the icon and name in the app bar, the logo (name and
+    // slogan) over the message.
+    final bar = find.byType(AppBar);
+    expect(
+      find.descendant(of: bar, matching: find.text('Loot Silo')),
+      findsOneWidget,
+    );
     expect(
       find.descendant(
-        of: find.byType(AppBar),
-        matching: find.text('Loot Silo'),
+        of: bar,
+        matching: find.byKey(const ValueKey('app-bar-icon')),
       ),
       findsOneWidget,
     );
-    expect(find.text('Loot Silo'), findsNWidgets(2));
-    expect(find.text('Your game assets. At a glance.'), findsOneWidget);
+    final logo = find.byKey(const ValueKey('app-logo'));
+    expect(logo, findsOneWidget);
+    expect(
+      tester.widget<Image>(logo).semanticLabel,
+      'Loot Silo. Your game assets. At a glance.',
+    );
     expect(
       tester.widget<MaterialApp>(find.byType(MaterialApp)).title,
       'Loot Silo',
@@ -130,6 +140,14 @@ void main() {
     await tester.pump();
     // M45: one import icon in the app bar, no import buttons.
     final bar = find.byType(AppBar);
+    // M49: the silo icon before the name.
+    expect(
+      find.descendant(
+        of: bar,
+        matching: find.byKey(const ValueKey('app-bar-icon')),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.descendant(of: bar, matching: find.byTooltip('Import')),
       findsOneWidget,
@@ -163,6 +181,14 @@ void main() {
     expect(find.text(appVersionLabel), findsOneWidget);
     expect(appVersionLabel, startsWith('Loot Silo '));
     expect(find.text(appSlogan), findsOneWidget);
+    // M49: the logo above the version line.
+    expect(
+      find.descendant(
+        of: find.byType(SettingsScreen),
+        matching: find.byKey(const ValueKey('app-logo')),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('How Loot Silo works'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Dark'), -300, scrollable: list);
 

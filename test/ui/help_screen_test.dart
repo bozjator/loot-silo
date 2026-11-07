@@ -103,6 +103,13 @@ void main() {
       findsOneWidget,
     );
     expect(pageText(tester), isNot(contains('Asset Explorer')));
+    // M49: the logo at the top, before the first section.
+    final logo = find.byKey(const ValueKey('app-logo'));
+    expect(logo, findsOneWidget);
+    expect(
+      tester.getTopLeft(logo).dy,
+      lessThan(tester.getTopLeft(find.text('Library layout')).dy),
+    );
   });
 
   testWidgets('M37: Play all and how Loop works with it', (tester) async {

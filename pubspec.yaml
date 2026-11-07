@@ -77,6 +77,12 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # Built by tool/branding/make_branding.py from ../app_logos.
+  assets:
+    - assets/branding/icon_small.png
+    - assets/branding/icon_full.png
+    - assets/branding/logo_wide.png
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

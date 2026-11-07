@@ -20,6 +20,7 @@ import 'help_screen.dart';
 import 'session.dart';
 import '../version.dart';
 import 'shortcuts.dart';
+import 'widgets/branding.dart';
 import 'cursors.dart';
 
 /// Root widget of Loot Silo.
@@ -246,9 +247,9 @@ class HomeScreen extends ConsumerWidget {
     );
     if (libraryPath == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text(appName)),
+        appBar: AppBar(title: const AppBarTitle()),
         body: _Message(
-          header: const _NameAndSlogan(),
+          header: const AppLogo(height: 140),
           icon: Icons.folder_special_outlined,
           title: 'Choose a library folder',
           body:
@@ -270,7 +271,7 @@ class HomeScreen extends ConsumerWidget {
     // Ctrl+I/O/R, F5 and Ctrl+, are bound app-wide (LootSiloApp).
     return Scaffold(
       appBar: AppBar(
-        title: const Text(appName),
+        title: const AppBarTitle(),
         bottom: tabStrip(ref, progress: scanning),
         actions: [
           IconButton(
@@ -477,28 +478,6 @@ class _Message extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// "Loot Silo" and its slogan, for the first-start screen.
-class _NameAndSlogan extends StatelessWidget {
-  const _NameAndSlogan();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        Text(appName, style: theme.textTheme.displaySmall),
-        const SizedBox(height: 4),
-        Text(
-          appSlogan,
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
     );
   }
 }

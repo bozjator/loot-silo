@@ -8,6 +8,7 @@ import '../version.dart';
 import 'itch_screen.dart';
 import 'help_screen.dart';
 import 'shortcuts.dart';
+import 'widgets/branding.dart';
 
 /// Keyboard shortcuts, listed on the settings screen.
 class SettingsScreen extends ConsumerWidget {
@@ -191,6 +192,13 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () => openHelp(context),
               ),
               section('About'),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: AppLogo(height: 80),
+                ),
+              ),
               const ListTile(
                 leading: Icon(Icons.info_outline),
                 title: SelectableText(appVersionLabel),
