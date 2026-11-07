@@ -172,6 +172,17 @@ class CtrlWheelResize extends StatelessWidget {
   );
 }
 
+/// Columns for [n] cards when [wanted] are asked for, so the rows come out
+/// as even as possible: `ceil(n / ceil(n / wanted))`. 8 cards, 5 wanted →
+/// 4 (two rows of 4); 9 cards → 5 (5 + 4); 7 cards, 3 wanted → 3 (no even
+/// split exists). Fewer cards than [wanted] get one column each.
+int balancedColumns(int n, int wanted) {
+  final c = math.max(1, wanted);
+  if (n <= 0) return c;
+  final rows = (n + c - 1) ~/ c;
+  return (n + rows - 1) ~/ rows;
+}
+
 /// Width of the pack detail page's file search box, and of the thumbnail
 /// slider in the tab toolbars right under it, so the two line up.
 const detailControlWidth = 260.0;

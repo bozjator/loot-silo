@@ -1028,12 +1028,9 @@ class _CarouselState extends State<_Carousel> {
   }
 }
 
-/// Widest card in the "All previews" dialog.
-const previewGridTileWidth = 440.0;
-
 /// Every preview candidate of a pack in a grid; a click opens it in the
 /// viewer, stepping through the grid.
-class PreviewGridDialog extends StatelessWidget {
+class PreviewGridDialog extends ConsumerWidget {
   const PreviewGridDialog({
     super.key,
     required this.packPath,
@@ -1045,13 +1042,19 @@ class PreviewGridDialog extends StatelessWidget {
   final List<String> images;
   final Map<String, int> sizes;
 
+  static const _spacing = 8.0;
+  static const _footer = 26.0;
+  static const _padding = EdgeInsets.fromLTRB(16, 0, 16, 16);
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final wanted = ref.watch(settingsProvider.select((s) => s.previewsColumns));
+    final settings = ref.read(settingsProvider.notifier);
+    final columns = balancedColumns(images.length, wanted);
     return Dialog(
       child: ConstrainedBox(
-        // Twice the cards of the first version (220 → 440 px); the window
-        // limits the dialog first.
+        // The window limits the dialog first.
         constraints: const BoxConstraints(maxWidth: 2000, maxHeight: 1440),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1067,6 +1070,34 @@ class PreviewGridDialog extends StatelessWidget {
                       style: theme.textTheme.titleLarge,
                     ),
                   ),
+                  // Fewer columns = bigger cards, like the size sliders.
+                  IconButton(
+                    tooltip: 'Fewer columns (Ctrl + wheel up)',
+                    icon: const Icon(Icons.remove),
+                    onPressed: wanted > 1
+                        ? () => settings.setPreviewsColumns(wanted - 1)
+                        : null,
+                  ),
+                  Tooltip(
+                    message: 'Columns',
+                    child: SizedBox(
+                      width: 28,
+                      child: Text(
+                        '$wanted',
+                        key: const ValueKey('previews-columns'),
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleMedium,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'More columns (Ctrl + wheel down)',
+                    icon: const Icon(Icons.add),
+                    onPressed: wanted < 8
+                        ? () => settings.setPreviewsColumns(wanted + 1)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
                   IconButton(
                     tooltip: 'Close',
                     icon: const Icon(Icons.close),
@@ -1076,55 +1107,72 @@ class PreviewGridDialog extends StatelessWidget {
               ),
             ),
             Flexible(
-              child: GridView.builder(
-                shrinkWrap: true,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                gridDelegate: ThumbGridDelegate(
-                  maxTileWidth: previewGridTileWidth,
-                  imageAspect: 4 / 3,
-                  footer: (_) => 26,
-                  spacing: 8,
-                ),
-                itemCount: images.length,
-                itemBuilder: (context, i) => Card(
-                  clipBehavior: Clip.antiAlias,
-                  margin: EdgeInsets.zero,
-                  child: InkWell(
-                    mouseCursor: clickCursor,
-                    onTap: () => showImageViewer(
-                      context,
-                      packPath: packPath,
-                      images: images,
-                      index: i,
-                      sizes: sizes,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(6),
-                            child: PixelImage(
-                              File(p.join(packPath, images[i])),
-                              animate: true,
-                            ),
+              child: CtrlWheelResize(
+                // Wheel up = bigger cards = fewer columns.
+                onSteps: (n) => settings.setPreviewsColumns(wanted - n),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    // The cards share the width; each keeps a 4:3 image
+                    // area over its name.
+                    final width =
+                        (constraints.maxWidth -
+                            _padding.horizontal -
+                            _spacing * (columns - 1)) /
+                        columns;
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const CtrlWheelPhysics(),
+                      padding: _padding,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: _spacing,
+                        mainAxisSpacing: _spacing,
+                        mainAxisExtent: width * 3 / 4 + _footer,
+                      ),
+                      itemCount: images.length,
+                      itemBuilder: (context, i) => Card(
+                        key: ValueKey('preview:${images[i]}'),
+                        clipBehavior: Clip.antiAlias,
+                        margin: EdgeInsets.zero,
+                        child: InkWell(
+                          mouseCursor: clickCursor,
+                          onTap: () => showImageViewer(
+                            context,
+                            packPath: packPath,
+                            images: images,
+                            index: i,
+                            sizes: sizes,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(6),
+                                  child: PixelImage(
+                                    File(p.join(packPath, images[i])),
+                                    animate: true,
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                                child: Tooltip(
+                                  message: images[i],
+                                  child: Text(
+                                    p.basename(images[i]),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.labelSmall,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-                          child: Tooltip(
-                            message: images[i],
-                            child: Text(
-                              p.basename(images[i]),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.labelSmall,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),

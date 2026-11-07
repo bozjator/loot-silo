@@ -96,6 +96,12 @@ class SettingsNotifier extends Notifier<AppSettings> {
   void setDashboardView(DashboardView view) =>
       _save(state.copyWith(dashboardView: view));
 
+  /// The previews grid's wanted column count, kept within 1–8.
+  void setPreviewsColumns(int columns) {
+    final c = columns.clamp(1, 8);
+    if (c != state.previewsColumns) _save(state.copyWith(previewsColumns: c));
+  }
+
   void setAnimationThumbSize(double size) {
     if (size != state.animationThumbSize) {
       _save(state.copyWith(animationThumbSize: size));

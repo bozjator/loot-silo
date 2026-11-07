@@ -2129,6 +2129,56 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump(const Duration(milliseconds: 500));
   });
 
+  testWidgets('m42: previews grid at two column counts (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    const title = 'Epic RPG World - Village(interiors) V1.3';
+    if (!Directory(p.join(real, 'RafaelMatos', title)).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField).first, 'Village(interiors)');
+    final tile = find.descendant(
+      of: find.byType(PackTile),
+      matching: find.text(title),
+    );
+    await pumpUntil(tester, tile);
+    await tester.tap(tile.first);
+    final box = find.byKey(const ValueKey('header-preview'));
+    await pumpUntil(tester, box);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(box));
+    addTearDown(mouse.removePointer);
+    await tester.pump();
+    await tester.tap(
+      find.byWidgetPredicate(
+        (w) => w is Tooltip && (w.message ?? '').startsWith('All previews'),
+      ),
+    );
+    await pumpUntil(tester, find.byType(PreviewGridDialog));
+    await mouse.moveTo(const Offset(5, 5));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm42_previews_default', settle: false);
+
+    // Two columns: bigger cards, still filling the width.
+    final less = find.byTooltip('Fewer columns (Ctrl + wheel up)');
+    await tester.tap(less);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(less);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('previews-columns'))).data,
+      '2',
+    );
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm42_previews_two', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.byType(PreviewGridDialog), gone: true);
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m29: header previews and viewer zoom (real, read-only)', (
     tester,
   ) async {

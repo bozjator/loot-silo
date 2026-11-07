@@ -179,7 +179,10 @@ class HelpScreen extends StatelessWidget {
                   '"<path in the pack>" in its pack file, or name an image '
                   'preview.png. The header of a pack page steps through all '
                   'its preview candidates; "All previews" shows them in a '
-                  'grid.',
+                  'grid whose cards share the dialog\'s width. −/+ in its '
+                  'title bar or Ctrl + wheel over it set how many columns '
+                  '(1–8, remembered); rows are kept even, so 8 previews at 5 '
+                  'columns show as two rows of 4.',
                 ),
               ]),
               const _Section('Pack page & tabs', [

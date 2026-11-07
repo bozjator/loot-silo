@@ -2855,6 +2855,117 @@ void main() {
       expect(find.textContaining('mockups/mockup2.png'), findsOneWidget);
     });
 
+    Future<void> openGrid(WidgetTester tester, int n) async {
+      await openKnight(tester, files: const [], images: mockups(n));
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(
+        location: tester.getCenter(
+          find.byKey(const ValueKey('header-preview')),
+        ),
+      );
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      await tester.tap(find.byTooltip('All previews ($n)'));
+      await tester.pumpAndSettle();
+    }
+
+    List<Rect> cards(WidgetTester tester) => [
+      for (final e
+          in find
+              .descendant(
+                of: find.byType(PreviewGridDialog),
+                matching: find.byWidgetPredicate(
+                  (w) =>
+                      w is Card &&
+                      w.key is ValueKey<String> &&
+                      (w.key! as ValueKey<String>).value.startsWith('preview:'),
+                ),
+              )
+              .evaluate())
+        tester.getRect(find.byWidget(e.widget)),
+    ];
+
+    testWidgets(
+      'cards fill the width; 8 previews at 5 wanted are 4 + 4 (M42)',
+      (tester) async {
+        await openGrid(tester, 8);
+        expect(store.load().previewsColumns, 4);
+        await tester.tap(find.byTooltip('More columns (Ctrl + wheel down)'));
+        await tester.pumpAndSettle();
+        expect(store.load().previewsColumns, 5);
+        expect(
+          tester
+              .widget<Text>(find.byKey(const ValueKey('previews-columns')))
+              .data,
+          '5',
+        );
+        final rects = cards(tester);
+        expect(rects, hasLength(8));
+        final rows = {for (final r in rects) r.top}.toList()..sort();
+        expect(rows, hasLength(2));
+        expect(rects.where((r) => r.top == rows.first), hasLength(4));
+        // The row spans the grid: 16 px padding a side, 8 px gaps.
+        final grid = tester.getRect(
+          find.descendant(
+            of: find.byType(PreviewGridDialog),
+            matching: find.byType(GridView),
+          ),
+        );
+        final first = rects.where((r) => r.top == rows.first).toList()
+          ..sort((a, b) => a.left.compareTo(b.left));
+        expect(first.first.left, closeTo(grid.left + 16, 0.5));
+        expect(first.last.right, closeTo(grid.right - 16, 0.5));
+        expect(first[1].left - first[0].right, closeTo(8, 0.5));
+      },
+    );
+
+    testWidgets('Ctrl + wheel and −/+ set the columns, within 1–8 (M42)', (
+      tester,
+    ) async {
+      await openGrid(tester, 3);
+      final grid = find.descendant(
+        of: find.byType(PreviewGridDialog),
+        matching: find.byType(GridView),
+      );
+      Future<void> wheel(double dy) async {
+        final pointer = TestPointer(7, PointerDeviceKind.mouse);
+        await tester.sendEventToBinding(pointer.hover(tester.getCenter(grid)));
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendEventToBinding(pointer.scroll(Offset(0, dy)));
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        await tester.pumpAndSettle();
+      }
+
+      await wheel(-100); // up: bigger cards, fewer columns
+      expect(store.load().previewsColumns, 3);
+      await wheel(100);
+      await wheel(100);
+      expect(store.load().previewsColumns, 5);
+      final less = find.byTooltip('Fewer columns (Ctrl + wheel up)');
+      final more = find.byTooltip('More columns (Ctrl + wheel down)');
+      for (var i = 0; i < 6; i++) {
+        await tester.tap(less, warnIfMissed: false);
+        await tester.pumpAndSettle();
+      }
+      expect(store.load().previewsColumns, 1);
+      IconButton button(Finder f) => tester.widget<IconButton>(
+        find.ancestor(of: f, matching: find.byType(IconButton)).first,
+      );
+      expect(button(less).onPressed, isNull);
+      // One column: one card per row, as wide as the grid allows.
+      expect({for (final r in cards(tester)) r.left}, hasLength(1));
+      for (var i = 0; i < 9; i++) {
+        await tester.tap(more, warnIfMissed: false);
+        await tester.pumpAndSettle();
+      }
+      expect(store.load().previewsColumns, 8);
+      expect(button(more).onPressed, isNull);
+      await wheel(100);
+      expect(store.load().previewsColumns, 8);
+      // 3 previews never need more than 3 columns.
+      expect({for (final r in cards(tester)) r.top}, hasLength(1));
+    });
+
     testWidgets('one candidate: no grid button', (tester) async {
       await openKnight(tester, files: const []);
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);

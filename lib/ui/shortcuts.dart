@@ -219,6 +219,7 @@ const mouseHelp = [
     'Zoom; drag to pan, double-click fits',
   ),
   MouseHelp('Wheel over the Frames field', 'Step through counts that fit'),
+  MouseHelp('Ctrl + wheel over All previews', 'Fewer or more columns'),
   MouseHelp('Wheel over the Edit preview', 'Zoom (−, +, reset on hover)'),
   MouseHelp('Ctrl / Shift-click images', 'Select frames to combine'),
 ];

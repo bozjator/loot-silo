@@ -234,6 +234,48 @@ void main() {
     expect(controller.offset, offset);
   });
 
+  group('balancedColumns (M42)', () {
+    test('the examples from the plan', () {
+      expect(balancedColumns(8, 5), 4);
+      expect(balancedColumns(9, 5), 5);
+      expect(balancedColumns(7, 3), 3);
+      expect(balancedColumns(8, 4), 4);
+      expect(balancedColumns(2, 4), 2);
+      expect(balancedColumns(0, 4), 4);
+    });
+
+    test('n = 1…20: never more columns or rows than wanted gives, '
+        'and rows differ by at most the minimum', () {
+      for (var wanted = 1; wanted <= 8; wanted++) {
+        for (var n = 1; n <= 20; n++) {
+          final c = balancedColumns(n, wanted);
+          final rows = (n + wanted - 1) ~/ wanted;
+          expect(c, lessThanOrEqualTo(wanted), reason: '$n/$wanted');
+          expect(c, greaterThanOrEqualTo(1));
+          // Same number of rows as the wanted count would need.
+          expect((n + c - 1) ~/ c, rows, reason: '$n/$wanted');
+          // No narrower count keeps that many rows.
+          if (c > 1) {
+            expect((n + c - 2) ~/ (c - 1), greaterThan(rows));
+          }
+        }
+      }
+    });
+  });
+
+  test('previews_columns round-trips, defaults to 4, stays in 1–8', () {
+    final dir = Directory.systemTemp.createTempSync('cols');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File(p.join(dir.path, 'settings.json'));
+    final store = SettingsStore(file);
+    expect(store.load().previewsColumns, 4);
+    store.save(const AppSettings(previewsColumns: 6));
+    expect(store.load().previewsColumns, 6);
+    expect(file.readAsStringSync(), contains('"previews_columns": 6'));
+    file.writeAsStringSync('{"previews_columns": 40}');
+    expect(store.load().previewsColumns, 8);
+  });
+
   test('tile sizes round-trip and default to today\'s sizes', () {
     final dir = Directory.systemTemp.createTempSync('sizes');
     addTearDown(() => dir.deleteSync(recursive: true));

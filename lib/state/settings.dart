@@ -35,6 +35,7 @@ class AppSettings {
     this.dashboardView = DashboardView.packs,
     this.detailAnimateMode = AnimateMode.hover,
     this.audioView = AudioView.rows,
+    this.previewsColumns = 4,
   });
 
   /// The managed library folder; null until the user picks one.
@@ -70,6 +71,10 @@ class AppSettings {
 
   final AudioView audioView;
 
+  /// Wanted columns in the "All previews" grid (1–8); rows are balanced
+  /// from it. 4 is what the 440 px cards gave in a full-width window.
+  final int previewsColumns;
+
   factory AppSettings.fromJson(Map<String, Object?> json) => AppSettings(
     libraryPath: json['library_path'] as String?,
     theme: ThemeChoice.values.asNameMap()[json['theme']] ?? ThemeChoice.system,
@@ -92,6 +97,10 @@ class AppSettings {
         AnimateMode.hover,
     audioView:
         AudioView.values.asNameMap()[json['audio_view']] ?? AudioView.rows,
+    previewsColumns: ((json['previews_columns'] as num?)?.toInt() ?? 4).clamp(
+      1,
+      8,
+    ),
   );
 
   Map<String, Object?> toJson() => {
@@ -108,6 +117,7 @@ class AppSettings {
     'dashboard_view': dashboardView.name,
     'detail_animate_mode': detailAnimateMode.name,
     'audio_view': audioView.name,
+    'previews_columns': previewsColumns,
   };
 
   AppSettings copyWith({
@@ -124,6 +134,7 @@ class AppSettings {
     DashboardView? dashboardView,
     AnimateMode? detailAnimateMode,
     AudioView? audioView,
+    int? previewsColumns,
   }) => AppSettings(
     libraryPath: libraryPath ?? this.libraryPath,
     theme: theme ?? this.theme,
@@ -138,6 +149,7 @@ class AppSettings {
     dashboardView: dashboardView ?? this.dashboardView,
     detailAnimateMode: detailAnimateMode ?? this.detailAnimateMode,
     audioView: audioView ?? this.audioView,
+    previewsColumns: previewsColumns ?? this.previewsColumns,
   );
 }
 
