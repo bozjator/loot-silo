@@ -16,13 +16,13 @@ import 'folder_import_screen.dart';
 import 'itch_screen.dart';
 import 'settings_screen.dart';
 import 'tabs.dart';
+import 'theme_colors.dart';
 import 'help_screen.dart';
 import 'session.dart';
 import '../version.dart';
 import 'shortcuts.dart';
 import 'widgets/branding.dart';
 import 'widgets/measure_size.dart';
-import 'cursors.dart';
 
 /// Root widget of Loot Silo.
 class LootSiloApp extends ConsumerStatefulWidget {
@@ -117,6 +117,7 @@ class _AppState extends ConsumerState<LootSiloApp> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(settingsProvider.select((s) => s.theme));
+    final themeColor = ref.watch(settingsProvider.select((s) => s.themeColor));
     return MaterialApp(
       title: appName,
       debugShowCheckedModeBanner: false,
@@ -138,12 +139,8 @@ class _AppState extends ConsumerState<LootSiloApp> {
           child: child!,
         ),
       ),
-      theme: withClickCursors(
-        ThemeData(colorSchemeSeed: Colors.teal, brightness: Brightness.light),
-      ),
-      darkTheme: withClickCursors(
-        ThemeData(colorSchemeSeed: Colors.teal, brightness: Brightness.dark),
-      ),
+      theme: appTheme(themeColor, Brightness.light),
+      darkTheme: appTheme(themeColor, Brightness.dark),
       home: const SessionHost(child: TabsHost(dashboard: HomeScreen())),
     );
   }

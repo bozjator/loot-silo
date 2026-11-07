@@ -70,6 +70,9 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   void setTheme(ThemeChoice theme) => _save(state.copyWith(theme: theme));
 
+  void setThemeColor(ThemeColor color) =>
+      _save(state.copyWith(themeColor: color));
+
   void setAnimateAll(bool on) => _save(state.copyWith(animateAll: on));
 
   void setAudioLoop(bool on) => _save(state.copyWith(audioLoop: on));

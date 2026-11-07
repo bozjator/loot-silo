@@ -4,6 +4,22 @@ import 'dart:io';
 /// Light, dark or follow the system.
 enum ThemeChoice { system, light, dark }
 
+/// The colour the light and dark themes are seeded from (Settings →
+/// Appearance). Stored by name; the seeds live in `ui/theme_colors.dart`.
+enum ThemeColor {
+  teal,
+  green,
+  blue,
+  indigo,
+  purple,
+  pink,
+  red,
+  orange,
+  amber,
+  brown,
+  blueGrey,
+}
+
 /// How a pack's Images and Animations tabs list their files.
 enum ItemsView { flat, folders }
 
@@ -158,6 +174,7 @@ class AppSettings {
   const AppSettings({
     this.libraryPath,
     this.theme = ThemeChoice.system,
+    this.themeColor = ThemeColor.teal,
     this.animateAll = false,
     this.audioLoop = false,
     this.dashboardTileSize = 240,
@@ -177,6 +194,9 @@ class AppSettings {
   /// The managed library folder; null until the user picks one.
   final String? libraryPath;
   final ThemeChoice theme;
+
+  /// The theme's seed colour; teal (the original look) by default.
+  final ThemeColor themeColor;
 
   /// Play every sprite preview on the dashboard, not just the hovered one.
   final bool animateAll;
@@ -221,6 +241,8 @@ class AppSettings {
   factory AppSettings.fromJson(Map<String, Object?> json) => AppSettings(
     libraryPath: json['library_path'] as String?,
     theme: ThemeChoice.values.asNameMap()[json['theme']] ?? ThemeChoice.system,
+    themeColor:
+        ThemeColor.values.asNameMap()[json['theme_color']] ?? ThemeColor.teal,
     animateAll: json['animate_all'] == true,
     audioLoop: json['audio_loop'] == true,
     dashboardTileSize: (json['dashboard_tile_size'] as num?)?.toDouble() ?? 240,
@@ -256,6 +278,7 @@ class AppSettings {
   Map<String, Object?> toJson() => {
     'library_path': ?libraryPath,
     'theme': theme.name,
+    'theme_color': themeColor.name,
     'animate_all': animateAll,
     'audio_loop': audioLoop,
     'dashboard_tile_size': dashboardTileSize,
@@ -275,6 +298,7 @@ class AppSettings {
   AppSettings copyWith({
     String? libraryPath,
     ThemeChoice? theme,
+    ThemeColor? themeColor,
     bool? animateAll,
     bool? audioLoop,
     double? dashboardTileSize,
@@ -292,6 +316,7 @@ class AppSettings {
   }) => AppSettings(
     libraryPath: libraryPath ?? this.libraryPath,
     theme: theme ?? this.theme,
+    themeColor: themeColor ?? this.themeColor,
     animateAll: animateAll ?? this.animateAll,
     audioLoop: audioLoop ?? this.audioLoop,
     dashboardTileSize: dashboardTileSize ?? this.dashboardTileSize,

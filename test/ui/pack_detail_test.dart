@@ -3739,8 +3739,12 @@ void main() {
       );
       // No URL text shown.
       expect(find.textContaining('https://', findRichText: true), findsNothing);
+      await tester.ensureVisible(find.byKey(const ValueKey('link:GitHub')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('link:GitHub')));
       await tester.pump(const Duration(milliseconds: 500));
+      await tester.ensureVisible(find.byKey(const ValueKey('link:itch.io')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('link:itch.io')));
       await tester.pump(const Duration(milliseconds: 500));
       expect(launched, [Uri.parse(appGitHubUrl), Uri.parse(appItchUrl)]);
@@ -3762,6 +3766,8 @@ void main() {
         600,
         scrollable: help,
       );
+      await tester.ensureVisible(find.byKey(const ValueKey('link:GitHub')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('link:GitHub')));
       expect(launched.last, Uri.parse(appGitHubUrl));
     });

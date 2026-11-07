@@ -325,6 +325,11 @@ class HelpScreen extends StatelessWidget {
               ]),
               const _Section('Settings', [
                 _P(
+                  'Appearance: light, dark or follow the system, and a '
+                  'colour for the whole app (the swatches; teal by '
+                  'default). Both apply at once.',
+                ),
+                _P(
                   'Resume where I left off (on by default): the next start '
                   'opens the same pack tabs, the dashboard search, filters, '
                   'sort and open bundle, and on each pack page its folder, '

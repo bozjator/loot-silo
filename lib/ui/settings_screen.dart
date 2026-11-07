@@ -8,6 +8,7 @@ import '../version.dart';
 import 'itch_screen.dart';
 import 'help_screen.dart';
 import 'shortcuts.dart';
+import 'theme_colors.dart';
 import 'widgets/branding.dart';
 import 'widgets/project_links.dart';
 
@@ -108,6 +109,17 @@ class SettingsScreen extends ConsumerWidget {
                   ],
                   selected: {settings.theme},
                   onSelectionChanged: (s) => notifier.setTheme(s.first),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.palette_outlined),
+                title: const Text('Colour'),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: ThemeColorPicker(
+                    selected: settings.themeColor,
+                    onChanged: notifier.setThemeColor,
+                  ),
                 ),
               ),
               SwitchListTile(

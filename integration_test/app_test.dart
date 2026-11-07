@@ -25,6 +25,7 @@ import 'package:loot_silo/ui/reveal.dart';
 import 'package:loot_silo/ui/settings_screen.dart';
 import 'package:loot_silo/ui/tabs.dart';
 import 'package:loot_silo/ui/text_preview_dialog.dart';
+import 'package:loot_silo/ui/theme_colors.dart';
 import 'package:loot_silo/ui/widgets/thumb_size.dart';
 import 'package:loot_silo/version.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
@@ -1950,6 +1951,76 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm50_about', settle: false);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await pumpUntil(tester, find.byType(SettingsScreen), gone: true);
+  });
+
+  testWidgets('m51: dashboard in three colours, light and dark; restart', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final settingsFile = File(p.join(tmp.path, 'settings.json'));
+    for (final color in [
+      ThemeColor.teal,
+      ThemeColor.purple,
+      ThemeColor.orange,
+    ]) {
+      for (final theme in [ThemeChoice.light, ThemeChoice.dark]) {
+        SettingsStore(
+          settingsFile,
+        ).save(AppSettings(libraryPath: lib, theme: theme, themeColor: color));
+        await tester.pumpWidget(app(lib, restart: true));
+        await pumpUntil(tester, find.text('Knight Pack'));
+        await tester.pump(const Duration(milliseconds: 500));
+        // A selected type chip and the slider show the colour.
+        await tester.tap(find.widgetWithText(FilterChip, 'character'));
+        await tester.pump(const Duration(milliseconds: 500));
+        final scheme = Theme.of(tester.element(find.byType(Dashboard)))
+            .colorScheme;
+        expect(
+          scheme.primary,
+          ColorScheme.fromSeed(
+            seedColor: color.seed,
+            brightness: theme == ThemeChoice.dark
+                ? Brightness.dark
+                : Brightness.light,
+          ).primary,
+        );
+        await settleImages(tester);
+        await captureScreenshot(
+          tester,
+          'm51_dashboard_${color.name}_${theme.name}',
+          settle: false,
+        );
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+      }
+    }
+
+    // Pick a colour in Settings → Appearance; it survives a restart.
+    SettingsStore(settingsFile).save(AppSettings(libraryPath: lib));
+    await tester.pumpWidget(app(lib, restart: true));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
+    await pumpUntil(tester, find.byType(SettingsScreen));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.byKey(const ValueKey('theme-color:indigo')));
+    await tester.pump(const Duration(milliseconds: 500));
+    await captureScreenshot(tester, 'm51_appearance', settle: false);
+    expect(SettingsStore(settingsFile).load().themeColor, ThemeColor.indigo);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    await tester.pumpWidget(app(lib, restart: true));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    // Theme "system": whatever brightness the system gives.
+    final restarted = Theme.of(tester.element(find.byType(Dashboard)));
+    expect(
+      restarted.colorScheme.primary,
+      ColorScheme.fromSeed(
+        seedColor: Colors.indigo,
+        brightness: restarted.brightness,
+      ).primary,
+    );
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
   });
 
   testWidgets('m39: toolbars, Loop, slim bar, Settings (real, read-only)', (
