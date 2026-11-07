@@ -118,6 +118,18 @@ class SettingsScreen extends ConsumerWidget {
                 value: settings.animateAll,
                 onChanged: notifier.setAnimateAll,
               ),
+              section('Startup'),
+              SwitchListTile(
+                key: const ValueKey('resume-session'),
+                secondary: const Icon(Icons.restore),
+                title: const Text('Resume where I left off'),
+                subtitle: const Text(
+                  'Reopens the pack tabs, dashboard filters and pack page '
+                  'searches of the last session. Off: a clean dashboard.',
+                ),
+                value: settings.resumeSession,
+                onChanged: notifier.setResumeSession,
+              ),
               section('itch.io'),
               ListTile(
                 leading: const Icon(Icons.storefront_outlined),

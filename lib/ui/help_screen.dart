@@ -294,6 +294,17 @@ class HelpScreen extends StatelessWidget {
                   'screenshots in _itch/.',
                 ),
               ]),
+              const _Section('Settings', [
+                _P(
+                  'Resume where I left off (on by default): the next start '
+                  'opens the same pack tabs, the dashboard search, filters, '
+                  'sort and open bundle, and on each pack page its folder, '
+                  'tab, file search and Favorites chip. Packs no longer in '
+                  'the library and filter values no pack has are left out. '
+                  'Scroll positions, selections and playing sounds are not '
+                  'kept. Off: every start shows a clean dashboard.',
+                ),
+              ]),
               const Divider(height: 32),
               Text(
                 appVersionLabel,

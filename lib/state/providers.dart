@@ -102,6 +102,20 @@ class SettingsNotifier extends Notifier<AppSettings> {
     if (c != state.previewsColumns) _save(state.copyWith(previewsColumns: c));
   }
 
+  /// Off also forgets the saved session.
+  void setResumeSession(bool on) => _save(
+    state.copyWith(
+      resumeSession: on,
+      lastSession: on ? state.lastSession : null,
+    ),
+  );
+
+  /// Saves [session] (null clears it) unless resuming is off.
+  void setLastSession(LastSession? session) {
+    if (!state.resumeSession || session == state.lastSession) return;
+    _save(state.copyWith(lastSession: session));
+  }
+
   void setAnimationThumbSize(double size) {
     if (size != state.animationThumbSize) {
       _save(state.copyWith(animationThumbSize: size));

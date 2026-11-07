@@ -140,6 +140,12 @@ class DashboardQueryNotifier extends Notifier<DashboardQuery> {
     state = DashboardQuery(sort: state.sort, authors: {author});
   }
 
+  /// Sets the whole query at once (resuming a session).
+  void restore(DashboardQuery query) {
+    _debounce?.cancel();
+    state = query;
+  }
+
   void clearFilters() {
     _debounce?.cancel();
     state = DashboardQuery(sort: state.sort);

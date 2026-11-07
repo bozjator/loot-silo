@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/providers.dart';
 import 'cursors.dart';
+import '../state/settings.dart';
 import 'pack_detail_screen.dart';
+import 'session.dart';
 
 /// Tracks a navigator's top route, so app-wide shortcuts can skip dialogs
 /// and menus, and how many pages ([PageRoute]s, not menus) it holds.
@@ -57,7 +59,14 @@ class TopRoute extends NavigatorObserver {
 /// One open pack, with its own navigator so its pages keep their state
 /// while another tab is shown.
 class PackTab {
-  PackTab(this.id, this.packId, {this.folder, this.search, this.file});
+  PackTab(
+    this.id,
+    this.packId, {
+    this.folder,
+    this.search,
+    this.file,
+    this.restore,
+  });
 
   /// Unique for the session; keys the tab's subtree.
   final int id;
@@ -65,12 +74,15 @@ class PackTab {
   final String? folder;
   final SearchFilter? search;
   final String? file;
+
+  /// The page's saved state, when the tab is resumed from the last session.
+  final PageSession? restore;
   final navigator = GlobalKey<NavigatorState>(debugLabel: 'pack tab');
   final top = TopRoute();
 }
 
 /// The open pack tabs and which tab shows: 0 is the dashboard, `i + 1` is
-/// `tabs[i]`. Session only; nothing is saved.
+/// `tabs[i]`. Saved for the next start by the session keeper.
 class Tabs {
   const Tabs(this.tabs, this.active);
 
@@ -106,6 +118,7 @@ class TabsNotifier extends Notifier<Tabs> {
     String? folder,
     SearchFilter? search,
     String? file,
+    PageSession? restore,
   }) {
     final at = state.tabs.indexWhere((t) => t.packId == packId);
     if (at >= 0) {
@@ -114,7 +127,14 @@ class TabsNotifier extends Notifier<Tabs> {
     }
     state = Tabs([
       ...state.tabs,
-      PackTab(_next++, packId, folder: folder, search: search, file: file),
+      PackTab(
+        _next++,
+        packId,
+        folder: folder,
+        search: search,
+        file: file,
+        restore: restore,
+      ),
     ], state.active);
   }
 
@@ -256,6 +276,8 @@ class TabsHost extends ConsumerWidget {
               folder: t.folder,
               search: t.search,
               file: t.file,
+              sessionKey: tabSessionKey(t),
+              restore: t.restore,
             ),
           ),
       ],

@@ -122,6 +122,16 @@ void main() {
     expect(text, isNot(contains('checked for strips whose')));
   });
 
+  testWidgets('M44: Settings section explains resuming', (tester) async {
+    await pumpHelp(tester);
+    final text = pageText(tester);
+    expect(find.text('Settings'), findsWidgets);
+    expect(text, contains('Resume where I left off (on by default)'));
+    expect(text, contains('the same pack tabs'));
+    expect(text, contains('Packs no longer in the library'));
+    expect(text, contains('Off: every start shows a clean dashboard'));
+  });
+
   test('keys are described as printed on the keyboard', () {
     expect(AppKeys.dashboardSearch.keys, '/  or  Ctrl+F');
     expect(AppKeys.rescan.keys, 'F5  or  Ctrl+R');

@@ -11,6 +11,7 @@ import 'file_results.dart';
 import 'shortcuts.dart';
 import 'tabs.dart';
 import 'pack_detail_screen.dart';
+import 'session.dart';
 import 'widgets/filter_bar.dart';
 import 'widgets/thumb_size.dart';
 import 'widgets/pack_tile.dart';
@@ -139,9 +140,14 @@ class _DashboardState extends ConsumerState<Dashboard> {
 
   @override
   Widget build(BuildContext context) {
-    // The search can be cleared from elsewhere (a pack page's author link).
+    // The search can be cleared from elsewhere (a pack page's author link),
+    // or set when the last session is resumed.
     ref.listen(dashboardQueryProvider.select((q) => q.text), (_, text) {
-      if (text.isEmpty && _search.text.isNotEmpty) _search.clear();
+      if (text.isEmpty && _search.text.isNotEmpty) {
+        _search.clear();
+      } else if (text.isNotEmpty && _search.text.isEmpty) {
+        _search.text = text;
+      }
     });
     final query = ref.watch(dashboardQueryProvider);
     final notifier = ref.read(dashboardQueryProvider.notifier);
@@ -440,6 +446,7 @@ void openPackDetail(
         folder: folder,
         search: search,
         file: file,
+        sessionKey: dashboardSessionKey,
       ),
     ),
   );

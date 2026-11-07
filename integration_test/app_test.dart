@@ -172,9 +172,11 @@ void main() {
   /// Stands in for the audio player where a test drives playback itself.
   TrackPlayer Function()? fakePlayer;
 
-  Widget app(String source, {String? library}) {
-    final store = SettingsStore(File(p.join(tmp.path, 'settings.json')))
-      ..save(AppSettings(libraryPath: library ?? lib));
+  /// [restart]: keeps the saved settings (and last session), as when the
+  /// app starts again.
+  Widget app(String source, {String? library, bool restart = false}) {
+    final store = SettingsStore(File(p.join(tmp.path, 'settings.json')));
+    if (!restart) store.save(AppSettings(libraryPath: library ?? lib));
     return screenshotable(
       ProviderScope(
         overrides: [
@@ -2647,6 +2649,77 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump(const Duration(seconds: 1));
     await captureScreenshot(tester, 'm43_ship_folder', settle: false);
     expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m44: tabs, filters and a pack search survive a restart', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    for (final rel in ['heroes/knight_a.png', 'heroes/knight_b.png']) {
+      File(p.join(lib, 'HeroMaker', 'Knight Pack', rel))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(img.encodePng(img.Image(width: 16, height: 16)));
+    }
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Slimes'));
+    var c = ProviderScope.containerOf(tester.element(find.byType(TabsHost)));
+    // Filters: the character type, sorted by name.
+    c
+        .read(dashboardQueryProvider.notifier)
+        .restore(
+          const DashboardQuery(types: {'character'}, sort: PackSort.title),
+        );
+    c.read(tabsProvider.notifier)
+      ..open('HeroMaker/Slimes')
+      ..open('HeroMaker/Knight Pack')
+      ..select(2);
+    final field = find.descendant(
+      of: find.byKey(const ValueKey('tab-1')),
+      matching: find.widgetWithText(TextField, 'Search files (Ctrl+F)'),
+    );
+    await pumpUntil(tester, field);
+    await tester.enterText(field, 'knight');
+    await pumpUntil(tester, find.text('Matching “knight”'));
+    final settings = File(p.join(tmp.path, 'settings.json'));
+    final end = DateTime.now().add(const Duration(seconds: 10));
+    while (!settings.readAsStringSync().contains('"search": "knight"')) {
+      if (DateTime.now().isAfter(end)) fail('last_session not saved');
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    // Restart on the same settings file.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpWidget(app(lib, restart: true));
+    await pumpUntil(tester, find.text('Matching “knight”'));
+    c = ProviderScope.containerOf(tester.element(find.byType(TabsHost)));
+    final tabs = c.read(tabsProvider);
+    expect(tabs.tabs.map((t) => t.packId), [
+      'HeroMaker/Slimes',
+      'HeroMaker/Knight Pack',
+    ]);
+    expect(tabs.active, 2);
+    expect(c.read(dashboardQueryProvider).types, {'character'});
+    expect(c.read(dashboardQueryProvider).sort, PackSort.title);
+    expect(
+      tester
+          .widget<TextField>(
+            find.descendant(
+              of: find.byKey(const ValueKey('tab-1')),
+              matching: find.byType(TextField),
+            ),
+          )
+          .controller!
+          .text,
+      'knight',
+    );
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 500));
+    await captureScreenshot(tester, 'm44_restored_tab', settle: false);
+    // The dashboard tab kept its filters.
+    c.read(tabsProvider.notifier).select(0);
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm44_restored_dashboard', settle: false);
   });
 
   testWidgets('m34: a file result that is an animation opens Animations', (

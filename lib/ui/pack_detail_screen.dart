@@ -29,6 +29,7 @@ import 'animation_grid.dart';
 import 'folder_groups.dart';
 import 'image_viewer.dart';
 import 'reveal.dart';
+import 'session.dart';
 import 'shortcuts.dart';
 import 'tabs.dart';
 import 'text_preview_dialog.dart';
@@ -50,6 +51,8 @@ class PackDetailScreen extends ConsumerWidget {
     this.folder,
     this.search,
     this.file,
+    this.sessionKey,
+    this.restore,
   });
 
   final String packId;
@@ -64,6 +67,13 @@ class PackDetailScreen extends ConsumerWidget {
 
   /// The file result that was clicked: its tab opens first.
   final String? file;
+
+  /// Where the page reports its state for "Resume where I left off" (see
+  /// [SessionKeeper]); null: not saved.
+  final String? sessionKey;
+
+  /// The state saved last time: tab, folder, search and Favorites chip.
+  final PageSession? restore;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -86,6 +96,7 @@ class PackDetailScreen extends ConsumerWidget {
     );
     void togglePin() =>
         ref.read(settingsProvider.notifier).setDetailHeaderPinned(!pinned);
+    final keeper = sessionKey == null ? null : ref.read(sessionKeeperProvider);
     return Focus(
       // H pins or unpins the header, unless a text field has the key. The
       // body holds the focus (see _BodyState._keys); keys bubble up here.
@@ -115,6 +126,15 @@ class PackDetailScreen extends ConsumerWidget {
             folder: folder,
             search: search,
             file: file,
+            restore: restore,
+            onSession: switch ((sessionKey, keeper)) {
+              (final key?, final keeper?) => (s) => keeper.page(key, s),
+              _ => null,
+            },
+            onSessionEnd: switch ((sessionKey, keeper)) {
+              (final key?, final keeper?) => () => keeper.removePage(key),
+              _ => null,
+            },
           ),
           AsyncError(:final error) => Center(
             child: Text('Could not read: $error'),
@@ -136,6 +156,9 @@ class _Body extends StatefulWidget {
     this.folder,
     this.search,
     this.file,
+    this.restore,
+    this.onSession,
+    this.onSessionEnd,
   });
 
   final PackRow pack;
@@ -146,6 +169,11 @@ class _Body extends StatefulWidget {
   final String? folder;
   final SearchFilter? search;
   final String? file;
+  final PageSession? restore;
+
+  /// Told the page's state whenever it changes, and when it goes.
+  final ValueChanged<PageSession>? onSession;
+  final VoidCallback? onSessionEnd;
 
   /// False: a slim bar replaces the header; hovering it shows the header
   /// floating over the tabs, so nothing below moves.
@@ -174,19 +202,40 @@ class _BodyState extends State<_Body> {
 
   /// The open tab, by kind, so it stays open when a tab appears or goes
   /// (e.g. the Animations tab after "Combine into animation").
-  Type? _tab;
-  late String? _folder = widget.folder;
+  late Type? _tab = _tabKinds[widget.restore?.tab];
+  late String? _folder = widget.restore?.folder ?? widget.folder;
 
   /// The Favorites chip: only starred files in every tab.
-  var _onlyFavorites = false;
+  late var _onlyFavorites = widget.restore?.favorites ?? false;
+
+  /// Session names of the tab kinds.
+  static const _tabKinds = {
+    'animations': _AnimationsTab,
+    'images': _ImagesTab,
+    'audio': _AudioTab,
+    'files': _FilesTab,
+  };
+
+  /// Tells the session keeper the page's state now.
+  void _report() {
+    final report = widget.onSession;
+    if (report == null) return;
+    report(
+      PageSession(
+        packId: widget.pack.id,
+        folder: _folder,
+        tab: _tabKinds.entries.where((e) => e.value == _tab).firstOrNull?.key,
+        search: _query,
+        favorites: _onlyFavorites,
+      ),
+    );
+  }
 
   /// The file-name search over every tab, seeded with the dashboard search
   /// the page was opened with. [_query] is what the tabs are filtered by;
   /// it follows the field once typing pauses.
-  late final _searchText = TextEditingController(
-    text: widget.search?.text ?? '',
-  );
-  late String _query = widget.search?.text ?? '';
+  late final _searchText = TextEditingController(text: _query);
+  late String _query = widget.restore?.search ?? widget.search?.text ?? '';
   final _searchFocus = FocusNode(debugLabel: 'detail search');
   Timer? _debounce;
 
@@ -220,6 +269,7 @@ class _BodyState extends State<_Body> {
 
   @override
   void dispose() {
+    widget.onSessionEnd?.call();
     _peekTimer?.cancel();
     _debounce?.cancel();
     _searchText.dispose();
@@ -440,7 +490,10 @@ class _BodyState extends State<_Body> {
           ],
         ),
         _TabMemory(
-          onChanged: (i) => _tab = i < tabs.length ? tabs[i].$1 : null,
+          onChanged: (i) {
+            _tab = i < tabs.length ? tabs[i].$1 : null;
+            _report();
+          },
         ),
         Expanded(
           child: TabBarView(children: [for (final (_, _, t) in tabs) t]),
@@ -468,6 +521,7 @@ class _BodyState extends State<_Body> {
     final kept = tabs.indexWhere((t) => t.$1 == _tab);
     if (kept >= 0) initial = kept;
     if (tabs.isNotEmpty) _tab = tabs[initial].$1;
+    _report();
     return Focus(
       focusNode: _keys,
       autofocus: true,

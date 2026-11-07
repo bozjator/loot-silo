@@ -17,6 +17,7 @@ import 'itch_screen.dart';
 import 'settings_screen.dart';
 import 'tabs.dart';
 import 'help_screen.dart';
+import 'session.dart';
 import 'shortcuts.dart';
 import 'cursors.dart';
 
@@ -140,7 +141,7 @@ class _AppState extends ConsumerState<AssetsExplorerApp> {
       darkTheme: withClickCursors(
         ThemeData(colorSchemeSeed: Colors.teal, brightness: Brightness.dark),
       ),
-      home: const TabsHost(dashboard: HomeScreen()),
+      home: const SessionHost(child: TabsHost(dashboard: HomeScreen())),
     );
   }
 }

@@ -133,7 +133,6 @@ void main() {
     await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsScreen), findsOneWidget);
-    expect(find.text('Not connected'), findsOneWidget);
     // The About line at the bottom shows the version.
     final list = find
         .descendant(
@@ -141,6 +140,13 @@ void main() {
           matching: find.byType(Scrollable),
         )
         .first;
+    // M44's Startup section sits above itch.io.
+    await tester.scrollUntilVisible(
+      find.text('Not connected'),
+      200,
+      scrollable: list,
+    );
+    expect(find.text('Not connected'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text(appVersionLabel),
       300,
