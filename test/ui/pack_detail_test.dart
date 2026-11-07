@@ -1953,6 +1953,52 @@ void main() {
       expect(find.text('Panel'), findsOneWidget);
     });
 
+    testWidgets('Make animation… starts from the guessed grid (M47)', (
+      tester,
+    ) async {
+      // A 3×3 grid of 48 px cells with 8 small sprites and no animation
+      // word: not detected, but the gaps give the cells.
+      final grid = img.Image(width: 144, height: 144, numChannels: 4);
+      for (var i = 0; i < 8; i++) {
+        final x = (i % 3) * 48 + 18;
+        final y = (i ~/ 3) * 48 + 14;
+        img.fillRect(
+          grid,
+          x1: x,
+          y1: y,
+          x2: x + 11,
+          y2: y + 19,
+          color: img.ColorRgba8(200, 80, 40, 255),
+        );
+      }
+      await openImages(tester, {
+        'npc/pulling.png': grid,
+        'npc/portrait.png': solid(20, 30, 40),
+      });
+      expect(find.textContaining('Animations ('), findsNothing);
+      await hover(tester, 'pulling.png');
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('image:npc/pulling.png')),
+          matching: find.byTooltip('Make animation…'),
+        ),
+      );
+      await pumpUntil(tester, find.text('Apply size'));
+      expect(find.text('Sheet · 48×48 frames · 3 × 3 · 8 frames'), findsOne);
+      await tester.tap(find.text('Save'));
+      await pumpUntil(tester, find.text('Back to image'));
+      expect(sidecar(), contains('"frames": 8'));
+      await tester.tap(find.text('Close'));
+      await pumpUntil(tester, find.textContaining('Animations (1)'));
+      await tester.pump(const Duration(milliseconds: 500));
+      // Detected again from the sidecar: the same grid.
+      await tester.tap(find.textContaining('Animations ('));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await pumpUntil(tester, find.textContaining('48×48 · 8 frames'));
+    });
+
     /// Every file under the pack with its bytes, to show nothing changed.
     Map<String, String> snapshot() => {
       for (final f in Directory(packDir()).listSync(recursive: true))
@@ -3329,6 +3375,21 @@ void main() {
       expect(fieldBox.height, detailControlHeight);
       expect(chipBox.top, fieldBox.top);
       expect(chipBox.bottom, fieldBox.bottom);
+      // A long search stays on one line (M47 screenshot).
+      await tester.enterText(search, 'fisherman-beard-headband-fishing');
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(tester.widget<TextField>(search).maxLines, 1);
+      expect(
+        tester
+            .getRect(
+              find.descendant(
+                of: search,
+                matching: find.byType(InputDecorator),
+              ),
+            )
+            .height,
+        detailControlHeight,
+      );
     });
 
     testWidgets('Audio and Images toolbars have one padding', (tester) async {

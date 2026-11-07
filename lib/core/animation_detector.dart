@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -401,7 +402,10 @@ bool hasAnimationWord(String rel) => pathWords(rel).any(_isAnimWord);
 /// gaps ([detectSheetByGaps]; strips up to [maxWordStripWidth] ×
 /// [maxWordStripHeight], grids up to [maxWordGridSide] a side). An
 /// undetected file with an animation word then takes the grid of a
-/// detected sheet of exactly its size in its folder ([borrowGrid]). A
+/// detected sheet of exactly its size in its folder ([borrowGrid]). Any
+/// other undetected file whose size is a whole number of an animation's
+/// frames in its folder is cut into those cells when the cuts are
+/// transparent ([cellGrid]; same budget). A
 /// square-frame guess with no sheet or animation word in its path is
 /// checked too, up to [maxWordScans] times: when the picture runs across
 /// the frame cuts it's one image ([runsAcrossCuts]). [atlases]
@@ -525,6 +529,39 @@ List<SpriteAnim> detectAnimations(
   out
     ..removeWhere((a) => replaced.contains(a.path))
     ..addAll(borrowed);
+  // Undetected files cut into the frame size of an animation next to them
+  // (a 6×6 grid of 192 px cells beside 192-high strips), when the cuts
+  // fall on transparent lines.
+  final shown = {for (final a in out) a.path};
+  for (final rel in order) {
+    if (shown.contains(rel) ||
+        atlases.contains(rel) ||
+        _notAnimation(rel) ||
+        _oneFrame.hasMatch(p.basenameWithoutExtension(rel))) {
+      continue;
+    }
+    final (w, h) = sizes[rel]!;
+    final cells = [
+      for (final (fw, fh) in folderFrameSizes(rel, out))
+        if (_fitsCells(w, h, fw, fh)) (fw, fh),
+    ];
+    if (cells.isEmpty ||
+        !wordScanSize(w, h) ||
+        wordScans >= maxWordScans ||
+        wordPixels + w * h > maxWordPixels) {
+      continue;
+    }
+    wordScans++;
+    wordPixels += w * h;
+    final decoded = _alphaOf(packPath, rel);
+    if (decoded == null) continue;
+    for (final (fw, fh) in cells) {
+      if (cellGrid(rel, decoded, fw, fh) case final grid?) {
+        out.add(grid);
+        break;
+      }
+    }
+  }
   final result = [
     for (final a in out)
       if (!isNotAnimation(overrides[a.path]))
@@ -575,6 +612,131 @@ List<SpriteAnim> borrowGrid(
             ),
   ];
 }
+
+/// Frame sizes of the sheets in [anims] that sit in [rel]'s folder, the
+/// most used first (then the bigger frame), for cutting [rel] into the same
+/// cells ([cellGrid]).
+List<(int, int)> folderFrameSizes(String rel, Iterable<SpriteAnim> anims) {
+  final dir = p.dirname(rel);
+  final counts = <(int, int), int>{};
+  for (final a in anims) {
+    if (a.kind != AnimKind.sheet || a.path == rel) continue;
+    if (p.dirname(a.path) != dir) continue;
+    final key = (a.frameW, a.frameH);
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts.keys.toList()..sort((a, b) {
+    final c = counts[b]!.compareTo(counts[a]!);
+    return c != 0 ? c : (b.$1 * b.$2).compareTo(a.$1 * a.$2);
+  });
+}
+
+/// Whether a [w]×[h] image holds at least two whole [fw]×[fh] cells.
+bool _fitsCells(int w, int h, int fw, int fh) {
+  if (fw <= 0 || fh <= 0 || w % fw != 0 || h % fh != 0) return false;
+  final n = (w ~/ fw) * (h ~/ fh);
+  return n >= 2 && n <= maxSheetFrames * 4;
+}
+
+/// [decoded] (alpha, width, height) of [rel] cut into [fw]×[fh] cells, when
+/// every cut line is transparent (±1 px, like [gapGrid]) and at least
+/// three cells hold something. Empty cells at the end don't count as
+/// frames ([usedCells]).
+SpriteAnim? cellGrid(
+  String rel,
+  (Uint8List, int, int) decoded,
+  int fw,
+  int fh,
+) {
+  final (alpha, w, h) = decoded;
+  if (!_fitsCells(w, h, fw, fh)) return null;
+  bool colEmpty(int x) {
+    if (x < 0 || x >= w) return false;
+    for (var y = 0; y < h; y++) {
+      if (alpha[y * w + x] != 0) return false;
+    }
+    return true;
+  }
+
+  bool rowEmpty(int y) {
+    if (y < 0 || y >= h) return false;
+    final o = y * w;
+    for (var x = 0; x < w; x++) {
+      if (alpha[o + x] != 0) return false;
+    }
+    return true;
+  }
+
+  for (var x = fw; x < w; x += fw) {
+    if (!colEmpty(x - 1) && !colEmpty(x) && !colEmpty(x + 1)) return null;
+  }
+  for (var y = fh; y < h; y += fh) {
+    if (!rowEmpty(y - 1) && !rowEmpty(y) && !rowEmpty(y + 1)) return null;
+  }
+  final cols = w ~/ fw;
+  final rows = h ~/ fh;
+  final total = cols * rows;
+  // Two filled cells are too often one prop with a gap in it (a table
+  // over its chairs), as in [gapGrid].
+  if (filledCells(alpha, w, fw, fh, cols, rows) < 3) return null;
+  final used = usedCells(alpha, w, fw, fh, cols, rows);
+  return SpriteAnim(
+    path: rel,
+    kind: AnimKind.sheet,
+    frameW: fw,
+    frameH: fh,
+    cols: cols,
+    rows: rows,
+    frameTotal: used < total ? used : null,
+  );
+}
+
+/// The starting guess for "Make animation…" on an image nothing detected:
+/// the cells of an animation in its folder ([folderSizes], [cellGrid]),
+/// then the transparent-gap grid ([gapGrid]), then square frames
+/// ([guessStrip]: a strip when the width is a multiple of the height,
+/// else one frame). Decodes the image; run it in an isolate.
+SpriteAnim guessAnimation(
+  String packPath,
+  String rel,
+  int w,
+  int h, {
+  List<(int, int)> folderSizes = const [],
+}) {
+  final decoded = wordScanSize(w, h) ? _alphaOf(packPath, rel) : null;
+  if (decoded != null) {
+    for (final (fw, fh) in folderSizes) {
+      if (cellGrid(rel, decoded, fw, fh) case final grid?) return grid;
+    }
+    final (alpha, dw, dh) = decoded;
+    if (gapGrid(alpha, dw, dh) case (:final fw, :final fh, evenAxes: _)) {
+      final cols = dw ~/ fw;
+      final rows = dh ~/ fh;
+      final used = usedCells(alpha, dw, fw, fh, cols, rows);
+      return SpriteAnim(
+        path: rel,
+        kind: AnimKind.sheet,
+        frameW: fw,
+        frameH: fh,
+        cols: cols,
+        rows: rows,
+        frameTotal: used >= 2 && used < cols * rows ? used : null,
+      );
+    }
+  }
+  return guessStrip(rel, w, h);
+}
+
+/// [guessAnimation] in a background isolate.
+Future<SpriteAnim> guessAnimationInBackground(
+  String packPath,
+  String rel,
+  int w,
+  int h, {
+  List<(int, int)> folderSizes = const [],
+}) => Isolate.run(
+  () => guessAnimation(packPath, rel, w, h, folderSizes: folderSizes),
+);
 
 /// Files in a numbered series: at least three of the same size in one
 /// folder named alike but for a trailing number (`boat-idle-1.png`,
@@ -1166,6 +1328,27 @@ int? _evenPitch(List<bool> empty) {
     }
   }
   return cell;
+}
+
+/// How many cells of a [cols]×[rows] grid of [fw]×[fh] in [alpha] (row
+/// width [w]) have something in them.
+int filledCells(Uint8List alpha, int w, int fw, int fh, int cols, int rows) {
+  var n = 0;
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < cols; c++) {
+      cell:
+      for (var y = r * fh; y < (r + 1) * fh; y++) {
+        final o = y * w;
+        for (var x = c * fw; x < (c + 1) * fw; x++) {
+          if (alpha[o + x] != 0) {
+            n++;
+            break cell;
+          }
+        }
+      }
+    }
+  }
+  return n;
 }
 
 /// Cells of a [cols]×[rows] grid of [fw]×[fh] in [alpha] (row width [w])

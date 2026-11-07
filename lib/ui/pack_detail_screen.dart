@@ -396,9 +396,9 @@ class _BodyState extends State<_Body> {
       child: SizedBox(
         width: detailControlWidth,
         height: detailControlHeight,
+        // One line: `expands` would need `maxLines: null`, and a long search
+        // then wrapped onto a second line.
         child: TextField(
-          expands: true,
-          maxLines: null,
           textAlignVertical: TextAlignVertical.center,
           key: _fieldKey,
           controller: _searchText,
@@ -1695,17 +1695,30 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
     _anchor ??= rel;
   });
 
-  /// "Make animation…": the Edit dialog with a one-row strip guess.
-  void _makeAnimation(String rel) {
+  /// "Make animation…": the Edit dialog with the best guess
+  /// ([guessAnimation]): an animation's cells in the same folder, the gap
+  /// grid, square frames, or one frame.
+  Future<void> _makeAnimation(String rel) async {
     final size = readImageSize(p.join(pack.path, rel));
-    if (size == null) return;
-    showDialog<void>(
+    if (size == null || _busy) return;
+    setState(() => _busy = true);
+    final SpriteAnim guess;
+    try {
+      guess = await guessAnimationInBackground(
+        pack.path,
+        rel,
+        size.$1,
+        size.$2,
+        folderSizes: folderFrameSizes(rel, contents.shownDetected),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (!mounted) return;
+    await showDialog<void>(
       context: context,
-      builder: (_) => _AnimationEditorDialog(
-        pack: pack,
-        path: rel,
-        pending: guessStrip(rel, size.$1, size.$2),
-      ),
+      builder: (_) =>
+          _AnimationEditorDialog(pack: pack, path: rel, pending: guess),
     );
   }
 
@@ -2182,7 +2195,16 @@ class _AnimationEditorDialogState
                           }
                           saveAnimationOverride(
                             pack.path,
-                            detected,
+                            // A new one is saved against what detection
+                            // gives a manual file (a strip guess), not
+                            // against the dialog's starting guess.
+                            isNew
+                                ? guessStrip(
+                                    detected.path,
+                                    detected.frameW * detected.cols,
+                                    detected.frameH * detected.rows,
+                                  )
+                                : detected,
                             anim,
                             manual: isNew,
                           );

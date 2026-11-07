@@ -271,4 +271,38 @@ void main() {
       expect(village['tilesets and props/Water-fountain.png']!.cols, 4);
     },
   );
+
+  test(
+    'M47: fisherman grids take their folder\'s 192 px cells (read-only)',
+    skip: Directory(managed).existsSync() ? false : 'no $managed',
+    () {
+      final pack = scanLibrary(managed).packs.firstWhere(
+        (p) => p.id == 'RafaelMatos/Epic RPG World - The Village V2.2',
+      );
+      final contents = loadPackContents(pack.path, [
+        for (final f in pack.files) (f, 0),
+      ]);
+      final anims = {for (final a in contents.detected) a.path: a};
+      (int, int, int, int, int) grid(String rel) {
+        final a = anims[rel]!;
+        return (a.frameW, a.frameH, a.cols, a.rows, a.frameCount);
+      }
+
+      for (final (dir, stem) in [
+        ('beard', 'fisherman-beard'),
+        ('beard and headband', 'fisherman-beard-headband'),
+        ('headband', 'fisherman-headband'),
+      ]) {
+        final f = 'NPCs/fisherman/$dir/$stem';
+        expect(grid('$f-fishing-pulling-back.png'), (192, 192, 6, 6, 35));
+        expect(grid('$f-fishing-throwing.png'), (192, 192, 4, 4, 14));
+        // The siblings are unchanged.
+        expect(grid('$f-death.png'), (192, 192, 5, 4, 19));
+        expect(grid('$f-hurt.png'), (192, 192, 8, 1, 8));
+        for (final s in ['idle', 'walk', 'fishing-waiting']) {
+          expect(grid('$f-$s.png'), (192, 192, 10, 1, 10));
+        }
+      }
+    },
+  );
 }

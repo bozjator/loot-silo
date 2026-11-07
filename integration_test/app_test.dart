@@ -2826,6 +2826,48 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m47: fisherman grids in the Animations tab (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    const title = 'Epic RPG World - The Village V2.2';
+    if (!Directory(p.join(real, 'RafaelMatos', title)).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'The Village V2.2');
+    final tile = find.descendant(
+      of: find.byType(PackTile),
+      matching: find.text(title),
+    );
+    await pumpUntil(tester, tile);
+    await tester.tap(tile.first);
+    await pumpUntil(tester, find.textContaining('Animations ('), seconds: 60);
+    await tester.tap(find.textContaining('Animations ('));
+    await tester.pump(const Duration(seconds: 1));
+    final field = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    await tester.enterText(field, 'fisherman-beard-headband');
+    await pumpUntil(tester, find.text('Matching “fisherman-beard-headband”'));
+    await tester.pump(const Duration(milliseconds: 500));
+    // Pulling back: 35 of the 6 × 6 cells; throwing: 14 of 4 × 4.
+    expect(find.text('192×192 · 35 frames · 10 fps'), findsOneWidget);
+    expect(find.text('192×192 · 14 frames · 10 fps'), findsOneWidget);
+    expect(
+      find.text('Fisherman beard headband fishing pulling back'),
+      findsOne,
+    );
+    await tester.tap(find.text('By folder'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('NPCs / Fisherman / Beard and headband'), findsOneWidget);
+    await settleImages(tester);
+    await tester.pump(const Duration(seconds: 1));
+    await captureScreenshot(tester, 'm47_fisherman_folder', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m44: tabs, filters and a pack search survive a restart', (
     tester,
   ) async {

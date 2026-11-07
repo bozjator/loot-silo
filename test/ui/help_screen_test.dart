@@ -84,6 +84,15 @@ void main() {
     );
   });
 
+  testWidgets('M47: cell size from the folder, Make animation guess', (
+    tester,
+  ) async {
+    await pumpHelp(tester);
+    final text = pageText(tester);
+    expect(text, contains('A sheet can take its cell size from other'));
+    expect(text, contains('starting from the best guess'));
+  });
+
   testWidgets('M37: Play all and how Loop works with it', (tester) async {
     await pumpHelp(tester);
     final text = pageText(tester);

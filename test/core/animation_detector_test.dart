@@ -885,4 +885,131 @@ void main() {
       expect(detectSheet('fx/wind(16x16).png', 64, 32)!.frameW, 16);
     });
   });
+
+  group('M47: same-folder cell size, Make animation guess', () {
+    Map<String, SpriteAnim> detect(List<String> files, {int scans = 16}) => {
+      for (final a in detectAnimations(tmp.path, files, maxWordScans: scans))
+        a.path: a,
+    };
+
+    /// Small sprites (12×20) in the middle of [cell]-px cells, the first
+    /// [used] of a [cols]×[rows] grid; frames move a little, like a
+    /// character.
+    List<(int, int, int, int)> sprites(
+      int cell,
+      int cols,
+      int rows,
+      int used,
+    ) => [
+      for (var i = 0; i < used; i++)
+        (
+          (i % cols) * cell + cell ~/ 2 - 6 + i % 3,
+          (i ~/ cols) * cell + cell ~/ 2 - 10,
+          12,
+          20,
+        ),
+    ];
+
+    test('a 6×6 grid of 48 px cells with 35 sprites beside 48-high strips: '
+        '35 frames of the strips\' size', () {
+      // The strip: 10 frames of 48 px (square guess). The grid's name has
+      // no animation word, as in fisherman-…-fishing-pulling-back.png.
+      png('npc/fisher-idle.png', 480, 48, blobs: sprites(48, 10, 1, 10));
+      png('npc/fisher-pulling.png', 288, 288, blobs: sprites(48, 6, 6, 35));
+      final found = detect(['npc/fisher-idle.png', 'npc/fisher-pulling.png']);
+      final a = found['npc/fisher-pulling.png']!;
+      expect((a.frameW, a.frameH, a.cols, a.rows), (48, 48, 6, 6));
+      expect(a.frameTotal, 35);
+      expect(a.frameCount, 35);
+      // Without the strip next to it, nothing detects it (no animation
+      // word), but Make animation starts from the gap grid: the same 35.
+      final alone = detect(['npc/fisher-pulling.png']);
+      expect(alone, isEmpty);
+      final guess = guessAnimation(
+        tmp.path,
+        'npc/fisher-pulling.png',
+        288,
+        288,
+      );
+      expect((guess.frameW, guess.frameH, guess.frameCount), (48, 48, 35));
+    });
+
+    test('the cells must be cut on transparent lines and hold 3 sprites', () {
+      png('npc/walk.png', 192, 48, blobs: sprites(48, 4, 1, 4));
+      // A picture across the cut lines: not cut.
+      png('npc/sign.png', 96, 96, blobs: [(10, 10, 76, 76)]);
+      // Two parts (a table over its chairs): not cut.
+      png('npc/table.png', 48, 96, blobs: [(8, 8, 32, 30), (8, 56, 32, 30)]);
+      // One shadow in a middle cell: not cut.
+      png('npc/shadow.png', 144, 96, blobs: [(60, 60, 20, 8)]);
+      final found = detect([
+        'npc/walk.png',
+        'npc/sign.png',
+        'npc/table.png',
+        'npc/shadow.png',
+      ]);
+      expect(found.keys, ['npc/walk.png']);
+    });
+
+    test('not for tilesets, atlases or a one-frame name', () {
+      png('npc/walk.png', 192, 48, blobs: sprites(48, 4, 1, 4));
+      png('npc/tileset.png', 144, 144, blobs: sprites(48, 3, 3, 9));
+      png('npc/pose-frame3.png', 144, 144, blobs: sprites(48, 3, 3, 9));
+      final found = detect([
+        'npc/walk.png',
+        'npc/tileset.png',
+        'npc/pose-frame3.png',
+      ]);
+      expect(found.keys, ['npc/walk.png']);
+    });
+
+    test('folderFrameSizes: most used first, own folder only', () {
+      SpriteAnim sheet(String path, int fw, int fh) => SpriteAnim(
+        path: path,
+        kind: AnimKind.sheet,
+        frameW: fw,
+        frameH: fh,
+        cols: 4,
+      );
+      expect(
+        folderFrameSizes('a/x.png', [
+          sheet('a/1.png', 32, 32),
+          sheet('a/2.png', 64, 48),
+          sheet('a/3.png', 64, 48),
+          sheet('b/4.png', 16, 16),
+          sheet('a/x.png', 8, 8),
+        ]),
+        [(64, 48), (32, 32)],
+      );
+    });
+
+    test('guessAnimation: folder cells, then gaps, then square, then 1', () {
+      png('g/grid.png', 144, 144, blobs: sprites(48, 3, 3, 9));
+      // Folder cells win over the gap grid when they fit.
+      var g = guessAnimation(
+        tmp.path,
+        'g/grid.png',
+        144,
+        144,
+        folderSizes: const [(48, 48)],
+      );
+      expect((g.frameW, g.cols, g.rows), (48, 3, 3));
+      // A folder size that doesn't cut cleanly is skipped.
+      g = guessAnimation(
+        tmp.path,
+        'g/grid.png',
+        144,
+        144,
+        folderSizes: const [(72, 72)],
+      );
+      expect((g.frameW, g.cols, g.rows), (48, 3, 3));
+      // No gaps (opaque): square frames for a strip, else one frame.
+      png('g/solid.png', 96, 32);
+      g = guessAnimation(tmp.path, 'g/solid.png', 96, 32);
+      expect((g.frameW, g.cols), (32, 3));
+      png('g/odd.png', 50, 30);
+      g = guessAnimation(tmp.path, 'g/odd.png', 50, 30);
+      expect((g.frameW, g.cols, g.frameCount), (50, 1, 1));
+    });
+  });
 }

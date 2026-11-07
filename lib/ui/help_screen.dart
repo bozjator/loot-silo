@@ -109,6 +109,12 @@ class HelpScreen extends StatelessWidget {
                       'gaps are hidden by particles) borrows the frame size '
                       'of an animation of exactly the same size in its '
                       'folder.',
+                  'A sheet can take its cell size from other animations in '
+                      'its folder: an image that is a whole grid of their '
+                      'frames (a 6 × 6 grid of 192 px cells next to 192 px '
+                      'strips) is cut into those cells when the cuts fall on '
+                      'transparent lines and at least three cells hold '
+                      'something. Empty cells at the end don\'t count.',
                   'A wide image without a sheet or animation word is a strip '
                       'only if its frames look apart: a picture that runs '
                       'across the square frame cuts (a bench, a row of bags) '
@@ -150,8 +156,10 @@ class HelpScreen extends StatelessWidget {
                   '"Not an animation" asks first, then moves a file to '
                       'Images; Restore (or Undo on the message) brings it '
                       'back.',
-                  '"Make animation…" on an image marks it as a sheet; "Back '
-                      'to image" undoes that.',
+                  '"Make animation…" on an image marks it as a sheet, '
+                      'starting from the best guess (the cells of an '
+                      'animation in its folder, then the transparent gaps, '
+                      'then square frames); "Back to image" undoes that.',
                   'Combine frame files: the button after a folder\'s name '
                       '(By folder), or select images (the checkbox, or Ctrl/'
                       'Shift-click, in either view) and use the selection '
