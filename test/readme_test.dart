@@ -2,13 +2,14 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// The README's images are committed media with alt text (M53).
+/// The README's images are committed media with alt text (M53); since
+/// M54 only the logo and the three screenshots in docs/media.
 void main() {
   final readme = File('README.md').readAsStringSync();
   final images = RegExp(r'<img\s[^>]*>').allMatches(readme).map((m) => m[0]!);
 
   test('every README image is a local file with alt text', () {
-    expect(images.length, greaterThanOrEqualTo(10));
+    expect(images.length, 4, reason: 'the logo and three screenshots');
     for (final tag in images) {
       final src = RegExp(r'src="([^"]+)"').firstMatch(tag)?[1];
       expect(src, isNotNull, reason: tag);
@@ -24,18 +25,31 @@ void main() {
     }
   });
 
-  test('every docs/media file is shown in the README, each GIF under 3 MB', () {
+  test('docs/media is the three screenshots, each shown in the README', () {
+    final files = Directory('docs/media').listSync().whereType<File>();
+    expect(files.length, 3);
     var total = 0;
-    for (final f in Directory('docs/media').listSync().whereType<File>()) {
+    for (final f in files) {
       final rel = 'docs/media/${f.uri.pathSegments.last}';
       expect(readme, contains('src="$rel"'), reason: '$rel unused');
-      final size = f.lengthSync();
-      total += size;
-      if (rel.endsWith('.gif')) {
-        expect(size, lessThanOrEqualTo(3 * 1024 * 1024), reason: rel);
-      }
+      total += f.lengthSync();
     }
-    expect(total, lessThan(10 * 1024 * 1024));
+    expect(total, lessThan(2 * 1024 * 1024));
+  });
+
+  test('the README still describes every feature area', () {
+    for (final heading in [
+      'Library and import',
+      'Dashboard: search, filters and favorites',
+      'Sprite sheet and animation detection',
+      'Image viewer',
+      'Sound effects browser',
+      'Credits and licenses',
+      'itch.io sync',
+      'Tabs, resume and themes',
+    ]) {
+      expect(readme, contains('### $heading'), reason: heading);
+    }
   });
 
   test('the README links to itch.io near the top and the end', () {

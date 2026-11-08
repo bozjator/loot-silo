@@ -1787,9 +1787,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
       children: [
         TabToolbar(
           children: [
-            ItemsViewToggle(view: view, onChanged: settings.setImagesView),
             if (view == ItemsView.folders) ...[
-              const SizedBox(width: 4),
               FoldAllButton(
                 rels: images,
                 collapsed: _collapsed,
@@ -1801,7 +1799,9 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
                   }
                 }),
               ),
+              const SizedBox(width: 4),
             ],
+            ItemsViewToggle(view: view, onChanged: settings.setImagesView),
             if (contents.hiddenAnimations case final hidden
                 when hidden.isNotEmpty) ...[
               const SizedBox(width: 12),

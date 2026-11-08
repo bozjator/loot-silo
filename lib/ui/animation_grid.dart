@@ -124,12 +124,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
           children: [
             TabToolbar(
               children: [
-                ItemsViewToggle(
-                  view: view,
-                  onChanged: settings.setAnimationsView,
-                ),
                 if (view == ItemsView.folders) ...[
-                  const SizedBox(width: 4),
                   FoldAllButton(
                     rels: paths,
                     collapsed: _collapsed,
@@ -143,7 +138,12 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                       }
                     }),
                   ),
+                  const SizedBox(width: 4),
                 ],
+                ItemsViewToggle(
+                  view: view,
+                  onChanged: settings.setAnimationsView,
+                ),
                 const SizedBox(width: 12),
                 AnimateModeToggle(
                   mode: mode,

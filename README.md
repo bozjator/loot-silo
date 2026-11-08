@@ -18,73 +18,53 @@ credits into your game. It also works as an itch.io asset manager: link your
 itch.io purchases and keep them in the same library.
 
 <p align="center">
-  <img src="docs/media/hover.gif" alt="The Loot Silo dashboard: a grid of game asset packs whose covers play their sprite animations" width="900">
+  <img src="docs/media/loot-silo-dashboard-with-open-tabs.png" alt="The Loot Silo dashboard: a grid of game asset packs with covers, authors and type tags, filter chips, and four packs open in tabs" width="900">
 </p>
 
 ## Features
 
 ### Library and import
 
-Drop in folders or archives (zip, tar, 7z, rar). Loot Silo finds the packs
-inside, guesses author and type, shows you a review before anything is
-copied, and checks every copied file against its SHA-1. Your library is one
-folder arranged as `Author/Pack` — plain files you can open in any file
-manager.
-
-<p align="center">
-  <img src="docs/media/import_review.png" alt="Import review: two packs found in a downloads folder, with author and target folder shown before copying" width="800">
-</p>
+Drop in folders or archives (zip, tar, 7z, rar), from the import menu or by
+drag and drop. Loot Silo finds the packs inside, guesses author and type,
+shows you a review before anything is copied, and checks every copied file
+against its SHA-1. Your library is one folder arranged as `Author/Pack` —
+plain files you can open in any file manager. Big collections become bundles
+that hold sub-packs.
 
 ### Dashboard: search, filters and favorites
 
 Search packs, authors, tags and file names as you type. Filter by type
 (character, environment, UI, icons, VFX, SFX, music, 3D, font), author, tag
-or source; star your favorite packs; sort by best match, name, author, size, file count, tags or type. Packs,
-Expanded and Files views; a slider sets the thumbnail size.
-
-<p align="center">
-  <img src="docs/media/dashboard.png" alt="The dashboard with 14 asset packs: covers, authors, type tags, favorites and filter chips" width="900">
-</p>
-
-<p align="center">
-  <img src="docs/media/search.gif" alt="Typing in the search box narrows the asset packs to the ones that match" width="900">
-</p>
-
-<p align="center">
-  <img src="docs/media/slider.gif" alt="Dragging the thumbnail slider makes the pack cards smaller and larger" width="900">
-</p>
+or source; star your favorite packs; sort by best match, name, author, size,
+file count, tags or type. Packs, Expanded and Files views; a slider sets the
+thumbnail size, and pack covers play their animations.
 
 ### Sprite sheet and animation detection
 
-Open a pack to see its images, audio and other files. Sprite sheets, strips
-and frame-per-file animations are detected and played automatically, at the
-right frame size. When a guess is wrong, fix it in the Edit dialog: frame
-width and height, frame count, FPS — or combine single frames into a strip.
+Open a pack to see its animations, images, audio and other files, flat or
+grouped by folder (collapse or expand every folder in one click). Sprite
+sheets, strips, grids and frame-per-file animations are detected and played
+automatically, at the right frame size — all at once or on hover.
 
 <p align="center">
-  <img src="docs/media/open_pack.gif" alt="Opening a pack from the dashboard and switching between its Animations and Images tabs" width="900">
+  <img src="docs/media/loot-silo-pack-details-view.png" alt="A pack's details: cover carousel, types, tags and author at the top, then the Animations tab grouped by folder with sprite animations playing" width="900">
 </p>
 
-<p align="center">
-  <img src="docs/media/focus_edit.gif" alt="Hovering an animation focuses it; the Edit dialog shows frame size, frame count and FPS" width="900">
-</p>
+When a guess is wrong, fix it in the Edit dialog: frame width and height,
+frame count, FPS, or mark the file "Not an animation". "Make animation…"
+turns any image into a sheet, and you can combine single frame files into a
+strip.
 
 <p align="center">
-  <img src="docs/media/animations.png" alt="The Animations tab of a platformer pack: alien walk, swim and climb cycles playing" width="900">
+  <img src="docs/media/loot-silo-animation-config.png" alt="The animation Edit dialog: a sprite playing next to its FPS slider, frame width, frame height and frame count" width="900">
 </p>
 
 ### Image viewer
 
-Images open at 1:1, actual pixels as in your game, so pixel art stays crisp;
-switch to Fit, zoom with the wheel and drag to pan.
-
-<p align="center">
-  <img src="docs/media/viewer.png" alt="The image viewer showing a pixel art background at 1:1" width="800">
-</p>
-
-<p align="center">
-  <img src="docs/media/pack_images.png" alt="A pack's Images tab: a grid of sprite thumbnails with names and sizes" width="900">
-</p>
+Images open at 1:1, actual pixels as in your game, so pixel art stays crisp
+(an image bigger than the window opens fitted); switch to Fit, zoom with the
+wheel and drag to pan. Focus mode steps through cards with the arrow keys.
 
 ### Sound effects browser
 
@@ -92,18 +72,10 @@ Play sound effects and music loops right in the pack, with length and size
 shown, Play all and Loop, so you find the right "jump" sound without opening
 an audio editor.
 
-<p align="center">
-  <img src="docs/media/audio.png" alt="The audio list of a music pack with play buttons and track lengths" width="800">
-</p>
-
 ### Credits and licenses
 
 Keep the license and attribution for every author, mark which packs a game
 uses, and get the credits for that game ready to paste.
-
-<p align="center">
-  <img src="docs/media/credits.png" alt="Credits for one game: the authors and licenses of the packs it uses" width="800">
-</p>
 
 ### itch.io sync
 
@@ -114,19 +86,8 @@ rest.
 ### Tabs, resume and themes
 
 Open packs in tabs (middle-click, Ctrl+Tab to switch); Loot Silo reopens where
-you left off. Pick a colour theme, light or dark.
-
-<p align="center">
-  <img src="docs/media/tabs.png" alt="Several asset packs open in tabs" width="800">
-</p>
-
-<p align="center">
-  <img src="docs/media/dashboard_dark.png" alt="The dashboard in a dark indigo theme" width="800">
-</p>
-
-<p align="center">
-  <img src="docs/media/settings_theme.png" alt="Settings with the colour theme swatches" width="800">
-</p>
+you left off — tabs, filters, sort and view. Pick a colour theme, light or
+dark.
 
 Press F1 in the app for the full guide and every keyboard shortcut.
 
@@ -195,12 +156,7 @@ on a headless machine run them under Xvfb:
 xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.dart -d linux
 ```
 
-The README media is made by `tool/readme_media/make_media.sh` (needs Xvfb,
-Pillow and a copy of the Kenney packs in `../assets_library`, read only). The branding assets are rebuilt with
-`python3 tool/branding/make_branding.py`.
-
-The packs shown in the screenshots are [Kenney](https://kenney.nl) packs
-(CC0, public domain).
+The branding assets are rebuilt with `python3 tool/branding/make_branding.py`.
 
 ## License
 

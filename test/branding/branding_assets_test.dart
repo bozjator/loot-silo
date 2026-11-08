@@ -58,17 +58,42 @@ void main() {
     // Transparent around the icon's rounded corner and right of the text.
     expect(logo.getPixel(0, 0).a, 0);
     expect(logo.getPixel(w - 1, h - 1).a, 0);
-    // The app icon's silo on the left: the same picture as icon_small.
-    final small = img.copyResize(
-      load('assets/branding/icon_small_256.png'),
-      width: h,
-      height: h,
+    // M54: the app icon on the left (the same picture as icon_small_256),
+    // the title picture right of it.
+    final small = img.copyResize(load(Branding.iconLarge), width: h, height: h);
+    // Mean colour of the middle of the icon (trimming may shift it by the
+    // icon's few transparent side pixels).
+    List<double> mean(img.Image image) {
+      final sum = [0.0, 0.0, 0.0];
+      var n = 0;
+      for (var y = h * 3 ~/ 10; y < h * 7 ~/ 10; y++) {
+        for (var x = h * 3 ~/ 10; x < h * 7 ~/ 10; x++) {
+          final p = image.getPixel(x, y);
+          sum[0] += p.r;
+          sum[1] += p.g;
+          sum[2] += p.b;
+          n++;
+        }
+      }
+      return [for (final v in sum) v / n];
+    }
+
+    final got = mean(logo), want = mean(small);
+    for (var c = 0; c < 3; c++) {
+      expect((got[c] - want[c]).abs(), lessThan(12), reason: 'channel $c');
+    }
+  });
+
+  test('M54: the title picture is bundled, wide, trimmed and transparent', () {
+    final title = load(Branding.title);
+    expect(title.width, greaterThan(title.height * 2));
+    expect(title.getPixel(0, 0).a, 0);
+    expect(title.getPixel(title.width - 1, title.height - 1).a, 0);
+    expect(
+      title.getPixel(title.width ~/ 2, title.height ~/ 2).a,
+      greaterThan(200),
     );
-    final mid = logo.getPixel(h ~/ 2, h ~/ 2);
-    final ref = small.getPixel(h ~/ 2, h ~/ 2);
-    expect((mid.r - ref.r).abs(), lessThan(24));
-    expect((mid.g - ref.g).abs(), lessThan(24));
-    expect((mid.b - ref.b).abs(), lessThan(24));
+    expect(File('pubspec.yaml').readAsStringSync(), contains(Branding.title));
   });
 
   test('the old gamepad logo is gone; the lockup icon is bundled', () {

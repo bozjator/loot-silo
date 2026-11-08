@@ -82,7 +82,7 @@ void main() {
     await pumpHelp(tester);
     expect(
       pageText(tester),
-      contains('the button next to the view switch collapses every'),
+      contains('the button left of the view switch collapses every'),
     );
   });
 

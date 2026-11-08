@@ -78,7 +78,7 @@ List<int> visibleOrder(
   ];
 }
 
-/// Flat | By folder switch for a tab's toolbar.
+/// By folder | Flat switch for a tab's toolbar.
 class ItemsViewToggle extends StatelessWidget {
   const ItemsViewToggle({
     super.key,
@@ -95,14 +95,14 @@ class ItemsViewToggle extends StatelessWidget {
     style: const ButtonStyle(visualDensity: VisualDensity.compact),
     segments: const [
       ButtonSegment(
-        value: ItemsView.flat,
-        icon: Icon(Icons.grid_view, size: 18),
-        label: Text('Flat'),
-      ),
-      ButtonSegment(
         value: ItemsView.folders,
         icon: Icon(Icons.folder_outlined, size: 18),
         label: Text('By folder'),
+      ),
+      ButtonSegment(
+        value: ItemsView.flat,
+        icon: Icon(Icons.grid_view, size: 18),
+        label: Text('Flat'),
       ),
     ],
     selected: {view},
@@ -125,7 +125,7 @@ void toggleAllFolders(List<String> rels, Set<String> collapsed) {
   }
 }
 
-/// "Collapse all" / "Expand all" next to [ItemsViewToggle], for the By
+/// "Collapse all" / "Expand all" left of [ItemsViewToggle], for the By
 /// folder view: collapses when any folder of [rels] is open.
 class FoldAllButton extends StatelessWidget {
   const FoldAllButton({

@@ -2,82 +2,71 @@ import 'package:flutter/material.dart';
 
 import '../../version.dart';
 
-/// Branding images, built by `tool/branding/make_branding.py`.
+/// Branding images, built by `tool/branding/make_branding.py` from
+/// `../app_logos` (icon_full_centered.png and app-title-with-slogan.png).
 abstract final class Branding {
-  /// The silo on its rounded square, no text: for small sizes (≤ 64 px).
+  /// The app icon (the silo on its rounded square) at 64 px, for small sizes.
   static const iconSmall = 'assets/branding/icon_small.png';
 
-  /// The same silo at 256 px, for the logo lockup ([AppLogo]).
+  /// The same icon at 256 px, for the logo lockup ([AppLogo]).
   static const iconLarge = 'assets/branding/icon_small_256.png';
 
-  /// The full app icon: silo, name and slogan on the rounded square.
+  /// The same icon at 512 px.
   static const iconFull = 'assets/branding/icon_full.png';
 
-  /// The README logo: [AppLogo]'s lockup as an image (transparent, outlined
-  /// text that reads on light and dark backgrounds). Not bundled.
+  /// "LootSilo" over the slogan, as one picture (outlined, so it reads on
+  /// light and dark backgrounds).
+  static const title = 'assets/branding/title_slogan.png';
+
+  /// The README logo: [AppLogo]'s lockup as one image. Not bundled.
   static const logoReadme = 'assets/branding/logo_readme.png';
 }
 
-/// The logo, [height] tall: the app icon's silo, then the name over the
-/// slogan in the theme's text styles (so it follows light / dark and the
-/// theme colour). Screen readers get the name and slogan as one label.
+/// The logo, [height] tall: the app icon, then the title-and-slogan picture
+/// ([Branding.title]). Screen readers get the name and slogan as one label.
 /// Scales down to fit a narrower space.
 class AppLogo extends StatelessWidget {
   const AppLogo({super.key, this.height = 120});
 
   final double height;
 
+  /// The title's height as a share of the icon's, and the gap between them
+  /// (the same proportions as `logo_readme.png`).
+  static const titleScale = 0.78;
+  static const gapScale = 0.1;
+
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Semantics(
-      key: const ValueKey('app-logo'),
-      label: '$appName. $appSlogan',
-      image: true,
-      excludeSemantics: true,
-      child: SizedBox(
-        height: height,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Image.asset(
-                Branding.iconLarge,
-                key: const ValueKey('app-logo-icon'),
-                width: height,
-                height: height,
-                filterQuality: FilterQuality.medium,
-              ),
-              SizedBox(width: height * 0.16),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    appName,
-                    style: theme.textTheme.displaySmall?.copyWith(
-                      fontSize: height * 0.42,
-                      height: 1.1,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                  Text(
-                    appSlogan,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontSize: height * 0.15,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+  Widget build(BuildContext context) => Semantics(
+    key: const ValueKey('app-logo'),
+    label: '$appName. $appSlogan',
+    image: true,
+    excludeSemantics: true,
+    child: SizedBox(
+      height: height,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              Branding.iconLarge,
+              key: const ValueKey('app-logo-icon'),
+              width: height,
+              height: height,
+              filterQuality: FilterQuality.medium,
+            ),
+            SizedBox(width: height * gapScale),
+            Image.asset(
+              Branding.title,
+              key: const ValueKey('app-logo-title'),
+              height: height * titleScale,
+              filterQuality: FilterQuality.medium,
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 /// The app bar title: the small silo icon, then "Loot Silo".

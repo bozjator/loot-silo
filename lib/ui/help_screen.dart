@@ -250,7 +250,7 @@ class HelpScreen extends StatelessWidget {
                   'the Flat and By folder views alike; Shift selects a range '
                   'in on-screen order, across folders. Folding a folder or '
                   'switching views keeps the selection. In the By folder '
-                  'view, the button next to the view switch collapses every '
+                  'view, the button left of the view switch collapses every '
                   'folder shown (or expands them all when all are folded).',
                 ),
                 _P(

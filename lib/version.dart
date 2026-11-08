@@ -22,7 +22,3 @@ const appGitHubUrl = 'https://github.com/bozjator/loot-silo';
 /// The app's download page ("Download it on itch.io"). A placeholder until
 /// the page exists.
 const appItchUrl = 'https://bozjator.itch.io/loot-silo';
-
-/// The license on GitHub (MIT + Commons Clause: free to use and change,
-/// not for resale).
-const appLicenseUrl = '$appGitHubUrl/blob/main/LICENSE';

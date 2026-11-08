@@ -178,7 +178,8 @@ void main() {
     );
     expect(find.text(appVersionLabel), findsOneWidget);
     expect(appVersionLabel, startsWith('Loot Silo '));
-    expect(find.text(appSlogan), findsOneWidget);
+    // M54: the slogan is part of the logo picture, not a text line.
+    expect(find.text(appSlogan), findsNothing);
     // M49: the logo above the version line.
     expect(
       find.descendant(

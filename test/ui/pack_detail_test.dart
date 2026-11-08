@@ -3512,6 +3512,17 @@ void main() {
         await tester.pump();
         expect(find.byType(ItemCard), findsNothing);
         expect(icon(tester), Icons.unfold_more);
+        // M54: the button sits left of the view switch, whose first
+        // segment is By folder.
+        final toggle = find.byType(ItemsViewToggle);
+        double left(Finder f) => tester.getTopLeft(f).dx;
+        expect(left(fold), lessThan(left(toggle)));
+        expect(
+          left(find.descendant(of: toggle, matching: find.text('By folder'))),
+          lessThan(
+            left(find.descendant(of: toggle, matching: find.text('Flat'))),
+          ),
+        );
         expect(find.byTooltip('Expand all folders'), findsOneWidget);
         // The folder headers stay.
         expect(find.text('A'), findsOneWidget);
@@ -3748,20 +3759,12 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('link:itch.io')));
       await tester.pump(const Duration(milliseconds: 500));
       expect(launched, [Uri.parse(appGitHubUrl), Uri.parse(appItchUrl)]);
-      // M53: the license line under them.
+      // M54: no license line in About.
       expect(
-        find.textContaining(
-          'Free to use and change; not for resale.',
-          findRichText: true,
-        ),
-        findsOneWidget,
+        find.textContaining('not for resale', findRichText: true),
+        findsNothing,
       );
-      await tester.ensureVisible(find.byKey(const ValueKey('link:license')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('link:license')));
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(launched.last, Uri.parse(appLicenseUrl));
-      expect(appLicenseUrl, '$appGitHubUrl/blob/main/LICENSE');
+      expect(find.byKey(const ValueKey('link:license')), findsNothing);
       expect(appGitHubUrl, 'https://github.com/bozjator/loot-silo');
       expect(appItchUrl, 'https://bozjator.itch.io/loot-silo');
 

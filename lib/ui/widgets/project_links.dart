@@ -13,17 +13,9 @@ final urlLauncherProvider = Provider<Future<bool> Function(Uri)>(
 /// "Star the project on GitHub" and "Download it on itch.io", with the link
 /// on the site's name only (Settings → About and the end of Help).
 class ProjectLinks extends StatelessWidget {
-  const ProjectLinks({
-    super.key,
-    this.textAlign = TextAlign.start,
-    this.license = false,
-  });
+  const ProjectLinks({super.key, this.textAlign = TextAlign.start});
 
   final TextAlign textAlign;
-
-  /// Adds "Free to use and change; not for resale. See the license", with
-  /// the link on "license".
-  final bool license;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -44,15 +36,6 @@ class ProjectLinks extends StatelessWidget {
         url: appItchUrl,
         textAlign: textAlign,
       ),
-      if (license) ...[
-        const SizedBox(height: 4),
-        _LinkLine(
-          before: 'Free to use and change; not for resale. See the ',
-          link: 'license',
-          url: appLicenseUrl,
-          textAlign: textAlign,
-        ),
-      ],
     ],
   );
 }
