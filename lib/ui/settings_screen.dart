@@ -132,6 +132,24 @@ class SettingsScreen extends ConsumerWidget {
                 value: settings.animateAll,
                 onChanged: notifier.setAnimateAll,
               ),
+              section('Audio'),
+              ListTile(
+                leading: const Icon(Icons.audio_file_outlined),
+                title: const Text('Preferred format'),
+                subtitle: const Text(
+                  'A sound that comes in several formats is one card; '
+                  'it plays this one when it has it.',
+                ),
+                trailing: SegmentedButton<String>(
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final f in const ['ogg', 'wav', 'flac', 'mp3'])
+                      ButtonSegment(value: f, label: Text(f.toUpperCase())),
+                  ],
+                  selected: {settings.audioFormat},
+                  onSelectionChanged: (s) => notifier.setAudioFormat(s.single),
+                ),
+              ),
               section('Startup'),
               SwitchListTile(
                 key: const ValueKey('resume-session'),

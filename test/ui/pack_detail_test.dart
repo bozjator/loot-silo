@@ -18,6 +18,7 @@ import 'package:loot_silo/ui/tabs.dart';
 import 'package:loot_silo/ui/dashboard.dart';
 import 'package:loot_silo/ui/folder_groups.dart';
 import 'package:loot_silo/ui/track_player.dart';
+import 'package:loot_silo/ui/widgets/favorite_star.dart';
 import 'package:loot_silo/ui/widgets/animated_sprite.dart';
 import 'package:loot_silo/ui/widgets/item_card.dart';
 import 'package:loot_silo/ui/widgets/measure_size.dart';
@@ -822,7 +823,7 @@ void main() {
       expect(find.text('2:30'), findsOneWidget);
       expect(find.text('0:03'), findsOneWidget);
 
-      await tester.tap(find.text('long.ogg'));
+      await tester.tap(find.text('long'));
       await tester.pump();
       expect(p.basename(fake.played.single), 'long.ogg');
       final seek = find.byKey(const ValueKey('seek'));
@@ -900,7 +901,7 @@ void main() {
 
       // Another file stops this one; short sounds get no slider.
       final stopsBefore = fake.stops;
-      await tester.tap(find.text('short.wav'));
+      await tester.tap(find.text('short'));
       await tester.pump();
       expect(fake.stops, greaterThan(stopsBefore));
       expect(p.basename(fake.played.last), 'short.wav');
@@ -977,7 +978,7 @@ void main() {
       expect(played(), ['a.wav', 'b.wav']);
       // The playing row is the selected (highlighted) one.
       final row = tester.widget<ListTile>(
-        find.ancestor(of: find.text('b.wav'), matching: find.byType(ListTile)),
+        find.ancestor(of: find.text('b'), matching: find.byType(ListTile)),
       );
       expect(row.selected, isTrue);
       await finish(tester);
@@ -999,7 +1000,7 @@ void main() {
       );
       await tester.pump(DashboardQueryNotifier.searchDebounce);
       await tester.pump();
-      expect(find.text('door.wav'), findsNothing);
+      expect(find.text('door'), findsNothing);
       await tester.tap(button('Play all'));
       await tester.pump();
       await finish(tester);
@@ -1014,7 +1015,7 @@ void main() {
       );
       await tester.tap(button('Play all'));
       await tester.pump();
-      await tester.tap(find.text('c.wav'));
+      await tester.tap(find.text('c'));
       await tester.pump();
       expect(played(), ['a.wav', 'c.wav']);
       expect(button('Stop'), findsOneWidget);
@@ -1048,7 +1049,7 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
       await tester.pump();
       expect(button('Stop'), findsOneWidget);
-      await tester.tap(find.text('a.wav'));
+      await tester.tap(find.text('a'));
       await tester.pump();
       expect(button('Play all'), findsOneWidget);
       await finish(tester);
@@ -1071,9 +1072,97 @@ void main() {
       // Stopped, a single sound loops again.
       await tester.tap(button('Stop'));
       await tester.pump();
-      await tester.tap(find.text('b.wav'));
+      await tester.tap(find.text('b'));
       await tester.pump();
       expect(fake.looping, isTrue);
+    });
+  });
+
+  group('Audio formats (M59)', () {
+    late _FakePlayer fake;
+
+    Future<void> open(WidgetTester tester) async {
+      fake = _FakePlayer();
+      await openKnight(
+        tester,
+        files: const [
+          'music/MP3/theme.mp3',
+          'music/OGG/theme.ogg',
+          'music/WAV/theme.wav',
+          'music/other.wav',
+        ],
+        types: ['music'],
+        overrides: [
+          trackPlayerFactoryProvider.overrideWithValue(() => fake),
+          audioDurationProvider.overrideWithValue(
+            (path) async => const Duration(minutes: 1),
+          ),
+        ],
+      );
+      await tester.pump();
+    }
+
+    List<String> played() => [for (final f in fake.played) p.basename(f)];
+
+    testWidgets('one row per sound; a format chip switches mid-play', (
+      tester,
+    ) async {
+      await open(tester);
+      expect(find.textContaining('Audio (2)'), findsOneWidget);
+      expect(find.byType(ListTile), findsNWidgets(2));
+      // Format folders are not shown as the folder.
+      expect(
+        find.descendant(
+          of: find.byType(ListTile),
+          matching: find.text('music'),
+        ),
+        findsNWidgets(2),
+      );
+      expect(find.text('OGG'), findsOneWidget);
+      expect(find.text('MP3'), findsOneWidget);
+      // theme's and other's.
+      expect(find.text('WAV'), findsNWidgets(2));
+
+      // The preferred format (ogg) plays.
+      await tester.tap(find.text('theme'));
+      await tester.pump();
+      expect(played(), ['theme.ogg']);
+      fake.position.add(const Duration(seconds: 12));
+      await tester.pump();
+
+      // Switching carries on from where it was.
+      await tester.tap(
+        find.byKey(const ValueKey('format:music/MP3/theme.mp3')),
+      );
+      await tester.pump();
+      expect(played(), ['theme.ogg', 'theme.mp3']);
+      expect(fake.seeks.last, const Duration(seconds: 12));
+
+      // Play all goes by sound: the picked format, then the next sound.
+      await tester.tap(find.widgetWithText(FilledButton, 'Play all'));
+      await tester.pump();
+      expect(played().last, 'theme.mp3');
+      fake.complete.add(null);
+      await tester.pump();
+      await tester.pump(playAllGap);
+      await tester.pump();
+      expect(played().last, 'other.wav');
+    });
+
+    testWidgets('the star is on when any format is starred', (tester) async {
+      await open(tester);
+      await tester.tap(find.byKey(const ValueKey('star:music/OGG/theme.ogg')));
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('format:music/WAV/theme.wav')),
+      );
+      await tester.pump();
+      final star = find.byKey(const ValueKey('star:music/WAV/theme.wav'));
+      expect(tester.widget<FavoriteStar>(star).starred, isTrue);
+      // Unstarring clears the starred format.
+      await tester.tap(star);
+      await tester.pump();
+      expect(tester.widget<FavoriteStar>(star).starred, isFalse);
     });
   });
 
@@ -1118,7 +1207,7 @@ void main() {
       await tester.tap(find.text('Rows'));
       await tester.pump();
       expect(store.load().audioView, AudioView.rows);
-      expect(find.text('coin_pickup.wav'), findsOneWidget);
+      expect(find.text('coin_pickup'), findsOneWidget);
     });
 
     testWidgets('playing: progress ring, seek bar for long, keys work', (

@@ -101,6 +101,9 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   void setAudioView(AudioView view) => _save(state.copyWith(audioView: view));
 
+  void setAudioFormat(String format) =>
+      _save(state.copyWith(audioFormat: format));
+
   void setDashboardView(DashboardView view) =>
       _save(state.copyWith(dashboardView: view));
 

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../core/audio_formats.dart' show audioFormatOrder;
+
 /// Light, dark or follow the system.
 enum ThemeChoice { system, light, dark }
 
@@ -186,6 +188,7 @@ class AppSettings {
     this.dashboardView = DashboardView.packs,
     this.detailAnimateMode = AnimateMode.hover,
     this.audioView = AudioView.rows,
+    this.audioFormat = 'ogg',
     this.previewsColumns = 4,
     this.resumeSession = true,
     this.lastSession,
@@ -227,6 +230,10 @@ class AppSettings {
 
   final AudioView audioView;
 
+  /// The format an Audio tab card plays when its sound comes in several
+  /// (one of `audioFormatOrder`).
+  final String audioFormat;
+
   /// Wanted columns in the "All previews" grid (1–8); rows are balanced
   /// from it. 4 is what the 440 px cards gave in a full-width window.
   final int previewsColumns;
@@ -262,6 +269,10 @@ class AppSettings {
         AnimateMode.hover,
     audioView:
         AudioView.values.asNameMap()[json['audio_view']] ?? AudioView.rows,
+    audioFormat: switch (json['audio_format']) {
+      final String f when audioFormatOrder.contains(f) => f,
+      _ => 'ogg',
+    },
     previewsColumns: ((json['previews_columns'] as num?)?.toInt() ?? 4).clamp(
       1,
       8,
@@ -290,6 +301,7 @@ class AppSettings {
     'dashboard_view': dashboardView.name,
     'detail_animate_mode': detailAnimateMode.name,
     'audio_view': audioView.name,
+    'audio_format': audioFormat,
     'previews_columns': previewsColumns,
     'resume_session': resumeSession,
     'last_session': ?lastSession?.toJson(),
@@ -310,6 +322,7 @@ class AppSettings {
     DashboardView? dashboardView,
     AnimateMode? detailAnimateMode,
     AudioView? audioView,
+    String? audioFormat,
     int? previewsColumns,
     bool? resumeSession,
     Object? lastSession = _keep,
@@ -328,6 +341,7 @@ class AppSettings {
     dashboardView: dashboardView ?? this.dashboardView,
     detailAnimateMode: detailAnimateMode ?? this.detailAnimateMode,
     audioView: audioView ?? this.audioView,
+    audioFormat: audioFormat ?? this.audioFormat,
     previewsColumns: previewsColumns ?? this.previewsColumns,
     resumeSession: resumeSession ?? this.resumeSession,
     lastSession: identical(lastSession, _keep)

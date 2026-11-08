@@ -277,6 +277,14 @@ class HelpScreen extends StatelessWidget {
                   'it. While Play all runs, Loop repeats the whole list '
                   'instead of one sound.',
                 ),
+                _P(
+                  'A sound saved in several formats (song.ogg, song.wav, '
+                  'song.mp3, side by side or in MP3 / OGG / WAV folders) is '
+                  'one row or card with a chip per format. The highlighted '
+                  'chip is the file that plays; click another to switch '
+                  '(a playing sound carries on from the same spot). '
+                  'Settings → Audio picks the format shown first.',
+                ),
               ]),
               const _Section('Favorites', [
                 _P(

@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/animation_detector.dart';
 import '../core/audio_duration.dart';
+import '../core/audio_formats.dart';
 import '../core/file_search.dart';
 import '../core/credits.dart';
 import '../core/library_index.dart';
@@ -371,8 +372,8 @@ class _BodyState extends State<_Body> {
     add(
       _AudioTab,
       'Audio',
-      contents.audio.length,
-      base.audio.length,
+      groupAudioFormats(contents.audio).length,
+      groupAudioFormats(base.audio).length,
       () => _AudioTab(pack: pack, contents: contents),
     );
     add(
@@ -3056,6 +3057,46 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   final _itemKeys = <String, GlobalKey>{};
   GlobalKey _keyFor(String rel) => _itemKeys.putIfAbsent(rel, GlobalKey.new);
 
+  /// The format picked on a card, by track key; else the preferred one.
+  final _chosen = <String, String>{};
+  List<String>? _groupedFrom;
+  var _grouped = const <AudioTrack>[];
+
+  /// The shown sounds, one per track, whatever formats they come in.
+  List<AudioTrack> get _tracks {
+    final audio = widget.contents.audio;
+    if (!identical(audio, _groupedFrom)) {
+      _groupedFrom = audio;
+      _grouped = groupAudioFormats(audio);
+    }
+    return _grouped;
+  }
+
+  /// The file [t] plays: the format picked on it, else the preferred one.
+  String _fileOf(AudioTrack t) {
+    final chosen = _chosen[t.key];
+    if (chosen != null && t.files.contains(chosen)) return chosen;
+    return t.pick(ref.read(settingsProvider).audioFormat);
+  }
+
+  /// The shown track [rel] (in any format) belongs to; -1 if none.
+  int _trackIndex(String? rel) =>
+      rel == null ? -1 : _tracks.indexWhere((t) => t.files.contains(rel));
+
+  /// A format chip: picks [rel] for [t]; a playing track carries on in
+  /// the new format from where it was.
+  Future<void> _switchFormat(AudioTrack t, String rel) async {
+    final was = _playing;
+    final at = _position;
+    setState(() {
+      _chosen[t.key] = rel;
+      if (t.files.contains(_selected)) _selected = rel;
+    });
+    if (was == rel || was == null || !t.files.contains(was)) return;
+    await _start(rel);
+    if (mounted && _playing == rel && at > Duration.zero) await _seek(at);
+  }
+
   TrackPlayer _ensurePlayer() {
     final existing = _player;
     if (existing != null) return existing;
@@ -3131,15 +3172,15 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   /// played sound when it is shown, else from the first.
   Future<void> _playAll() async {
     if (_all) return _stopAll();
-    final audio = widget.contents.audio;
-    if (audio.isEmpty) return;
-    final from = [_selected, _playing].firstWhere(
-      (r) => r != null && audio.contains(r),
-      orElse: () => audio.first,
-    )!;
+    final tracks = _tracks;
+    if (tracks.isEmpty) return;
+    final at = [
+      _trackIndex(_selected),
+      _trackIndex(_playing),
+    ].firstWhere((i) => i >= 0, orElse: () => 0);
     _keys.requestFocus();
     _all = true;
-    await _start(from);
+    await _start(_fileOf(tracks[at]));
   }
 
   Future<void> _stopAll() async {
@@ -3152,18 +3193,17 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   /// Play all: the track after the one that just ended, after a short gap;
   /// past the end, the first again with Loop on, else the run ends.
   void _next() {
-    final audio = widget.contents.audio;
-    final at = _playing == null ? -1 : audio.indexOf(_playing!);
-    var next = at + 1;
-    if (next >= audio.length) {
-      if (audio.isEmpty || !ref.read(settingsProvider).audioLoop) {
+    final tracks = _tracks;
+    var next = _trackIndex(_playing) + 1;
+    if (next >= tracks.length) {
+      if (tracks.isEmpty || !ref.read(settingsProvider).audioLoop) {
         _all = false;
         setState(() => _playing = null);
         return;
       }
       next = 0;
     }
-    final rel = audio[next];
+    final rel = _fileOf(tracks[next]);
     setState(() {
       _playing = null;
       _selected = rel;
@@ -3191,12 +3231,11 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
       if (!mounted) return;
       if (_itemKeys[rel]?.currentContext != null) return show();
       if (!_scroll.hasClients) return;
-      final audio = widget.contents.audio;
-      final i = audio.indexOf(rel);
+      final i = _trackIndex(rel);
       if (i < 0) return;
       final pos = _scroll.position;
       final estimate =
-          (pos.maxScrollExtent + pos.viewportDimension) * i / audio.length -
+          (pos.maxScrollExtent + pos.viewportDimension) * i / _tracks.length -
           pos.viewportDimension / 2;
       _scroll.jumpTo(estimate.clamp(0.0, pos.maxScrollExtent));
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -3268,7 +3307,9 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
 
   @override
   Widget build(BuildContext context) {
-    final audio = widget.contents.audio;
+    final audio = _tracks;
+    // Rebuilt when it changes: cards without a picked format follow it.
+    ref.watch(settingsProvider.select((s) => s.audioFormat));
     final theme = Theme.of(context);
     final loop = ref.watch(settingsProvider.select((s) => s.audioLoop));
     final read = ref.watch(audioDurationProvider);
@@ -3356,7 +3397,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   }
 
   Widget _rows(
-    List<String> audio,
+    List<AudioTrack> audio,
     Future<Duration?> Function(String) readLength,
     Set<String> favorites,
   ) => ListView.builder(
@@ -3364,7 +3405,8 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     padding: const EdgeInsets.only(top: tabContentGap, bottom: 8),
     itemCount: audio.length,
     itemBuilder: (context, i) {
-      final rel = audio[i];
+      final track = audio[i];
+      final rel = _fileOf(track);
       final path = p.join(widget.pack.path, rel);
       final playing = _playing == rel;
       final tile = ListTile(
@@ -3375,21 +3417,22 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
           icon: Icon(playing ? Icons.stop_circle : Icons.play_circle),
           onPressed: () => _toggle(rel),
         ),
-        title: Text(p.basename(rel)),
-        subtitle: p.dirname(rel) == '.' ? null : Text(p.dirname(rel)),
+        title: Text(p.basenameWithoutExtension(rel)),
+        subtitle: track.folder == '.' ? null : Text(track.folder),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            _FormatChips(
+              files: track.files,
+              shown: rel,
+              onPick: (f) => _switchFormat(track, f),
+            ),
+            const SizedBox(width: 16),
             // Built only for visible rows, so only they are read.
             _TrackLength(future: readLength(rel)),
             const SizedBox(width: 16),
             Text(formatBytes(widget.contents.sizes[rel] ?? 0)),
-            fileStar(
-              ref,
-              widget.pack.id,
-              rel,
-              starred: favorites.contains(rel),
-            ),
+            _trackStar(track, rel, favorites),
             RevealButton(path),
           ],
         ),
@@ -3415,7 +3458,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   );
 
   Widget _cards(
-    List<String> audio,
+    List<AudioTrack> audio,
     Future<Duration?> Function(String) readLength,
     Set<String> favorites,
   ) => GridView.builder(
@@ -3430,13 +3473,21 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     ),
     itemCount: audio.length,
     itemBuilder: (context, i) {
-      final rel = audio[i];
+      final track = audio[i];
+      final rel = _fileOf(track);
       final playing = _playing == rel;
       return KeyedSubtree(
         key: _keyFor(rel),
         child: _AudioCard(
-          key: ValueKey(rel),
+          key: ValueKey(track.key),
           rel: rel,
+          folder: track.folder,
+          formats: _FormatChips(
+            files: track.files,
+            shown: rel,
+            onPick: (f) => _switchFormat(track, f),
+            vertical: true,
+          ),
           packPath: widget.pack.path,
           length: readLength(rel),
           selected: _selected == rel,
@@ -3445,16 +3496,105 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
           playingLength: playing ? _lengthOf(rel) : null,
           onToggle: () => _toggle(rel),
           onSeek: _seek,
-          star: fileStar(
-            ref,
-            widget.pack.id,
-            rel,
-            starred: favorites.contains(rel),
-          ),
+          star: _trackStar(track, rel, favorites),
         ),
       );
     },
   );
+
+  /// Starred when any of its formats is; a click stars the shown file, or
+  /// unstars every starred format.
+  Widget _trackStar(AudioTrack track, String rel, Set<String> favorites) {
+    final starred = [
+      for (final f in track.files)
+        if (favorites.contains(f)) f,
+    ];
+    return FavoriteStar(
+      key: ValueKey('star:$rel'),
+      starred: starred.isNotEmpty,
+      onPressed: () {
+        final favs = ref.read(favoritesProvider.notifier);
+        for (final f in starred.isEmpty ? [rel] : starred) {
+          favs.toggleFile(widget.pack.id, f);
+        }
+      },
+    );
+  }
+}
+
+/// A track's formats as small chips (`OGG · WAV · MP3`), the shown one
+/// highlighted; a click on another switches to that file.
+class _FormatChips extends StatelessWidget {
+  const _FormatChips({
+    required this.files,
+    required this.shown,
+    required this.onPick,
+    this.vertical = false,
+  });
+
+  final List<String> files;
+  final String shown;
+  final ValueChanged<String> onPick;
+
+  /// Stacked, one width (on a card's left edge, clear of the play button).
+  final bool vertical;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.labelSmall;
+    final chips = Flex(
+      direction: vertical ? Axis.vertical : Axis.horizontal,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: vertical
+          ? CrossAxisAlignment.stretch
+          : CrossAxisAlignment.center,
+      children: [
+        for (final f in files)
+          Padding(
+            padding: vertical
+                ? const EdgeInsets.only(bottom: 4)
+                : const EdgeInsets.only(right: 4),
+            child: Tooltip(
+              message: f == shown
+                  ? p.basename(f)
+                  : 'Switch to ${p.basename(f)}',
+              child: Material(
+                key: ValueKey('format:$f'),
+                color: f == shown
+                    ? scheme.primaryContainer
+                    : scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(4),
+                child: InkWell(
+                  mouseCursor: f == shown ? null : clickCursor,
+                  borderRadius: BorderRadius.circular(4),
+                  onTap: f == shown || files.length == 1
+                      ? null
+                      : () => onPick(f),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
+                    child: Text(
+                      formatOf(f).toUpperCase(),
+                      textAlign: TextAlign.center,
+                      style: style?.copyWith(
+                        color: f == shown
+                            ? scheme.onPrimaryContainer
+                            : scheme.onSurfaceVariant,
+                        fontWeight: f == shown ? FontWeight.bold : null,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+    return vertical ? IntrinsicWidth(child: chips) : chips;
+  }
 }
 
 /// Rows or Cards in the Audio tab.
@@ -3492,6 +3632,8 @@ class _AudioCard extends StatelessWidget {
   const _AudioCard({
     super.key,
     required this.rel,
+    required this.folder,
+    required this.formats,
     required this.packPath,
     required this.length,
     required this.selected,
@@ -3504,6 +3646,12 @@ class _AudioCard extends StatelessWidget {
   });
 
   final String rel;
+
+  /// The track's folder, format folders left out.
+  final String folder;
+
+  /// The format chips, stacked on the left edge.
+  final Widget formats;
   final String packPath;
 
   /// The favorites star, beside the reveal button.
@@ -3527,7 +3675,6 @@ class _AudioCard extends StatelessWidget {
         ? (position!.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
         : null;
     final long = playing && total != null && total >= seekBarMinLength;
-    final folder = p.dirname(rel);
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
@@ -3588,6 +3735,7 @@ class _AudioCard extends StatelessWidget {
                       ],
                     ),
                   ),
+                  Positioned(top: 8, left: 8, child: formats),
                   Positioned(
                     top: 0,
                     right: 0,
