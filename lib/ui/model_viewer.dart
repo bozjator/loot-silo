@@ -573,6 +573,23 @@ class _ModelViewerState extends ConsumerState<ModelViewer>
           const SizedBox(height: 2),
           SelectableText(value, key: ValueKey('info:$name')),
         ],
+        if (mesh != null) ...[
+          const SizedBox(height: 12),
+          Text('Materials', style: label),
+          for (final m in mesh.usedMaterials)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: _MaterialSwatch(
+                m,
+                // Its own file: the texture image, else the OBJ's MTL.
+                file: switch (m.texture) {
+                  final t? when !mesh.images.containsKey(t) => t,
+                  _ => m.file,
+                },
+                onReveal: (path) => ref.read(revealProvider)(path),
+              ),
+            ),
+        ],
         const SizedBox(height: 16),
         Wrap(
           spacing: 8,
@@ -594,6 +611,93 @@ class _ModelViewerState extends ConsumerState<ModelViewer>
           ],
         ),
       ],
+    );
+  }
+}
+
+/// One material: its colour as a swatch, its name and hex value, and
+/// "texture" when an image is painted over the colour. While hovered, a
+/// material with a [file] of its own (texture or MTL) shows an icon that
+/// reveals it.
+class _MaterialSwatch extends StatefulWidget {
+  const _MaterialSwatch(
+    this.material, {
+    required this.file,
+    required this.onReveal,
+  });
+
+  final ModelMaterial material;
+  final String? file;
+  final ValueChanged<String> onReveal;
+
+  @override
+  State<_MaterialSwatch> createState() => _MaterialSwatchState();
+}
+
+class _MaterialSwatchState extends State<_MaterialSwatch> {
+  var _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final material = widget.material;
+    final c = material.color;
+    final hex =
+        '#${(c & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
+    final alpha = (c >>> 24) * 100 ~/ 255;
+    final details = [
+      hex,
+      if (alpha < 100) '$alpha% opaque',
+      if (material.texture != null) 'texture',
+    ].join(' · ');
+    final file = widget.file;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Row(
+        key: ValueKey('material:${material.name ?? hex}'),
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: Color(c),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SelectableText.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: material.name ?? 'Unnamed'),
+                  TextSpan(
+                    text: '  $details',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              maxLines: 1,
+            ),
+          ),
+          // Its room is kept, so rows don't shift as the pointer passes.
+          if (file != null)
+            Visibility.maintain(
+              visible: _hover,
+              child: IconButton(
+                key: ValueKey('reveal-material:${material.name ?? hex}'),
+                tooltip: 'Show ${p.basename(file)} in file manager',
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.drive_file_move_outline),
+                onPressed: () => widget.onReveal(file),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

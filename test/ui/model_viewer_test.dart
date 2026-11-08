@@ -232,6 +232,20 @@ void main() {
     expect(info('Size'), '2 × 2 × 2');
     expect(info('Texture'), 'None');
     expect(info('Folder'), 'Models');
+    // A swatch per material the model uses, with its name and colour.
+    String swatch(String name) => tester
+        .widget<SelectableText>(
+          find.descendant(
+            of: find.byKey(ValueKey('material:$name')),
+            matching: find.byType(SelectableText),
+          ),
+        )
+        .textSpan!
+        .toPlainText();
+    expect(swatch('side'), 'side  #E68C59');
+    expect(swatch('top'), 'top  #59B34D');
+    // Stored inside the GLB: nothing of their own to reveal.
+    expect(find.byKey(const ValueKey('reveal-material:side')), findsNothing);
     await tester.tap(
       find.byKey(const ValueKey('format:Models/OBJ format/crate.obj')),
     );
@@ -239,6 +253,27 @@ void main() {
     await tester.pump();
     expect(find.text('Models/OBJ format/crate.obj'), findsOneWidget);
     expect(info('Vertices'), '8');
+    // An OBJ's materials come from its MTL: hover shows its reveal icon.
+    final reveal = find.byKey(const ValueKey('reveal-material:side'));
+    expect(reveal, findsOneWidget);
+    expect(
+      tester
+          .widget<Visibility>(
+            find.ancestor(of: reveal, matching: find.byType(Visibility)),
+          )
+          .visible,
+      isFalse,
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(
+      location: tester.getCenter(find.byKey(const ValueKey('material:side'))),
+    );
+    addTearDown(mouse.removePointer);
+    await tester.pump();
+    await tester.tap(reveal);
+    await tester.pump();
+    expect(reveals.single, endsWith(p.join('OBJ format', 'crate.mtl')));
+    reveals.clear();
     await tester.tap(
       find.byKey(const ValueKey('format:Models/FBX format/crate.fbx')),
     );

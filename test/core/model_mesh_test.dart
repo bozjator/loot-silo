@@ -32,6 +32,8 @@ void main() {
       final m = readModel(writeCubeGlb(tmp.path, 'cube').path);
       expectCube(m);
       expect(m.materials.map((x) => x.color), [0xFFE68C59, 0xFF59B34D]);
+      expect(m.materials.map((x) => x.name), ['side', 'top']);
+      expect(m.materials.first.file, isNull);
       // Ten side triangles, then the two of the top face.
       expect(m.triangleMaterials.where((t) => t == 1).length, 2);
       expect(m.textures, isEmpty);
@@ -178,6 +180,8 @@ void main() {
     test('quads, negative indices, usemtl + mtllib colours', () {
       final m = readModel(writeCubeObj(tmp.path, 'cube').path);
       expectCube(m);
+      expect(m.usedMaterials.map((x) => x.name), ['side', 'top']);
+      expect(m.materials.first.file, p.join(tmp.path, 'cube.mtl'));
       expect(m.materials.map((x) => x.color), [0xFFE68C59, 0xFF59B34D]);
       expect(m.triangleMaterials.where((t) => t == 1).length, 2);
     });
@@ -216,7 +220,9 @@ f 1/1/1 2/2/1 3/1/1 4/2/1 5/1/1 6/2/1
           'mtllib nope.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\n'
           'usemtl x\nf 1 2 3\n',
         );
-      expect(readObj(f.path).materials.single.color, 0xFFC8C8C8);
+      final plain = readObj(f.path).materials.single;
+      expect(plain.color, 0xFFC8C8C8);
+      expect(plain.name, 'x');
       f.writeAsStringSync('v 0 0 0\nf 1 2 9\n');
       expect(() => readObj(f.path), throwsA(isA<ModelReadError>()));
       f.writeAsStringSync('# nothing\n');

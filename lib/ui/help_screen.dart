@@ -313,8 +313,11 @@ class HelpScreen extends StatelessWidget {
                   'floor grid; these stay as you leave them until the app '
                   'closes. The panel on the right shows the folder, the '
                   'formats (click one to draw it), the triangle and vertex '
-                  'counts, the size in model units, the texture and the '
-                  'file size, with Show in file manager and Copy path. Esc '
+                  'counts, the size in model units, the texture, the file '
+                  'size and each material the model uses (its colour as a '
+                  'swatch, its name and hex value; hover one to show its '
+                  'texture or .mtl file in the file manager), with Show in file '
+                  'manager and Copy path. Esc '
                   'or the mouse back button close the viewer.',
                 ),
                 _P(

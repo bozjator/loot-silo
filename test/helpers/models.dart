@@ -72,9 +72,11 @@ List<int> get cubeTriangles => [
     ],
     'materials': [
       {
+        'name': 'side',
         'pbrMetallicRoughness': {'baseColorFactor': sideColor},
       },
       {
+        'name': 'top',
         'pbrMetallicRoughness': {'baseColorFactor': topColor},
       },
     ],

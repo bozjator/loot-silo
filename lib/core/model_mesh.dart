@@ -31,6 +31,8 @@ const maxPreviewTriangles = 200000;
 class ModelMaterial {
   const ModelMaterial({
     required this.color,
+    this.name,
+    this.file,
     this.texture,
     this.nearest = true,
     this.doubleSided = false,
@@ -50,6 +52,13 @@ class ModelMaterial {
   /// Both sides are drawn (glTF `doubleSided`); otherwise back faces are
   /// culled.
   final bool doubleSided;
+
+  /// As the file names it (`wood`, `leavesGreen`); null when unnamed.
+  final String? name;
+
+  /// The file that defines it when that isn't the model file (an OBJ's
+  /// `.mtl`), absolute; null for materials stored in the model.
+  final String? file;
 
   static const plain = ModelMaterial(color: 0xFFC8C8C8);
 }
@@ -97,6 +106,15 @@ class ModelMesh {
 
   int get triangleCount => indices.length ~/ 3;
   int get vertexCount => positions.length ~/ 3;
+
+  /// The materials at least one triangle uses, in [materials] order.
+  List<ModelMaterial> get usedMaterials {
+    final used = {...triangleMaterials};
+    return [
+      for (var i = 0; i < materials.length; i++)
+        if (used.contains(i)) materials[i],
+    ];
+  }
 
   /// The textures the triangles use (paths or [images] keys).
   Set<String> get textures => {
@@ -510,6 +528,7 @@ class _Gltf {
       _builder.materials.add(
         ModelMaterial(
           color: color,
+          name: m['name'] as String?,
           texture: texture,
           nearest: nearest,
           doubleSided: m['doubleSided'] == true,
@@ -696,7 +715,11 @@ ModelMesh readObj(String path) {
       case 'usemtl':
         final name = line.substring(6).trim();
         current = matIndex.putIfAbsent(name, () {
-          b.materials.add(mtl[name] ?? ModelMaterial.plain);
+          // A name the MTL doesn't define (or no MTL): plain grey.
+          b.materials.add(
+            mtl[name] ??
+                ModelMaterial(color: ModelMaterial.plain.color, name: name),
+          );
           return b.materials.length - 1;
         });
     }
@@ -717,6 +740,8 @@ Map<String, ModelMaterial> _readMtl(String path) {
     if (name == null) return;
     out[name] = ModelMaterial(
       color: _argb(kd[0], kd[1], kd[2], alpha),
+      name: name,
+      file: path,
       texture: map,
     );
   }
