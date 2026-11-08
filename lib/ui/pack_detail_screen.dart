@@ -22,6 +22,7 @@ import '../core/type_classifier.dart' show AssetType;
 import '../state/dashboard.dart'
     show DashboardQueryNotifier, dashboardQueryProvider, knownTags, sortedTags;
 import '../state/favorites.dart';
+import '../state/folder_folds.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
 import 'format.dart';
@@ -1605,8 +1606,14 @@ class _ImagesTab extends ConsumerStatefulWidget {
 }
 
 class _ImagesTabState extends ConsumerState<_ImagesTab> {
-  /// Folders folded away in the "By folder" view, for this visit.
-  final _collapsed = <String>{};
+  /// Folders folded away in the "By folder" view; remembered per pack.
+  late final _collapsed = ref
+      .read(folderFoldsProvider)
+      .of(widget.pack.path, FoldTab.images);
+
+  void _saveFolds() => ref
+      .read(folderFoldsProvider)
+      .set(widget.pack.path, FoldTab.images, _collapsed);
 
   /// Flat view selection (Ctrl/Shift-click or the hover checkbox), for
   /// "Combine N images into animation".
@@ -1793,6 +1800,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
                 collapsed: _collapsed,
                 onPressed: () => setState(() {
                   toggleAllFolders(images, _collapsed);
+                  _saveFolds();
                   // A card folded out of sight can't stay focused.
                   if (_focused case final rel? when !_shown().contains(rel)) {
                     _focused = null;
@@ -1891,6 +1899,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
       collapsed: _collapsed,
       onToggleFolder: (f) => setState(() {
         if (!_collapsed.remove(f)) _collapsed.add(f);
+        _saveFolds();
         // A card folded out of sight can't stay focused.
         if (_focused case final rel? when !_shown().contains(rel)) {
           _focused = null;

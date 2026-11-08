@@ -251,7 +251,8 @@ class HelpScreen extends StatelessWidget {
                   'in on-screen order, across folders. Folding a folder or '
                   'switching views keeps the selection. In the By folder '
                   'view, the button left of the view switch collapses every '
-                  'folder shown (or expands them all when all are folded).',
+                  'folder shown (or expands them all when all are folded). Each '
+                  'pack remembers which folders you folded, per tab.',
                 ),
                 _P(
                   'The image viewer opens each image at 1:1 (actual pixels, '

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:loot_silo/core/library_index.dart';
 import 'package:loot_silo/state/itch.dart';
 import 'package:loot_silo/state/dashboard.dart';
+import 'package:loot_silo/state/folder_folds.dart';
 import 'package:loot_silo/state/providers.dart';
 import 'package:loot_silo/state/settings.dart';
 import 'package:loot_silo/ui/app.dart';
@@ -3545,6 +3546,65 @@ void main() {
         await tester.tap(find.text('Flat').first);
         await tester.pump(const Duration(milliseconds: 300));
         expect(fold, findsNothing);
+      });
+    }
+
+    for (final (tab, foldTab, files, a, b) in [
+      (
+        'Images',
+        FoldTab.images,
+        {'a/k1.png': solid(8, 8, 10), 'b/z1.png': solid(8, 8, 30)},
+        'image:a/k1.png',
+        'image:b/z1.png',
+      ),
+      (
+        'Animations',
+        FoldTab.animations,
+        {
+          'a/run_strip.png': solid(64, 16, 10),
+          'b/jump_strip.png': solid(64, 16, 30),
+        },
+        'a/run_strip.png',
+        'b/jump_strip.png',
+      ),
+    ]) {
+      testWidgets('$tab: collapsed folders are remembered per pack', (
+        tester,
+      ) async {
+        final pack = p.join(tmp.path, 'library', 'HeroMaker', 'Knight Pack');
+        final file = File(p.join(tmp.path, 'ui_state.json'));
+        // Folded last time: B.
+        FolderFolds(file).set(pack, foldTab, {'b'});
+        final folds = FolderFolds(file);
+        await openKnight(
+          tester,
+          files: const [],
+          images: files,
+          size: const Size(1600, 1600),
+          overrides: [folderFoldsProvider.overrideWithValue(folds)],
+        );
+        await tester.tap(find.textContaining('$tab ('));
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.tap(find.text('By folder').first);
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.byKey(ValueKey(a)), findsOneWidget);
+        expect(find.byKey(ValueKey(b)), findsNothing);
+
+        // A click saves at once.
+        await tester.tap(find.text('A'));
+        await tester.pump();
+        expect(FolderFolds(file).of(pack, foldTab), {'a', 'b'});
+        await tester.tap(find.text('B'));
+        await tester.pump();
+        expect(FolderFolds(file).of(pack, foldTab), {'a'});
+        // Collapse all remembers every folder (Images has a root one too).
+        await tester.tap(fold);
+        await tester.pump();
+        expect(FolderFolds(file).of(pack, foldTab), containsAll(['a', 'b']));
+        // Expand all leaves nothing to remember.
+        await tester.tap(fold);
+        await tester.pump();
+        expect(FolderFolds(file).of(pack, foldTab), isEmpty);
       });
     }
 

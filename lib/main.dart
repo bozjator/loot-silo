@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'core/library_index.dart';
+import 'state/folder_folds.dart';
 import 'state/providers.dart';
 import 'state/settings.dart';
 import 'ui/app.dart';
@@ -26,6 +27,9 @@ Future<void> main() async {
       overrides: [
         settingsStoreProvider.overrideWithValue(
           SettingsStore(File(p.join(support.path, 'settings.json'))),
+        ),
+        folderFoldsProvider.overrideWithValue(
+          FolderFolds(File(p.join(support.path, 'ui_state.json'))),
         ),
         libraryIndexProvider.overrideWithValue(index),
         extractRootProvider.overrideWithValue(p.join(cache.path, 'extract')),

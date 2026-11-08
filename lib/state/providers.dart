@@ -9,12 +9,17 @@ import '../core/library_index.dart';
 import '../core/library_service.dart';
 import '../core/pack_editor.dart';
 import '../install/archive_extractor.dart';
+import 'folder_folds.dart';
 import 'settings.dart';
 
 /// Overridden in `main` (and tests) once the app support folder is known.
 final settingsStoreProvider = Provider<SettingsStore>(
   (ref) => throw UnimplementedError('settingsStoreProvider not overridden'),
 );
+
+/// Collapsed "By folder" folders per pack. In memory unless overridden
+/// (`main` points it at `ui_state.json`).
+final folderFoldsProvider = Provider<FolderFolds>((ref) => FolderFolds());
 
 /// Overridden in `main` with the on-disk index, in tests with memory.
 final libraryIndexProvider = Provider<LibraryIndex>(
@@ -175,6 +180,9 @@ class LibraryNotifier extends AsyncNotifier<LibraryState> {
     }
     final service = LibraryService(ref.read(libraryIndexProvider));
     final result = await service.load(root, force: force);
+    ref.read(folderFoldsProvider).prune(root, [
+      for (final p in result.packs) p.path,
+    ]);
     return LibraryState(root: root, packs: result.packs, result: result);
   }
 

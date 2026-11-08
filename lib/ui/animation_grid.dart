@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/animation_detector.dart';
+import '../state/folder_folds.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
 import 'folder_groups.dart';
@@ -63,8 +64,14 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
   final _keys = FocusNode(debugLabel: 'animations');
   int? _focused;
 
-  /// Folders folded away in the "By folder" view, for this visit.
-  final _collapsed = <String>{};
+  /// Folders folded away in the "By folder" view; remembered per pack.
+  late final _collapsed = ref
+      .read(folderFoldsProvider)
+      .of(widget.packPath, FoldTab.animations);
+
+  void _saveFolds() => ref
+      .read(folderFoldsProvider)
+      .set(widget.packPath, FoldTab.animations, _collapsed);
 
   @override
   void dispose() {
@@ -130,6 +137,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                     collapsed: _collapsed,
                     onPressed: () => setState(() {
                       toggleAllFolders(paths, _collapsed);
+                      _saveFolds();
                       // A card folded out of sight can't stay focused.
                       final i = _focused;
                       if (i != null &&
@@ -174,6 +182,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                     collapsed: _collapsed,
                     onToggleFolder: (f) => setState(() {
                       if (!_collapsed.remove(f)) _collapsed.add(f);
+                      _saveFolds();
                       // A card folded out of sight can't stay focused.
                       final i = _focused;
                       if (i != null &&
