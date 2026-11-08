@@ -1,4 +1,14 @@
+import 'dart:io';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:loot_silo/core/model_cache.dart';
+import 'package:loot_silo/core/model_formats.dart';
+import 'package:loot_silo/state/providers.dart';
 import 'package:loot_silo/ui/cursors.dart';
+import 'package:loot_silo/ui/model_viewer.dart';
+
+import '../helpers/models.dart';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -98,5 +108,58 @@ void main() {
       SystemMouseCursors.click,
       reason: 'PopupMenuItem',
     );
+  });
+
+  testWidgets('model viewer: grab over the stage, hand on its controls', (
+    tester,
+  ) async {
+    final tmp = Directory.systemTemp.createTempSync('cursor-model');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    writeCubeGlb(tmp.path, 'cube');
+    writeCubeObj(tmp.path, 'cube');
+    final items = groupModelFormats(['cube.glb', 'cube.obj']);
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          modelCacheProvider.overrideWithValue(
+            ModelCache(read: (path) async => readModelForPreview(path)),
+          ),
+        ],
+        child: MaterialApp(
+          theme: withClickCursors(ThemeData()),
+          home: ModelViewer(
+            packPath: tmp.path,
+            items: items,
+            files: const ['cube.glb'],
+            initialIndex: 0,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    Future<MouseCursor?> over(Finder f) async {
+      await mouse.moveTo(tester.getCenter(f));
+      await tester.pump();
+      return RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1);
+    }
+
+    expect(
+      await over(find.byKey(const ValueKey('model-viewer-stage'))),
+      SystemMouseCursors.grab,
+    );
+    expect(
+      await over(find.byKey(const ValueKey('toggle-wireframe'))),
+      SystemMouseCursors.click,
+    );
+    expect(
+      await over(find.byKey(const ValueKey('format:cube.obj'))),
+      SystemMouseCursors.click,
+    );
+    expect(await over(find.text('Copy path')), SystemMouseCursors.click);
   });
 }

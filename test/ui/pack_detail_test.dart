@@ -13,6 +13,7 @@ import 'package:loot_silo/ui/app.dart';
 import 'package:loot_silo/ui/format.dart';
 import 'package:loot_silo/ui/help_screen.dart';
 import 'package:loot_silo/ui/image_viewer.dart';
+import 'package:loot_silo/ui/model_viewer.dart';
 import 'package:loot_silo/ui/pack_detail_screen.dart';
 import 'package:loot_silo/ui/reveal.dart';
 import 'package:loot_silo/ui/settings_screen.dart';
@@ -4034,6 +4035,46 @@ void main() {
       await tester.pump();
       expect(tester.widget<ItemCard>(card).path, 'Models/OBJ format/tree.obj');
       expect(reveals.single, endsWith('Models/FBX format/tree.fbx'));
+    });
+
+    testWidgets('M61: double-click opens the viewer; back button, Esc close', (
+      tester,
+    ) async {
+      await open(tester);
+      final card = find.byKey(const ValueKey('model:models/tree'));
+      await tester.tap(card);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(card);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(ModelViewer), findsOneWidget);
+      // In on-screen order: tree, then broken.
+      expect(find.text('1 / 2'), findsOneWidget);
+      final back = await tester.startGesture(
+        const Offset(5, 895),
+        kind: PointerDeviceKind.mouse,
+        buttons: kBackMouseButton,
+      );
+      await back.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(ModelViewer), findsNothing);
+      expect(find.byType(PackDetailScreen), findsOneWidget);
+
+      // The card icon opens it too; Esc closes only the viewer.
+      await back.moveTo(tester.getCenter(card));
+      await tester.pump();
+      await tester.tap(
+        find.descendant(of: card, matching: find.byTooltip('Open in viewer')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(ModelViewer), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(ModelViewer), findsNothing);
+      expect(find.byType(PackDetailScreen), findsOneWidget);
     });
 
     testWidgets('search, By folder without format folders, 3D packs', (

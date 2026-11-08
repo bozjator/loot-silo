@@ -301,6 +301,23 @@ class HelpScreen extends StatelessWidget {
                   'slider and Ctrl + wheel.',
                 ),
                 _P(
+                  'Double-click a card, or use its Open in viewer icon, to '
+                  'look at the model up close. Drag to orbit around it, use '
+                  'the wheel (or pinch) to zoom, right- or middle-drag to '
+                  'move it, and double-click to reset the camera. Keys: '
+                  'Shift+←/→ turn it, ↑/↓ look from higher or lower, + and '
+                  '− zoom, 0 resets; ←/→ go to the previous or next model of '
+                  'the tab, in on-screen order. The toolbar switches '
+                  'between the texture and flat colours, and turns on a '
+                  'wireframe, a turntable that keeps it turning, and a '
+                  'floor grid; these stay as you leave them until the app '
+                  'closes. The panel on the right shows the folder, the '
+                  'formats (click one to draw it), the triangle and vertex '
+                  'counts, the size in model units, the texture and the '
+                  'file size, with Show in file manager and Copy path. Esc '
+                  'or the mouse back button close the viewer.',
+                ),
+                _P(
                   'A model saved in several formats (tree.glb, tree.obj, '
                   'tree.fbx, side by side or in "GLTF format" / "OBJ '
                   'format" folders) is one card with a chip per format; the '

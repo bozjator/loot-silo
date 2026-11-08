@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +18,7 @@ import '../state/settings.dart';
 import 'folder_groups.dart';
 import 'format.dart';
 import 'model_stage.dart';
+import 'model_viewer.dart';
 import 'reveal.dart';
 import 'shortcuts.dart';
 import 'widgets/format_chips.dart';
@@ -146,6 +148,43 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
     } else {
       ref.read(revealProvider)(p.join(widget.pack.path, rel));
     }
+  }
+
+  /// The last card click, to tell a double-click.
+  (String, DateTime)? _lastTap;
+
+  /// A click focuses the card (or leaves it); a second click on the same
+  /// card soon after opens the viewer. Done here rather than with a
+  /// double-tap recognizer, which would hold every single click (and the
+  /// format chips) back until the double-click time had passed.
+  void _tapped(ModelItem m) {
+    final now = DateTime.now();
+    final last = _lastTap;
+    if (last != null &&
+        last.$1 == m.key &&
+        now.difference(last.$2) <= kDoubleTapTimeout) {
+      _lastTap = null;
+      // Focused, without taking the keyboard back from the viewer.
+      setState(() => _focused = m.key);
+      _openViewer(m);
+      return;
+    }
+    _lastTap = (m.key, now);
+    _focus(_focused == m.key ? null : m.key);
+  }
+
+  /// The viewer, stepping through the models in on-screen order.
+  void _openViewer(ModelItem m) {
+    final byKey = {for (final x in _models) x.key: x};
+    final shown = [for (final k in _shown()) byKey[k]!];
+    showModelViewer(
+      context,
+      packPath: widget.pack.path,
+      items: shown,
+      files: [for (final x in shown) _fileOf(x)],
+      index: math.max(0, shown.indexOf(m)),
+      sizes: widget.contents.sizes,
+    );
   }
 
   void _dropHiddenFocus() {
@@ -292,8 +331,15 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
           favs.toggleFile(pack.id, f);
         }
       },
-      onTap: () => _focus(_focused == m.key ? null : m.key),
-      actions: [RevealButton(path)],
+      onTap: () => _tapped(m),
+      actions: [
+        CardIconButton(
+          tooltip: 'Open in viewer',
+          icon: Icons.open_in_full,
+          onPressed: () => _openViewer(m),
+        ),
+        RevealButton(path),
+      ],
     );
   }
 }

@@ -14,6 +14,8 @@ import 'package:loot_silo/ui/app.dart';
 import 'package:loot_silo/ui/dashboard.dart';
 import 'package:loot_silo/ui/help_screen.dart';
 import 'package:loot_silo/ui/image_viewer.dart';
+import 'package:loot_silo/ui/model_painter.dart';
+import 'package:loot_silo/ui/model_viewer.dart';
 import 'package:loot_silo/ui/pack_detail_screen.dart';
 import 'package:loot_silo/ui/track_player.dart';
 import 'package:loot_silo/ui/widgets/favorite_star.dart';
@@ -3707,6 +3709,91 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.textContaining('format'), findsNothing);
     await captureScreenshot(tester, 'm60_models_by_folder', settle: false);
+  });
+
+  testWidgets('m61: model viewer — orbit, wireframe, Esc closes', (
+    tester,
+  ) async {
+    const kit =
+        '../assets_library/Kenney/Kenney Game Assets 1 version 42/3D assets/'
+        'Fantasy Town Kit/Models/GLTF format';
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    final models = p.join(pack, 'Models');
+    if (Directory(kit).existsSync()) {
+      // A temp copy of three real models: the library is never written.
+      for (final name in ['cart.glb', 'fountainRoundDetail.glb', 'tree.glb']) {
+        final from = File(p.join(kit, name));
+        if (!from.existsSync()) continue;
+        Directory(models).createSync(recursive: true);
+        from.copySync(p.join(models, name));
+      }
+    }
+    writeCubeGlb(models, 'crate');
+    modelViewOptions
+      ..textured = true
+      ..wireframe = false
+      ..turntable = false
+      ..grid = false;
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Models ('));
+    await tester.tap(find.textContaining('Models ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await pumpUntil(
+      tester,
+      find.byKey(const ValueKey('model-loading')),
+      gone: true,
+    );
+    final first = find.byType(ItemCard).first;
+    await tester.tap(first);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(first);
+    await pumpUntil(tester, find.byKey(const ValueKey('model-viewer-paint')));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.textContaining('1 / '), findsOneWidget);
+    await captureScreenshot(tester, 'm61_viewer', settle: false);
+
+    // Orbit by dragging.
+    ModelPainter painter() =>
+        tester
+                .widget<CustomPaint>(
+                  find.byKey(const ValueKey('model-viewer-paint')),
+                )
+                .painter!
+            as ModelPainter;
+    final stage = find.byKey(const ValueKey('model-viewer-stage'));
+    final drag = await tester.startGesture(
+      tester.getCenter(stage),
+      kind: PointerDeviceKind.mouse,
+    );
+    await drag.moveBy(const Offset(120, 0));
+    await drag.moveBy(const Offset(0, 30));
+    await drag.up();
+    await tester.pump();
+    expect(painter().yaw, closeTo(defaultModelYaw + 1.2, 1e-6));
+    expect(painter().pitch, closeTo(defaultModelPitch + 0.3, 1e-6));
+
+    await tester.tap(find.byKey(const ValueKey('toggle-wireframe')));
+    await tester.tap(find.byKey(const ValueKey('toggle-grid')));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(painter().wireframe, isTrue);
+    await captureScreenshot(tester, 'm61_wireframe', settle: false);
+
+    // Next model, then Esc closes the viewer only.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    expect(find.textContaining('2 / '), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(ModelViewer), findsNothing);
+    expect(find.byType(PackDetailScreen), findsOneWidget);
+    modelViewOptions
+      ..wireframe = false
+      ..grid = false;
   });
 
   testWidgets('m60: a real Kenney kit (temp copy), smallest cards', (

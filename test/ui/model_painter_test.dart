@@ -16,7 +16,7 @@ void main() {
     tmp.deleteSync(recursive: true);
   });
 
-  Widget stage(Brightness brightness) {
+  Widget stage(Brightness brightness, {bool wireframe = false}) {
     final scheme = ColorScheme.fromSeed(
       seedColor: Colors.teal,
       brightness: brightness,
@@ -29,6 +29,9 @@ void main() {
             painter: ModelPainter(
               mesh: cube,
               background: modelStageColor(scheme),
+              wireframe: wireframe,
+              grid: wireframe,
+              lineColor: scheme.onSurface,
             ),
           ),
         ),
@@ -45,6 +48,14 @@ void main() {
       );
     });
   }
+
+  testWidgets('the wireframe cube with the floor grid', (tester) async {
+    await tester.pumpWidget(stage(Brightness.dark, wireframe: true));
+    await expectLater(
+      find.byType(RepaintBoundary).first,
+      matchesGoldenFile('goldens/model_cube_wireframe.png'),
+    );
+  });
 
   test('repaints only when what it draws changes', () {
     final a = ModelPainter(mesh: cube);

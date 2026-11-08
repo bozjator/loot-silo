@@ -156,6 +156,36 @@ abstract final class AppKeys {
   static const viewerNext = KeyBinding('Next image', [
     SingleActivator(LogicalKeyboardKey.arrowRight),
   ]);
+
+  // Model viewer.
+  static const modelPrevious = KeyBinding('Previous model', [
+    SingleActivator(LogicalKeyboardKey.arrowLeft),
+  ]);
+  static const modelNext = KeyBinding('Next model', [
+    SingleActivator(LogicalKeyboardKey.arrowRight),
+  ]);
+  static const turnLeft = KeyBinding('Turn the model left', [
+    SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true),
+  ]);
+  static const turnRight = KeyBinding('Turn the model right', [
+    SingleActivator(LogicalKeyboardKey.arrowRight, shift: true),
+  ]);
+  static const tiltUp = KeyBinding('Look from higher up', [
+    SingleActivator(LogicalKeyboardKey.arrowUp),
+    SingleActivator(LogicalKeyboardKey.arrowUp, shift: true),
+  ]);
+  static const tiltDown = KeyBinding('Look from lower down', [
+    SingleActivator(LogicalKeyboardKey.arrowDown),
+    SingleActivator(LogicalKeyboardKey.arrowDown, shift: true),
+  ]);
+  static const modelZoomIn = KeyBinding('Zoom in', [
+    CharacterActivator('+'),
+    CharacterActivator('='),
+  ]);
+  static const modelZoomOut = KeyBinding('Zoom out', [CharacterActivator('-')]);
+  static const resetCamera = KeyBinding('Reset the camera', [
+    CharacterActivator('0'),
+  ]);
 }
 
 /// The shortcut table as the Help page shows it, by where it works.
@@ -193,6 +223,20 @@ const shortcutSections = <(String, List<KeyBinding>)>[
     ],
   ),
   ('Image viewer', [AppKeys.viewerPrevious, AppKeys.viewerNext]),
+  (
+    'Model viewer',
+    [
+      AppKeys.modelPrevious,
+      AppKeys.modelNext,
+      AppKeys.turnLeft,
+      AppKeys.turnRight,
+      AppKeys.tiltUp,
+      AppKeys.tiltDown,
+      AppKeys.modelZoomIn,
+      AppKeys.modelZoomOut,
+      AppKeys.resetCamera,
+    ],
+  ),
 ];
 
 /// Mouse gestures the Help page lists next to the shortcuts.
@@ -228,6 +272,14 @@ const mouseHelp = [
   MouseHelp('Ctrl + wheel over All previews', 'Fewer or more columns'),
   MouseHelp('Wheel over the Edit preview', 'Zoom (−, +, reset on hover)'),
   MouseHelp('Ctrl / Shift-click images', 'Select frames to combine'),
+  MouseHelp('Double-click a model card', 'Open it in the model viewer'),
+  MouseHelp('Drag in the model viewer', 'Orbit around the model'),
+  MouseHelp(
+    'Right- or middle-drag in the model viewer',
+    'Move the model (pan)',
+  ),
+  MouseHelp('Wheel or pinch in the model viewer', 'Zoom'),
+  MouseHelp('Double-click in the model viewer', 'Reset the camera'),
 ];
 
 /// The mouse back button, offered to the focused widget before the app
