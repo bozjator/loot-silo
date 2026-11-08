@@ -3711,6 +3711,105 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm60_models_by_folder', settle: false);
   });
 
+  testWidgets('m62: Materials tab — two materials and a plain image', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    // A temp copy of a real ambientCG material when the library is here.
+    const paving = '../assets_library/Unknown Author/PavingStones138_1K-JPG';
+    final real = Directory(paving).existsSync();
+    if (real) {
+      copyTree(paving, p.join(pack, 'Paving'));
+      File(p.join(pack, 'Paving', 'asset_pack.json')).deleteSync();
+    }
+    // A generated one without a preview: its Color map shows tiled.
+    final color = img.Image(width: 128, height: 128);
+    final normal = img.Image(width: 128, height: 128);
+    for (var y = 0; y < 128; y++) {
+      for (var x = 0; x < 128; x++) {
+        final row = y ~/ 32;
+        final mortar = y % 32 < 3 || (x + (row.isOdd ? 32 : 0)) % 64 < 3;
+        color.setPixelRgb(
+          x,
+          y,
+          mortar ? 200 : 150 + (x * 7 + y * 3) % 30,
+          mortar ? 195 : 60,
+          mortar ? 185 : 45,
+        );
+        normal.setPixelRgb(x, y, mortar ? 100 : 128, mortar ? 160 : 128, 255);
+      }
+    }
+    for (final (name, image) in [
+      ('Bricks_Color.png', color),
+      ('Bricks_Normal.png', normal),
+      ('Bricks_Roughness.png', img.grayscale(color.clone())),
+    ]) {
+      File(p.join(pack, 'Bricks', name))
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(img.encodePng(image));
+    }
+    File(p.join(pack, 'Bricks', 'Bricks.tres')).writeAsStringSync('[gd]');
+    revealed.clear();
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Materials ('));
+    expect(find.text('Materials (${real ? 2 : 1})'), findsOneWidget);
+    // Only knight.png is left as an image.
+    expect(find.text('Images (1)'), findsOneWidget);
+    await tester.tap(find.textContaining('Materials ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    final bricks = find.byKey(const ValueKey('material:Bricks/Bricks'));
+    expect(bricks, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('material-picture:Bricks/Bricks_Color.png')),
+      findsNWidgets(4),
+    );
+    if (real) {
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('material:Paving/PavingStones138')),
+          matching: find.text('1K · 6 maps'),
+        ),
+        findsOneWidget,
+      );
+    }
+    await tester.pump(const Duration(milliseconds: 400));
+    await captureScreenshot(tester, 'm62_materials_tab', settle: false);
+
+    // A map chip shows that map; a tool chip reveals its file.
+    await hoverOver(tester, bricks);
+    await tester.tap(
+      find.byKey(const ValueKey('map:Bricks/Bricks_Normal.png')),
+    );
+    await tester.pump();
+    await settleImages(tester);
+    expect(
+      find.byKey(const ValueKey('material-picture:Bricks/Bricks_Normal.png')),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await captureScreenshot(tester, 'm62_map_chip', settle: false);
+    await tester.tap(find.byKey(const ValueKey('format:Bricks/Bricks.tres')));
+    await tester.pump();
+    expect(revealed.single, endsWith('Bricks.tres'));
+
+    // Search by map role.
+    await tester.enterText(find.byType(TextField).first, 'displacement');
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Materials (${real ? 1 : 0})'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, '');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.text('By folder'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+    await captureScreenshot(tester, 'm62_by_folder', settle: false);
+  });
+
   testWidgets('m61: model viewer — orbit, wireframe, Esc closes', (
     tester,
   ) async {

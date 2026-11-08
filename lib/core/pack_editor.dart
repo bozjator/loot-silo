@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 
 import 'animation_detector.dart';
 import 'file_search.dart';
+import 'material_sets.dart';
 import 'model_formats.dart';
 import 'natural_order.dart';
 import 'preview_picker.dart';
@@ -23,6 +24,7 @@ class PackContents {
     required this.images,
     required this.audio,
     this.models = const [],
+    this.materials = const [],
     required this.other,
     required this.detected,
     required this.sizes,
@@ -38,6 +40,10 @@ class PackContents {
   /// format of it, [groupModelFormats] makes the cards); models in
   /// unreadable formats only are listed in [other].
   final List<String> models;
+
+  /// PBR materials ([groupMaterials]); their maps, previews and tool files
+  /// are in no other list.
+  final List<MaterialSet> materials;
   final List<String> other;
 
   /// Animations as detected, before sidecar overrides.
@@ -56,6 +62,10 @@ class PackContents {
       images: under(images),
       audio: under(audio),
       models: under(models),
+      materials: [
+        for (final m in materials)
+          if (m.key.startsWith(prefix)) m,
+      ],
       other: under(other),
       detected: [
         for (final a in detected)
@@ -71,6 +81,7 @@ class PackContents {
       images.isEmpty &&
       audio.isEmpty &&
       models.isEmpty &&
+      materials.isEmpty &&
       other.isEmpty &&
       detected.isEmpty;
 
@@ -85,6 +96,10 @@ class PackContents {
       images: keep(images),
       audio: keep(audio),
       models: keep(models),
+      materials: [
+        for (final m in materials)
+          if (materialMatches(m, words, infix: infix)) m,
+      ],
       other: keep(other),
       detected: [
         for (final a in detected)
@@ -105,6 +120,10 @@ class PackContents {
       images: kept(images),
       audio: kept(audio),
       models: kept(models),
+      materials: [
+        for (final m in materials)
+          if (keep.contains(m.key)) m,
+      ],
       other: kept(other),
       detected: [
         for (final a in detected)
@@ -157,7 +176,10 @@ PackContents loadPackContents(String packPath, List<(String, int)> files) {
   final sidecar = PackSidecar.read(packPath);
   final images = <String>[], audio = <String>[], other = <String>[];
   final models = <String>[];
-  for (final (rel, _) in files) {
+  final (materials, rest) = groupMaterials([
+    for (final (rel, _) in files) rel,
+  ], mtlx: readMtlxFiles(packPath, files));
+  for (final rel in rest) {
     final ext = p.extension(rel).toLowerCase().replaceFirst('.', '');
     // Only formats the engine decodes count as images; PSD/Aseprite
     // sources are listed with the other files.
@@ -201,11 +223,54 @@ PackContents loadPackContents(String packPath, List<(String, int)> files) {
     ],
     audio: audio..sort(),
     models: drawable..sort(),
+    materials: [
+      for (final m in materials)
+        m.resolution == null
+            ? m.withResolution(colorMapResolution(packPath, m))
+            : m,
+    ],
     other: other..sort(),
     detected: detected,
     sizes: {for (final (rel, size) in files) rel: size},
     sidecar: sidecar,
   );
+}
+
+/// Whether material [m] matches a search: by its name, or by a map's role
+/// (`roughness`) or file.
+bool materialMatches(MaterialSet m, List<String> words, {bool infix = false}) {
+  if (words.isEmpty) return true;
+  final text = [
+    m.key,
+    materialTitle(m.name),
+    for (final map in m.maps) map.role.label,
+    ...m.files,
+  ].join(' ');
+  return fileMatches(text, words, infix: infix);
+}
+
+/// The text of each `.mtlx` in [files] (under 1 MiB), by path.
+Map<String, String> readMtlxFiles(String packPath, List<(String, int)> files) {
+  final out = <String, String>{};
+  for (final (rel, size) in files) {
+    if (!rel.toLowerCase().endsWith('.mtlx') || size > 1 << 20) continue;
+    try {
+      out[rel] = File(p.join(packPath, rel)).readAsStringSync();
+    } on FileSystemException {
+      // Unreadable: suffixes decide.
+    }
+  }
+  return out;
+}
+
+/// `1K`, `2K`… from the width of [m]'s Color map (PNG / GIF headers only),
+/// or `512 px` below 1K; null when unknown.
+String? colorMapResolution(String packPath, MaterialSet m) {
+  final color = m.color ?? m.maps.first.path;
+  final size = readImageSize(p.join(packPath, color));
+  if (size == null) return null;
+  final w = math.max(size.$1, size.$2);
+  return w >= 1024 ? '${(w / 1024).round()}K' : '$w px';
 }
 
 /// Writes user edits to `asset_pack.json`, creating it when missing and

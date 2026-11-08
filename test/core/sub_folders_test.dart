@@ -85,7 +85,7 @@ void main() {
 
       final index = LibraryIndex(NativeDatabase.memory());
       addTearDown(index.close);
-      expect(index.schemaVersion, 4);
+      expect(index.schemaVersion, 5);
       await index.replaceScan(scan);
       await index.replaceScan(scan);
       final stored = await index.allSubFolders();

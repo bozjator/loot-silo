@@ -1,4 +1,5 @@
 import 'fs_tree.dart';
+import 'material_sets.dart';
 
 enum AssetType {
   character('character'),
@@ -9,6 +10,9 @@ enum AssetType {
   sfx('sfx'),
   music('music'),
   threeD('3d'),
+
+  /// PBR materials: maps grouped by [groupMaterials].
+  material('material'),
   font('font'),
   misc('misc');
 
@@ -148,8 +152,14 @@ List<AssetType> classifyPack(
     return null;
   }
 
+  // Material maps, previews and tool files don't vote; a pack with a
+  // material gets the type beside whatever the rest votes for.
+  final all = files.toList();
+  final (materials, rest) = groupMaterials([for (final (rel, _) in all) rel]);
+  final loose = rest.toSet();
   var total = 0;
-  for (final (rel, f) in files) {
+  for (final (rel, f) in all) {
+    if (!loose.contains(rel)) continue;
     final ext = f.ext;
     if (modelExts.contains(ext)) {
       vote(AssetType.threeD);
@@ -166,7 +176,9 @@ List<AssetType> classifyPack(
     }
     total++;
   }
-  if (total == 0) return const [AssetType.misc];
+  if (total == 0) {
+    return materials.isEmpty ? const [AssetType.misc] : [AssetType.material];
+  }
 
   final audio = (votes[AssetType.sfx] ?? 0) + (votes[AssetType.music] ?? 0);
   if (audio < total / 2) {
@@ -180,6 +192,7 @@ List<AssetType> classifyPack(
   final ranked = votes.entries.where((e) => e.value / sum >= 0.15).toList()
     ..sort((a, b) => b.value.compareTo(a.value));
   final types = [for (final e in ranked) e.key];
+  if (materials.isNotEmpty) types.add(AssetType.material);
   if (types.length > 1) types.remove(AssetType.misc);
   return types.isEmpty ? const [AssetType.misc] : types;
 }

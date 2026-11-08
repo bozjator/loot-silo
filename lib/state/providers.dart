@@ -103,6 +103,9 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   void setModelsView(ItemsView view) => _save(state.copyWith(modelsView: view));
 
+  void setMaterialsView(ItemsView view) =>
+      _save(state.copyWith(materialsView: view));
+
   void setDetailAnimateMode(AnimateMode mode) =>
       _save(state.copyWith(detailAnimateMode: mode));
 
@@ -143,6 +146,12 @@ class SettingsNotifier extends Notifier<AppSettings> {
   void setModelThumbSize(double size) {
     if (size != state.modelThumbSize) {
       _save(state.copyWith(modelThumbSize: size));
+    }
+  }
+
+  void setMaterialThumbSize(double size) {
+    if (size != state.materialThumbSize) {
+      _save(state.copyWith(materialThumbSize: size));
     }
   }
 

@@ -255,13 +255,21 @@ const mouseHelp = [
   MouseHelp('Click the Dashboard tab', 'Back to the dashboard from a pack'),
   MouseHelp('Click a star', 'Add a pack or file to favorites, or remove it'),
   MouseHelp(
-    'Click an animation, image or model card',
+    'Click an animation, image, model or material card',
     'Focus mode: dim (and pause) the others',
   ),
   MouseHelp('Hover a model card', 'Turn the model slowly'),
   MouseHelp(
     'Click a model\'s format chip',
     'Draw that file (GLB, glTF, OBJ) or show it in the file manager',
+  ),
+  MouseHelp(
+    'Click a map chip on a material card',
+    'Show that map in the card (again: the picture)',
+  ),
+  MouseHelp(
+    'Click a material\'s tool chip',
+    'Show that file (MaterialX, Godot, Blender…) in the file manager',
   ),
   MouseHelp('Open image icon on a card', 'Show it in the image viewer'),
   MouseHelp(
@@ -273,6 +281,10 @@ const mouseHelp = [
   MouseHelp('Wheel over the Edit preview', 'Zoom (−, +, reset on hover)'),
   MouseHelp('Ctrl / Shift-click images', 'Select frames to combine'),
   MouseHelp('Double-click a model card', 'Open it in the model viewer'),
+  MouseHelp(
+    'Double-click a material card',
+    'Step through its picture and maps in the image viewer',
+  ),
   MouseHelp('Drag in the model viewer', 'Orbit around the model'),
   MouseHelp(
     'Right- or middle-drag in the model viewer',

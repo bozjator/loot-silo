@@ -5,7 +5,8 @@ import '../../core/audio_formats.dart' show formatOf;
 import '../cursors.dart';
 
 /// A sound's or model's formats as small chips (`OGG · WAV · MP3`), the shown one
-/// highlighted; a click on another switches to that file.
+/// highlighted; a click on another switches to that file. Materials use
+/// them for their maps and tool files ([label]).
 class FormatChips extends StatelessWidget {
   const FormatChips({
     super.key,
@@ -14,6 +15,8 @@ class FormatChips extends StatelessWidget {
     required this.onPick,
     this.vertical = false,
     this.tooltip,
+    this.label,
+    this.pickSingle = false,
   });
 
   final List<String> files;
@@ -25,6 +28,12 @@ class FormatChips extends StatelessWidget {
 
   /// A chip's tooltip; by default its file name, or "Switch to …".
   final String Function(String file)? tooltip;
+
+  /// A chip's text; by default the file's format (`OGG`).
+  final String Function(String file)? label;
+
+  /// A lone chip is clickable too (it reveals a file, say).
+  final bool pickSingle;
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +64,7 @@ class FormatChips extends StatelessWidget {
                 child: InkWell(
                   mouseCursor: f == shown ? null : clickCursor,
                   borderRadius: BorderRadius.circular(4),
-                  onTap: f == shown || files.length == 1
+                  onTap: f == shown || (files.length == 1 && !pickSingle)
                       ? null
                       : () => onPick(f),
                   child: Padding(
@@ -64,7 +73,7 @@ class FormatChips extends StatelessWidget {
                       vertical: 2,
                     ),
                     child: Text(
-                      formatOf(f).toUpperCase(),
+                      label?.call(f) ?? formatOf(f).toUpperCase(),
                       textAlign: TextAlign.center,
                       style: style?.copyWith(
                         color: f == shown

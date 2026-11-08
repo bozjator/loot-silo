@@ -219,8 +219,9 @@ class HelpScreen extends StatelessWidget {
               const _Section('Pack page & tabs', [
                 _P(
                   'A pack page has a header (previews and info) above the '
-                  'Animations, Images, Audio, Models and Other files tabs. '
-                  'Music and sound packs open on Audio, 3D packs on Models. '
+                  'Animations, Images, Audio, Models, Materials and Other '
+                  'files tabs. Music and sound packs open on Audio, packs '
+                  'of the material type on Materials, 3D packs on Models. '
                   'The pin '
                   '(H), itch.io page (when linked) and open folder icons sit '
                   'in the header\'s top-right corner. When the header is '
@@ -265,7 +266,7 @@ class HelpScreen extends StatelessWidget {
                   'fitted instead. Fit and 1:1 in its toolbar switch, the '
                   'wheel zooms, drag pans and a double-click fits. The '
                   'thumbnail size sliders (dashboard, Images, Animations, '
-                  'Models) '
+                  'Models, Materials) '
                   'step one size smaller or larger with the small and big '
                   'icons at their ends.',
                 ),
@@ -337,13 +338,54 @@ class HelpScreen extends StatelessWidget {
                   '(over 200,000 triangles) show "Too large to preview".',
                 ),
               ]),
+              const _Section('Materials', [
+                _P(
+                  'A texture is one image; a material is a whole surface '
+                  'made of several textures, its maps: Color (also called '
+                  'albedo, base colour or diffuse), Normal (GL or DX), '
+                  'Roughness, Metalness, AO (ambient occlusion), Height '
+                  '(displacement), Opacity, Emission, Specular, and ARM / ORM '
+                  '(several packed in one). Sites such as ambientCG call '
+                  'them materials, others "PBR textures" or a "texture set"; '
+                  'the app says Materials and maps.',
+                ),
+                _P(
+                  'Maps are grouped by a shared name plus a known ending '
+                  '(Wood_Color.png, Wood_Normal.png, rock_diff_1k.jpg), '
+                  'ignoring the resolution tag (_1K, _2K-JPG). It takes two '
+                  'maps, one of them Color or Normal, so a lone '
+                  'hero_normal.png stays an image. A .mtlx (MaterialX) file '
+                  'next to the maps names them itself, with their roles. '
+                  'A material\'s maps and the picture the pack ships for it '
+                  '(Wood.png, Wood_preview.png) leave the Images tab; its '
+                  'files for other tools leave Other files. Packs with a '
+                  'material get the material type (a type you set on a pack '
+                  'stays).',
+                ),
+                _P(
+                  'The Materials tab shows one card per material: the '
+                  'shipped picture, else the Color map tiled 2 × 2 so seams '
+                  'and scale show. The footer gives the name, the '
+                  'resolution and the number of maps. Hover a card for its '
+                  'chips: a map chip (Color, Normal, Roughness…) shows that '
+                  'map in the card until the pointer leaves (click it again '
+                  'for the picture); a tool chip (MaterialX, Godot, USD, '
+                  'Blender, Substance, Unity) shows its file in the file '
+                  'manager. Cards work like model cards: click to focus, '
+                  '←/→, the star, Flat or By folder, the size slider and '
+                  'Ctrl + wheel. Double-click a card, or use its Open in '
+                  'viewer icon, to step through the picture and the maps in '
+                  'the image viewer.',
+                ),
+              ]),
               const _Section('Favorites', [
                 _P(
                   'Star packs and single files to find them again. The star '
                   'sits on a dashboard tile (shown on hover, always once '
                   'starred), next to the title in a pack\'s header, on image '
                   'and animation cards, on audio rows and cards, on model '
-                  'cards, and on Other files rows. Click it again to unstar.',
+                  'and material cards, and on Other files rows. Click it '
+                  'again to unstar.',
                 ),
                 _P(
                   'The Favorites chip (★ and a count) in the dashboard '

@@ -31,6 +31,7 @@ import 'format.dart';
 import 'animation_grid.dart';
 import 'folder_groups.dart';
 import 'image_viewer.dart';
+import 'materials_tab.dart';
 import 'models_tab.dart';
 import 'reveal.dart';
 import 'session.dart';
@@ -220,6 +221,7 @@ class _BodyState extends State<_Body> {
     'images': _ImagesTab,
     'audio': _AudioTab,
     'models': ModelsTab,
+    'materials': MaterialsTab,
     'files': _FilesTab,
   };
 
@@ -388,6 +390,13 @@ class _BodyState extends State<_Body> {
       () => ModelsTab(pack: pack, contents: contents),
     );
     add(
+      MaterialsTab,
+      'Materials',
+      contents.materials.length,
+      base.materials.length,
+      () => MaterialsTab(pack: pack, contents: contents),
+    );
+    add(
       _FilesTab,
       'Other files',
       contents.other.length,
@@ -516,12 +525,16 @@ class _BodyState extends State<_Body> {
         ),
       ],
     ];
-    // Music / sfx packs open on their Audio tab, 3D packs on Models; a
+    // Music / sfx packs open on their Audio tab, packs typed `material` on
+    // Materials, 3D packs on Models; a
     // clicked file result on the tab that lists it.
     final audioTab = tabs.indexWhere((t) => t.$1 == _AudioTab);
     final modelsTab = tabs.indexWhere((t) => t.$1 == ModelsTab);
+    final materialsTab = tabs.indexWhere((t) => t.$1 == MaterialsTab);
     var initial = isAudioPack(pack.types) && audioTab >= 0
         ? audioTab
+        : pack.types.contains(AssetType.material.id) && materialsTab >= 0
+        ? materialsTab
         : isModelPack(pack.types) && modelsTab >= 0
         ? modelsTab
         : 0;
@@ -534,6 +547,9 @@ class _BodyState extends State<_Body> {
           const (_ImagesTab) => contents.images.contains(file),
           const (_AudioTab) => contents.audio.contains(file),
           const (ModelsTab) => contents.models.contains(file),
+          const (MaterialsTab) => contents.materials.any(
+            (m) => m.files.contains(file),
+          ),
           const (_FilesTab) => contents.other.contains(file),
           _ => false,
         },

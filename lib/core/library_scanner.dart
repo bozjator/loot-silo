@@ -2,6 +2,7 @@ import 'package:path/path.dart' as p;
 
 import 'animation_detector.dart';
 import 'fs_tree.dart';
+import 'material_sets.dart';
 import 'pack_detector.dart';
 import 'preview_picker.dart';
 import 'sidecar.dart';
@@ -131,15 +132,30 @@ ScanResult scanLibrary(String root) {
     } else {
       types = [for (final t in classifyPack(id, files)) t.id];
     }
-    final pick = pickPreviewRanked(files, sidecar: sc);
+    // Material maps are no pictures of the pack (and no animations): the
+    // material's shipped preview, else its Color map, stands in for them.
+    final (materials, _) = groupMaterials([for (final (rel, _) in files) rel]);
+    final maps = {
+      for (final m in materials) ...[for (final map in m.maps) map.path],
+    };
+    final pictures = maps.isEmpty
+        ? files
+        : [
+            for (final e in files)
+              if (!maps.contains(e.$1)) e,
+          ];
+    final pick = pickPreviewRanked(pictures, sidecar: sc);
     final chosen = choosePreviewAnimation(
       dp.dir.path,
-      [for (final (rel, _) in files) rel],
+      [for (final (rel, _) in pictures) rel],
       preview: pick?.path,
       rank: pick?.rank ?? 6,
       overrides: sc?.animations ?? const {},
     );
-    var preview = chosen.preview;
+    var preview =
+        chosen.preview ??
+        materials.firstOrNull?.preview ??
+        materials.firstOrNull?.color;
     if (preview == null) {
       for (final sub in packs.skip(slot).where((x) => x.parentId == id)) {
         if (sub.preview != null) {

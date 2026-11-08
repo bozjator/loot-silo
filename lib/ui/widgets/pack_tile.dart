@@ -16,6 +16,7 @@ IconData iconForTypes(List<String> types) => switch (types.firstOrNull) {
   'sfx' => Icons.graphic_eq,
   'font' => Icons.font_download_outlined,
   '3d' => Icons.view_in_ar_outlined,
+  'material' => Icons.texture,
   'ui' => Icons.dashboard_outlined,
   'icons' => Icons.category_outlined,
   'vfx' => Icons.auto_awesome_outlined,

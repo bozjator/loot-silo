@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:loot_silo/core/library_index.dart';
 import 'package:loot_silo/core/model_cache.dart';
+import 'package:loot_silo/core/sidecar.dart';
 import 'package:loot_silo/state/itch.dart';
 import 'package:loot_silo/state/dashboard.dart';
 import 'package:loot_silo/state/folder_folds.dart';
@@ -34,6 +35,7 @@ import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -4092,6 +4094,164 @@ void main() {
       // One section: "Models", not "Models / GLTF format".
       expect(find.text('Models'), findsOneWidget);
       expect(find.textContaining('GLTF format'), findsNothing);
+    });
+  });
+
+  group('Materials tab (M62)', () {
+    final reveals = <String>[];
+
+    Future<void> open(WidgetTester tester, {List<String>? types}) async {
+      reveals.clear();
+      await openKnight(
+        tester,
+        files: const [
+          'Stone/Rock_Color.png',
+          'Stone/Rock_Normal.png',
+          'Stone/Rock_Roughness.png',
+          'Stone/Rock.png',
+          'Wood_BaseColor.png',
+          'Wood_Normal.png',
+          'hero.png',
+        ],
+        raw: {
+          'Stone/Rock.tres': [1],
+        },
+        types: types,
+        overrides: [
+          revealProvider.overrideWithValue((path) async => reveals.add(path)),
+        ],
+      );
+      if (types == null) {
+        await tester.tap(find.textContaining('Materials ('));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      await tester.pump();
+    }
+
+    final rock = find.byKey(const ValueKey('material:Stone/Rock'));
+    final wood = find.byKey(const ValueKey('material:Wood'));
+
+    testWidgets('one card per material; maps and previews leave Images', (
+      tester,
+    ) async {
+      await open(tester);
+      expect(find.text('Materials (2)'), findsOneWidget);
+      // hero.png and the fixture's knight.png.
+      expect(find.text('Images (2)'), findsOneWidget);
+      expect(find.textContaining('Other files'), findsNothing);
+      expect(rock, findsOneWidget);
+      expect(wood, findsOneWidget);
+      expect(
+        find.descendant(of: rock, matching: find.text('8 px · 3 maps')),
+        findsOneWidget,
+      );
+      // The shipped picture on Rock; Wood's Color map tiled 2 × 2.
+      expect(
+        find.byKey(const ValueKey('material-picture:Stone/Rock.png')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('material-picture:Wood_BaseColor.png')),
+        findsNWidgets(4),
+      );
+    });
+
+    testWidgets('map chips switch the picture, tool chips reveal', (
+      tester,
+    ) async {
+      await open(tester);
+      final normal = find.byKey(const ValueKey('map:Stone/Rock_Normal.png'));
+      expect(normal, findsNothing);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(rock));
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      expect(normal, findsOneWidget);
+      // Both chip kinds show the hand.
+      for (final chip in [
+        normal,
+        find.byKey(const ValueKey('format:Stone/Rock.tres')),
+      ]) {
+        await mouse.moveTo(tester.getCenter(chip));
+        await tester.pump();
+        expect(
+          RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+          SystemMouseCursors.click,
+        );
+      }
+      await tester.tap(normal);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('material-picture:Stone/Rock_Normal.png')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('format:Stone/Rock.tres')));
+      await tester.pump();
+      expect(reveals.single, endsWith('Stone/Rock.tres'));
+      // Leaving the card brings the picture back.
+      await mouse.moveTo(const Offset(5, 895));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('material-picture:Stone/Rock.png')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('search by name and map role; material packs open here', (
+      tester,
+    ) async {
+      await open(tester, types: ['material']);
+      expect(rock, findsOneWidget);
+      await tester.enterText(find.byType(TextField).first, 'roughness');
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Materials (1)'), findsOneWidget);
+      expect(wood, findsNothing);
+      await tester.enterText(find.byType(TextField).first, 'wood');
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Materials (1)'), findsOneWidget);
+      expect(wood, findsOneWidget);
+      expect(rock, findsNothing);
+    });
+
+    testWidgets('double-click opens the maps in the image viewer', (
+      tester,
+    ) async {
+      await open(tester);
+      await tester.tap(rock);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(rock);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(ImageViewer), findsOneWidget);
+      final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
+      expect(viewer.images, [
+        'Stone/Rock.png',
+        'Stone/Rock_Color.png',
+        'Stone/Rock_Normal.png',
+        'Stone/Rock_Roughness.png',
+      ]);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(ImageViewer), findsNothing);
+      expect(find.byType(PackDetailScreen), findsOneWidget);
+    });
+
+    testWidgets('the star saves the material key', (tester) async {
+      await open(tester);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(wood));
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      await tester.tap(
+        find.descendant(of: wood, matching: find.byType(FavoriteStar)),
+      );
+      await tester.pump();
+      final sidecar = PackSidecar.read(
+        p.join(tmp.path, 'library', 'HeroMaker', 'Knight Pack'),
+      );
+      expect(sidecar?.favoriteFiles, ['Wood']);
     });
   });
 }

@@ -183,4 +183,32 @@ void main() {
     expect(hidden.preview, 'fx/Explosion-sheet.png');
     expect(hidden.previewAnim, isNull);
   });
+
+  test(
+    'M62: material maps are no preview or animation; the shipped one is',
+    () {
+      final tmp = Directory.systemTemp.createTempSync('scan_material');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final pack = p.join(tmp.path, 'Author', 'Stones');
+      void png(String rel, int w, int h) => File(p.join(pack, rel))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(img.encodePng(img.Image(width: w, height: h)));
+      // A wide Color map would pass for a strip if it were an image.
+      png('Stones_Color.png', 256, 64);
+      png('Stones_Normal.png', 256, 64);
+      png('Stones_Roughness.png', 256, 64);
+      File(p.join(pack, 'asset_pack.json')).writeAsStringSync('{}');
+      ScannedPack scan() =>
+          scanLibrary(tmp.path).packs
+              .singleWhere((x) => x.id == 'Author/Stones');
+      var stones = scan();
+      expect(stones.types, ['material']);
+      expect(stones.preview, 'Stones_Color.png');
+      expect(stones.previewAnim, isNull);
+      png('Stones.png', 64, 64);
+      stones = scan();
+      expect(stones.preview, 'Stones.png');
+      expect(stones.previewAnim, isNull);
+    },
+  );
 }
