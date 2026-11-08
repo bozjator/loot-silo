@@ -182,9 +182,11 @@ class AppSettings {
     this.dashboardTileSize = 240,
     this.imageThumbSize = 160,
     this.animationThumbSize = 200,
+    this.modelThumbSize = 200,
     this.detailHeaderPinned = true,
     this.imagesView = ItemsView.flat,
     this.animationsView = ItemsView.flat,
+    this.modelsView = ItemsView.flat,
     this.dashboardView = DashboardView.packs,
     this.detailAnimateMode = AnimateMode.hover,
     this.audioView = AudioView.rows,
@@ -216,12 +218,16 @@ class AppSettings {
   /// Widest an animation card in a pack's Animations tab may get.
   final double animationThumbSize;
 
+  /// Widest a model card in a pack's Models tab may get.
+  final double modelThumbSize;
+
   /// The pack detail header (previews + info) stays above the tabs; when
   /// off it shrinks to a slim bar that shows the header on hover.
   final bool detailHeaderPinned;
 
   final ItemsView imagesView;
   final ItemsView animationsView;
+  final ItemsView modelsView;
   final DashboardView dashboardView;
 
   /// Animations tab play mode. Hover by default (a deliberate change from
@@ -256,11 +262,14 @@ class AppSettings {
     imageThumbSize: (json['image_thumb_size'] as num?)?.toDouble() ?? 160,
     animationThumbSize:
         (json['animation_thumb_size'] as num?)?.toDouble() ?? 200,
+    modelThumbSize: (json['model_thumb_size'] as num?)?.toDouble() ?? 200,
     detailHeaderPinned: json['detail_header_pinned'] != false,
     imagesView:
         ItemsView.values.asNameMap()[json['images_view']] ?? ItemsView.flat,
     animationsView:
         ItemsView.values.asNameMap()[json['animations_view']] ?? ItemsView.flat,
+    modelsView:
+        ItemsView.values.asNameMap()[json['models_view']] ?? ItemsView.flat,
     dashboardView:
         DashboardView.values.asNameMap()[json['dashboard_view']] ??
         DashboardView.packs,
@@ -295,9 +304,11 @@ class AppSettings {
     'dashboard_tile_size': dashboardTileSize,
     'image_thumb_size': imageThumbSize,
     'animation_thumb_size': animationThumbSize,
+    'model_thumb_size': modelThumbSize,
     'detail_header_pinned': detailHeaderPinned,
     'images_view': imagesView.name,
     'animations_view': animationsView.name,
+    'models_view': modelsView.name,
     'dashboard_view': dashboardView.name,
     'detail_animate_mode': detailAnimateMode.name,
     'audio_view': audioView.name,
@@ -316,9 +327,11 @@ class AppSettings {
     double? dashboardTileSize,
     double? imageThumbSize,
     double? animationThumbSize,
+    double? modelThumbSize,
     bool? detailHeaderPinned,
     ItemsView? imagesView,
     ItemsView? animationsView,
+    ItemsView? modelsView,
     DashboardView? dashboardView,
     AnimateMode? detailAnimateMode,
     AudioView? audioView,
@@ -335,9 +348,11 @@ class AppSettings {
     dashboardTileSize: dashboardTileSize ?? this.dashboardTileSize,
     imageThumbSize: imageThumbSize ?? this.imageThumbSize,
     animationThumbSize: animationThumbSize ?? this.animationThumbSize,
+    modelThumbSize: modelThumbSize ?? this.modelThumbSize,
     detailHeaderPinned: detailHeaderPinned ?? this.detailHeaderPinned,
     imagesView: imagesView ?? this.imagesView,
     animationsView: animationsView ?? this.animationsView,
+    modelsView: modelsView ?? this.modelsView,
     dashboardView: dashboardView ?? this.dashboardView,
     detailAnimateMode: detailAnimateMode ?? this.detailAnimateMode,
     audioView: audioView ?? this.audioView,

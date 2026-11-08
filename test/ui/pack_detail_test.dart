@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/core/model_cache.dart';
 import 'package:loot_silo/state/itch.dart';
 import 'package:loot_silo/state/dashboard.dart';
 import 'package:loot_silo/state/folder_folds.dart';
@@ -13,6 +14,7 @@ import 'package:loot_silo/ui/format.dart';
 import 'package:loot_silo/ui/help_screen.dart';
 import 'package:loot_silo/ui/image_viewer.dart';
 import 'package:loot_silo/ui/pack_detail_screen.dart';
+import 'package:loot_silo/ui/reveal.dart';
 import 'package:loot_silo/ui/settings_screen.dart';
 import 'package:loot_silo/ui/tabs.dart';
 import 'package:loot_silo/ui/dashboard.dart';
@@ -38,6 +40,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
+import '../helpers/models.dart';
 import '../helpers/fonts.dart';
 import '../helpers/fs.dart';
 
@@ -3936,6 +3939,118 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('link:GitHub')));
       expect(launched.last, Uri.parse(appGitHubUrl));
+    });
+  });
+
+  group('Models tab (M60)', () {
+    final reveals = <String>[];
+
+    Future<void> open(WidgetTester tester, {List<String>? types}) async {
+      reveals.clear();
+      final tmpModels = Directory.systemTemp.createTempSync('m60');
+      addTearDown(() => tmpModels.deleteSync(recursive: true));
+      final (json, bin) = cubeGltf();
+      final obj = writeCubeObj(tmpModels.path, 'tree');
+      await openKnight(
+        tester,
+        files: const [],
+        types: types,
+        raw: {
+          'Models/GLTF format/tree.glb': glbBytes(json, bin),
+          'Models/OBJ format/tree.obj': obj.readAsBytesSync(),
+          'Models/OBJ format/tree.mtl': File(p.join(tmpModels.path, 'tree.mtl'))
+              .readAsBytesSync(),
+          'Models/FBX format/tree.fbx': [0, 1, 2],
+          'Models/GLTF format/broken.glb': [1, 2, 3, 4],
+          'Models/FBX format/fence.fbx': [0],
+        },
+        overrides: [
+          // Read on the test's thread: isolates need real time.
+          modelCacheProvider.overrideWithValue(
+            ModelCache(read: (path) async => readModelForPreview(path)),
+          ),
+          revealProvider.overrideWithValue((path) async => reveals.add(path)),
+        ],
+      );
+      if (types == null) {
+        await tester.tap(find.textContaining('Models ('));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      await tester.pump();
+    }
+
+    testWidgets('one card per model; FBX-only models stay other files', (
+      tester,
+    ) async {
+      await open(tester);
+      expect(find.text('Models (2)'), findsOneWidget);
+      expect(find.byKey(const ValueKey('model:models/tree')), findsOneWidget);
+      expect(find.byKey(const ValueKey('model:models/broken')), findsOneWidget);
+      expect(find.textContaining('Other files'), findsOneWidget);
+      // Drawn, with formats and the triangle count in the footer.
+      expect(find.byKey(const ValueKey('model-paint')), findsOneWidget);
+      expect(find.text('12 triangles · GLB, OBJ, FBX'), findsOneWidget);
+    });
+
+    testWidgets('a broken file shows the error stage with its reason', (
+      tester,
+    ) async {
+      await open(tester);
+      final error = find.byKey(const ValueKey('model-error'));
+      expect(error, findsOneWidget);
+      final tip = tester.widget<Tooltip>(
+        find.ancestor(of: error, matching: find.byType(Tooltip)).first,
+      );
+      expect(tip.message, isNotEmpty);
+    });
+
+    testWidgets('format chips: OBJ draws the OBJ, FBX is revealed', (
+      tester,
+    ) async {
+      await open(tester);
+      final card = find.byKey(const ValueKey('model:models/tree'));
+      expect(tester.widget<ItemCard>(card).path, 'Models/GLTF format/tree.glb');
+      // Only the drawn format's chip until the card is hovered.
+      final objChip = find.byKey(
+        const ValueKey('format:Models/OBJ format/tree.obj'),
+      );
+      expect(objChip, findsNothing);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(card));
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      expect(objChip, findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey('format:Models/OBJ format/tree.obj')),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(tester.widget<ItemCard>(card).path, 'Models/OBJ format/tree.obj');
+      expect(find.byKey(const ValueKey('model-paint')), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey('format:Models/FBX format/tree.fbx')),
+      );
+      await tester.pump();
+      expect(tester.widget<ItemCard>(card).path, 'Models/OBJ format/tree.obj');
+      expect(reveals.single, endsWith('Models/FBX format/tree.fbx'));
+    });
+
+    testWidgets('search, By folder without format folders, 3D packs', (
+      tester,
+    ) async {
+      await open(tester, types: ['3d']);
+      // A 3D-only pack opens on Models.
+      expect(find.byKey(const ValueKey('model:models/tree')), findsOneWidget);
+      await tester.enterText(find.byType(TextField).first, 'tree');
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Models (1)'), findsOneWidget);
+      expect(find.byKey(const ValueKey('model:models/broken')), findsNothing);
+      await tester.tap(find.text('By folder'));
+      await tester.pump();
+      // One section: "Models", not "Models / GLTF format".
+      expect(find.text('Models'), findsOneWidget);
+      expect(find.textContaining('GLTF format'), findsNothing);
     });
   });
 }

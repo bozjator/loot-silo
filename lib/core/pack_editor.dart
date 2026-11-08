@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 
 import 'animation_detector.dart';
 import 'file_search.dart';
+import 'model_formats.dart';
 import 'natural_order.dart';
 import 'preview_picker.dart';
 import 'sidecar.dart';
@@ -21,6 +22,7 @@ class PackContents {
   const PackContents({
     required this.images,
     required this.audio,
+    this.models = const [],
     required this.other,
     required this.detected,
     required this.sizes,
@@ -31,6 +33,11 @@ class PackContents {
   /// shown as animations ([shownDetected]): one file is listed in one tab.
   final List<String> images;
   final List<String> audio;
+
+  /// 3D model files whose model has a format the app can draw (every
+  /// format of it, [groupModelFormats] makes the cards); models in
+  /// unreadable formats only are listed in [other].
+  final List<String> models;
   final List<String> other;
 
   /// Animations as detected, before sidecar overrides.
@@ -48,6 +55,7 @@ class PackContents {
     return PackContents(
       images: under(images),
       audio: under(audio),
+      models: under(models),
       other: under(other),
       detected: [
         for (final a in detected)
@@ -60,7 +68,11 @@ class PackContents {
 
   /// No file in any tab.
   bool get isEmpty =>
-      images.isEmpty && audio.isEmpty && other.isEmpty && detected.isEmpty;
+      images.isEmpty &&
+      audio.isEmpty &&
+      models.isEmpty &&
+      other.isEmpty &&
+      detected.isEmpty;
 
   /// Only files matching a search ([fileMatches]).
   PackContents matching(List<String> words, {bool infix = false}) {
@@ -72,6 +84,7 @@ class PackContents {
     return PackContents(
       images: keep(images),
       audio: keep(audio),
+      models: keep(models),
       other: keep(other),
       detected: [
         for (final a in detected)
@@ -91,6 +104,7 @@ class PackContents {
     return PackContents(
       images: kept(images),
       audio: kept(audio),
+      models: kept(models),
       other: kept(other),
       detected: [
         for (final a in detected)
@@ -137,11 +151,12 @@ class PackContents {
   ].take(limit).toList();
 }
 
-/// Splits [files] into images / audio / other and detects animations,
+/// Splits [files] into images / audio / models / other and detects animations,
 /// applying the sidecar's overrides. Pure Dart; run it in an isolate.
 PackContents loadPackContents(String packPath, List<(String, int)> files) {
   final sidecar = PackSidecar.read(packPath);
   final images = <String>[], audio = <String>[], other = <String>[];
+  final models = <String>[];
   for (final (rel, _) in files) {
     final ext = p.extension(rel).toLowerCase().replaceFirst('.', '');
     // Only formats the engine decodes count as images; PSD/Aseprite
@@ -150,9 +165,16 @@ PackContents loadPackContents(String packPath, List<(String, int)> files) {
       images.add(rel);
     } else if (audioExts.contains(ext)) {
       audio.add(rel);
+    } else if (modelExts.contains(ext)) {
+      models.add(rel);
     } else {
       other.add(rel);
     }
+  }
+  // A model with no format the app can draw stays an "other file".
+  final drawable = <String>[];
+  for (final m in groupModelFormats(models)) {
+    (m.readable.isEmpty ? other : drawable).addAll(m.files);
   }
   // Effect packs often hold grids with no size hints; a few full decodes
   // find them by their transparent gaps. Files with an animation word get
@@ -178,6 +200,7 @@ PackContents loadPackContents(String packPath, List<(String, int)> files) {
         if (!animated.contains(f)) f,
     ],
     audio: audio..sort(),
+    models: drawable..sort(),
     other: other..sort(),
     detected: detected,
     sizes: {for (final (rel, size) in files) rel: size},

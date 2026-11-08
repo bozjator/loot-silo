@@ -101,3 +101,7 @@ class _Swatch extends StatelessWidget {
     );
   }
 }
+
+/// Behind a drawn 3D model: the card stage colour, so models sit on the
+/// same ground as images in light and dark themes.
+Color modelStageColor(ColorScheme scheme) => scheme.surfaceContainerHighest;

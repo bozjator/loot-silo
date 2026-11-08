@@ -43,6 +43,7 @@ import 'package:path/path.dart' as p;
 
 import '../test/helpers/fs.dart';
 import '../test/helpers/logo.dart';
+import '../test/helpers/models.dart';
 import 'screenshot_helper.dart';
 
 class MemoryKeyStore implements KeyStore {
@@ -1494,7 +1495,7 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(fake.played, hasLength(4));
     expect(fake.played.toSet(), hasLength(4));
     expect(fake.looping, isFalse);
-    final fourth = p.basename(fake.played.last);
+    final fourth = p.basenameWithoutExtension(fake.played.last);
     final row = tester.widget<ListTile>(
       find.ancestor(of: find.text(fourth), matching: find.byType(ListTile)),
     );
@@ -2098,7 +2099,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await pumpUntil(tester, find.byType(PackDetailScreen), gone: true);
     await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
-    await pumpUntil(tester, find.text('Keyboard shortcuts'));
+    await pumpUntil(tester, find.text('Appearance'));
     await tester.pump(const Duration(milliseconds: 500));
     await tester.scrollUntilVisible(
       find.text('About'),
@@ -2989,7 +2990,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.comma);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    await pumpUntil(tester, find.text('Keyboard shortcuts'));
+    await pumpUntil(tester, find.text('Appearance'));
     final list = find
         .descendant(
           of: find.byType(SettingsScreen),
@@ -3615,7 +3616,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.tap(find.byTooltip('Settings (Ctrl+,)'));
-    await pumpUntil(tester, find.text('Keyboard shortcuts'));
+    await pumpUntil(tester, find.text('Appearance'));
     await captureScreenshot(tester, 'm10_settings');
 
     await tester.tap(find.text('Dark'));
@@ -3638,6 +3639,139 @@ A **16×16** knight with *walk* and *idle* animations.
     await settleImages(tester);
     await tester.pump(const Duration(milliseconds: 400));
     await captureScreenshot(tester, 'm10_search_dark', settle: false);
+  });
+
+  testWidgets('m60: Models tab — one card per model, chips, broken file', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    final models = p.join(pack, 'Models');
+    writeCubeGlb(p.join(models, 'GLTF format'), 'crate');
+    writeCubeObj(p.join(models, 'OBJ format'), 'crate');
+    File(p.join(models, 'FBX format', 'crate.fbx'))
+      ..createSync(recursive: true)
+      ..writeAsBytesSync([0, 1, 2]);
+    writeCubeGlb(
+      p.join(models, 'GLTF format'),
+      'tower',
+      node: {
+        'scale': [0.6, 2, 0.6],
+        'rotation': [0, 0.38, 0, 0.92],
+      },
+    );
+    File(p.join(models, 'GLTF format', 'broken.glb')).writeAsBytesSync([1, 2]);
+    revealed.clear();
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Models ('));
+    expect(find.text('Models (3)'), findsOneWidget);
+    await tester.tap(find.textContaining('Models ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await pumpUntil(tester, find.byKey(const ValueKey('model-error')));
+    await pumpUntil(
+      tester,
+      find.byKey(const ValueKey('model-loading')),
+      gone: true,
+    );
+    expect(find.byKey(const ValueKey('model-paint')), findsNWidgets(2));
+    expect(find.text('12 triangles · GLB, OBJ, FBX'), findsOneWidget);
+    await captureScreenshot(tester, 'm60_models_tab', settle: false);
+
+    // OBJ draws the OBJ; FBX is shown in the file manager.
+    final crate = find.byKey(const ValueKey('model:models/crate'));
+    // The chips show on hover.
+    await hoverOver(tester, crate);
+    await tester.tap(
+      find.byKey(const ValueKey('format:Models/OBJ format/crate.obj')),
+    );
+    await tester.pump();
+    await pumpUntil(
+      tester,
+      find.byKey(const ValueKey('model-loading')),
+      gone: true,
+    );
+    expect(tester.widget<ItemCard>(crate).path, 'Models/OBJ format/crate.obj');
+    await tester.tap(
+      find.byKey(const ValueKey('format:Models/FBX format/crate.fbx')),
+    );
+    await tester.pump();
+    expect(revealed.single, endsWith('crate.fbx'));
+
+    // Hover turns it; By folder leaves the format folders out.
+    await tester.pump(const Duration(seconds: 1));
+    await captureScreenshot(tester, 'm60_hover', settle: false);
+    await tester.tap(find.text('By folder'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.textContaining('format'), findsNothing);
+    await captureScreenshot(tester, 'm60_models_by_folder', settle: false);
+  });
+
+  testWidgets('m60: a real Kenney kit (temp copy), smallest cards', (
+    tester,
+  ) async {
+    const kit =
+        '../assets_library/Kenney/Kenney Game Assets 1 version 42/3D assets/'
+        'Fantasy Town Kit/Models';
+    if (!Directory(kit).existsSync()) return;
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    copyTree(kit, p.join(pack, 'Models'));
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Models ('));
+    expect(find.text('Models (153)'), findsOneWidget);
+    await tester.tap(find.textContaining('Models ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await pumpUntil(
+      tester,
+      find.byKey(const ValueKey('model-loading')),
+      gone: true,
+    );
+    expect(find.byKey(const ValueKey('model-error')), findsNothing);
+    await captureScreenshot(tester, 'm60_kenney_kit', settle: false);
+
+    // Smallest cards, then scroll the whole grid.
+    final slider = find.byType(ThumbSizeSlider);
+    for (var i = 0; i < 20; i++) {
+      await tester.tap(
+        find.descendant(of: slider, matching: find.byTooltip('Smaller')),
+      );
+      await tester.pump();
+    }
+    await tester.pump(const Duration(milliseconds: 300));
+    await pumpUntil(
+      tester,
+      find.byKey(const ValueKey('model-loading')),
+      gone: true,
+    );
+    await captureScreenshot(tester, 'm60_kenney_small', settle: false);
+    final scrollable = find
+        .descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    final watch = Stopwatch()..start();
+    var frames = 0;
+    for (var i = 0; i < 30; i++) {
+      await tester.drag(scrollable, const Offset(0, -200));
+      await tester.pump();
+      frames++;
+    }
+    await pumpUntil(
+      tester,
+      find.byKey(const ValueKey('model-loading')),
+      gone: true,
+    );
+    // ignore: avoid_print
+    print('m60: ${watch.elapsedMilliseconds} ms for $frames scroll steps');
+    expect(find.byKey(const ValueKey('model-error')), findsNothing);
+    await captureScreenshot(tester, 'm60_kenney_scrolled', settle: false);
   });
 }
 

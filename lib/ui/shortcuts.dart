@@ -211,8 +211,13 @@ const mouseHelp = [
   MouseHelp('Click the Dashboard tab', 'Back to the dashboard from a pack'),
   MouseHelp('Click a star', 'Add a pack or file to favorites, or remove it'),
   MouseHelp(
-    'Click an animation or image card',
+    'Click an animation, image or model card',
     'Focus mode: dim (and pause) the others',
+  ),
+  MouseHelp('Hover a model card', 'Turn the model slowly'),
+  MouseHelp(
+    'Click a model\'s format chip',
+    'Draw that file (GLB, glTF, OBJ) or show it in the file manager',
   ),
   MouseHelp('Open image icon on a card', 'Show it in the image viewer'),
   MouseHelp(

@@ -35,7 +35,17 @@ const imageExts = {
   'tga',
 };
 const audioExts = {'ogg', 'wav', 'mp3', 'flac', 'm4a', 'aiff', 'opus'};
-const modelExts = {'glb', 'gltf', 'fbx', 'obj', 'blend', 'dae', '3ds', 'vox'};
+const modelExts = {
+  'glb',
+  'gltf',
+  'fbx',
+  'obj',
+  'blend',
+  'dae',
+  'stl',
+  '3ds',
+  'vox',
+};
 const fontExts = {'ttf', 'otf', 'woff', 'woff2', 'fnt'};
 
 /// Splits a path or name into lowercase words, breaking on separators

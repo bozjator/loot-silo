@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../core/library_index.dart';
 import '../core/library_service.dart';
+import '../core/model_cache.dart';
 import '../core/pack_editor.dart';
 import '../install/archive_extractor.dart';
 import 'folder_folds.dart';
@@ -20,6 +21,10 @@ final settingsStoreProvider = Provider<SettingsStore>(
 /// Collapsed "By folder" folders per pack. In memory unless overridden
 /// (`main` points it at `ui_state.json`).
 final folderFoldsProvider = Provider<FolderFolds>((ref) => FolderFolds());
+
+/// Parsed 3D models for the Models tab, in memory; tests may read them on
+/// the test's own thread instead of an isolate.
+final modelCacheProvider = Provider<ModelCache>((ref) => ModelCache());
 
 /// Overridden in `main` with the on-disk index, in tests with memory.
 final libraryIndexProvider = Provider<LibraryIndex>(
@@ -96,6 +101,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
   void setAnimationsView(ItemsView view) =>
       _save(state.copyWith(animationsView: view));
 
+  void setModelsView(ItemsView view) => _save(state.copyWith(modelsView: view));
+
   void setDetailAnimateMode(AnimateMode mode) =>
       _save(state.copyWith(detailAnimateMode: mode));
 
@@ -130,6 +137,12 @@ class SettingsNotifier extends Notifier<AppSettings> {
   void setAnimationThumbSize(double size) {
     if (size != state.animationThumbSize) {
       _save(state.copyWith(animationThumbSize: size));
+    }
+  }
+
+  void setModelThumbSize(double size) {
+    if (size != state.modelThumbSize) {
+      _save(state.copyWith(modelThumbSize: size));
     }
   }
 

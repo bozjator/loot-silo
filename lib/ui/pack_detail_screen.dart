@@ -16,6 +16,7 @@ import '../core/audio_formats.dart';
 import '../core/file_search.dart';
 import '../core/credits.dart';
 import '../core/library_index.dart';
+import '../core/model_formats.dart';
 import '../core/pack_editor.dart';
 import '../core/sidecar.dart';
 import '../core/text_preview.dart';
@@ -30,6 +31,7 @@ import 'format.dart';
 import 'animation_grid.dart';
 import 'folder_groups.dart';
 import 'image_viewer.dart';
+import 'models_tab.dart';
 import 'reveal.dart';
 import 'session.dart';
 import 'shortcuts.dart';
@@ -38,6 +40,7 @@ import 'text_preview_dialog.dart';
 import 'track_player.dart';
 import 'widgets/animated_sprite.dart';
 import 'widgets/favorite_star.dart';
+import 'widgets/format_chips.dart';
 import 'widgets/tab_toolbar.dart';
 import 'widgets/item_card.dart';
 import 'widgets/meta_dialogs.dart';
@@ -216,6 +219,7 @@ class _BodyState extends State<_Body> {
     'animations': _AnimationsTab,
     'images': _ImagesTab,
     'audio': _AudioTab,
+    'models': ModelsTab,
     'files': _FilesTab,
   };
 
@@ -377,6 +381,13 @@ class _BodyState extends State<_Body> {
       () => _AudioTab(pack: pack, contents: contents),
     );
     add(
+      ModelsTab,
+      'Models',
+      groupModelFormats(contents.models).length,
+      groupModelFormats(base.models).length,
+      () => ModelsTab(pack: pack, contents: contents),
+    );
+    add(
       _FilesTab,
       'Other files',
       contents.other.length,
@@ -505,10 +516,15 @@ class _BodyState extends State<_Body> {
         ),
       ],
     ];
-    // Music / sfx packs open on their Audio tab; a clicked file result on
-    // the tab that lists it.
+    // Music / sfx packs open on their Audio tab, 3D packs on Models; a
+    // clicked file result on the tab that lists it.
     final audioTab = tabs.indexWhere((t) => t.$1 == _AudioTab);
-    var initial = isAudioPack(pack.types) && audioTab >= 0 ? audioTab : 0;
+    final modelsTab = tabs.indexWhere((t) => t.$1 == ModelsTab);
+    var initial = isAudioPack(pack.types) && audioTab >= 0
+        ? audioTab
+        : isModelPack(pack.types) && modelsTab >= 0
+        ? modelsTab
+        : 0;
     if (widget.file case final file? when widget.search != null) {
       final at = tabs.indexWhere(
         (t) => switch (t.$1) {
@@ -517,6 +533,7 @@ class _BodyState extends State<_Body> {
           ),
           const (_ImagesTab) => contents.images.contains(file),
           const (_AudioTab) => contents.audio.contains(file),
+          const (ModelsTab) => contents.models.contains(file),
           const (_FilesTab) => contents.other.contains(file),
           _ => false,
         },
@@ -614,6 +631,10 @@ class _NoMatches extends StatelessWidget {
 bool isAudioPack(List<String> types) =>
     types.isNotEmpty &&
     types.every((t) => t == AssetType.music.id || t == AssetType.sfx.id);
+
+/// Only 3D models: the page opens on the Models tab.
+bool isModelPack(List<String> types) =>
+    types.isNotEmpty && types.every((t) => t == AssetType.threeD.id);
 
 /// A dashboard search the detail page is filtered by.
 class SearchFilter {
@@ -3422,7 +3443,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _FormatChips(
+            FormatChips(
               files: track.files,
               shown: rel,
               onPick: (f) => _switchFormat(track, f),
@@ -3482,7 +3503,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
           key: ValueKey(track.key),
           rel: rel,
           folder: track.folder,
-          formats: _FormatChips(
+          formats: FormatChips(
             files: track.files,
             shown: rel,
             onPick: (f) => _switchFormat(track, f),
@@ -3519,81 +3540,6 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
         }
       },
     );
-  }
-}
-
-/// A track's formats as small chips (`OGG · WAV · MP3`), the shown one
-/// highlighted; a click on another switches to that file.
-class _FormatChips extends StatelessWidget {
-  const _FormatChips({
-    required this.files,
-    required this.shown,
-    required this.onPick,
-    this.vertical = false,
-  });
-
-  final List<String> files;
-  final String shown;
-  final ValueChanged<String> onPick;
-
-  /// Stacked, one width (on a card's left edge, clear of the play button).
-  final bool vertical;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final style = Theme.of(context).textTheme.labelSmall;
-    final chips = Flex(
-      direction: vertical ? Axis.vertical : Axis.horizontal,
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: vertical
-          ? CrossAxisAlignment.stretch
-          : CrossAxisAlignment.center,
-      children: [
-        for (final f in files)
-          Padding(
-            padding: vertical
-                ? const EdgeInsets.only(bottom: 4)
-                : const EdgeInsets.only(right: 4),
-            child: Tooltip(
-              message: f == shown
-                  ? p.basename(f)
-                  : 'Switch to ${p.basename(f)}',
-              child: Material(
-                key: ValueKey('format:$f'),
-                color: f == shown
-                    ? scheme.primaryContainer
-                    : scheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(4),
-                child: InkWell(
-                  mouseCursor: f == shown ? null : clickCursor,
-                  borderRadius: BorderRadius.circular(4),
-                  onTap: f == shown || files.length == 1
-                      ? null
-                      : () => onPick(f),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 2,
-                    ),
-                    child: Text(
-                      formatOf(f).toUpperCase(),
-                      textAlign: TextAlign.center,
-                      style: style?.copyWith(
-                        color: f == shown
-                            ? scheme.onPrimaryContainer
-                            : scheme.onSurfaceVariant,
-                        fontWeight: f == shown ? FontWeight.bold : null,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-    return vertical ? IntrinsicWidth(child: chips) : chips;
   }
 }
 

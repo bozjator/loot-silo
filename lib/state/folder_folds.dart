@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 /// The pack page tabs that have a "By folder" view.
-enum FoldTab { images, animations }
+enum FoldTab { images, animations, models }
 
 /// Which folders are collapsed in each pack's "By folder" views, remembered
 /// across launches in `ui_state.json`. Keyed by the pack's folder path, so

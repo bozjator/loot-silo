@@ -219,7 +219,9 @@ class HelpScreen extends StatelessWidget {
               const _Section('Pack page & tabs', [
                 _P(
                   'A pack page has a header (previews and info) above the '
-                  'Animations, Images, Audio and Other files tabs. The pin '
+                  'Animations, Images, Audio, Models and Other files tabs. '
+                  'Music and sound packs open on Audio, 3D packs on Models. '
+                  'The pin '
                   '(H), itch.io page (when linked) and open folder icons sit '
                   'in the header\'s top-right corner. When the header is '
                   'unpinned, a slim bar replaces it, with the same icons at '
@@ -262,7 +264,8 @@ class HelpScreen extends StatelessWidget {
                   'as in a game); an image bigger than the window opens '
                   'fitted instead. Fit and 1:1 in its toolbar switch, the '
                   'wheel zooms, drag pans and a double-click fits. The '
-                  'thumbnail size sliders (dashboard, Images, Animations) '
+                  'thumbnail size sliders (dashboard, Images, Animations, '
+                  'Models) '
                   'step one size smaller or larger with the small and big '
                   'icons at their ends.',
                 ),
@@ -286,13 +289,41 @@ class HelpScreen extends StatelessWidget {
                   'Settings → Audio picks the format shown first.',
                 ),
               ]),
+              const _Section('3D models', [
+                _P(
+                  'The Models tab draws every GLB, glTF and OBJ model of the '
+                  'pack as a card, seen from a three-quarter view with '
+                  'simple lighting in the model\'s own colours (and its '
+                  'texture, when it has one). Hover a card to turn the '
+                  'model slowly. The footer shows the name, the formats and '
+                  'the triangle count. Cards work like image cards: click '
+                  'to focus, ←/→, the star, Flat or By folder, the size '
+                  'slider and Ctrl + wheel.',
+                ),
+                _P(
+                  'A model saved in several formats (tree.glb, tree.obj, '
+                  'tree.fbx, side by side or in "GLTF format" / "OBJ '
+                  'format" folders) is one card with a chip per format; the '
+                  'By folder view leaves the format folders out. Click GLB, '
+                  'glTF or OBJ to draw that file. FBX, DAE, STL, Blend, 3DS '
+                  'and VOX are not drawn: their chip shows the file in the '
+                  'file manager, and a model that only comes in those '
+                  'formats is listed under Other files.',
+                ),
+                _P(
+                  'A file that can\'t be read shows a broken-image icon (the '
+                  'reason in its tooltip). Models are drawn as they are '
+                  'stored, without their animations, and very large ones '
+                  '(over 200,000 triangles) show "Too large to preview".',
+                ),
+              ]),
               const _Section('Favorites', [
                 _P(
                   'Star packs and single files to find them again. The star '
                   'sits on a dashboard tile (shown on hover, always once '
                   'starred), next to the title in a pack\'s header, on image '
-                  'and animation cards, on audio rows and cards, and on '
-                  'Other files rows. Click it again to unstar.',
+                  'and animation cards, on audio rows and cards, on model '
+                  'cards, and on Other files rows. Click it again to unstar.',
                 ),
                 _P(
                   'The Favorites chip (★ and a count) in the dashboard '
