@@ -10,6 +10,7 @@ import '../core/animation_detector.dart';
 import '../state/folder_folds.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
+import 'double_click.dart';
 import 'folder_groups.dart';
 import 'format.dart';
 import 'image_viewer.dart';
@@ -84,6 +85,9 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
     _keys.requestFocus();
   }
 
+  /// A second click on a card opens the image viewer.
+  final _clicks = DoubleClick<int>();
+
   /// Esc and arrows act only while a card is focused; otherwise Esc goes on
   /// to the app and closes the page.
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
@@ -120,6 +124,14 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
     final paths = [for (final a in anims) a.path];
     // The viewer steps through the animations in on-screen order.
     final order = visibleOrder(paths, view, _collapsed);
+    // The image viewer on card [i], stepping in on-screen order.
+    void open(int i) => showImageViewer(
+      context,
+      packPath: widget.packPath,
+      images: [for (final j in order) paths[j]],
+      index: math.max(0, order.indexOf(i)),
+      sizes: widget.sizes,
+    );
     return BackHandler(
       enabled: _focused != null,
       onBack: () => _focus(null),
@@ -207,19 +219,26 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                       focused: _focused == i,
                       dimmed: _focused != null && _focused != i,
                       playAll: mode == AnimateMode.all,
-                      onTap: () => _focus(_focused == i ? null : i),
+                      onTap: () {
+                        final keys = HardwareKeyboard.instance;
+                        if (keys.isControlPressed || keys.isShiftPressed) {
+                          _clicks.reset();
+                          _focus(_focused == i ? null : i);
+                        } else if (_clicks.second(i)) {
+                          // Focused, without taking the keyboard from
+                          // the viewer.
+                          setState(() => _focused = i);
+                          open(i);
+                        } else {
+                          _focus(_focused == i ? null : i);
+                        }
+                      },
                       onEdit: () => widget.onEdit(anims[i]),
                       starred: widget.favoriteFiles.contains(anims[i].path),
                       onToggleStar: widget.onToggleFavorite == null
                           ? null
                           : () => widget.onToggleFavorite!(anims[i].path),
-                      onOpen: () => showImageViewer(
-                        context,
-                        packPath: widget.packPath,
-                        images: [for (final j in order) paths[j]],
-                        index: math.max(0, order.indexOf(i)),
-                        sizes: widget.sizes,
-                      ),
+                      onOpen: () => open(i),
                     ),
                   ),
                 ),

@@ -192,6 +192,57 @@ void main() {
     expect(find.text('retro'), findsOneWidget);
   });
 
+  testWidgets('M64: a tag or author new on one row is offered on the next', (
+    tester,
+  ) async {
+    final src = p.join(tmp.path, 'src');
+    copyTree('test/fixtures/library_src', src);
+    await openReview(tester, src);
+    await pumpUntil(tester, find.text('Import 7 packs'));
+    await waitForLibrary(tester);
+
+    // A new tag on the first row without tags…
+    await tester.tap(find.text('—').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'Zanzibar');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('zanzibar'), findsOneWidget);
+
+    // …is suggested on the next one.
+    await tester.tap(find.text('—').first);
+    await tester.pumpAndSettle();
+    final dialog = find.byType(TagsDialog);
+    expect(tester.widget<TagsDialog>(dialog).known, contains('zanzibar'));
+    await tester.enterText(find.byType(TextField).last, 'zan');
+    await tester.pump();
+    expect(
+      find.descendant(of: dialog, matching: find.text('zanzibar')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    // A new author typed on one row is a choice on another.
+    final unknown = find.widgetWithText(TextField, 'Unknown — set author');
+    await tester.tap(unknown);
+    await tester.pump();
+    await tester.enterText(unknown, 'Quokka Art');
+    await tester.pump();
+    await tester.tap(find.text('Add new author “Quokka Art”'));
+    await tester.pump();
+    expect(find.text('Quokka Art/misc'), findsOneWidget);
+    final other = find.widgetWithText(TextField, 'HeroMaker').first;
+    await tester.tap(other);
+    await tester.pump();
+    await tester.enterText(other, 'quo');
+    await tester.pump();
+    expect(find.text('Quokka Art'), findsWidgets);
+    expect(find.text('Add new author “quo”'), findsOneWidget);
+  });
+
   testWidgets('a folder inside the library gets a plain message', (
     tester,
   ) async {

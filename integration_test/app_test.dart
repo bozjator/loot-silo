@@ -3897,6 +3897,73 @@ A **16×16** knight with *walk* and *idle* animations.
     materialViewOptions.reset();
   });
 
+  testWidgets('m64: audio columns, double-click viewer, slim header title', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    final tone = File('test/fixtures/audio/tone.wav').readAsBytesSync();
+    for (final rel in [
+      'sfx/hit.wav',
+      'sfx/coin_pickup.wav',
+      'music/OGG/theme.ogg',
+      'music/MP3/theme.mp3',
+      'music/WAV/theme.wav',
+    ]) {
+      File(p.join(pack, rel))
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(tone);
+    }
+    // A big one: the size column has to hold `1.3 MB` beside `44 B`.
+    File(p.join(pack, 'music', 'long_ambience.wav'))
+        .writeAsBytesSync([...tone, ...List.filled(1200000, 0)]);
+    File(p.join(pack, 'sfx', 'tiny.wav')).writeAsBytesSync(tone.sublist(0, 44));
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Audio ('));
+    await tester.tap(find.textContaining('Audio ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await pumpUntil(tester, find.text('1.3 MB'));
+    final lefts = {
+      for (final e
+          in find
+              .byWidgetPredicate(
+                (w) =>
+                    w.key is ValueKey<String> &&
+                    (w.key! as ValueKey<String>).value.startsWith('length:'),
+              )
+              .evaluate())
+        (e.renderObject! as RenderBox).localToGlobal(Offset.zero).dx,
+    };
+    expect(lefts, hasLength(1));
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm64_audio_rows', settle: false);
+
+    // A double-click on an image card opens the viewer.
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    final knight = find.byKey(const ValueKey('image:knight.png'));
+    await tester.tap(knight);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(knight);
+    await pumpUntil(tester, find.byType(ImageViewer));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(ImageViewer), findsNothing);
+
+    // The slim bar names the pack.
+    await tester.tap(find.byTooltip('Unpin header — show it on hover (H)'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('slim-title')), findsOneWidget);
+    await captureScreenshot(tester, 'm64_slim_header', settle: false);
+    await tester.tap(find.byTooltip('Pin header (H)'));
+    await tester.pump(const Duration(milliseconds: 300));
+  });
+
   testWidgets('m61: model viewer — orbit, wireframe, Esc closes', (
     tester,
   ) async {

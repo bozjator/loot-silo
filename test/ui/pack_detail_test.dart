@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:loot_silo/core/library_index.dart';
 import 'package:loot_silo/core/model_cache.dart';
 import 'package:loot_silo/core/sidecar.dart';
+import 'package:loot_silo/core/type_classifier.dart';
 import 'package:loot_silo/state/itch.dart';
 import 'package:loot_silo/state/dashboard.dart';
 import 'package:loot_silo/state/folder_folds.dart';
@@ -589,6 +590,49 @@ void main() {
       expect(focused(tester), isNull);
     });
 
+    testWidgets('M64: a double-click opens the viewer; Ctrl never does', (
+      tester,
+    ) async {
+      await openImagesTab(tester);
+      // A single click only focuses.
+      await tester.tap(card('heroes/archer/c.png'));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(focused(tester), 'heroes/archer/c.png');
+      expect(find.byType(ImageViewer), findsNothing);
+      // Two clicks on another card, soon after each other: the viewer, on
+      // that image, with the card focused.
+      await tester.tap(card('z_root.png'));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(card('z_root.png'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(ImageViewer), findsOneWidget);
+      final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
+      expect(viewer.images[viewer.initialIndex], 'z_root.png');
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(ImageViewer), findsNothing);
+      expect(focused(tester), 'z_root.png');
+
+      // Ctrl-double-click selects and unselects, without the viewer.
+      await tester.pump(const Duration(seconds: 1));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.tap(card('heroes/archer/d.png'));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(card('heroes/archer/d.png'));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(ImageViewer), findsNothing);
+      // Two clicks far apart are two single clicks.
+      await tester.tap(card('heroes/archer/d.png'));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(card('heroes/archer/d.png'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(ImageViewer), findsNothing);
+      expect(focused(tester), isNull);
+    });
+
     testWidgets('Open image starts the viewer at that image', (tester) async {
       await openImagesTab(tester);
       await openImage(tester, 'z_root.png');
@@ -732,6 +776,36 @@ void main() {
       final track = tester.getSize(slider).width - 2 * 24 - 4;
       expect(track / s.divisions!, greaterThanOrEqualTo(3 * dot));
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('M64: the slim bar shows the title; facts are cut first', (
+      tester,
+    ) async {
+      await openKnight(
+        tester,
+        size: const Size(1024, 800),
+        types: [for (final t in AssetType.values) t.id],
+      );
+      tester.takeException();
+      await tester.tap(find.byTooltip('Unpin header — show it on hover (H)'));
+      await tester.pump();
+      final title = find.byKey(const ValueKey('slim-title'));
+      expect(tester.widget<Text>(title).data, 'Knight Pack');
+      bool cut(Finder f) => tester
+          .renderObject<RenderParagraph>(
+            find.descendant(of: f, matching: find.byType(RichText)),
+          )
+          .didExceedMaxLines;
+      expect(cut(title), isFalse);
+      expect(cut(find.byKey(const ValueKey('slim-facts'))), isTrue);
+      expect(find.text('Hover for details'), findsOneWidget);
+      // The title comes before the facts, after the star.
+      expect(
+        tester.getTopLeft(title).dx,
+        lessThan(
+          tester.getTopLeft(find.byKey(const ValueKey('slim-facts'))).dx,
+        ),
+      );
     });
 
     for (final width in [1024.0, 1800.0]) {
@@ -1110,6 +1184,50 @@ void main() {
     }
 
     List<String> played() => [for (final f in fake.played) p.basename(f)];
+
+    testWidgets('M64: formats, length and size line up down the rows', (
+      tester,
+    ) async {
+      fake = _FakePlayer();
+      await openKnight(
+        tester,
+        files: const [],
+        raw: {
+          'a.ogg': List.filled(512, 0),
+          'b.ogg': List.filled(12300, 0),
+          'c.mp3': [0],
+          'c.ogg': List.filled(1200000, 0),
+          'c.wav': [0],
+        },
+        types: ['sfx'],
+        overrides: [
+          trackPlayerFactoryProvider.overrideWithValue(() => fake),
+          audioDurationProvider.overrideWithValue(
+            (path) async => const Duration(seconds: 5),
+          ),
+        ],
+      );
+      await tester.pump();
+      expect(find.text('512 B'), findsOneWidget);
+      expect(find.text('12 KB'), findsOneWidget);
+      expect(find.text('1.2 MB'), findsOneWidget);
+      double left(String key) =>
+          tester.getTopLeft(find.byKey(ValueKey(key))).dx;
+      double right(String key) =>
+          tester.getTopRight(find.byKey(ValueKey(key))).dx;
+      for (final key in ['length', 'format', 'formats-column']) {
+        expect(
+          {
+            for (final r in ['a.ogg', 'b.ogg', 'c.ogg']) left('$key:$r'),
+          },
+          hasLength(1),
+          reason: key,
+        );
+      }
+      expect({
+        for (final r in ['a.ogg', 'b.ogg', 'c.ogg']) right('size:$r'),
+      }, hasLength(1));
+    });
 
     testWidgets('one row per sound; a format chip switches mid-play', (
       tester,
@@ -4218,11 +4336,11 @@ void main() {
     });
 
     Future<void> openViewer(WidgetTester tester) async {
-      await tester.tap(rock);
-      await tester.pump(const Duration(milliseconds: 50));
       // Maps decode and the shader loads on real time, so the viewer opens
-      // with real timers.
+      // with real timers (both clicks, so they share one clock).
       await tester.runAsync(() async {
+        await tester.tap(rock);
+        await tester.pump();
         await tester.tap(rock);
         await tester.pump();
         await Future<void>.delayed(const Duration(milliseconds: 300));

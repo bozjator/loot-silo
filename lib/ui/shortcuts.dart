@@ -320,6 +320,10 @@ const mouseHelp = [
   MouseHelp('Ctrl + wheel over All previews', 'Fewer or more columns'),
   MouseHelp('Wheel over the Edit preview', 'Zoom (−, +, reset on hover)'),
   MouseHelp('Ctrl / Shift-click images', 'Select frames to combine'),
+  MouseHelp(
+    'Double-click an image or animation card',
+    'Open it in the image viewer',
+  ),
   MouseHelp('Double-click a model card', 'Open it in the model viewer'),
   MouseHelp('Double-click a material card', 'Open it in the material viewer'),
   MouseHelp('Drag in the material viewer', 'Turn the light'),

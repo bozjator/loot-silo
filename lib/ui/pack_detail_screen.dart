@@ -33,6 +33,7 @@ import 'folder_groups.dart';
 import 'image_viewer.dart';
 import 'materials_tab.dart';
 import 'models_tab.dart';
+import 'double_click.dart';
 import 'reveal.dart';
 import 'session.dart';
 import 'shortcuts.dart';
@@ -956,25 +957,57 @@ class _SlimHeader extends StatelessWidget {
           // next to a Spacer would split the free space with it and leave
           // the icons in the middle of the bar.
           Expanded(
-            child: Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    [
-                      pack.author ?? 'Unknown author',
-                      if (pack.types.isNotEmpty) pack.types.join(', '),
-                      '${formatCount(pack.fileCount)} files',
-                      formatBytes(pack.totalBytes),
-                    ].join(' · '),
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Icon(Icons.unfold_more, size: 16, color: muted?.color),
-                const SizedBox(width: 4),
-                Text('Hover for details', style: muted),
-              ],
+            child: LayoutBuilder(
+              builder: (context, box) {
+                // The title keeps its width and the facts take what is
+                // left, so they are cut first; the title is cut only when
+                // the hint alone fills the bar.
+                const hint = 'Hover for details';
+                final painter = TextPainter(
+                  text: TextSpan(text: hint, style: muted),
+                  textDirection: TextDirection.ltr,
+                  textScaler: MediaQuery.textScalerOf(context),
+                )..layout();
+                final reserved = painter.width.ceilToDouble() + 12 + 16 + 4;
+                painter.dispose();
+                return Row(
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: math.max(0, box.maxWidth - reserved),
+                      ),
+                      child: Text(
+                        pack.title,
+                        key: const ValueKey('slim-title'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        [
+                          pack.author ?? 'Unknown author',
+                          if (pack.types.isNotEmpty) pack.types.join(', '),
+                          '${formatCount(pack.fileCount)} files',
+                          formatBytes(pack.totalBytes),
+                        ].join(' · '),
+                        key: const ValueKey('slim-facts'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: muted,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(Icons.unfold_more, size: 16, color: muted?.color),
+                    const SizedBox(width: 4),
+                    Text(hint, style: muted),
+                  ],
+                );
+              },
             ),
           ),
           actions,
@@ -1663,6 +1696,9 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
   String? _focused;
   final _keys = FocusNode(debugLabel: 'images');
 
+  /// A second click on a card opens the image viewer.
+  final _clicks = DoubleClick<String>();
+
   /// Image sizes read from the file headers, for the card footers.
   final _dims = <String, (int, int)?>{};
 
@@ -1970,6 +2006,13 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
             !_animated.contains(rel) &&
             p.extension(rel).toLowerCase() == '.png';
         final shown = [for (final j in order) images[j]];
+        void open() => showImageViewer(
+          context,
+          packPath: pack.path,
+          images: shown,
+          index: math.max(0, order.indexOf(i)),
+          sizes: contents.sizes,
+        );
         final dims = _dims.putIfAbsent(rel, () => readImageSize(file.path));
         // Plain click focuses; Ctrl/Shift-click select in the Flat view.
         return ItemCard(
@@ -2003,9 +2046,15 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
           onTap: () {
             final keys = HardwareKeyboard.instance;
             if (keys.isShiftPressed) {
+              _clicks.reset();
               _selectRange(shown, rel);
             } else if (keys.isControlPressed) {
+              _clicks.reset();
               _toggle(rel);
+            } else if (_clicks.second(rel)) {
+              // Focused, without taking the keyboard from the viewer.
+              setState(() => _focused = rel);
+              open();
             } else {
               _focus(_focused == rel ? null : rel);
             }
@@ -2017,15 +2066,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
                 icon: Icons.animation,
                 onPressed: () => _makeAnimation(rel),
               ),
-            OpenImageButton(
-              onPressed: () => showImageViewer(
-                context,
-                packPath: pack.path,
-                images: shown,
-                index: math.max(0, order.indexOf(i)),
-                sizes: contents.sizes,
-              ),
-            ),
+            OpenImageButton(onPressed: open),
             RevealButton(file.path),
           ],
         );
@@ -3433,66 +3474,123 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     return length != null && length >= seekBarMinLength;
   }
 
+  /// Width of [text] in [style] at the screen's text scale.
+  double _textWidth(String text, TextStyle? style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final w = painter.width;
+    painter.dispose();
+    return w.ceilToDouble();
+  }
+
   Widget _rows(
     List<AudioTrack> audio,
     Future<Duration?> Function(String) readLength,
     Set<String> favorites,
-  ) => ListView.builder(
-    controller: _scroll,
-    padding: const EdgeInsets.only(top: tabContentGap, bottom: 8),
-    itemCount: audio.length,
-    itemBuilder: (context, i) {
-      final track = audio[i];
-      final rel = _fileOf(track);
-      final path = p.join(widget.pack.path, rel);
-      final playing = _playing == rel;
-      final tile = ListTile(
-        dense: true,
-        selected: _selected == rel,
-        leading: IconButton(
-          tooltip: playing ? 'Stop' : 'Play',
-          icon: Icon(playing ? Icons.stop_circle : Icons.play_circle),
-          onPressed: () => _toggle(rel),
-        ),
-        title: Text(p.basenameWithoutExtension(rel)),
-        subtitle: track.folder == '.' ? null : Text(track.folder),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FormatChips(
-              files: track.files,
-              shown: rel,
-              onPick: (f) => _switchFormat(track, f),
-            ),
-            const SizedBox(width: 16),
-            // Built only for visible rows, so only they are read.
-            _TrackLength(future: readLength(rel)),
-            const SizedBox(width: 16),
-            Text(formatBytes(widget.contents.sizes[rel] ?? 0)),
-            _trackStar(track, rel, favorites),
-            RevealButton(path),
-          ],
-        ),
-        onTap: () => _toggle(rel),
-      );
-      return KeyedSubtree(
-        key: _keyFor(rel),
-        child: !playing || !_seekable(rel)
-            ? tile
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  tile,
-                  _SeekBar(
-                    position: _position,
-                    length: _lengthOf(rel)!,
-                    onSeek: _seek,
+  ) {
+    final theme = Theme.of(context);
+    // Fixed columns, so formats, length and size line up down the list:
+    // the chips as wide as the widest set in the tab (left-aligned), the
+    // size as wide as the widest size there can be (right-aligned).
+    final chip = theme.textTheme.labelSmall?.copyWith(
+      fontWeight: FontWeight.bold,
+    );
+    var chipsWidth = 0.0;
+    for (final track in audio) {
+      var w = 0.0;
+      for (final f in track.files) {
+        // Text, the chip's padding and the gap after it ([FormatChips]).
+        w += _textWidth(formatOf(f).toUpperCase(), chip) + 10 + 4;
+      }
+      chipsWidth = math.max(chipsWidth, w);
+    }
+    // The size keeps the row's trailing text style (as the length does);
+    // only the figures are made tabular.
+    const sizeStyle = TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
+    // A ListTile's trailing text style (Material 3: labelSmall).
+    final trailing = theme.textTheme.labelSmall?.merge(sizeStyle);
+    // [formatBytes] gives `999 B`, `9.9 KB` or `999 MB`.
+    final sizeWidth = [
+      for (final u in ['B', 'KB', 'MB', 'GB']) ...['999 $u', '9.9 $u'],
+    ].map((t) => _textWidth(t, trailing)).reduce(math.max);
+    return ListView.builder(
+      controller: _scroll,
+      padding: const EdgeInsets.only(top: tabContentGap, bottom: 8),
+      itemCount: audio.length,
+      itemBuilder: (context, i) {
+        final track = audio[i];
+        final rel = _fileOf(track);
+        final path = p.join(widget.pack.path, rel);
+        final playing = _playing == rel;
+        final tile = ListTile(
+          dense: true,
+          selected: _selected == rel,
+          leading: IconButton(
+            tooltip: playing ? 'Stop' : 'Play',
+            icon: Icon(playing ? Icons.stop_circle : Icons.play_circle),
+            onPressed: () => _toggle(rel),
+          ),
+          title: Text(p.basenameWithoutExtension(rel)),
+          subtitle: track.folder == '.' ? null : Text(track.folder),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                key: ValueKey('formats-column:$rel'),
+                width: chipsWidth,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FormatChips(
+                    files: track.files,
+                    shown: rel,
+                    onPick: (f) => _switchFormat(track, f),
                   ),
-                ],
+                ),
               ),
-      );
-    },
-  );
+              const SizedBox(width: 12),
+              // Built only for visible rows, so only they are read.
+              _TrackLength(
+                key: ValueKey('length:$rel'),
+                future: readLength(rel),
+              ),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: sizeWidth,
+                child: Text(
+                  formatBytes(widget.contents.sizes[rel] ?? 0),
+                  key: ValueKey('size:$rel'),
+                  textAlign: TextAlign.end,
+                  style: sizeStyle,
+                ),
+              ),
+              _trackStar(track, rel, favorites),
+              RevealButton(path),
+            ],
+          ),
+          onTap: () => _toggle(rel),
+        );
+        return KeyedSubtree(
+          key: _keyFor(rel),
+          child: !playing || !_seekable(rel)
+              ? tile
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    tile,
+                    _SeekBar(
+                      position: _position,
+                      length: _lengthOf(rel)!,
+                      onSeek: _seek,
+                    ),
+                  ],
+                ),
+        );
+      },
+    );
+  }
 
   Widget _cards(
     List<AudioTrack> audio,
@@ -3752,6 +3850,7 @@ class _AudioCard extends StatelessWidget {
 /// `m:ss` once the header has been read; nothing for unknown formats.
 class _TrackLength extends StatelessWidget {
   const _TrackLength({
+    super.key,
     required this.future,
     this.align = TextAlign.end,
     this.width = 56,

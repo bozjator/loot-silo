@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +15,7 @@ import '../state/folder_folds.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
 import 'cursors.dart';
+import 'double_click.dart';
 import 'folder_groups.dart';
 import 'material_viewer.dart';
 import 'reveal.dart';
@@ -112,23 +112,18 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
     return KeyEventResult.handled;
   }
 
-  (String, DateTime)? _lastTap;
+  /// A second click on a card opens the viewer.
+  final _clicks = DoubleClick<String>();
 
   /// A click focuses the card (or leaves it); a second one soon after opens
   /// the viewer (see the Models tab for why this isn't a double-tap
   /// recognizer).
   void _tapped(MaterialSet m) {
-    final now = DateTime.now();
-    final last = _lastTap;
-    if (last != null &&
-        last.$1 == m.key &&
-        now.difference(last.$2) <= kDoubleTapTimeout) {
-      _lastTap = null;
+    if (_clicks.second(m.key)) {
       setState(() => _focused = m.key);
       _openViewer(m);
       return;
     }
-    _lastTap = (m.key, now);
     _focus(_focused == m.key ? null : m.key);
   }
 

@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,6 +14,7 @@ import '../state/favorites.dart';
 import '../state/folder_folds.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
+import 'double_click.dart';
 import 'folder_groups.dart';
 import 'format.dart';
 import 'model_stage.dart';
@@ -150,26 +150,20 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
     }
   }
 
-  /// The last card click, to tell a double-click.
-  (String, DateTime)? _lastTap;
+  /// A second click on a card opens the viewer.
+  final _clicks = DoubleClick<String>();
 
   /// A click focuses the card (or leaves it); a second click on the same
   /// card soon after opens the viewer. Done here rather than with a
   /// double-tap recognizer, which would hold every single click (and the
   /// format chips) back until the double-click time had passed.
   void _tapped(ModelItem m) {
-    final now = DateTime.now();
-    final last = _lastTap;
-    if (last != null &&
-        last.$1 == m.key &&
-        now.difference(last.$2) <= kDoubleTapTimeout) {
-      _lastTap = null;
+    if (_clicks.second(m.key)) {
       // Focused, without taking the keyboard back from the viewer.
       setState(() => _focused = m.key);
       _openViewer(m);
       return;
     }
-    _lastTap = (m.key, now);
     _focus(_focused == m.key ? null : m.key);
   }
 

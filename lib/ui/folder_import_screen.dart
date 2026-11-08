@@ -87,22 +87,47 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
     if (mounted) setState(() => _phase = _Phase.done);
   }
 
-  /// Author picker entries: the library's authors with their pack counts,
-  /// then authors only found in this import (count 0).
+  /// Author picker entries: the authors on this import's rows first (a
+  /// name typed on one row is offered on the next), then the library's
+  /// authors with their pack counts, then the rest found in this import.
   List<AuthorChoice> _authorChoices() {
     final packs = ref.read(libraryProvider).value?.packs ?? const [];
     final urls = {for (final a in _knownAuthors()) a.user: a.url};
-    final out = [
-      for (final (name, n) in knownAuthors(packs))
-        AuthorChoice(name, packs: n, url: urls[name]),
-    ];
-    final seen = {for (final c in out) c.name.toLowerCase()};
-    for (final a in _knownAuthors()) {
-      if (seen.add(a.user.toLowerCase())) {
-        out.add(AuthorChoice(a.user, url: a.url));
+    final counts = {
+      for (final (name, n) in knownAuthors(packs)) name.toLowerCase(): n,
+    };
+    final out = <AuthorChoice>[];
+    final seen = <String>{};
+    void add(String name, String? url) {
+      final key = name.toLowerCase();
+      if (seen.add(key)) {
+        out.add(AuthorChoice(name, packs: counts[key] ?? 0, url: url));
       }
     }
+
+    for (final i in _plan?.items ?? const <ImportItem>[]) {
+      if (i.author case final a?) add(a.user, a.url ?? urls[a.user]);
+    }
+    for (final (name, _) in knownAuthors(packs)) {
+      add(name, urls[name]);
+    }
+    for (final a in _knownAuthors()) {
+      add(a.user, a.url);
+    }
     return out;
+  }
+
+  /// Tag suggestions: the tags on this import's rows first (a tag made on
+  /// one row is offered on the next), then the library's, most used first.
+  List<String> _knownTags() {
+    final seen = <String>{};
+    return [
+      for (final i in _plan?.items ?? const <ImportItem>[])
+        for (final t in i.tags)
+          if (seen.add(t)) t,
+      for (final t in knownTags(ref))
+        if (seen.add(t)) t,
+    ];
   }
 
   /// Authors already in the library plus those found in this import.
@@ -225,7 +250,7 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
                 onChanged: () => setState(() {}),
                 knownAuthors: _knownAuthors,
                 authorChoices: _authorChoices,
-                knownTags: () => knownTags(ref),
+                knownTags: _knownTags,
               );
             },
           ),

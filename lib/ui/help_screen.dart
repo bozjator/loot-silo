@@ -225,8 +225,9 @@ class HelpScreen extends StatelessWidget {
                   'The pin '
                   '(H), itch.io page (when linked) and open folder icons sit '
                   'in the header\'s top-right corner. When the header is '
-                  'unpinned, a slim bar replaces it, with the same icons at '
-                  'its right end. Rest the pointer on the bar for a moment '
+                  'unpinned, a slim bar replaces it: the pack\'s title, then '
+                  'author, types, file count and size (cut first when the '
+                  'bar is narrow), and the same icons at its right end. Rest the pointer on the bar for a moment '
                   'to see the full header floating over the tabs; passing '
                   'over it on the way to a tab doesn\'t open it.',
                 ),
@@ -250,7 +251,9 @@ class HelpScreen extends StatelessWidget {
                   'focused card leave it. On hover, a card shows its star '
                   '(top right) and its icons over the footer: Edit (animations) '
                   'or Make animation… (images), Open image (the viewer, in '
-                  'on-screen order) and Show in file manager. Image cards '
+                  'on-screen order) and Show in file manager. A double-click '
+                  'on a card opens it in the image viewer as well (not with '
+                  'Ctrl or Shift held). Image cards '
                   'show the image size under the name. Ctrl-click or '
                   'Shift-click select images instead of focusing them, in '
                   'the Flat and By folder views alike; Shift selects a range '

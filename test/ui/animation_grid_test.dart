@@ -314,4 +314,36 @@ void main() {
     await tester.pump();
     expect(opacityOf(tester, 'Knight idle'), 0.35);
   });
+
+  testWidgets('M64: a double-click opens the viewer on that animation', (
+    tester,
+  ) async {
+    await pumpGrid(tester);
+    // One click only focuses.
+    await tester.tap(find.text('Knight idle'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(ImageViewer), findsNothing);
+    // A second click soon after opens the viewer on the same file as the
+    // card's Open icon.
+    await tester.tap(find.text('Knight attack'));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.text('Knight attack'));
+    await tester.pump(const Duration(milliseconds: 300));
+    final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
+    expect(viewer.images[viewer.initialIndex], 'knight_attack.png');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(ImageViewer), findsNothing);
+    expect(opacityOf(tester, 'Knight idle'), 0.35);
+
+    // Ctrl held: two clicks focus and unfocus, no viewer.
+    await tester.pump(const Duration(seconds: 1));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.tap(find.text('Knight walk'));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.text('Knight walk'));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(ImageViewer), findsNothing);
+  });
 }
