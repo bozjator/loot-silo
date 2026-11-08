@@ -305,4 +305,77 @@ void main() {
       }
     },
   );
+
+  test(
+    'M55: crab, chimney smoke, villager parts, one-picture props (read-only)',
+    skip: Directory(managed).existsSync() ? false : 'no $managed',
+    () {
+      final packs = scanLibrary(managed).packs;
+      Map<String, SpriteAnim> animsOf(String id) {
+        final pack = packs.firstWhere((p) => p.id == id);
+        return {
+          for (final a in loadPackContents(pack.path, [
+            for (final f in pack.files) (f, 0),
+          ]).detected)
+            a.path: a,
+        };
+      }
+
+      (int, int, int, int, int)? grid(Map<String, SpriteAnim> m, String rel) {
+        final a = m[rel];
+        return a == null
+            ? null
+            : (a.frameW, a.frameH, a.cols, a.rows, a.frameCount);
+      }
+
+      final sea = animsOf(
+        'RafaelMatos/ERW - Sea Adventures (GL 2.0 expansion) V1.5',
+      );
+      const crab = 'Characters/crab-claw enemy/crab-claw enemy';
+      expect(grid(sea, '$crab-idle2.png'), (160, 128, 8, 1, 8));
+      expect(grid(sea, '$crab-atk2-finish.png'), (160, 128, 8, 1, 8));
+      expect(grid(sea, '$crab-atk1.png'), (160, 128, 17, 1, 17));
+      expect(grid(sea, '$crab-atk1-packed.png'), (160, 128, 5, 4, 17));
+
+      final village = animsOf('RafaelMatos/Epic RPG World - The Village V2.2');
+      for (final n in [1, 2]) {
+        for (final tone in ['dark', 'white']) {
+          expect(
+            grid(
+              village,
+              'buildings/Animated stuff/chimney-smoke-chiminey $n - '
+              '$tone smoke.png',
+            ),
+            (96, 64, 16, 1, 16),
+          );
+        }
+      }
+      expect(
+        village['tilesets and props/props-sprites/pennant-bunting_2.png'],
+        isNull,
+      );
+      const parts = 'NPCs/villager/female/by parts/villager';
+      expect(grid(village, '$parts-R-Arm-skin2-death.png'), (
+        160,
+        160,
+        12,
+        2,
+        17,
+      ));
+      for (final m in [
+        for (final MapEntry(:key, :value) in village.entries)
+          if (key.contains('/by parts/') && key.endsWith('.png')) value,
+      ]) {
+        expect((m.frameW, m.frameH), (160, 160), reason: m.path);
+      }
+
+      final interiors = animsOf(
+        'RafaelMatos/Epic RPG World - Village(interiors) V1.3',
+      );
+      expect(
+        interiors['assets/furniture_and_props_sprites/decor_shields_7.png'],
+        isNull,
+      );
+    },
+  );
 }

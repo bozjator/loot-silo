@@ -913,21 +913,21 @@ void main() {
     test('a 6×6 grid of 48 px cells with 35 sprites beside 48-high strips: '
         '35 frames of the strips\' size', () {
       // The strip: 10 frames of 48 px (square guess). The grid's name has
-      // no animation word, as in fisherman-…-fishing-pulling-back.png.
+      // no animation word (`pulling` became one in M55).
       png('npc/fisher-idle.png', 480, 48, blobs: sprites(48, 10, 1, 10));
-      png('npc/fisher-pulling.png', 288, 288, blobs: sprites(48, 6, 6, 35));
-      final found = detect(['npc/fisher-idle.png', 'npc/fisher-pulling.png']);
-      final a = found['npc/fisher-pulling.png']!;
+      png('npc/fisher-reeling.png', 288, 288, blobs: sprites(48, 6, 6, 35));
+      final found = detect(['npc/fisher-idle.png', 'npc/fisher-reeling.png']);
+      final a = found['npc/fisher-reeling.png']!;
       expect((a.frameW, a.frameH, a.cols, a.rows), (48, 48, 6, 6));
       expect(a.frameTotal, 35);
       expect(a.frameCount, 35);
       // Without the strip next to it, nothing detects it (no animation
       // word), but Make animation starts from the gap grid: the same 35.
-      final alone = detect(['npc/fisher-pulling.png']);
+      final alone = detect(['npc/fisher-reeling.png']);
       expect(alone, isEmpty);
       final guess = guessAnimation(
         tmp.path,
-        'npc/fisher-pulling.png',
+        'npc/fisher-reeling.png',
         288,
         288,
       );
@@ -1010,6 +1010,211 @@ void main() {
       png('g/odd.png', 50, 30);
       g = guessAnimation(tmp.path, 'g/odd.png', 50, 30);
       expect((g.frameW, g.cols, g.frameCount), (50, 1, 1));
+    });
+  });
+
+  group('M55: word stems, folder frame sizes, smoke, one-picture props', () {
+    Map<String, SpriteAnim> detect(List<String> files, {int scans = 64}) => {
+      for (final a in detectAnimations(tmp.path, files, maxWordScans: scans))
+        a.path: a,
+    };
+
+    /// Small (6×8) sprites in [cell]-px cells: those of [cols]×[rows] whose
+    /// index [drawn] accepts.
+    List<(int, int, int, int)> sprites(
+      int cell,
+      int cols,
+      int rows,
+      bool Function(int i) drawn,
+    ) => [
+      for (var i = 0; i < cols * rows; i++)
+        if (drawn(i)) ((i % cols) * cell + 5, (i ~/ cols) * cell + 4, 6, 8),
+    ];
+
+    test('a trailing number keeps the word: idle2, attack1, atk2', () {
+      for (final name in [
+        'crab-claw enemy-idle2.png',
+        'hero-attack1.png',
+        'crab-claw enemy-atk2-finish.png',
+        'Attack2.png',
+        'fisherman-fishing-throwing.png',
+      ]) {
+        expect(hasAnimationWord('c/$name'), isTrue, reason: name);
+      }
+      expect(hasAnimationWord('c/crab-claw enemy-2.png'), isFalse);
+      expect(animationWords, containsAll(['atk', 'throwing', 'fishing']));
+      // Not-animation words match exactly: `tilesets and props` holds
+      // animated props.
+      expect(detectSheet('tilesets and props/fountain.png', 64, 16), isNotNull);
+      expect(detectSheet('tileset2/water.png', 64, 16), isNull);
+    });
+
+    test('17 frames on 1920×320 is 12 × 2 of 160, not 5 × 4', () {
+      const death = SpriteAnim(
+        path: 'villager-R-Arm-skin2-death.png',
+        kind: AnimKind.sheet,
+        frameW: 320,
+        frameH: 320,
+        cols: 6,
+      );
+      final s = death.withFrameCount(17)!;
+      expect(
+        (s.cols, s.rows, s.frameW, s.frameH, s.frameCount),
+        (12, 2, 160, 160, 17),
+      );
+    });
+
+    test('a strip without a word takes its folder\'s frame size when the '
+        'square cuts run through drawings', () {
+      // 8 frames of 40×32 (sprites 20 wide) beside a sibling with a word.
+      final wide = [for (var i = 0; i < 8; i++) (i * 40 + 10, 6, 20, 20)];
+      png('crab/crab-idle.png', 320, 32, blobs: wide);
+      png('crab/crab-xyz.png', 320, 32, blobs: wide);
+      final found = detect(['crab/crab-idle.png', 'crab/crab-xyz.png']);
+      for (final a in found.values) {
+        expect((a.frameW, a.frameH, a.cols), (40, 32, 8), reason: a.path);
+      }
+    });
+
+    test('a two-row death sheet takes the 16 px cells of its siblings', () {
+      // Siblings: 10 frames of 16 px. Death: 192×32, 12 × 2 cells of 16
+      // with 17 sprites; the square guess was 6 of 32.
+      png(
+        'parts/arm-idle.png',
+        160,
+        16,
+        blobs: sprites(16, 10, 1, (_) => true),
+      );
+      png(
+        'parts/leg-idle.png',
+        160,
+        16,
+        blobs: sprites(16, 10, 1, (_) => true),
+      );
+      png(
+        'parts/arm-death.png',
+        192,
+        32,
+        blobs: sprites(16, 12, 2, (i) => i < 17),
+      );
+      final a = detect([
+        'parts/arm-idle.png',
+        'parts/leg-idle.png',
+        'parts/arm-death.png',
+      ])['parts/arm-death.png']!;
+      expect(
+        (a.frameW, a.frameH, a.cols, a.rows, a.frameCount),
+        (16, 16, 12, 2, 17),
+      );
+      // Bigger cells over a clean strip don't win: 16 px frames stay.
+      png('small/coin-spin.png', 64, 16, blobs: sprites(16, 4, 1, (_) => true));
+      png(
+        'small/gem-spin.png',
+        64,
+        32,
+        blobs: [(4, 4, 24, 24), (36, 4, 24, 24)],
+      );
+      png(
+        'small/orb-spin.png',
+        64,
+        32,
+        blobs: [(4, 4, 24, 24), (36, 4, 24, 24)],
+      );
+      expect(
+        detect([
+          'small/coin-spin.png',
+          'small/gem-spin.png',
+          'small/orb-spin.png',
+        ])['small/coin-spin.png']!.frameW,
+        16,
+      );
+    });
+
+    test(
+      'a body-part layer hidden in some frames takes its siblings\' grid',
+      () {
+        // Idle strips of 16 px frames, two-row death sheets of 16 px cells.
+        for (final part in ['head', 'body']) {
+          png(
+            'parts/$part-idle.png',
+            160,
+            16,
+            blobs: sprites(16, 10, 1, (_) => true),
+          );
+          png(
+            'parts/$part-death.png',
+            192,
+            32,
+            blobs: sprites(16, 12, 2, (i) => i < 20),
+          );
+        }
+        // The arm shows in frame 1 and 7–12 only.
+        png(
+          'parts/arm-death.png',
+          192,
+          32,
+          blobs: sprites(16, 12, 2, (i) => i == 0 || i >= 6 && i < 12),
+        );
+        final found = detect([
+          'parts/head-idle.png',
+          'parts/body-idle.png',
+          'parts/head-death.png',
+          'parts/body-death.png',
+          'parts/arm-death.png',
+        ]);
+        final arm = found['parts/arm-death.png']!;
+        expect(
+          (arm.frameW, arm.frameH, arm.cols, arm.rows, arm.frameCount),
+          (16, 16, 12, 2, 12),
+        );
+        expect(found['parts/head-death.png']!.frameCount, 20);
+        expect(
+          siblingGrids(found.values, {
+            for (final f in found.keys)
+              f: f.endsWith('idle.png') ? (160, 16) : (192, 32),
+          })[('parts', 192, 32)],
+          (16, 16),
+        );
+      },
+    );
+
+    test('smoke: the most frames with clear cuts and a drawing in each', () {
+      // 16 frames of 24×16 on 384×16, each with two wisps and a gap
+      // inside, so the gaps are uneven; the square guess (24 of 16)
+      // leaves frames empty.
+      final wisps = [
+        for (var i = 0; i < 16; i++) ...[
+          (i * 24 + 4, 4, 5, 6),
+          (i * 24 + 10, 2, 6 + i % 3, 8),
+        ],
+      ];
+      png('fx/chimney-smoke.png', 384, 16, blobs: wisps);
+      final a = detect(['fx/chimney-smoke.png'])['fx/chimney-smoke.png']!;
+      expect((a.frameW, a.frameH, a.cols), (24, 16, 16));
+    });
+
+    test('thin parts over every cut make one picture (antlers, bunting)', () {
+      // Antlers: a 1 px line from x 22 to 73 over a 20 px head.
+      png(
+        'props/decor_shields_7.png',
+        96,
+        32,
+        blobs: [(22, 6, 52, 2), (38, 3, 20, 18)],
+      );
+      // Bunting: a string over the whole width with pennants on it.
+      png(
+        'props/pennant-bunting_2.png',
+        224,
+        32,
+        blobs: [
+          (6, 5, 215, 1),
+          for (var x = 10; x < 210; x += 24) (x, 6, 10, 12),
+        ],
+      );
+      expect(
+        detect(['props/decor_shields_7.png', 'props/pennant-bunting_2.png']),
+        isEmpty,
+      );
     });
   });
 }

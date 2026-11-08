@@ -1978,14 +1978,14 @@ void main() {
         );
       }
       await openImages(tester, {
-        'npc/pulling.png': grid,
+        'npc/reeling.png': grid,
         'npc/portrait.png': solid(20, 30, 40),
       });
       expect(find.textContaining('Animations ('), findsNothing);
-      await hover(tester, 'pulling.png');
+      await hover(tester, 'reeling.png');
       await tester.tap(
         find.descendant(
-          of: find.byKey(const ValueKey('image:npc/pulling.png')),
+          of: find.byKey(const ValueKey('image:npc/reeling.png')),
           matching: find.byTooltip('Make animation…'),
         ),
       );
