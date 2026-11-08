@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds the Loot Silo branding assets from ../app_logos (read-only).
+"""Builds the Loot Silo branding assets from tool/branding/source (read-only).
 
 Sources: icon_full_centered.png (the app icon) and app-title-with-slogan.png
 (the name and slogan). Run from the repo root:
@@ -7,13 +7,12 @@ Sources: icon_full_centered.png (the app icon) and app-title-with-slogan.png
 Needs Pillow. Writes assets/branding/*.png and the Linux/macOS/Windows icons.
 """
 import os
-import shutil
 import sys
 
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-SRC = os.path.join(ROOT, '..', 'app_logos')
+SRC = os.path.join(ROOT, 'tool', 'branding', 'source')
 OUT = os.path.join(ROOT, 'assets', 'branding')
 
 ICON = 'icon_full_centered.png'

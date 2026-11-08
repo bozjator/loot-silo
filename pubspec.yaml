@@ -77,7 +77,7 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # Built by tool/branding/make_branding.py from ../app_logos.
+  # Built by tool/branding/make_branding.py from tool/branding/source.
   assets:
     - assets/branding/icon_small.png
     - assets/branding/icon_full.png

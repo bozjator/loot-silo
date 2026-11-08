@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../version.dart';
 
-/// Branding images, built by `tool/branding/make_branding.py` from
-/// `../app_logos` (icon_full_centered.png and app-title-with-slogan.png).
+/// Branding images, built by `tool/branding/make_branding.py` from the two
+/// source images in `tool/branding/source` (icon_full_centered.png and
+/// app-title-with-slogan.png).
 abstract final class Branding {
   /// The app icon (the silo on its rounded square) at 64 px, for small sizes.
   static const iconSmall = 'assets/branding/icon_small.png';

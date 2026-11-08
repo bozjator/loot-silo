@@ -2,14 +2,14 @@
   <img src="assets/branding/logo_readme.png" alt="Loot Silo logo: a silo full of game loot, with the slogan" width="520">
 </p>
 
-<p align="center"><b>Your game assets. At a glance.</b></p>
+<p align="center"><b>Your game assets explorer.</b></p>
 
 <p align="center">
   <a href="https://bozjator.itch.io/loot-silo"><b>⬇ Download Loot Silo on itch.io</b></a>
   &nbsp;·&nbsp; Linux · Windows · macOS &nbsp;·&nbsp; free, no account, no cloud
 </p>
 
-**Loot Silo is a game asset manager for indie game devs.** It is a desktop
+**Loot Silo is a game asset manager for game devs.** It is a desktop
 asset library organizer and sprite / spritesheet viewer for everything you
 have bought, bundled or downloaded: pixel art, tilesets, characters, UI,
 VFX, sound effects, music and fonts. Import your packs once, then find any
@@ -111,8 +111,7 @@ Archives: zip, tar, 7z, rar.
 
 **Where is my data stored?**
 Your assets stay in the library folder you choose. Settings and a search
-index (a cache that is rebuilt when needed) live in the app's data folder,
-on Linux `~/.local/share/dev.uzo.loot_silo`.
+index (a cache that is rebuilt when needed) live in the app's data folder.
 
 **Is it free?**
 Yes. Download it on [itch.io](https://bozjator.itch.io/loot-silo) or build
@@ -141,6 +140,17 @@ flutter build linux --release
 
 Windows and macOS runners are included but not yet tested.
 
+### Branding
+
+The app icon (window, taskbar and installer icons on Linux, Windows and
+macOS) and the Loot Silo logo shown in the app and at the top of this README
+are generated from two source images in `tool/branding/source/`. After
+changing either one, regenerate the files (needs Pillow) and rebuild the app:
+
+```bash
+python3 tool/branding/make_branding.py
+```
+
 ## Tests
 
 ```bash
@@ -155,8 +165,6 @@ on a headless machine run them under Xvfb:
 ```bash
 xvfb-run -a -s "-screen 0 1440x900x24" flutter test integration_test/app_test.dart -d linux
 ```
-
-The branding assets are rebuilt with `python3 tool/branding/make_branding.py`.
 
 ## License
 
