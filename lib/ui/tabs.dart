@@ -157,6 +157,17 @@ class TabsNotifier extends Notifier<Tabs> {
     state = Tabs(tabs, active);
   }
 
+  /// Moves pack tab [from] to index [to] (both before the move); the
+  /// shown tab stays shown.
+  void move(int from, int to) {
+    final n = state.tabs.length;
+    if (from < 0 || from >= n || to < 0 || to >= n || from == to) return;
+    final shown = state.active > 0 ? state.tabs[state.active - 1] : null;
+    final tabs = [...state.tabs];
+    tabs.insert(to, tabs.removeAt(from));
+    state = Tabs(tabs, shown == null ? 0 : tabs.indexOf(shown) + 1);
+  }
+
   /// Ctrl+W: the shown pack tab (never the dashboard).
   void closeCurrent() {
     if (state.active > 0) close(state.active - 1);
@@ -493,25 +504,39 @@ class _PackTabStripState extends ConsumerState<PackTabStrip> {
                   child: _RevealOnChange(
                     tabs: tabs,
                     reveal: _reveal,
-                    child: SingleChildScrollView(
+                    // Drag a pack tab to move it; a click without moving
+                    // still selects it.
+                    child: ReorderableListView.builder(
                       key: const ValueKey('strip-scroll'),
-                      controller: _scroll,
+                      scrollController: _scroll,
                       scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          for (final (i, t) in tabs.tabs.indexed)
-                            KeyedSubtree(
-                              key: _keys[t.id],
+                      buildDefaultDragHandles: false,
+                      // Every tab is built, so any can be scrolled into view.
+                      scrollCacheExtent: const ScrollCacheExtent.pixels(1e6),
+                      itemCount: tabs.tabs.length,
+                      onReorderItem: notifier.move,
+                      proxyDecorator: (child, _, _) => Material(
+                        type: MaterialType.transparency,
+                        child: child,
+                      ),
+                      itemBuilder: (context, i) {
+                        final t = tabs.tabs[i];
+                        return ReorderableDragStartListener(
+                          key: ValueKey('strip-${t.id}'),
+                          index: i,
+                          child: KeyedSubtree(
+                            key: _keys[t.id],
+                            child: Center(
                               child: _StripTab(
-                                key: ValueKey('strip-${t.id}'),
                                 label: label(t),
                                 selected: tabs.active == i + 1,
                                 onTap: () => show(i + 1),
                                 onClose: () => notifier.close(i),
                               ),
                             ),
-                        ],
-                      ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),

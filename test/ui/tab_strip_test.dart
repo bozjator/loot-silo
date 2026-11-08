@@ -137,4 +137,61 @@ void main() {
     expect(left, findsNothing);
     expect(find.byTooltip('All tabs'), findsNothing);
   });
+
+  testWidgets('drag a tab to move it; a click still selects', (tester) async {
+    await pumpStrip(tester, width: 1400);
+    tabs()
+      ..open('a')
+      ..open('b')
+      ..open('c')
+      ..select(2);
+    await tester.pumpAndSettle();
+    List<String> order() =>
+        container.read(tabsProvider).tabs.map((t) => t.packId).toList();
+
+    // Drag a past c with the mouse.
+    final from = tester.getCenter(find.text('a'));
+    final to = tester.getCenter(find.text('c'));
+    final g = await tester.startGesture(from, kind: PointerDeviceKind.mouse);
+    for (var i = 1; i <= 10; i++) {
+      await g.moveTo(Offset.lerp(from, to + const Offset(60, 0), i / 10)!);
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(order(), ['b', 'c', 'a']);
+    // b is still the shown tab.
+    expect(container.read(tabsProvider).active, 1);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('a'), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    expect(order(), ['b', 'c', 'a']);
+    expect(container.read(tabsProvider).active, 3);
+  });
+
+  test('move keeps the shown tab', () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final n = c.read(tabsProvider.notifier)
+      ..open('a')
+      ..open('b')
+      ..open('c')
+      ..select(1); // a
+    List<String> order() =>
+        c.read(tabsProvider).tabs.map((t) => t.packId).toList();
+    n.move(0, 2);
+    expect(order(), ['b', 'c', 'a']);
+    expect(c.read(tabsProvider).active, 3);
+    n.move(2, 0);
+    expect(order(), ['a', 'b', 'c']);
+    expect(c.read(tabsProvider).active, 1);
+    n
+      ..select(0)
+      ..move(1, 2);
+    expect(order(), ['a', 'c', 'b']);
+    expect(c.read(tabsProvider).active, 0);
+    n.move(0, 9); // out of range: nothing
+    expect(order(), ['a', 'c', 'b']);
+  });
 }
