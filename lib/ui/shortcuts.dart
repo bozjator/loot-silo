@@ -186,6 +186,32 @@ abstract final class AppKeys {
   static const resetCamera = KeyBinding('Reset the camera', [
     CharacterActivator('0'),
   ]);
+
+  // Material viewer.
+  static const materialPrevious = KeyBinding('Previous material', [
+    SingleActivator(LogicalKeyboardKey.arrowLeft),
+  ]);
+  static const materialNext = KeyBinding('Next material', [
+    SingleActivator(LogicalKeyboardKey.arrowRight),
+  ]);
+  static const materialSphere = KeyBinding('Sphere', [CharacterActivator('1')]);
+  static const materialPlane = KeyBinding('Plane', [CharacterActivator('2')]);
+  static const materialTiled = KeyBinding('Tiled 3 × 3', [
+    CharacterActivator('3'),
+  ]);
+  static const materialMap = KeyBinding('The picked map', [
+    CharacterActivator('4'),
+  ]);
+  static const materialZoomIn = KeyBinding('Zoom in', [
+    CharacterActivator('+'),
+    CharacterActivator('='),
+  ]);
+  static const materialZoomOut = KeyBinding('Zoom out', [
+    CharacterActivator('-'),
+  ]);
+  static const materialReset = KeyBinding('Reset the light, turn and zoom', [
+    CharacterActivator('0'),
+  ]);
 }
 
 /// The shortcut table as the Help page shows it, by where it works.
@@ -237,6 +263,20 @@ const shortcutSections = <(String, List<KeyBinding>)>[
       AppKeys.resetCamera,
     ],
   ),
+  (
+    'Material viewer',
+    [
+      AppKeys.materialPrevious,
+      AppKeys.materialNext,
+      AppKeys.materialSphere,
+      AppKeys.materialPlane,
+      AppKeys.materialTiled,
+      AppKeys.materialMap,
+      AppKeys.materialZoomIn,
+      AppKeys.materialZoomOut,
+      AppKeys.materialReset,
+    ],
+  ),
 ];
 
 /// Mouse gestures the Help page lists next to the shortcuts.
@@ -281,10 +321,14 @@ const mouseHelp = [
   MouseHelp('Wheel over the Edit preview', 'Zoom (−, +, reset on hover)'),
   MouseHelp('Ctrl / Shift-click images', 'Select frames to combine'),
   MouseHelp('Double-click a model card', 'Open it in the model viewer'),
+  MouseHelp('Double-click a material card', 'Open it in the material viewer'),
+  MouseHelp('Drag in the material viewer', 'Turn the light'),
+  MouseHelp('Right- or middle-drag in the material viewer', 'Turn the sphere'),
   MouseHelp(
-    'Double-click a material card',
-    'Step through its picture and maps in the image viewer',
+    'Wheel in the material viewer',
+    'Zoom (the map: zoom and drag to pan)',
   ),
+  MouseHelp('Click a map in the material viewer\'s strip', 'Show that map'),
   MouseHelp('Drag in the model viewer', 'Orbit around the model'),
   MouseHelp(
     'Right- or middle-drag in the model viewer',

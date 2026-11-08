@@ -77,6 +77,10 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # The material viewer's lit sphere (M63).
+  shaders:
+    - shaders/material_preview.frag
+
   # Built by tool/branding/make_branding.py from tool/branding/source.
   assets:
     - assets/branding/icon_small.png

@@ -6,6 +6,8 @@ import 'package:loot_silo/core/model_formats.dart';
 import 'package:loot_silo/state/providers.dart';
 import 'package:loot_silo/ui/cursors.dart';
 import 'package:loot_silo/ui/model_viewer.dart';
+import 'package:loot_silo/ui/material_viewer.dart';
+import 'package:loot_silo/core/material_sets.dart';
 
 import '../helpers/models.dart';
 
@@ -158,6 +160,65 @@ void main() {
     );
     expect(
       await over(find.byKey(const ValueKey('format:cube.obj'))),
+      SystemMouseCursors.click,
+    );
+    expect(await over(find.text('Copy path')), SystemMouseCursors.click);
+  });
+
+  testWidgets('material viewer: grab over the stage, hand on its controls', (
+    tester,
+  ) async {
+    materialViewOptions.reset();
+    final tmp = Directory.systemTemp.createTempSync('cursor-material');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    const m = MaterialSet(
+      key: 'Rock',
+      name: 'Rock',
+      maps: [
+        MaterialMap(MapRole.color, 'Rock_Color.png'),
+        MaterialMap(MapRole.normalGL, 'Rock_Normal.png'),
+      ],
+      toolFiles: ['Rock.tres'],
+    );
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: withClickCursors(ThemeData()),
+          home: MaterialViewer(
+            packPath: tmp.path,
+            materials: const [m],
+            initialIndex: 0,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    Future<MouseCursor?> over(Finder f) async {
+      await mouse.moveTo(tester.getCenter(f));
+      await tester.pump();
+      return RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1);
+    }
+
+    expect(
+      await over(find.byKey(const ValueKey('material-viewer-stage'))),
+      SystemMouseCursors.grab,
+    );
+    expect(await over(find.text('Plane')), SystemMouseCursors.click);
+    expect(
+      await over(find.byKey(const ValueKey('material-tiling'))),
+      SystemMouseCursors.click,
+    );
+    expect(
+      await over(find.byKey(const ValueKey('strip:Rock_Normal.png'))),
+      SystemMouseCursors.click,
+    );
+    expect(
+      await over(find.byKey(const ValueKey('format:Rock.tres'))),
       SystemMouseCursors.click,
     );
     expect(await over(find.text('Copy path')), SystemMouseCursors.click);

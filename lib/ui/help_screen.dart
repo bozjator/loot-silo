@@ -373,9 +373,29 @@ class HelpScreen extends StatelessWidget {
                   'Blender, Substance, Unity) shows its file in the file '
                   'manager. Cards work like model cards: click to focus, '
                   '←/→, the star, Flat or By folder, the size slider and '
-                  'Ctrl + wheel. Double-click a card, or use its Open in '
-                  'viewer icon, to step through the picture and the maps in '
-                  'the image viewer.',
+                  'Ctrl + wheel.',
+                ),
+                _P(
+                  'Double-click a card, or use its Open in viewer icon, to '
+                  'open the material viewer. Sphere (1) and Plane (2) draw '
+                  'the material lit by one light, from its Color, Normal, '
+                  'Roughness, Metalness and AO maps (a missing map counts as '
+                  'plain: white, flat, half rough, not metal, no shadow; the '
+                  'Height map and packed ARM maps are not used). Drag to '
+                  'move the light, right- or middle-drag to turn the sphere, '
+                  'the wheel or + and − zoom, double-click or 0 resets; the '
+                  'Tiling slider repeats the maps 1 to 8 times. Tiled 3 × 3 '
+                  '(3) shows the Color map nine times to judge its seams, '
+                  'and Map (4) one map at actual pixels (wheel to zoom, drag '
+                  'to pan). The strip under the stage lists the maps with '
+                  'their role, file and pixel size; click one to show it. '
+                  'The panel on the right gives the folder, resolution, '
+                  'maps, the files for other tools (click to show one in '
+                  'the file manager) and the total size, with Show in file '
+                  'manager and Copy path. ←/→ go to the previous or next '
+                  'material of the tab; the mode, tiling and light stay '
+                  'until the app closes. Esc or the mouse back button '
+                  'close the viewer.',
                 ),
               ]),
               const _Section('Favorites', [

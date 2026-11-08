@@ -14,6 +14,7 @@ import 'package:loot_silo/ui/app.dart';
 import 'package:loot_silo/ui/format.dart';
 import 'package:loot_silo/ui/help_screen.dart';
 import 'package:loot_silo/ui/image_viewer.dart';
+import 'package:loot_silo/ui/material_viewer.dart';
 import 'package:loot_silo/ui/model_viewer.dart';
 import 'package:loot_silo/ui/pack_detail_screen.dart';
 import 'package:loot_silo/ui/reveal.dart';
@@ -4099,6 +4100,8 @@ void main() {
 
   group('Materials tab (M62)', () {
     final reveals = <String>[];
+    // The viewer's options last for the session.
+    setUp(materialViewOptions.reset);
 
     Future<void> open(WidgetTester tester, {List<String>? types}) async {
       reveals.clear();
@@ -4214,28 +4217,124 @@ void main() {
       expect(rock, findsNothing);
     });
 
-    testWidgets('double-click opens the maps in the image viewer', (
+    Future<void> openViewer(WidgetTester tester) async {
+      await tester.tap(rock);
+      await tester.pump(const Duration(milliseconds: 50));
+      // Maps decode and the shader loads on real time, so the viewer opens
+      // with real timers.
+      await tester.runAsync(() async {
+        await tester.tap(rock);
+        await tester.pump();
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      final loading = find.byKey(const ValueKey('material-loading'));
+      for (var i = 0; i < 50 && loading.evaluate().isNotEmpty; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+      expect(loading, findsNothing);
+    }
+
+    testWidgets('M63: double-click opens the viewer; ←/→, back, Esc', (
       tester,
     ) async {
       await open(tester);
-      await tester.tap(rock);
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.tap(rock);
+      await openViewer(tester);
+      expect(find.byType(MaterialViewer), findsOneWidget);
+      // On-screen order: Stone/Rock, then Wood.
+      expect(find.text('1 / 2'), findsOneWidget);
+      expect(find.text('Stone/Rock'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(find.text('2 / 2'), findsOneWidget);
+      expect(find.text('Wood'), findsWidgets);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(find.text('1 / 2'), findsOneWidget);
+
+      final back = await tester.startGesture(
+        const Offset(5, 895),
+        kind: PointerDeviceKind.mouse,
+        buttons: kBackMouseButton,
+      );
+      await back.up();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.byType(ImageViewer), findsOneWidget);
-      final viewer = tester.widget<ImageViewer>(find.byType(ImageViewer));
-      expect(viewer.images, [
-        'Stone/Rock.png',
-        'Stone/Rock_Color.png',
-        'Stone/Rock_Normal.png',
-        'Stone/Rock_Roughness.png',
-      ]);
+      expect(find.byType(MaterialViewer), findsNothing);
+      expect(find.byType(PackDetailScreen), findsOneWidget);
+
+      await openViewer(tester);
+      expect(find.byType(MaterialViewer), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.byType(ImageViewer), findsNothing);
+      expect(find.byType(MaterialViewer), findsNothing);
       expect(find.byType(PackDetailScreen), findsOneWidget);
+    });
+
+    testWidgets('M63: modes, the map strip and the info panel', (tester) async {
+      await open(tester);
+      await openViewer(tester);
+      expect(
+        find.byKey(const ValueKey('material-shader:sphere')),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Plane'));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('material-shader:plane')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('material-tiling')), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit3);
+      await tester.pump();
+      expect(find.byKey(const ValueKey('material-tiled')), findsOneWidget);
+      expect(find.byKey(const ValueKey('material-tiling')), findsNothing);
+
+      // The strip: one entry per map, with its pixel size; a click shows it.
+      for (final m in ['Color', 'Normal', 'Roughness']) {
+        expect(find.byKey(ValueKey('strip:Stone/Rock_$m.png')), findsOneWidget);
+      }
+      expect(
+        find.byKey(const ValueKey('strip-size:Stone/Rock_Normal.png')),
+        findsOneWidget,
+      );
+      expect(find.text('8 × 8'), findsNWidgets(3));
+      await tester.tap(
+        find.byKey(const ValueKey('strip:Stone/Rock_Normal.png')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('material-map:Stone/Rock_Normal.png')),
+        findsOneWidget,
+      );
+
+      // Info: maps with roles, the tool file chip reveals, total size.
+      final info = find.byKey(const ValueKey('material-info'));
+      expect(
+        find.descendant(of: info, matching: find.text('Folder')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('info-map:Stone/Rock_Roughness.png')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('info:total')), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: info,
+          matching: find.byKey(const ValueKey('format:Stone/Rock.tres')),
+        ),
+      );
+      await tester.pump();
+      expect(reveals.single, endsWith('Stone/Rock.tres'));
+      await tester.tap(find.text('Show in file manager'));
+      await tester.pump();
+      expect(reveals.last, endsWith('Stone/Rock.png'));
     });
 
     testWidgets('the star saves the material key', (tester) async {

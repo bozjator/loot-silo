@@ -17,7 +17,7 @@ import '../state/providers.dart';
 import '../state/settings.dart';
 import 'cursors.dart';
 import 'folder_groups.dart';
-import 'image_viewer.dart';
+import 'material_viewer.dart';
 import 'reveal.dart';
 import 'shortcuts.dart';
 import 'theme_colors.dart';
@@ -32,7 +32,7 @@ import 'widgets/thumb_size.dart';
 /// bottom show one map in the card (the picture comes back on leave) and
 /// tool chips (MaterialX, Godot, Blender…) show their file in the file
 /// manager. Flat or By folder, star, focus and the size slider work as in
-/// the Models tab; double-click opens the maps in the image viewer.
+/// the Models tab; double-click opens the [MaterialViewer].
 class MaterialsTab extends ConsumerStatefulWidget {
   const MaterialsTab({super.key, required this.pack, required this.contents});
 
@@ -132,15 +132,19 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
     _focus(_focused == m.key ? null : m.key);
   }
 
-  /// The image viewer on the material's pictures: preview first, then the
-  /// maps in role order.
-  void _openViewer(MaterialSet m) => showImageViewer(
-    context,
-    packPath: widget.pack.path,
-    images: m.pictures,
-    index: 0,
-    sizes: widget.contents.sizes,
-  );
+  /// The material viewer, stepping through the materials in on-screen
+  /// order.
+  void _openViewer(MaterialSet m) {
+    final byKey = {for (final x in _materials) x.key: x};
+    final shown = [for (final k in _shown()) byKey[k]!];
+    showMaterialViewer(
+      context,
+      packPath: widget.pack.path,
+      materials: shown,
+      index: math.max(0, shown.indexOf(m)),
+      sizes: widget.contents.sizes,
+    );
+  }
 
   void _dropHiddenFocus() {
     if (_focused case final key? when !_shown().contains(key)) _focused = null;

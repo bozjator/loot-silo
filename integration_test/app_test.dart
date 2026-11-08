@@ -15,6 +15,7 @@ import 'package:loot_silo/ui/dashboard.dart';
 import 'package:loot_silo/ui/help_screen.dart';
 import 'package:loot_silo/ui/image_viewer.dart';
 import 'package:loot_silo/ui/model_painter.dart';
+import 'package:loot_silo/ui/material_viewer.dart';
 import 'package:loot_silo/ui/model_viewer.dart';
 import 'package:loot_silo/ui/pack_detail_screen.dart';
 import 'package:loot_silo/ui/track_player.dart';
@@ -67,6 +68,47 @@ class MemoryKeyStore implements KeyStore {
 /// the library changes it, so the first test to load the library reads it
 /// (no search or filter is active then); later calls match that exact text,
 /// so a filtered count ("17 packs") doesn't pass for the root.
+/// Adds two materials to [pack]: a temp copy of the real
+/// `PavingStones138_1K-JPG` (when the library is here; returns whether) and
+/// a generated Bricks material without a preview.
+bool addMaterials(String pack) {
+  // A temp copy of a real ambientCG material when the library is here.
+  const paving = '../assets_library/Unknown Author/PavingStones138_1K-JPG';
+  final real = Directory(paving).existsSync();
+  if (real) {
+    copyTree(paving, p.join(pack, 'Paving'));
+    File(p.join(pack, 'Paving', 'asset_pack.json')).deleteSync();
+  }
+  // A generated one without a preview: its Color map shows tiled.
+  final color = img.Image(width: 128, height: 128);
+  final normal = img.Image(width: 128, height: 128);
+  for (var y = 0; y < 128; y++) {
+    for (var x = 0; x < 128; x++) {
+      final row = y ~/ 32;
+      final mortar = y % 32 < 3 || (x + (row.isOdd ? 32 : 0)) % 64 < 3;
+      color.setPixelRgb(
+        x,
+        y,
+        mortar ? 200 : 150 + (x * 7 + y * 3) % 30,
+        mortar ? 195 : 60,
+        mortar ? 185 : 45,
+      );
+      normal.setPixelRgb(x, y, mortar ? 100 : 128, mortar ? 160 : 128, 255);
+    }
+  }
+  for (final (name, image) in [
+    ('Bricks_Color.png', color),
+    ('Bricks_Normal.png', normal),
+    ('Bricks_Roughness.png', img.grayscale(color.clone())),
+  ]) {
+    File(p.join(pack, 'Bricks', name))
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(img.encodePng(image));
+  }
+  File(p.join(pack, 'Bricks', 'Bricks.tres')).writeAsStringSync('[gd]');
+  return real;
+}
+
 Finder realPacks() {
   if (_realPacksText case final text?) return find.text(text);
   return find.byWidgetPredicate((w) {
@@ -3716,40 +3758,7 @@ A **16×16** knight with *walk* and *idle* animations.
   ) async {
     copyTree('test/fixtures/managed', lib);
     final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
-    // A temp copy of a real ambientCG material when the library is here.
-    const paving = '../assets_library/Unknown Author/PavingStones138_1K-JPG';
-    final real = Directory(paving).existsSync();
-    if (real) {
-      copyTree(paving, p.join(pack, 'Paving'));
-      File(p.join(pack, 'Paving', 'asset_pack.json')).deleteSync();
-    }
-    // A generated one without a preview: its Color map shows tiled.
-    final color = img.Image(width: 128, height: 128);
-    final normal = img.Image(width: 128, height: 128);
-    for (var y = 0; y < 128; y++) {
-      for (var x = 0; x < 128; x++) {
-        final row = y ~/ 32;
-        final mortar = y % 32 < 3 || (x + (row.isOdd ? 32 : 0)) % 64 < 3;
-        color.setPixelRgb(
-          x,
-          y,
-          mortar ? 200 : 150 + (x * 7 + y * 3) % 30,
-          mortar ? 195 : 60,
-          mortar ? 185 : 45,
-        );
-        normal.setPixelRgb(x, y, mortar ? 100 : 128, mortar ? 160 : 128, 255);
-      }
-    }
-    for (final (name, image) in [
-      ('Bricks_Color.png', color),
-      ('Bricks_Normal.png', normal),
-      ('Bricks_Roughness.png', img.grayscale(color.clone())),
-    ]) {
-      File(p.join(pack, 'Bricks', name))
-        ..createSync(recursive: true)
-        ..writeAsBytesSync(img.encodePng(image));
-    }
-    File(p.join(pack, 'Bricks', 'Bricks.tres')).writeAsStringSync('[gd]');
+    final real = addMaterials(pack);
     revealed.clear();
 
     await tester.pumpWidget(app(lib));
@@ -3808,6 +3817,84 @@ A **16×16** knight with *walk* and *idle* animations.
     await settleImages(tester);
     await tester.pump(const Duration(milliseconds: 400));
     await captureScreenshot(tester, 'm62_by_folder', settle: false);
+  });
+
+  testWidgets('m63: material viewer — sphere, plane, tiled, Esc closes', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    final real = addMaterials(pack);
+    materialViewOptions.reset();
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Materials ('));
+    await tester.tap(find.textContaining('Materials ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    final card = find.byKey(
+      ValueKey(
+        real ? 'material:Paving/PavingStones138' : 'material:Bricks/Bricks',
+      ),
+    );
+    await hoverOver(tester, card);
+    final watch = Stopwatch()..start();
+    await tester.tap(
+      find.descendant(of: card, matching: find.byTooltip('Open in viewer')),
+    );
+    await pumpUntil(tester, find.byType(MaterialViewer));
+    await pumpUntil(
+      tester,
+      find.byKey(const ValueKey('material-loading')),
+      gone: true,
+    );
+    // ignore: avoid_print
+    print(
+      'm63: maps decoded and the sphere drawn in '
+      '${watch.elapsedMilliseconds} ms',
+    );
+    expect(
+      find.byKey(const ValueKey('material-shader:sphere')),
+      findsOneWidget,
+    );
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm63_sphere', settle: false);
+
+    // Light from the right, a few repeats, then the plane.
+    final stage = find.byKey(const ValueKey('material-viewer-stage'));
+    await tester.drag(stage, const Offset(160, 40));
+    await tester.pump();
+    await tester.tap(find.text('Plane'));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('material-shader:plane')), findsOneWidget);
+    await tester.tap(find.text('Sphere'));
+    await tester.pump();
+    for (var i = 0; i < 2; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+    }
+    await tester.tap(find.text('Plane'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm63_plane', settle: false);
+
+    await tester.tap(find.text('Tiled 3 × 3'));
+    await tester.pump();
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('material-tiled')), findsOneWidget);
+    await captureScreenshot(tester, 'm63_tiled', settle: false);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(MaterialViewer), findsNothing);
+    expect(find.byType(PackDetailScreen), findsOneWidget);
+    materialViewOptions.reset();
   });
 
   testWidgets('m61: model viewer — orbit, wireframe, Esc closes', (
