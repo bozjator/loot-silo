@@ -234,7 +234,9 @@ class HelpScreen extends StatelessWidget {
                   'the back arrow stays. A plain click opens a pack inside '
                   'the Dashboard tab, which then isn\'t shown as selected; '
                   'clicking it takes you back to the dashboard. Esc and the '
-                  'mouse back button go back as well.',
+                  'mouse back button go back as well. When the tabs don\'t '
+                  'fit, scroll them with the mouse wheel or the ‹ › arrows, '
+                  'or pick one from the ⌄ list of all tabs.',
                 ),
                 _P(
                   'Animations and Images tabs: the cards work alike. Click a '

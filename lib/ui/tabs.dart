@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -287,19 +288,146 @@ class TabsHost extends ConsumerWidget {
 
 /// Dashboard plus one tab per open pack, under the app bar of the
 /// dashboard and of pack pages. Shown only while a pack tab is open.
-class PackTabStrip extends ConsumerWidget implements PreferredSizeWidget {
+///
+/// The Dashboard tab stays put; the pack tabs scroll (mouse wheel or the
+/// arrows that show when they don't fit), and the list button jumps to
+/// any of them. The shown tab, or a newly opened one, scrolls into view.
+class PackTabStrip extends ConsumerStatefulWidget {
   const PackTabStrip({super.key});
 
   static const height = 40.0;
 
   @override
-  Size get preferredSize => const Size.fromHeight(height);
+  ConsumerState<PackTabStrip> createState() => _PackTabStripState();
+}
+
+class _PackTabStripState extends ConsumerState<PackTabStrip> {
+  final _scroll = ScrollController();
+  final _keys = <int, GlobalKey>{};
+  var _overflows = false;
+  var _canLeft = false;
+  var _canRight = false;
+
+  /// Each arrow and the list button are this wide.
+  static const _controlSize = 28.0;
+  static const _controlsWidth = 3 * _controlSize;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    _scroll.addListener(_updateArrows);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _updateArrows();
+      final tabs = ref.read(tabsProvider);
+      if (tabs.active > 0) {
+        _reveal(tabs.tabs[tabs.active - 1].id, animate: false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _updateArrows() {
+    if (!mounted || !_scroll.hasClients) return;
+    final p = _scroll.position;
+    if (!p.hasContentDimensions) return;
+    // Judged against the room the tabs would have without the arrows, or
+    // showing the arrows could itself keep the tabs from fitting.
+    final content = p.maxScrollExtent - p.minScrollExtent + p.viewportDimension;
+    final room = p.viewportDimension + (_overflows ? _controlsWidth : 0);
+    final over = content > room + 0.5;
+    final left = over && p.pixels > p.minScrollExtent + 0.5;
+    final right = over && p.pixels < p.maxScrollExtent - 0.5;
+    if (over == _overflows && left == _canLeft && right == _canRight) return;
+    final appeared = over && !_overflows;
+    setState(() {
+      _overflows = over;
+      _canLeft = left;
+      _canRight = right;
+    });
+    // The arrows take room from the tabs: show the last revealed one again.
+    final last = _revealed;
+    if (appeared && last != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _reveal(last, animate: false);
+      });
+    }
+  }
+
+  /// The tab last scrolled into view.
+  int? _revealed;
+
+  /// Scrolls just enough to show the whole tab [id].
+  void _reveal(int id, {bool animate = true}) {
+    _revealed = id;
+    final box = _keys[id]?.currentContext?.findRenderObject();
+    if (box == null || !_scroll.hasClients || !box.attached) return;
+    final viewport = RenderAbstractViewport.maybeOf(box);
+    if (viewport == null) return;
+    final p = _scroll.position;
+    final atStart = viewport.getOffsetToReveal(box, 0).offset;
+    final atEnd = viewport.getOffsetToReveal(box, 1).offset;
+    var to = p.pixels;
+    if (to > atStart) {
+      to = atStart;
+    } else if (to < atEnd) {
+      to = atEnd;
+    }
+    to = to.clamp(p.minScrollExtent, p.maxScrollExtent);
+    if ((to - p.pixels).abs() < 0.5) return;
+    if (animate) {
+      _scroll.animateTo(
+        to,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    } else {
+      _scroll.jumpTo(to);
+    }
+  }
+
+  /// About most of the visible width, so one click moves a page.
+  void _page(int dir) {
+    if (!_scroll.hasClients) return;
+    final p = _scroll.position;
+    final to = (p.pixels + dir * p.viewportDimension * 0.8).clamp(
+      p.minScrollExtent,
+      p.maxScrollExtent,
+    );
+    _scroll.animateTo(
+      to,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    );
+  }
+
+  /// The wheel scrolls the tabs sideways, as vertical wheels can't.
+  void _wheel(PointerSignalEvent e) {
+    if (e is! PointerScrollEvent || !_scroll.hasClients) return;
+    final p = _scroll.position;
+    if (p.maxScrollExtent <= p.minScrollExtent) return;
+    GestureBinding.instance.pointerSignalResolver.register(e, (e) {
+      final d = (e as PointerScrollEvent).scrollDelta;
+      final delta = d.dx.abs() > d.dy.abs() ? d.dx : d.dy;
+      _scroll.jumpTo(
+        (p.pixels + delta).clamp(p.minScrollExtent, p.maxScrollExtent),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final tabs = ref.watch(tabsProvider);
     final notifier = ref.read(tabsProvider.notifier);
     final packs = ref.watch(libraryProvider).value?.packs ?? const [];
+    String label(PackTab t) =>
+        packs.where((p) => p.id == t.packId).firstOrNull?.title ?? t.packId;
+
     // From a page pushed over the tabs (e.g. itch.io → a pack), a tab
     // click first goes back to the tabs. The Dashboard tab also goes back
     // from a pack opened in it to the dashboard itself.
@@ -312,43 +440,162 @@ class PackTabStrip extends ConsumerWidget implements PreferredSizeWidget {
       }
     }
 
+    _keys.removeWhere((id, _) => !tabs.tabs.any((t) => t.id == id));
+    for (final t in tabs.tabs) {
+      _keys.putIfAbsent(t.id, () => GlobalKey(debugLabel: 'strip-${t.id}'));
+    }
+
+    final overflows = _overflows;
+    Widget arrow(IconData icon, String tip, bool enabled, int dir) =>
+        IconButton(
+          tooltip: tip,
+          iconSize: 20,
+          style: IconButton.styleFrom(
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          constraints: const BoxConstraints.tightFor(
+            width: _controlSize,
+            height: _controlSize,
+          ),
+          padding: EdgeInsets.zero,
+          icon: Icon(icon),
+          onPressed: enabled ? () => _page(dir) : null,
+        );
+
     return SizedBox(
-      height: height,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            children: [
-              // Selected only while it shows the dashboard itself, not a
-              // pack opened in it.
-              ValueListenableBuilder(
-                valueListenable: notifier.dashboardTop.pages,
-                builder: (context, pages, _) => _StripTab(
-                  key: const ValueKey('strip-dashboard'),
-                  label: 'Dashboard',
-                  icon: Icons.dashboard_outlined,
-                  selected: tabs.active == 0 && pages <= 1,
-                  onTap: () => show(0),
+      height: PackTabStrip.height,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            // Selected only while it shows the dashboard itself, not a
+            // pack opened in it.
+            ValueListenableBuilder(
+              valueListenable: notifier.dashboardTop.pages,
+              builder: (context, pages, _) => _StripTab(
+                key: const ValueKey('strip-dashboard'),
+                label: 'Dashboard',
+                icon: Icons.dashboard_outlined,
+                selected: tabs.active == 0 && pages <= 1,
+                onTap: () => show(0),
+              ),
+            ),
+            if (overflows)
+              arrow(Icons.chevron_left, 'Scroll tabs left', _canLeft, -1),
+            Flexible(
+              child: Listener(
+                onPointerSignal: _wheel,
+                child: NotificationListener<ScrollMetricsNotification>(
+                  onNotification: (_) {
+                    _updateArrows();
+                    return false;
+                  },
+                  child: _RevealOnChange(
+                    tabs: tabs,
+                    reveal: _reveal,
+                    child: SingleChildScrollView(
+                      key: const ValueKey('strip-scroll'),
+                      controller: _scroll,
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final (i, t) in tabs.tabs.indexed)
+                            KeyedSubtree(
+                              key: _keys[t.id],
+                              child: _StripTab(
+                                key: ValueKey('strip-${t.id}'),
+                                label: label(t),
+                                selected: tabs.active == i + 1,
+                                onTap: () => show(i + 1),
+                                onClose: () => notifier.close(i),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              for (final (i, t) in tabs.tabs.indexed)
-                _StripTab(
-                  key: ValueKey('strip-${t.id}'),
-                  label:
-                      packs.where((p) => p.id == t.packId).firstOrNull?.title ??
-                      t.packId,
-                  selected: tabs.active == i + 1,
-                  onTap: () => show(i + 1),
-                  onClose: () => notifier.close(i),
+            ),
+            if (overflows) ...[
+              arrow(Icons.chevron_right, 'Scroll tabs right', _canRight, 1),
+              SizedBox.square(
+                key: const ValueKey('strip-all'),
+                dimension: _controlSize,
+                child: PopupMenuButton<int>(
+                  tooltip: 'All tabs',
+                  iconSize: 20,
+                  padding: EdgeInsets.zero,
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size.square(_controlSize),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: const Icon(Icons.keyboard_arrow_down),
+                  onSelected: show,
+                  itemBuilder: (_) => [
+                    for (final (i, t) in tabs.tabs.indexed)
+                      CheckedPopupMenuItem(
+                        value: i + 1,
+                        checked: tabs.active == i + 1,
+                        child: Text(
+                          label(t),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
                 ),
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
+}
+
+/// After a frame where the shown tab changed or a tab was opened, scrolls
+/// that tab into view.
+class _RevealOnChange extends StatefulWidget {
+  const _RevealOnChange({
+    required this.tabs,
+    required this.reveal,
+    required this.child,
+  });
+
+  final Tabs tabs;
+  final void Function(int id) reveal;
+  final Widget child;
+
+  @override
+  State<_RevealOnChange> createState() => _RevealOnChangeState();
+}
+
+class _RevealOnChangeState extends State<_RevealOnChange> {
+  static int? _shownId(Tabs t) => t.active > 0 ? t.tabs[t.active - 1].id : null;
+
+  @override
+  void didUpdateWidget(_RevealOnChange old) {
+    super.didUpdateWidget(old);
+    final now = widget.tabs;
+    final before = old.tabs;
+    final shown = now.active > 0 ? now.tabs[now.active - 1].id : null;
+    final id = shown != null && shown != _shownId(before)
+        ? shown
+        // A new tab, normally opened behind the shown one: show it's there.
+        : now.tabs
+              .where((t) => !before.tabs.any((b) => b.id == t.id))
+              .lastOrNull
+              ?.id;
+    if (id == null) return;
+    final target = id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.reveal(target);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _StripTab extends StatelessWidget {
