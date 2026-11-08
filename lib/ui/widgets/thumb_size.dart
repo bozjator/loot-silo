@@ -273,6 +273,10 @@ class ThumbSizeSlider extends StatelessWidget {
                     .copyWith(tickMarkShape: const _DenseTickMarkShape()),
                 child: Slider(
                   mouseCursor: WidgetStateMouseCursor.clickable,
+                  // The default side padding is the 24 px hover overlay's
+                  // radius, which left the end icons far from the track.
+                  // Enough for the thumb at either end is enough here.
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                   min: range.min,
                   max: range.max,
                   divisions: ((range.max - range.min) / range.step).round(),
