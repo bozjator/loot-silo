@@ -35,7 +35,8 @@ that hold sub-packs.
 ### Dashboard: search, filters and favorites
 
 Search packs, authors, tags and file names as you type. Filter by type
-(character, environment, UI, icons, VFX, SFX, music, 3D, font), author, tag
+(character, environment, UI, icons, VFX, SFX, music, 3D, material, font),
+author, tag
 or source; star your favorite packs; sort by best match, name, author, size,
 file count, tags or type. Packs, Expanded and Files views; a slider sets the
 thumbnail size, and pack covers play their animations.
@@ -66,11 +67,33 @@ Images open at 1:1, actual pixels as in your game, so pixel art stays crisp
 (an image bigger than the window opens fitted); switch to Fit, zoom with the
 wheel and drag to pan. Focus mode steps through cards with the arrow keys.
 
+### 3D models
+
+The Models tab shows one card per model, whatever formats it comes in (GLB,
+OBJ and FBX of the same tree are one card with a chip per format). GLB, glTF
+and OBJ models are drawn in their own colours and textures; hover a card to
+turn the model. Double-click for the model viewer: orbit, zoom and pan,
+wireframe, flat colours, turntable and floor grid, with an info panel
+(triangles, vertices, size, textures and materials) and the previous or next
+model one key away.
+
+### Materials
+
+PBR texture sets (Color, Normal, Roughness, Metalness, AO … maps) become one
+card per material in a Materials tab, grouped by their names or by a
+MaterialX `.mtlx` file, so the maps no longer flood the Images tab. Hover a
+card for its map chips and its files for other tools (MaterialX, Godot, USD,
+Blender, Substance, Unity). The material viewer draws it on a lit sphere or
+plane, tiled, or one map at a time; drag to move the light. Packs with
+materials get the Material type, so you can filter for them on the dashboard.
+
 ### Sound effects browser
 
 Play sound effects and music loops right in the pack, with length and size
 shown, Play all and Loop, so you find the right "jump" sound without opening
-an audio editor.
+an audio editor. Each sound shows its waveform (WAV, MP3 and Ogg Vorbis), so
+a short click and a long whoosh look different before you play them; a sound
+saved in several formats is one row with a chip per format.
 
 ### Credits and licenses
 
@@ -106,8 +129,10 @@ Press F1 in the app for the full guide and every keyboard shortcut.
 **Which file formats does it support?**
 Images: PNG, GIF, JPG, WebP, BMP, SVG, TGA (Aseprite and PSD files are
 listed). Audio: OGG, WAV, MP3, FLAC, M4A, AIFF, Opus. Fonts: TTF, OTF, WOFF,
-FNT. 3D models (GLB, glTF, FBX, OBJ, Blend, VOX …) are listed and counted.
-Archives: zip, tar, 7z, rar.
+FNT. 3D models: GLB, glTF and OBJ are drawn; FBX, DAE, STL, Blend, 3DS and
+VOX are listed. Materials: maps as PNG, JPG, WebP, BMP or GIF, plus MaterialX,
+Godot (.tres), USD, Blender, Substance and Unity material files. Archives:
+zip, tar, 7z, rar.
 
 **Where is my data stored?**
 Your assets stay in the library folder you choose. Settings and a search

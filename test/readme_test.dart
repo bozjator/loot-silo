@@ -43,6 +43,8 @@ void main() {
       'Dashboard: search, filters and favorites',
       'Sprite sheet and animation detection',
       'Image viewer',
+      '3D models',
+      'Materials',
       'Sound effects browser',
       'Credits and licenses',
       'itch.io sync',
