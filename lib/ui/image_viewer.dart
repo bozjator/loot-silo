@@ -6,7 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
-import '../core/animation_detector.dart' show readImageSize;
+import '../core/animation_detector.dart' show SpriteAnim, readImageSize;
+import '../core/animation_gif.dart';
 import 'clipboard.dart';
 import 'format.dart';
 import 'reveal.dart';
@@ -22,6 +23,7 @@ Future<void> showImageViewer(
   required List<String> images,
   required int index,
   Map<String, int> sizes = const {},
+  Map<String, SpriteAnim> animations = const {},
 }) => showDialog<void>(
   context: context,
   barrierColor: Colors.black87,
@@ -30,6 +32,7 @@ Future<void> showImageViewer(
     images: images,
     initialIndex: index,
     sizes: sizes,
+    animations: animations,
   ),
 );
 
@@ -46,6 +49,7 @@ class ImageViewer extends ConsumerStatefulWidget {
     required this.images,
     required this.initialIndex,
     this.sizes = const {},
+    this.animations = const {},
   });
 
   final String packPath;
@@ -54,6 +58,10 @@ class ImageViewer extends ConsumerStatefulWidget {
 
   /// File sizes by relative path; missing ones are read from disk.
   final Map<String, int> sizes;
+
+  /// Opened from the Animations tab: each image's animation, for Copy as
+  /// GIF.
+  final Map<String, SpriteAnim> animations;
 
   @override
   ConsumerState<ImageViewer> createState() => _ImageViewerState();
@@ -332,6 +340,14 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                               files: [file.path],
                               image: file.path,
                               open: file.path,
+                              gif: switch (widget.animations[rel]) {
+                                final anim? => (
+                                  name: anim.label,
+                                  make: () =>
+                                      makeAnimationGif(widget.packPath, anim),
+                                ),
+                                null => null,
+                              },
                             ),
                           ),
                           child: InteractiveViewer(

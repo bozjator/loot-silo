@@ -437,8 +437,17 @@ class HelpScreen extends StatelessWidget {
                   'as text; Open opens the file in its default app and Open '
                   'with… asks which app. With several images selected, a '
                   'right-click on one of them copies all selected files. '
-                  'Ctrl+C in the image viewer copies the shown image. Copy '
-                  'image, Copy file and Open with… are Linux only for now.',
+                  'Ctrl+C in the image viewer copies the shown image.',
+                ),
+                _P(
+                  'Copy as GIF, on animation cards and in the image viewer '
+                  'opened from them, makes a looping GIF of the animation '
+                  'as its card plays it (its frames at their own size, at '
+                  'its speed) and copies it both as a .gif file and as a GIF '
+                  'picture. Some chat apps show a pasted GIF as a still '
+                  'picture; pasting the file (or dropping it in) keeps it '
+                  'moving. Copy image, Copy as GIF, Copy file and Open with… '
+                  'are Linux only for now.',
                 ),
               ]),
               const _Section('Favorites', [

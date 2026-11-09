@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' as ui;
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
@@ -1687,6 +1688,61 @@ A **16×16** knight with *walk* and *idle* animations.
       () => Clipboard.getData(Clipboard.kTextPlain),
     );
     expect(text?.text, path);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m70: Copy as GIF on an animation card (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField).first, 'Epic RPG World');
+    const village = 'Epic RPG World - The Village V2.2';
+    final tile = find.descendant(
+      of: find.byType(PackTile),
+      matching: find.text(village),
+    );
+    await pumpUntil(tester, tile);
+    await tester.tap(tile);
+    await pumpUntil(tester, find.textContaining('Animations ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.textContaining('Animations ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    final cards = find.byType(ItemCard);
+    await pumpUntil(tester, cards);
+    await settleImages(tester);
+    // A sheet with several frames.
+    final card = cards.first;
+    await tester.tap(card, buttons: kSecondaryButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Copy as GIF'), findsOneWidget);
+    await captureScreenshot(tester, 'm70_copy_as_gif', settle: false);
+
+    await tester.tap(find.text('Copy as GIF'));
+    await pumpUntil(tester, find.text('GIF copied'));
+    final gif = await tester.runAsync(
+      () => PlatformFileClipboard.read('image/gif'),
+    );
+    expect(gif, isNotNull);
+    expect(String.fromCharCodes(gif!.take(6)), 'GIF89a');
+    final frames = await tester.runAsync(() async {
+      final codec = await ui.instantiateImageCodec(gif);
+      final n = codec.frameCount;
+      codec.dispose();
+      return n;
+    });
+    expect(frames, greaterThan(1));
+    final uris = await tester.runAsync(
+      () => PlatformFileClipboard.read('text/uri-list'),
+    );
+    final file = File.fromUri(Uri.parse(utf8.decode(uris!).trim()));
+    expect(p.extension(file.path), '.gif');
+    expect(file.readAsBytesSync(), gif);
+    expect(p.isWithin(real, file.path), isFalse);
     expect(Directory(real).statSync().modified, before);
   });
 

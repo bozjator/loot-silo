@@ -112,7 +112,9 @@ class _FakeClipboard implements FileClipboard {
     List<String> paths, {
     String? mime,
     Uint8List? bytes,
-  }) async => calls.add('files:${paths.join('|')}');
+  }) async => calls.add(
+    'files:${paths.join('|')}${mime == null ? '' : ' $mime ${bytes?.length}'}',
+  );
   @override
   Future<void> copyText(String text) async => calls.add('text:$text');
   @override
@@ -1923,6 +1925,7 @@ void main() {
         images: images,
         overrides: [
           fileClipboardProvider.overrideWithValue(clip),
+          gifCacheProvider.overrideWithValue(p.join(tmp.path, 'gif_cache')),
           trackPlayerFactoryProvider.overrideWithValue(_FakePlayer.new),
           audioDurationProvider.overrideWithValue((_) async => null),
           audioInfoProvider.overrideWithValue((_) async => null),
@@ -2057,12 +2060,33 @@ void main() {
         (w) => w is ItemCard && w.path == 'fx/Explosion(16x16).png',
       );
       await rightClick(tester, card.first);
-      expect(items(tester), all);
+      // Copy as GIF right after Copy image (M70).
+      expect(items(tester), ['copyImage', 'copyGif', ...all.skip(1)]);
       await pick(tester, 'copyFiles');
       expect(clip.calls.last, 'files:${abs('fx/Explosion(16x16).png')}');
       await rightClick(tester, card.first);
       await pick(tester, 'copyImage');
       expect(clip.calls.last, 'image:${abs('fx/Explosion(16x16).png')}');
+
+      // Copy as GIF: built off the UI thread, written to the GIF cache,
+      // copied as that file plus image/gif bytes.
+      await rightClick(tester, card.first);
+      await pick(tester, 'copyGif');
+      expect(find.text('Making GIF…'), findsOneWidget);
+      final gif = p.join(tmp.path, 'gif_cache', 'Explosion(16x16).gif');
+      final copied = RegExp(r'^files:(.*) image/gif (\d+)$');
+      for (var i = 0; i < 50 && !copied.hasMatch(clip.calls.last); i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+      final match = copied.firstMatch(clip.calls.last)!;
+      expect(match[1], gif);
+      final bytes = File(gif).readAsBytesSync();
+      expect(int.parse(match[2]!), bytes.length);
+      expect(String.fromCharCodes(bytes.take(6)), 'GIF89a');
+      expect(find.text('GIF copied'), findsOneWidget);
     });
 
     testWidgets('audio rows and cards, Other files rows: file items', (

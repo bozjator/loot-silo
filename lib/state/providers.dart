@@ -74,6 +74,13 @@ final extractRootProvider = Provider<String>(
   (ref) => p.join(Directory.systemTemp.path, 'loot_silo_extract'),
 );
 
+/// Where Copy as GIF writes its files (`<name>.gif`), so they can be pasted
+/// as files. Overridden in `main` with the app cache's `gif_cache/`, which
+/// is emptied on start.
+final gifCacheProvider = Provider<String>(
+  (ref) => p.join(Directory.systemTemp.path, 'loot_silo_gif_cache'),
+);
+
 final settingsProvider = NotifierProvider<SettingsNotifier, AppSettings>(
   SettingsNotifier.new,
 );

@@ -139,21 +139,12 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
     final anim = widget.anim;
     if (_images.isEmpty) return const [];
     final image = _images.first;
-    // The decoded image may differ from the recorded size (overrides,
-    // edited files); slice by the real size.
-    final cols = math.max(1, image.width ~/ math.max(1, anim.frameW));
-    final rows = math.max(1, image.height ~/ math.max(1, anim.frameH));
-    final fw = anim.frameW.toDouble();
-    final fh = anim.frameH.toDouble();
-    final row = anim.rowToPlay;
-    // A total-frames override leaves the last row partly filled.
-    final total = anim.frameTotal ?? cols * rows;
     return [
-      for (var r = 0; r < rows; r++)
-        if (row == null || r == row.clamp(0, rows - 1))
-          for (var c = 0; c < cols; c++)
-            if (r * cols + c < total)
-              (0, Rect.fromLTWH(c * fw, r * fh, fw, fh)),
+      for (final (x, y, w, h) in anim.frameCells(image.width, image.height))
+        (
+          0,
+          Rect.fromLTWH(x.toDouble(), y.toDouble(), w.toDouble(), h.toDouble()),
+        ),
     ];
   }
 

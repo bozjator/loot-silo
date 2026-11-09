@@ -328,7 +328,7 @@ const mouseHelp = [
   MouseHelp('Open image icon on a card', 'Show it in the image viewer'),
   MouseHelp(
     'Right-click a file card or row (or the viewer\'s picture)',
-    'Copy image, Copy file, Copy path, Open, Open with…',
+    'Copy image (or as GIF), Copy file, Copy path, Open, Open with…',
   ),
   MouseHelp(
     'Wheel in the image viewer',

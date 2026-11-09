@@ -49,6 +49,12 @@ void main() {
     });
   });
 
+  test('GIF file names are safe', () {
+    expect(gifFileName('Explosion(16x16)'), 'Explosion(16x16)');
+    expect(gifFileName('a/b:c'), 'a_b_c');
+    expect(gifFileName('  '), 'animation');
+  });
+
   test('menu items: only what applies, in order', () {
     const one = FileMenuTarget(
       files: ['/a.png'],
@@ -56,7 +62,22 @@ void main() {
       open: '/a.png',
     );
     const many = FileMenuTarget(files: ['/a.png', '/b.png']);
-    expect(fileMenuActions(one, _Caps(true)), FileMenuAction.values);
+    expect(fileMenuActions(one, _Caps(true)), [
+      for (final a in FileMenuAction.values)
+        if (a != FileMenuAction.copyGif) a,
+    ]);
+    // An animation adds Copy as GIF after Copy image.
+    final anim = FileMenuTarget(
+      files: const ['/a.png'],
+      image: '/a.png',
+      open: '/a.png',
+      gif: (name: 'a', make: () async => null),
+    );
+    expect(fileMenuActions(anim, _Caps(true)), FileMenuAction.values);
+    expect(fileMenuActions(anim, _Caps(false)), [
+      FileMenuAction.copyPath,
+      FileMenuAction.open,
+    ]);
     expect(fileMenuActions(many, _Caps(true)), [
       FileMenuAction.copyFiles,
       FileMenuAction.copyPath,

@@ -16,6 +16,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final support = await getApplicationSupportDirectory();
   final cache = await getApplicationCacheDirectory();
+  // Copy as GIF's files from the last run.
+  final gifCache = Directory(p.join(cache.path, 'gif_cache'));
+  try {
+    if (gifCache.existsSync()) gifCache.deleteSync(recursive: true);
+  } on FileSystemException {
+    // In use or gone: left for next time.
+  }
   final index = LibraryIndex(
     driftDatabase(
       name: 'library_index',
@@ -33,6 +40,7 @@ Future<void> main() async {
         ),
         libraryIndexProvider.overrideWithValue(index),
         extractRootProvider.overrideWithValue(p.join(cache.path, 'extract')),
+        gifCacheProvider.overrideWithValue(gifCache.path),
       ],
       child: const LootSiloApp(),
     ),

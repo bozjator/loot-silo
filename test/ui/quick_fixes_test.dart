@@ -25,7 +25,7 @@ void main() {
   });
 
   testWidgets('the Help page ends with the version', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(1200, 12000));
+    await tester.binding.setSurfaceSize(const Size(1200, 14000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const MaterialApp(home: HelpScreen()));
     await tester.pump();

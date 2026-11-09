@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/animation_gif.dart';
 import '../core/animation_detector.dart';
 import '../state/folder_folds.dart';
 import '../state/providers.dart';
@@ -132,6 +133,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
       images: [for (final j in order) paths[j]],
       index: math.max(0, order.indexOf(i)),
       sizes: widget.sizes,
+      animations: {for (final a in anims) a.path: a},
     );
     return BackHandler(
       enabled: _focused != null,
@@ -330,7 +332,12 @@ class _AnimationTile extends StatelessWidget {
     final file = p.join(packPath, a.path);
     // An animation is one image file: the menu copies and opens that.
     return FileMenuArea(
-      target: () => FileMenuTarget(files: [file], image: file, open: file),
+      target: () => FileMenuTarget(
+        files: [file],
+        image: file,
+        open: file,
+        gif: (name: a.label, make: () => makeAnimationGif(packPath, a)),
+      ),
       child: ItemCard(
         path: a.path,
         focused: focused,

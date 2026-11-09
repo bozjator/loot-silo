@@ -72,6 +72,25 @@ class SpriteAnim {
   /// Display name: the file stem.
   String get label => p.basenameWithoutExtension(path);
 
+  /// The frames a sheet plays, in order, as `(x, y, w, h)` cells of an
+  /// image [imageW] × [imageH] (sliced by the real size, which may differ
+  /// from the recorded one): row by row, only [rowToPlay] when set, up to
+  /// [frameTotal]. [AnimatedSprite] and Copy as GIF both use it.
+  List<(int, int, int, int)> frameCells(int imageW, int imageH) {
+    final fw = frameW < 1 ? 1 : frameW;
+    final fh = frameH < 1 ? 1 : frameH;
+    final cols = imageW ~/ fw < 1 ? 1 : imageW ~/ fw;
+    final rows = imageH ~/ fh < 1 ? 1 : imageH ~/ fh;
+    final row = rowToPlay;
+    final total = frameTotal ?? cols * rows;
+    return [
+      for (var r = 0; r < rows; r++)
+        if (row == null || r == row.clamp(0, rows - 1))
+          for (var c = 0; c < cols; c++)
+            if (r * cols + c < total) (c * frameW, r * frameH, frameW, frameH),
+    ];
+  }
+
   /// Changing the frame size drops a [frameTotal] override, since cols and
   /// rows are recomputed from it.
   SpriteAnim copyWith({
