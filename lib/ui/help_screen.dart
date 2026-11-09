@@ -249,7 +249,9 @@ class HelpScreen extends StatelessWidget {
                   'pause). ←/→ move the focus in on-screen order; Esc, the '
                   'mouse back button, a click on empty space or on the '
                   'focused card leave it. On hover, a card shows its star '
-                  '(top right) and its icons over the footer: Edit (animations) '
+                  '(top right; always once starred), its select box (top '
+                  'left, images; always once selected) and its icons over '
+                  'the footer: Edit (animations) '
                   'or Make animation… (images), Open image (the viewer, in '
                   'on-screen order) and Show in file manager. A double-click '
                   'on a card opens it in the image viewer as well (not with '
@@ -455,7 +457,9 @@ class HelpScreen extends StatelessWidget {
                   'Star packs and single files to find them again. The star '
                   'sits on a dashboard tile (shown on hover, always once '
                   'starred), next to the title in a pack\'s header, on image '
-                  'and animation cards, on audio rows and cards, on model '
+                  'and animation cards, on audio rows and cards (on cards '
+                  'the star and Show in file manager show on hover, a set '
+                  'star always), on model '
                   'and material cards, and on Other files rows. Click it '
                   'again to unstar.',
                 ),

@@ -15,6 +15,14 @@ const itemCardFooter = 64.0;
 /// shows in the stage's top-right corner (always when [starred]) and
 /// [leading] in the top-left (always with [showLeading]). [badge] sits in
 /// the top-left corner whenever there is no [leading] shown.
+/// Behind the plain icons on a card's picture: a dark halo for light
+/// pictures, the icon's own colour for dark ones.
+const cardIconShadows = [
+  Shadow(color: Color(0xFF000000), blurRadius: 1),
+  Shadow(color: Color(0xFF000000), blurRadius: 4),
+  Shadow(color: Color(0xCC000000), blurRadius: 8),
+];
+
 class ItemCard extends StatefulWidget {
   const ItemCard({
     super.key,
@@ -67,9 +75,10 @@ class ItemCard extends StatefulWidget {
 class _ItemCardState extends State<ItemCard> {
   var _hover = false;
 
-  Widget _disc(Widget child) => Material(
-    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
-    shape: const CircleBorder(),
+  /// The stage's corner icons: plain, like the audio card's star and
+  /// reveal, with a soft shadow so they read over white and black sprites.
+  Widget _plain(Widget child) => IconTheme.merge(
+    data: const IconThemeData(shadows: cardIconShadows),
     child: child,
   );
 
@@ -114,20 +123,22 @@ class _ItemCardState extends State<ItemCard> {
                             padding: EdgeInsets.all(widget.stagePadding),
                             child: widget.stage(_hover),
                           ),
+                          // At the audio card's insets (its star / reveal row
+                          // sits at the card's top-right corner, 0 / 0).
                           if (showLeading)
                             Positioned(
-                              top: 2,
-                              left: 2,
-                              child: _disc(widget.leading!),
+                              top: 0,
+                              left: 0,
+                              child: _plain(widget.leading!),
                             )
                           else if (widget.badge case final badge?)
                             Positioned(top: 6, left: 6, child: badge),
                           if (widget.onToggleStar case final toggle?
                               when _hover || widget.starred)
                             Positioned(
-                              top: 2,
-                              right: 2,
-                              child: _disc(
+                              top: 0,
+                              right: 0,
+                              child: _plain(
                                 FavoriteStar(
                                   key: ValueKey('star:${widget.path}'),
                                   starred: widget.starred,

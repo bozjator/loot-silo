@@ -14,6 +14,7 @@
 //                                   and the paths as text; plus `mime` with
 //                                   `bytes` when given (image/gif)
 //   read(String target) -> Uint8List?  the clipboard's data for `target`
+//   targets() -> List<String>       the clipboard's target names
 //   openWith(String path) -> bool   the app chooser, then launches the pick
 void clipboard_plugin_register_with_registrar(FlPluginRegistrar* registrar);
 

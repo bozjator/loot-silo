@@ -166,6 +166,20 @@ FlMethodResponse* read(FlValue* args) {
   return ok(fl_value_ref(value));
 }
 
+FlMethodResponse* targets() {
+  GdkAtom* atoms = nullptr;
+  gint n = 0;
+  g_autoptr(FlValue) list = fl_value_new_list();
+  if (gtk_clipboard_wait_for_targets(clipboard(), &atoms, &n)) {
+    for (gint i = 0; i < n; i++) {
+      g_autofree gchar* name = gdk_atom_name(atoms[i]);
+      fl_value_append_take(list, fl_value_new_string(name));
+    }
+    g_free(atoms);
+  }
+  return ok(fl_value_ref(list));
+}
+
 FlMethodResponse* open_with(FlValue* args, GtkWindow* window) {
   if (fl_value_get_type(args) != FL_VALUE_TYPE_STRING) {
     return error("bad-args", "openWith takes a path");
@@ -204,6 +218,8 @@ void method_call_cb(FlMethodChannel* channel, FlMethodCall* call,
     response = copy_files(args);
   } else if (strcmp(method, "read") == 0) {
     response = read(args);
+  } else if (strcmp(method, "targets") == 0) {
+    response = targets();
   } else if (strcmp(method, "openWith") == 0) {
     FlView* view = fl_plugin_registrar_get_view(registrar);
     GtkWidget* top = view == nullptr ? nullptr

@@ -2178,6 +2178,152 @@ void main() {
     });
   });
 
+  group('Card icons (M71)', () {
+    Future<void> open(WidgetTester tester) async {
+      await openKnight(
+        tester,
+        files: const ['heroes/a.png', 'heroes/b.png', 'sfx/coin.wav'],
+        overrides: [
+          trackPlayerFactoryProvider.overrideWithValue(_FakePlayer.new),
+          audioDurationProvider.overrideWithValue((_) async => null),
+          audioInfoProvider.overrideWithValue((_) async => null),
+          audioPeaksProvider.overrideWithValue(
+            AudioPeaksCache(read: (_) async => Float32List(0)),
+          ),
+        ],
+      );
+    }
+
+    Future<TestGesture> hover(WidgetTester tester, Finder target) async {
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(target));
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      return mouse;
+    }
+
+    Future<void> audioCards(WidgetTester tester) async {
+      await tester.tap(find.textContaining('Audio ('));
+      // The tab slide takes several frames.
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.tap(find.text('Cards'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    final icons = find.byKey(const ValueKey('audio-card-icons'));
+    final star = find.byKey(const ValueKey('star:sfx/coin.wav'));
+    final reveal = find.descendant(
+      of: icons,
+      matching: find.byTooltip('Show in file manager'),
+    );
+    double opacityOf(WidgetTester tester, Finder f) => tester
+        .widget<AnimatedOpacity>(
+          find.ancestor(of: f, matching: find.byType(AnimatedOpacity)).first,
+        )
+        .opacity;
+    bool ignored(WidgetTester tester, Finder f) => tester
+        .widget<IgnorePointer>(
+          find.ancestor(of: f, matching: find.byType(IgnorePointer)).first,
+        )
+        .ignoring;
+    Finder cardOf(Finder f) =>
+        find.ancestor(of: f, matching: find.byType(Card)).first;
+
+    testWidgets(
+      'audio cards: star and reveal only on hover; a set star stays',
+      (tester) async {
+        await open(tester);
+        await audioCards(tester);
+        expect(opacityOf(tester, star), 0);
+        expect(opacityOf(tester, reveal), 0);
+        expect(ignored(tester, star), isTrue);
+        expect(ignored(tester, reveal), isTrue);
+
+        final mouse = await hover(tester, cardOf(star));
+        expect(opacityOf(tester, star), 1);
+        expect(opacityOf(tester, reveal), 1);
+        expect(ignored(tester, star), isFalse);
+        await tester.tap(star);
+        await tester.pump();
+        expect(tester.widget<FavoriteStar>(star).starred, isTrue);
+
+        // Off the card: the set star stays, the reveal icon hides.
+        await mouse.moveTo(const Offset(5, 5));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(opacityOf(tester, star), 1);
+        expect(ignored(tester, star), isFalse);
+        expect(opacityOf(tester, reveal), 0);
+        // The list rows are unchanged: icons always there.
+        await tester.tap(find.text('Rows'));
+        await tester.pump();
+        expect(
+          find.ancestor(of: star, matching: find.byType(AnimatedOpacity)),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets('image cards: plain star and select box at the audio insets', (
+      tester,
+    ) async {
+      await open(tester);
+      await audioCards(tester);
+      final audioMouse = await hover(tester, cardOf(star));
+      final audioCard = tester.getRect(cardOf(star));
+      // The audio card's corner icon (reveal, the star beside it).
+      final corner = tester.getRect(
+        find.descendant(of: icons, matching: find.byType(RevealButton)),
+      );
+      final right = audioCard.right - corner.right;
+      final top = corner.top - audioCard.top;
+      final size = tester.getRect(star).size;
+      expect(corner.size, size);
+      await audioMouse.removePointer();
+
+      await tester.tap(find.textContaining('Images ('));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final card = find.byKey(const ValueKey('image:heroes/a.png'));
+      await hover(tester, card);
+      final imageStar = find.byKey(const ValueKey('star:heroes/a.png'));
+      final select = find.byKey(const ValueKey('select:heroes/a.png'));
+      final box = tester.getRect(
+        find.descendant(of: card, matching: find.byType(Card)),
+      );
+      final s = tester.getRect(imageStar);
+      final b = tester.getRect(select);
+      expect(s.size, size);
+      expect(box.right - s.right, closeTo(right, 0.01));
+      expect(s.top - box.top, closeTo(top, 0.01));
+      // The select box mirrors it in the top-left corner.
+      expect(b.left - box.left, closeTo(right, 0.01));
+      expect(b.top - box.top, closeTo(top, 0.01));
+      expect(b.size, size);
+      // No disc behind them; a soft shadow under the glyph instead.
+      for (final icon in [imageStar, select]) {
+        expect(
+          find.ancestor(
+            of: icon,
+            matching: find.byWidgetPredicate(
+              (w) => w is Material && w.shape is CircleBorder,
+            ),
+          ),
+          findsNothing,
+        );
+        final glyph = tester.widget<RichText>(
+          find.descendant(of: icon, matching: find.byType(RichText)).first,
+        );
+        expect(glyph.text.style?.shadows, cardIconShadows);
+      }
+    });
+  });
+
   group('file search', () {
     final barrels = [for (var i = 0; i < 3; i++) 'props/barrels_$i.png'];
 

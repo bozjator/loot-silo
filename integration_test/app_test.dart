@@ -196,6 +196,25 @@ Future<void> importFrom(WidgetTester tester, String item) async {
 /// Screenshot suffix for the m27 before/after comparison.
 const m27Phase = String.fromEnvironment('M27_PHASE', defaultValue: 'after');
 
+/// Reads the clipboard's [target] through our channel, retrying a few
+/// times: the X selection round trip can come back empty under load. Each
+/// empty read prints the targets on offer (diagnostics).
+Future<Uint8List?> clipRead(WidgetTester tester, String target) async {
+  for (var i = 0; i < 5; i++) {
+    final data = await tester.runAsync(
+      () => PlatformFileClipboard.read(target),
+    );
+    if (data != null) return data;
+    final offered = await tester.runAsync(PlatformFileClipboard.targets);
+    // ignore: avoid_print
+    print('clipboard read $target empty (try ${i + 1}); targets: $offered');
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+  }
+  return null;
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -1664,9 +1683,7 @@ A **16×16** knight with *walk* and *idle* animations.
     // Copy image: PNG bytes at the image's own size.
     await tester.tap(find.text('Copy image'));
     await pumpUntil(tester, find.text('Image copied'));
-    final png = await tester.runAsync(
-      () => PlatformFileClipboard.read('image/png'),
-    );
+    final png = await clipRead(tester, 'image/png');
     expect(png, isNotNull);
     final copied = img.decodePng(png!)!;
     final source = img.decodeImage(File(path).readAsBytesSync())!;
@@ -1676,13 +1693,9 @@ A **16×16** knight with *walk* and *idle* animations.
     await menu();
     await tester.tap(find.text('Copy file'));
     await pumpUntil(tester, find.text('File copied'));
-    final uris = await tester.runAsync(
-      () => PlatformFileClipboard.read('text/uri-list'),
-    );
+    final uris = await clipRead(tester, 'text/uri-list');
     expect(utf8.decode(uris!).trim(), Uri.file(path).toString());
-    final gnome = await tester.runAsync(
-      () => PlatformFileClipboard.read('x-special/gnome-copied-files'),
-    );
+    final gnome = await clipRead(tester, 'x-special/gnome-copied-files');
     expect(utf8.decode(gnome!), 'copy\n${Uri.file(path)}');
     final text = await tester.runAsync(
       () => Clipboard.getData(Clipboard.kTextPlain),
@@ -1724,9 +1737,7 @@ A **16×16** knight with *walk* and *idle* animations.
 
     await tester.tap(find.text('Copy as GIF'));
     await pumpUntil(tester, find.text('GIF copied'));
-    final gif = await tester.runAsync(
-      () => PlatformFileClipboard.read('image/gif'),
-    );
+    final gif = await clipRead(tester, 'image/gif');
     expect(gif, isNotNull);
     expect(String.fromCharCodes(gif!.take(6)), 'GIF89a');
     final frames = await tester.runAsync(() async {
@@ -1736,14 +1747,84 @@ A **16×16** knight with *walk* and *idle* animations.
       return n;
     });
     expect(frames, greaterThan(1));
-    final uris = await tester.runAsync(
-      () => PlatformFileClipboard.read('text/uri-list'),
-    );
+    final uris = await clipRead(tester, 'text/uri-list');
     final file = File.fromUri(Uri.parse(utf8.decode(uris!).trim()));
     expect(p.extension(file.path), '.gif');
     expect(file.readAsBytesSync(), gif);
     expect(p.isWithin(real, file.path), isFalse);
     expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m71: plain card icons on white and black, audio hover', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    for (final (name, v) in [('white', 255), ('black', 0), ('grey', 128)]) {
+      final image = img.Image(width: 32, height: 32, numChannels: 4);
+      img.fill(image, color: img.ColorRgba8(v, v, v, 255));
+      File(p.join(pack, 'tiles', '$name.png'))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(img.encodePng(image));
+    }
+    for (final name in ['blip', 'chime', 'thud']) {
+      File(p.join(pack, 'sfx', '$name.wav'))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(List.filled(64, 1));
+    }
+    // Hover fades run on real time here.
+    Future<void> fades(WidgetTester tester) async {
+      for (var i = 0; i < 4; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 150)),
+        );
+        await tester.pump(const Duration(milliseconds: 150));
+      }
+    }
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    Finder card(String rel) => find.byKey(ValueKey('image:$rel'));
+    await pumpUntil(tester, card('tiles/white.png'));
+    await settleImages(tester);
+
+    // Black: starred. Grey: selected. White: hovered.
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(card('tiles/black.png')));
+    addTearDown(mouse.removePointer);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const ValueKey('star:tiles/black.png')));
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.tap(card('tiles/grey.png'));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump(const Duration(milliseconds: 300));
+    await mouse.moveTo(tester.getCenter(card('tiles/white.png')));
+    await fades(tester);
+    expect(find.byKey(const ValueKey('star:tiles/white.png')), findsOneWidget);
+    expect(find.byKey(const ValueKey('select:tiles/grey.png')), findsOneWidget);
+    await captureScreenshot(tester, 'm71_image_card_icons', settle: false);
+
+    await tester.tap(find.textContaining('Audio ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Cards'));
+    await tester.pump(const Duration(milliseconds: 300));
+    final sound = find.ancestor(
+      of: find.text('Chime'),
+      matching: find.byType(Card),
+    );
+    await pumpUntil(tester, sound);
+    // Over the card, clear of the play button (no tooltip).
+    await mouse.moveTo(
+      tester.getRect(sound.first).topLeft + const Offset(60, 70),
+    );
+    await fades(tester);
+    await captureScreenshot(tester, 'm71_audio_hover', settle: false);
   });
 
   testWidgets('m66: each format in its own column (real, read-only)', (

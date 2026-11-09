@@ -3779,6 +3779,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
             onToggle: () => _toggle(rel),
             onSeek: _seek,
             star: _trackStar(track, rel, favorites),
+            starred: track.files.any(favorites.contains),
           ),
         ),
       );
@@ -3852,9 +3853,13 @@ class _AudioCard extends StatefulWidget {
     required this.onToggle,
     required this.onSeek,
     this.star,
+    this.starred = false,
   });
 
   final String rel;
+
+  /// The star shows without hover (the reveal icon still hides).
+  final bool starred;
 
   /// The track's folder, format folders left out.
   final String folder;
@@ -3930,6 +3935,19 @@ class _AudioCardState extends State<_AudioCard> {
   /// Where a drag on the waveform is (0..1); position updates wait.
   double? _drag;
 
+  /// The pointer is over the card: the star and reveal icons show.
+  var _hover = false;
+
+  /// Fades like [ItemCard]'s hover icons; not clickable while hidden.
+  Widget _hoverIcon(Widget child, {required bool shown}) => IgnorePointer(
+    ignoring: !shown,
+    child: AnimatedOpacity(
+      duration: const Duration(milliseconds: 150),
+      opacity: shown ? 1 : 0,
+      child: child,
+    ),
+  );
+
   double _fractionAt(Offset local, double width) =>
       width <= 0 ? 0 : (local.dx / width).clamp(0.0, 1.0);
 
@@ -4003,7 +4021,7 @@ class _AudioCardState extends State<_AudioCard> {
       height: _AudioCard.waveformHeight,
       playhead: long,
     );
-    return Card(
+    final card = Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
@@ -4060,10 +4078,20 @@ class _AudioCardState extends State<_AudioCard> {
                           top: 0,
                           right: 0,
                           child: Row(
+                            key: const ValueKey('audio-card-icons'),
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              ?widget.star,
-                              RevealButton(p.join(widget.packPath, widget.rel)),
+                              if (widget.star case final star?)
+                                _hoverIcon(
+                                  star,
+                                  shown: _hover || widget.starred,
+                                ),
+                              _hoverIcon(
+                                RevealButton(
+                                  p.join(widget.packPath, widget.rel),
+                                ),
+                                shown: _hover,
+                              ),
                             ],
                           ),
                         ),
@@ -4148,6 +4176,11 @@ class _AudioCardState extends State<_AudioCard> {
           ),
         ),
       ),
+    );
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: card,
     );
   }
 }

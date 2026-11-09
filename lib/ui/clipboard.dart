@@ -85,6 +85,10 @@ class PlatformFileClipboard implements FileClipboard {
   /// for tests.
   static Future<Uint8List?> read(String target) =>
       channel.invokeMethod<Uint8List>('read', target);
+
+  /// The targets the clipboard offers now; for tests.
+  static Future<List<String>> targets() async =>
+      (await channel.invokeListMethod<String>('targets')) ?? const [];
 }
 
 /// The file's bytes when it is a PNG, else the image decoded and encoded as

@@ -305,6 +305,7 @@ const mouseHelp = [
     'Focus mode: dim (and pause) the others',
   ),
   MouseHelp('Hover a model card', 'Turn the model slowly'),
+  MouseHelp('Hover a sound card', 'Show its star and Show in file manager'),
   MouseHelp(
     'Click or drag a playing sound card\'s waveform',
     'Seek (sounds of 10 s or more)',
