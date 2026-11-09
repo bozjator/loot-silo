@@ -300,6 +300,14 @@ const mouseHelp = [
   ),
   MouseHelp('Hover a model card', 'Turn the model slowly'),
   MouseHelp(
+    'Click or drag a playing sound card\'s waveform',
+    'Seek (sounds of 10 s or more)',
+  ),
+  MouseHelp(
+    'Rest on a sound\'s format chip',
+    'Its rate, channels, bit depth or bitrate',
+  ),
+  MouseHelp(
     'Click a model\'s format chip',
     'Draw that file (GLB, glTF, OBJ) or show it in the file manager',
   ),

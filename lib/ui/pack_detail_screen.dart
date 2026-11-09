@@ -3133,6 +3133,10 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   final _lengths = <String, Future<Duration?>>{};
   final _known = <String, Duration>{};
 
+  /// Header details by file, read when a row or card first shows it.
+  final _infos = <String, Future<AudioInfo?>>{};
+  final _chipTips = <String, Future<String?>>{};
+
   /// Play all is running: each finished track starts the next one in the
   /// shown order (search and folder filter applied), after [playAllGap].
   /// With Loop on, the list starts over at the end; the player itself then
@@ -3473,6 +3477,24 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     );
   }
 
+  /// The file's [AudioInfo], read once (header only, off the UI thread).
+  Future<AudioInfo?> _info(String rel) => _infos.putIfAbsent(
+    rel,
+    () => ref.read(audioInfoProvider)(p.join(widget.pack.path, rel)),
+  );
+
+  /// A format chip's tooltip: `WAV · 44.1 kHz · Stereo · 16-bit · 1.2 MB`.
+  Future<String?> _chipDetails(String rel) => _chipTips.putIfAbsent(
+    rel,
+    () => _info(rel).then(
+      (info) => [
+        formatOf(rel).toUpperCase(),
+        if (info != null && info.details.isNotEmpty) info.details,
+        formatBytes(widget.contents.sizes[rel] ?? 0),
+      ].join(' · '),
+    ),
+  );
+
   /// The playing track's length: the player's once it reports one, else
   /// the header's.
   Duration? _lengthOf(String rel) => _length ?? _known[rel];
@@ -3554,6 +3576,45 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     final sizeWidth = [
       for (final u in ['B', 'KB', 'MB', 'GB']) ...['999 $u', '9.9 $u'],
     ].map((t) => _textWidth(t, trailing)).reduce(math.max);
+    // Details: as wide as the usual longest lines; less (cut with an
+    // ellipsis) when the window leaves the title too little room.
+    final detailsIdeal = [
+      '44.1 kHz · Stereo · 24-bit',
+      '44.1 kHz · Stereo · ~320 kbps',
+      '48 kHz · Stereo · VBR ~128 kbps',
+    ].map((t) => _textWidth(t, trailing)).reduce(math.max);
+    return LayoutBuilder(
+      builder: (context, box) {
+        // Leading button and paddings (~72), a title of at least 160, and
+        // every other trailing column.
+        final others =
+            chipsWidth + 12 + 80 + 12 + 56 + 16 + sizeWidth + 40 + 40 + 12;
+        final room = box.maxWidth - 72 - 160 - others;
+        final detailsWidth = room < 48 ? 0.0 : math.min(detailsIdeal, room);
+        return _rowList(
+          audio,
+          readLength,
+          favorites,
+          chipsWidth: chipsWidth,
+          slots: mixed ? slots : null,
+          sizeWidth: sizeWidth,
+          sizeStyle: sizeStyle,
+          detailsWidth: detailsWidth,
+        );
+      },
+    );
+  }
+
+  Widget _rowList(
+    List<AudioTrack> audio,
+    Future<Duration?> Function(String) readLength,
+    Set<String> favorites, {
+    required double chipsWidth,
+    required Map<String, double>? slots,
+    required double sizeWidth,
+    required TextStyle sizeStyle,
+    required double detailsWidth,
+  }) {
     return ListView.builder(
       controller: _scroll,
       padding: const EdgeInsets.only(top: tabContentGap, bottom: 8),
@@ -3585,11 +3646,24 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
                     files: track.files,
                     shown: rel,
                     onPick: (f) => _switchFormat(track, f),
-                    slots: mixed ? slots : null,
+                    slots: slots,
+                    details: _chipDetails,
                   ),
                 ),
               ),
               const SizedBox(width: 12),
+              if (detailsWidth > 0) ...[
+                // The first format's details ([audioFormatOrder]).
+                SizedBox(
+                  key: ValueKey('details-column:$rel'),
+                  width: detailsWidth,
+                  child: _AudioDetails(
+                    key: ValueKey('details:$rel'),
+                    future: _info(track.files.first),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
               // Built only for visible rows, so only they are decoded.
               Waveform(
                 key: ValueKey('waveform:$rel'),
@@ -3650,8 +3724,8 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     padding: const EdgeInsets.fromLTRB(16, tabContentGap, 16, 16),
     gridDelegate: ThumbGridDelegate(
       maxTileWidth: 220,
-      // Room for the button and, while a long track plays, its seek bar;
-      // the footer holds the waveform and the name.
+      // Room for the button; the footer holds the waveform (the seek bar
+      // while a long track plays) and the name.
       imageAspect: 1.6,
       footer: (_) => 60 + _AudioCard.waveformHeight + 6,
     ),
@@ -3671,6 +3745,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
             shown: rel,
             onPick: (f) => _switchFormat(track, f),
             vertical: true,
+            details: _chipDetails,
           ),
           packPath: widget.pack.path,
           length: readLength(rel),
@@ -3735,10 +3810,10 @@ class _AudioViewToggle extends StatelessWidget {
 }
 
 /// One sound as a grid card: a big play / stop button with a progress
-/// ring while playing, the waveform (the played part highlighted), the
-/// prettified name, its length and folder; long tracks get a seek bar
-/// under the button while they play.
-class _AudioCard extends StatelessWidget {
+/// ring while playing, the waveform (the played part highlighted; the seek
+/// bar while a long track plays, with the elapsed time above its left
+/// end), the prettified name, its length and folder.
+class _AudioCard extends StatefulWidget {
   const _AudioCard({
     super.key,
     required this.rel,
@@ -3767,6 +3842,50 @@ class _AudioCard extends StatelessWidget {
   /// The waveform strip between the button and the name.
   static const waveformHeight = 32.0;
 
+  /// The play button with its progress ring.
+  static const buttonSize = 56.0;
+
+  /// Space kept between the ring and the waveform.
+  static const waveformGap = 4.0;
+
+  /// The star / reveal row in the top-right corner (compact icon buttons).
+  static const iconRowHeight = 40.0;
+
+  /// Where the button's centre goes, from the top of the area above the
+  /// waveform ([areaHeight] tall) in a card [cardHeight] tall and [width]
+  /// wide: on the card's vertical centre, never below it, and higher only
+  /// when the ring would come closer than [waveformGap] to the waveform
+  /// (or cover the elapsed time, [timeWidth] × [timeHeight] at the
+  /// waveform's left end, on narrow cards). Clear of the corner icons it
+  /// takes from that gap first.
+  static double buttonCentre({
+    required double cardHeight,
+    required double areaHeight,
+    required double width,
+    required double timeWidth,
+    required double timeHeight,
+  }) {
+    const r = buttonSize / 2;
+    var limit = areaHeight - waveformGap - r;
+    // The time sits at x 10..10 + timeWidth, just above the waveform.
+    if (width / 2 - r < 10 + timeWidth + 4) {
+      limit = math.min(limit, areaHeight - _timeBottom - timeHeight - 2 - r);
+    }
+    var centre = math.min(cardHeight / 2, limit);
+    // The ring under the corner icons (two 40 px buttons): down into the
+    // gap first, at most onto the waveform's edge, never below the centre.
+    if (centre - r < iconRowHeight && width / 2 + r > width - 2 * 40) {
+      centre = math.min(
+        cardHeight / 2,
+        math.max(centre, math.min(iconRowHeight + r, areaHeight - r)),
+      );
+    }
+    return centre;
+  }
+
+  /// The elapsed time's gap to the waveform below it.
+  static const _timeBottom = 2.0;
+
   /// The favorites star, beside the reveal button.
   final Widget? star;
   final Future<Duration?> length;
@@ -3780,137 +3899,257 @@ class _AudioCard extends StatelessWidget {
   final ValueChanged<Duration> onSeek;
 
   @override
+  State<_AudioCard> createState() => _AudioCardState();
+}
+
+class _AudioCardState extends State<_AudioCard> {
+  /// Where a drag on the waveform is (0..1); position updates wait.
+  double? _drag;
+
+  double _fractionAt(Offset local, double width) =>
+      width <= 0 ? 0 : (local.dx / width).clamp(0.0, 1.0);
+
+  void _seekTo(double fraction) {
+    final total = widget.playingLength;
+    if (total == null) return;
+    widget.onSeek(
+      Duration(milliseconds: (fraction * total.inMilliseconds).round()),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_AudioCard old) {
+    super.didUpdateWidget(old);
+    if (!widget.playing) _drag = null;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final total = playingLength;
+    final total = widget.playingLength;
+    final position = widget.position;
+    final playing = widget.playing;
     final progress = playing && total != null && total > Duration.zero
         ? (position!.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
         : null;
     final long = playing && total != null && total >= seekBarMinLength;
+    final shown = long ? (_drag ?? progress) : progress;
+    final timeStyle = theme.textTheme.labelSmall?.copyWith(
+      fontFeatures: const [FontFeature.tabularFigures()],
+      color: scheme.onSurfaceVariant,
+    );
+    // Sized for the widest time, so the button never moves as it counts.
+    final timeBox = (TextPainter(
+      text: TextSpan(text: '00:00', style: timeStyle),
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout());
+    final timeSize = timeBox.size;
+    timeBox.dispose();
+    final button = SizedBox.square(
+      dimension: _AudioCard.buttonSize,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (progress != null)
+            SizedBox.square(
+              dimension: _AudioCard.buttonSize,
+              child: CircularProgressIndicator(
+                key: const ValueKey('progress'),
+                value: progress,
+                strokeWidth: 3,
+              ),
+            ),
+          IconButton(
+            key: const ValueKey('card-play'),
+            tooltip: playing ? 'Stop' : 'Play',
+            iconSize: 40,
+            color: scheme.primary,
+            icon: Icon(playing ? Icons.stop_circle : Icons.play_circle),
+            onPressed: widget.onToggle,
+          ),
+        ],
+      ),
+    );
+    final waveform = Waveform(
+      key: ValueKey('waveform:${widget.rel}'),
+      path: p.join(widget.packPath, widget.rel),
+      progress: shown,
+      height: _AudioCard.waveformHeight,
+      playhead: long,
+    );
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: selected
+        side: widget.selected
             ? BorderSide(color: scheme.primary, width: 2)
             : BorderSide.none,
       ),
       child: InkWell(
         mouseCursor: clickCursor,
-        onTap: onToggle,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  // At the top, so the seek bar of a long track fits
-                  // between it and the waveform.
-                  Align(
-                    alignment: Alignment.topCenter,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+        onTap: widget.onToggle,
+        child: LayoutBuilder(
+          builder: (context, card) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, area) {
+                    final centre = _AudioCard.buttonCentre(
+                      cardHeight: card.maxHeight,
+                      areaHeight: area.maxHeight,
+                      width: area.maxWidth,
+                      timeWidth: timeSize.width,
+                      timeHeight: timeSize.height,
+                    );
+                    return Stack(
                       children: [
-                        const SizedBox(height: 8),
-                        SizedBox.square(
-                          dimension: 56,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              if (progress != null)
-                                SizedBox.square(
-                                  dimension: 56,
-                                  child: CircularProgressIndicator(
-                                    key: const ValueKey('progress'),
-                                    value: progress,
-                                    strokeWidth: 3,
-                                  ),
+                        Positioned(
+                          top: centre - _AudioCard.buttonSize / 2,
+                          left: 0,
+                          right: 0,
+                          child: Center(child: button),
+                        ),
+                        // Only the elapsed time: the total is the length
+                        // under the name.
+                        if (long)
+                          Positioned(
+                            left: 10,
+                            bottom: _AudioCard._timeBottom,
+                            child: Text(
+                              formatDuration(
+                                Duration(
+                                  milliseconds:
+                                      ((shown ?? 0) * total.inMilliseconds)
+                                          .round(),
                                 ),
-                              IconButton(
-                                tooltip: playing ? 'Stop' : 'Play',
-                                iconSize: 40,
-                                color: scheme.primary,
-                                icon: Icon(
-                                  playing
-                                      ? Icons.stop_circle
-                                      : Icons.play_circle,
-                                ),
-                                onPressed: onToggle,
                               ),
+                              key: const ValueKey('elapsed'),
+                              style: timeStyle,
+                            ),
+                          ),
+                        Positioned(top: 8, left: 8, child: widget.formats),
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ?widget.star,
+                              RevealButton(p.join(widget.packPath, widget.rel)),
                             ],
                           ),
                         ),
-                        if (long)
-                          _SeekBar(
-                            position: position!,
-                            length: total,
-                            onSeek: onSeek,
-                            compact: true,
+                      ],
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 6),
+                // While a long track plays the strip seeks (a click or a
+                // drag); otherwise a click plays or stops, like the card.
+                child: !long
+                    ? waveform
+                    : LayoutBuilder(
+                        builder: (context, strip) => MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            key: const ValueKey('waveform-seek'),
+                            behavior: HitTestBehavior.opaque,
+                            onTapUp: (d) => _seekTo(
+                              _fractionAt(d.localPosition, strip.maxWidth),
+                            ),
+                            onHorizontalDragStart: (d) => setState(
+                              () => _drag = _fractionAt(
+                                d.localPosition,
+                                strip.maxWidth,
+                              ),
+                            ),
+                            onHorizontalDragUpdate: (d) => setState(
+                              () => _drag = _fractionAt(
+                                d.localPosition,
+                                strip.maxWidth,
+                              ),
+                            ),
+                            onHorizontalDragEnd: (_) {
+                              final to = _drag;
+                              setState(() => _drag = null);
+                              if (to != null) _seekTo(to);
+                            },
+                            onHorizontalDragCancel: () =>
+                                setState(() => _drag = null),
+                            child: waveform,
+                          ),
+                        ),
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      prettyName(p.basename(widget.rel)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        _TrackLength(
+                          future: widget.length,
+                          align: TextAlign.start,
+                          width: null,
+                        ),
+                        if (widget.folder != '.')
+                          Expanded(
+                            child: Text(
+                              ' · ${widget.folder}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall,
+                            ),
                           ),
                       ],
                     ),
-                  ),
-                  Positioned(top: 8, left: 8, child: formats),
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [?star, RevealButton(p.join(packPath, rel))],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 6),
-              child: Waveform(
-                key: ValueKey('waveform:$rel'),
-                path: p.join(packPath, rel),
-                progress: progress,
-                height: waveformHeight,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    prettyName(p.basename(rel)),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      _TrackLength(
-                        future: length,
-                        align: TextAlign.start,
-                        width: null,
-                      ),
-                      if (folder != '.')
-                        Expanded(
-                          child: Text(
-                            ' · $folder',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+/// A file's audio details (`44.1 kHz · Stereo · 16-bit`) once its header
+/// has been read; empty when it says nothing.
+class _AudioDetails extends StatelessWidget {
+  const _AudioDetails({super.key, required this.future});
+
+  final Future<AudioInfo?> future;
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder(
+    future: future,
+    builder: (context, snap) {
+      final text = snap.data?.details ?? '';
+      final line = Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        softWrap: false,
+      );
+      // The whole line when the column cuts it.
+      return text.isEmpty ? line : Tooltip(message: text, child: line);
+    },
+  );
 }
 
 /// `m:ss` once the header has been read; nothing for unknown formats.
@@ -3945,21 +4184,19 @@ class _TrackLength extends StatelessWidget {
   );
 }
 
-/// Elapsed time, a slider that seeks on click or drag, and the total, for
-/// tracks of [seekBarMinLength] or more. [compact] (in an audio card) puts
-/// the times under the slider.
+/// Elapsed time, a slider that seeks on click or drag, and the total, in
+/// one line under a list row, for tracks of [seekBarMinLength] or more.
+/// (Cards seek on their waveform.)
 class _SeekBar extends StatefulWidget {
   const _SeekBar({
     required this.position,
     required this.length,
     required this.onSeek,
-    this.compact = false,
   });
 
   final Duration position;
   final Duration length;
   final ValueChanged<Duration> onSeek;
-  final bool compact;
 
   @override
   State<_SeekBar> createState() => _SeekBarState();
@@ -4004,21 +4241,6 @@ class _SeekBarState extends State<_SeekBar> {
         },
       ),
     );
-    if (widget.compact) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(height: 24, child: slider),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [elapsed, total],
-            ),
-          ],
-        ),
-      );
-    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(72, 0, 24, 6),
       child: Row(

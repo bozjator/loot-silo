@@ -301,8 +301,19 @@ class HelpScreen extends StatelessWidget {
                   'row or card appears (WAV, MP3 and Ogg Vorbis; other '
                   'formats leave the strip empty). While a sound plays, the '
                   'part already heard is drawn in the accent colour. Sounds '
-                  'of 10 seconds or more also get a seek bar while they '
-                  'play.',
+                  'of 10 seconds or more can be sought while they play: on '
+                  'a card, click or drag the waveform (the elapsed time '
+                  'shows above its left end; the length stays under the '
+                  'name); in the list, use the seek bar under the row.',
+                ),
+                _P(
+                  'Rest the pointer on a format chip to see that file\'s '
+                  'details: sample rate, Mono / Stereo, bit depth (WAV, '
+                  'AIFF, FLAC) or bitrate (MP3, with VBR when it varies; '
+                  'Ogg as a ~ figure) and size, e.g. "WAV · 44.1 kHz · '
+                  'Stereo · 16-bit · 1.2 MB". The list shows the first '
+                  'format\'s details in a Details column (cut short in '
+                  'narrow windows).',
                 ),
               ]),
               const _Section('3D models', [

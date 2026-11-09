@@ -18,6 +18,7 @@ class FormatChips extends StatelessWidget {
     this.label,
     this.pickSingle = false,
     this.slots,
+    this.details,
   });
 
   final List<String> files;
@@ -40,6 +41,12 @@ class FormatChips extends StatelessWidget {
   /// sits in its format's slot and a missing format leaves its slot empty,
   /// so the same format lines up down a list.
   final Map<String, double>? slots;
+
+  /// Audio: a file's details line (`WAV · 44.1 kHz · Stereo · 16-bit ·
+  /// 1.2 MB`), shown as the chip's tooltip once read. Null or empty keeps
+  /// the plain tooltip. The futures should be kept by the caller, so a
+  /// rebuild doesn't read them again.
+  final Future<String?> Function(String file)? details;
 
   @override
   Widget build(BuildContext context) {
@@ -83,11 +90,11 @@ class FormatChips extends StatelessWidget {
       padding: vertical
           ? const EdgeInsets.only(bottom: 4)
           : const EdgeInsets.only(right: 4),
-      child: Tooltip(
-        message:
-            tooltip?.call(f) ??
+      child: _tip(
+        f,
+        tooltip?.call(f) ??
             (f == shown ? p.basename(f) : 'Switch to ${p.basename(f)}'),
-        child: Material(
+        Material(
           key: ValueKey('format:$f'),
           color: f == shown
               ? scheme.primaryContainer
@@ -115,6 +122,27 @@ class FormatChips extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// [plain], or the file's details once [details] has them (with how to
+  /// switch on the chips that aren't shown).
+  Widget _tip(String f, String plain, Widget chip) {
+    final read = details;
+    if (read == null) return Tooltip(message: plain, child: chip);
+    return FutureBuilder(
+      future: read(f),
+      builder: (context, snap) {
+        final line = snap.data;
+        return Tooltip(
+          message: line == null || line.isEmpty
+              ? plain
+              : f == shown
+              ? line
+              : '$line\nSwitch to ${p.basename(f)}',
+          child: chip,
+        );
+      },
     );
   }
 }

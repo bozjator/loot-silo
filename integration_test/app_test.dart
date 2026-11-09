@@ -1543,6 +1543,84 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m68: card waveform seeks, audio details (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    final fake = _FakeTrackPlayer();
+    fakePlayer = () => fake;
+    addTearDown(() => fakePlayer = null);
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField), 'chiptune');
+    await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
+    await tester.tap(find.text('music-loop-bundle-chiptune'));
+    await pumpUntil(tester, find.byKey(const ValueKey('loop')));
+    await tester.tap(find.text('Cards'));
+    await tester.pump(const Duration(milliseconds: 300));
+    final bars = find.byKey(const ValueKey('waveform-bars'));
+    await pumpUntil(tester, bars);
+    await pumpUntil(tester, find.textContaining(RegExp(r'^\d+:\d\d$')));
+
+    // A long track plays: ring, playhead, elapsed above the waveform.
+    await tester.tap(find.byTooltip('Play').first);
+    await pumpUntil(tester, find.byKey(const ValueKey('waveform-seek')));
+    fake.position.add(const Duration(seconds: 42));
+    await tester.pump();
+    await tester.pump();
+    final strip = tester.getRect(find.byKey(const ValueKey('waveform-seek')));
+    final elapsed = find.byKey(const ValueKey('elapsed'));
+    expect(tester.widget<Text>(elapsed).data, '0:42');
+    expect(tester.getRect(elapsed).bottom, lessThanOrEqualTo(strip.top));
+    final card = tester.getRect(
+      find
+          .ancestor(
+            of: find.byKey(const ValueKey('waveform-seek')),
+            matching: find.byType(Card),
+          )
+          .first,
+    );
+    final button = tester.getRect(find.byTooltip('Stop').first);
+    expect(button.center.dy, lessThanOrEqualTo(card.center.dy + 0.5));
+    expect(button.center.dy + 28, lessThanOrEqualTo(strip.top - 3.5));
+    await captureScreenshot(tester, 'm68_audio_card_playing', settle: false);
+    await tester.tapAt(strip.center);
+    await tester.pump();
+    expect(fake.seeks, isNotEmpty);
+    await tester.tap(find.byTooltip('Stop').first);
+    await tester.pump();
+
+    // Rows: the Details column, and a chip's tooltip.
+    await tester.tap(find.text('Rows'));
+    await tester.pump(const Duration(milliseconds: 300));
+    final details = find.textContaining(RegExp(r'kHz · (Mono|Stereo)'));
+    await pumpUntil(tester, details);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await tester.pump();
+    final chip = find.byWidgetPredicate(
+      (w) =>
+          w.key is ValueKey<String> &&
+          (w.key! as ValueKey<String>).value.startsWith('format:'),
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(chip.first));
+    addTearDown(mouse.removePointer);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is Text && (w.data?.contains(' kHz · ') ?? false),
+      ),
+      findsWidgets,
+    );
+    await captureScreenshot(tester, 'm68_audio_rows_details', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m66: each format in its own column (real, read-only)', (
     tester,
   ) async {

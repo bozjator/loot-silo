@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:loot_silo/core/audio_peaks.dart';
@@ -14,6 +15,7 @@ import 'package:loot_silo/state/folder_folds.dart';
 import 'package:loot_silo/state/providers.dart';
 import 'package:loot_silo/state/settings.dart';
 import 'package:loot_silo/ui/app.dart';
+import 'package:loot_silo/core/audio_duration.dart';
 import 'package:loot_silo/ui/format.dart';
 import 'package:loot_silo/ui/help_screen.dart';
 import 'package:loot_silo/ui/image_viewer.dart';
@@ -1431,7 +1433,7 @@ void main() {
       expect(find.text('coin_pickup'), findsOneWidget);
     });
 
-    testWidgets('playing: progress ring, seek bar for long, keys work', (
+    testWidgets('playing: progress ring, waveform seeks for long, keys work', (
       tester,
     ) async {
       final fake = await openCards(tester);
@@ -1444,7 +1446,9 @@ void main() {
         find.byKey(const ValueKey('progress')),
       );
       expect(ring.value, closeTo(0.5, 0.01));
-      expect(find.byKey(const ValueKey('seek')), findsOneWidget);
+      // The waveform is the seek bar; no slider on the card.
+      expect(find.byKey(const ValueKey('waveform-seek')), findsOneWidget);
+      expect(find.byKey(const ValueKey('seek')), findsNothing);
       expect(
         tester.widget<Text>(find.byKey(const ValueKey('elapsed'))).data,
         '0:50',
@@ -1459,7 +1463,7 @@ void main() {
       fake.position.add(const Duration(seconds: 1));
       await tester.pump();
       expect(find.byKey(const ValueKey('progress')), findsOneWidget);
-      expect(find.byKey(const ValueKey('seek')), findsNothing);
+      expect(find.byKey(const ValueKey('waveform-seek')), findsNothing);
       expect(find.byKey(const ValueKey('elapsed')), findsNothing);
       // Space stops it.
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
@@ -1577,11 +1581,16 @@ void main() {
       await tester.pump();
       expect(progressOf(tester, ogg), closeTo(0.5, 0.01));
       expect(progressOf(tester, 'sfx/coin_pickup.wav'), isNull);
-      // The seek bar of a long track still sits under the button.
-      expect(find.byKey(const ValueKey('seek')), findsOneWidget);
+      // The waveform of a long track is its seek bar, with a playhead.
+      expect(find.byKey(const ValueKey('waveform-seek')), findsOneWidget);
       expect(
-        tester.getRect(find.byKey(const ValueKey('seek'))).bottom,
-        lessThanOrEqualTo(tester.getRect(wave(ogg)).top),
+        find.descendant(
+          of: wave(ogg),
+          matching: find.byWidgetPredicate(
+            (w) => w is CustomPaint && w.foregroundPainter is PlayheadPainter,
+          ),
+        ),
+        findsOneWidget,
       );
 
       await tester.tap(find.text('Rows'));
@@ -1617,6 +1626,244 @@ void main() {
         tester.getRect(find.byKey(const ValueKey('length:$m4a'))).left,
         length.left,
       );
+    });
+  });
+
+  group('Audio card layout and details (M68)', () {
+    final lengths = {
+      'music/long_theme.ogg': const Duration(minutes: 1, seconds: 40),
+      'music/long_theme.wav': const Duration(minutes: 1, seconds: 40),
+      'sfx/coin_pickup.wav': const Duration(seconds: 2),
+    };
+    const ogg = 'music/long_theme.ogg';
+    const coin = 'sfx/coin_pickup.wav';
+    final peaks = Float32List.fromList([for (var i = 0; i < 200; i++) 0.5]);
+
+    Future<_FakePlayer> open(
+      WidgetTester tester, {
+      bool cards = true,
+      Size size = const Size(1644, 900),
+    }) async {
+      final fake = _FakePlayer();
+      await openKnight(
+        tester,
+        size: size,
+        files: lengths.keys.toList(),
+        types: ['music', 'sfx'],
+        overrides: [
+          trackPlayerFactoryProvider.overrideWithValue(() => fake),
+          audioDurationProvider.overrideWithValue(
+            (path) async => lengths.entries
+                .where((e) => path.endsWith(e.key))
+                .firstOrNull
+                ?.value,
+          ),
+          audioInfoProvider.overrideWithValue(
+            (path) async => path.endsWith('.ogg')
+                ? const AudioInfo(
+                    sampleRate: 48000,
+                    channels: 1,
+                    kbps: 112,
+                    approximate: true,
+                  )
+                : const AudioInfo(sampleRate: 44100, channels: 2, bitDepth: 16),
+          ),
+          audioPeaksProvider.overrideWithValue(
+            AudioPeaksCache(read: (path) async => peaks),
+          ),
+        ],
+      );
+      if (cards) {
+        await tester.tap(find.text('Cards'));
+        await tester.pump();
+      }
+      await tester.pump();
+      await tester.pump();
+      return fake;
+    }
+
+    Finder wave(String rel) => find.byKey(ValueKey('waveform:$rel'));
+    Finder cardOf(String rel) =>
+        find.ancestor(of: wave(rel), matching: find.byType(Card)).first;
+    Rect buttonOf(WidgetTester tester, String rel) => tester.getRect(
+      find.descendant(
+        of: cardOf(rel),
+        matching: find.byKey(const ValueKey('card-play')),
+      ),
+    );
+
+    testWidgets('the button sits on the card centre at the default size', (
+      tester,
+    ) async {
+      await open(tester);
+      final card = tester.getRect(cardOf(ogg));
+      expect(card.width, closeTo(220, 0.5));
+      final button = buttonOf(tester, ogg);
+      expect(button.center.dx, closeTo(card.center.dx, 0.5));
+      // On the card's centre, or as near as the ring's ~4 px gap to the
+      // waveform allows (the footer's text height decides; 2 px here).
+      final waveTop = tester.getRect(wave(ogg)).top;
+      expect(
+        button.center.dy,
+        closeTo(math.min(card.center.dy, waveTop - 4 - 28), 0.5),
+      );
+      expect(button.center.dy, closeTo(card.center.dy, 3));
+      expect(button.center.dy, lessThanOrEqualTo(card.center.dy));
+      // The card's size is the M65 one: 220 / 1.6 plus the footer.
+      expect(card.height, closeTo(220 / 1.6 + 60 + 32 + 6, 0.5));
+    });
+
+    testWidgets('small cards: the button moves up, above the waveform', (
+      tester,
+    ) async {
+      await open(tester);
+      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      await tester.pump();
+      final card = tester.getRect(cardOf(ogg));
+      expect(card.width, lessThan(200));
+      final button = buttonOf(tester, ogg);
+      final waveTop = tester.getRect(wave(ogg)).top;
+      expect(button.center.dy, lessThan(card.center.dy - 10));
+      // At most 4 px from the waveform (more when the test font's wide
+      // time label needs the room beside the ring).
+      expect(button.center.dy + 28, lessThanOrEqualTo(waveTop - 4 + 0.01));
+      // Clear of the chips and the corner icons.
+      final chip = tester.getRect(find.byKey(const ValueKey('format:$ogg')));
+      final star = tester.getRect(find.byKey(const ValueKey('star:$ogg')));
+      expect(button.center.dy - 28, greaterThanOrEqualTo(star.bottom - 0.5));
+      expect(button.center.dx - 28, greaterThan(chip.right));
+    });
+
+    testWidgets('tap and drag on the waveform seek; elapsed above its left', (
+      tester,
+    ) async {
+      final fake = await open(tester);
+      await tester.tap(find.text('Long theme'));
+      await tester.pump();
+      fake.position.add(const Duration(seconds: 10));
+      await tester.pump();
+      final strip = tester.getRect(find.byKey(const ValueKey('waveform-seek')));
+      expect(strip, tester.getRect(wave(ogg)));
+      // Only the elapsed time, just above the waveform's left end; the
+      // total is the length under the name, once.
+      final elapsed = find.byKey(const ValueKey('elapsed'));
+      expect(tester.widget<Text>(elapsed).data, '0:10');
+      final time = tester.getRect(elapsed);
+      expect(time.left, strip.left);
+      expect(time.bottom, lessThanOrEqualTo(strip.top));
+      expect(time.bottom, greaterThan(strip.top - 6));
+      expect(find.text('1:40'), findsOneWidget);
+      // The ring does not cover the time.
+      final button = buttonOf(tester, ogg);
+      expect(
+        Rect.fromCircle(center: button.center, radius: 28).overlaps(time),
+        isFalse,
+      );
+
+      final stops = fake.stops;
+      await tester.tapAt(strip.centerLeft + Offset(strip.width * 0.25, 0));
+      await tester.pump();
+      expect(fake.seeks.last.inSeconds, 25);
+      // Still playing: a click on the strip seeks, it doesn't stop.
+      expect(fake.stops, stops);
+      expect(find.byKey(const ValueKey('progress')), findsOneWidget);
+
+      final drag = await tester.startGesture(
+        strip.centerLeft + Offset(strip.width * 0.1, 0),
+      );
+      await drag.moveTo(strip.centerLeft + Offset(strip.width * 0.4, 0));
+      await tester.pump();
+      await drag.moveTo(strip.centerLeft + Offset(strip.width * 0.6, 0));
+      await tester.pump();
+      // While dragging the time follows the finger; nothing seeks yet.
+      expect(tester.widget<Text>(elapsed).data, '1:00');
+      expect(fake.seeks, hasLength(1));
+      await drag.up();
+      await tester.pump();
+      expect(fake.seeks.last.inSeconds, 60);
+    });
+
+    testWidgets('format chip tooltips give the file details', (tester) async {
+      await open(tester);
+      String tipOf(String rel) => tester
+          .widget<Tooltip>(
+            find
+                .ancestor(
+                  of: find.byKey(ValueKey('format:$rel')),
+                  matching: find.byType(Tooltip),
+                )
+                .first,
+          )
+          .message!;
+      final size = formatBytes(
+        File(p.join(tmp.path, 'library', 'HeroMaker', 'Knight Pack', ogg))
+            .lengthSync(),
+      );
+      expect(tipOf(ogg), 'OGG · 48 kHz · Mono · ~112 kbps · $size');
+      expect(
+        tipOf('music/long_theme.wav'),
+        startsWith('WAV · 44.1 kHz · Stereo · 16-bit · '),
+      );
+      expect(
+        tipOf('music/long_theme.wav'),
+        endsWith('\nSwitch to long_theme.wav'),
+      );
+    });
+
+    testWidgets('rows: a Details column, aligned across rows', (tester) async {
+      await open(tester, cards: false);
+      final a = find.byKey(const ValueKey('details-column:$ogg'));
+      final b = find.byKey(const ValueKey('details-column:$coin'));
+      expect(tester.getRect(a).left, tester.getRect(b).left);
+      expect(tester.getRect(a).width, tester.getRect(b).width);
+      // The first format's details ([audioFormatOrder]: OGG before WAV).
+      expect(
+        find.descendant(
+          of: a,
+          matching: find.text('48 kHz · Mono · ~112 kbps'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: b,
+          matching: find.text('44.1 kHz · Stereo · 16-bit'),
+        ),
+        findsOneWidget,
+      );
+      // After the formats, before the waveform.
+      expect(
+        tester.getRect(find.byKey(const ValueKey('formats-column:$ogg'))).right,
+        lessThan(tester.getRect(a).left),
+      );
+      expect(tester.getRect(a).right, lessThan(tester.getRect(wave(ogg)).left));
+      // Narrow windows cut it (ellipsis), then leave it out. (Below
+      // ~1000 px the test font's wide glyphs overflow the header's author
+      // line, which this milestone doesn't touch; that error is dropped.)
+      final wide = tester.getRect(a).width;
+      await tester.binding.setSurfaceSize(const Size(980, 900));
+      await tester.pump();
+      tester.takeException();
+      expect(tester.getRect(a).width, lessThan(wide));
+      expect(tester.getRect(a).width, greaterThanOrEqualTo(48));
+      await tester.binding.setSurfaceSize(const Size(620, 900));
+      await tester.pump();
+      tester.takeException();
+      expect(a, findsNothing);
+    });
+
+    testWidgets('rows: the seek bar keeps elapsed and total on one line', (
+      tester,
+    ) async {
+      final fake = await open(tester, cards: false);
+      await tester.tap(find.text('long_theme'));
+      await tester.pump();
+      fake.position.add(const Duration(seconds: 5));
+      await tester.pump();
+      final seek = tester.getRect(find.byKey(const ValueKey('seek')));
+      final elapsed = tester.getRect(find.byKey(const ValueKey('elapsed')));
+      expect(elapsed.right, lessThanOrEqualTo(seek.left));
+      expect(elapsed.center.dy, closeTo(seek.center.dy, 2));
     });
   });
 

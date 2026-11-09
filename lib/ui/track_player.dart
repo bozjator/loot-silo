@@ -73,15 +73,25 @@ final trackPlayerFactoryProvider = Provider<TrackPlayer Function()>(
   (ref) => AudioplayersTrackPlayer.new,
 );
 
-/// Header durations by absolute path, kept for the session. Null values
+/// Header infos by absolute path, kept for the session. Null values
 /// (unknown format) are cached too.
-final _durations = <String, Future<Duration?>>{};
+final _infos = <String, Future<AudioInfo?>>{};
 
-Future<Duration?> _readInIsolate(String path) =>
-    Isolate.run(() => audioDuration(path));
+Future<AudioInfo?> _readInIsolate(String path) =>
+    Isolate.run(() => audioInfo(path));
 
-/// Reads an audio file's length off the UI thread, once per path.
-final audioDurationProvider = Provider<Future<Duration?> Function(String)>(
+/// Reads an audio file's header ([AudioInfo]: length, rate, channels, bit
+/// depth or bitrate) off the UI thread, once per path.
+final audioInfoProvider = Provider<Future<AudioInfo?> Function(String)>(
   (ref) =>
-      (path) => _durations.putIfAbsent(path, () => _readInIsolate(path)),
+      (path) => _infos.putIfAbsent(path, () => _readInIsolate(path)),
 );
+
+/// Reads an audio file's length off the UI thread, once per path (from
+/// the same header read as [audioInfoProvider]).
+final audioDurationProvider = Provider<Future<Duration?> Function(String)>((
+  ref,
+) {
+  final read = ref.watch(audioInfoProvider);
+  return (path) => read(path).then((info) => info?.duration);
+});

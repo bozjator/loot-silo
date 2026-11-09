@@ -18,10 +18,14 @@ class Waveform extends ConsumerStatefulWidget {
     this.progress,
     this.width,
     required this.height,
+    this.playhead = false,
   });
 
   final String path;
   final double? progress;
+
+  /// A thin line at [progress] (the card's seek strip while playing).
+  final bool playhead;
 
   /// Null: as wide as the parent allows.
   final double? width;
@@ -56,6 +60,13 @@ class _WaveformState extends ConsumerState<Waveform> {
     });
   }
 
+  /// No waveform (unknown format): the playhead alone, so seeking still
+  /// shows where it is.
+  Widget? _playhead(ColorScheme scheme) =>
+      widget.playhead && widget.progress != null
+      ? CustomPaint(painter: PlayheadPainter(widget.progress!, scheme.primary))
+      : null;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -64,7 +75,7 @@ class _WaveformState extends ConsumerState<Waveform> {
       width: widget.width,
       height: widget.height,
       child: peaks == null || peaks.isEmpty
-          ? null
+          ? _playhead(scheme)
           : CustomPaint(
               key: const ValueKey('waveform-bars'),
               painter: WaveformPainter(
@@ -73,9 +84,38 @@ class _WaveformState extends ConsumerState<Waveform> {
                 played: scheme.primary,
                 rest: scheme.onSurfaceVariant.withValues(alpha: 0.7),
               ),
+              foregroundPainter: widget.playhead && widget.progress != null
+                  ? PlayheadPainter(widget.progress!, scheme.primary)
+                  : null,
             ),
     );
   }
+}
+
+/// A 1.5 px line across the full height at [progress] (0..1).
+class PlayheadPainter extends CustomPainter {
+  PlayheadPainter(this.progress, this.color);
+
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final x = progress.clamp(0.0, 1.0) * size.width;
+    canvas.drawRect(
+      Rect.fromLTWH(
+        (x - 0.75).clamp(0.0, math.max(0.0, size.width - 1.5)),
+        0,
+        1.5,
+        size.height,
+      ),
+      Paint()..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(PlayheadPainter old) =>
+      old.progress != progress || old.color != color;
 }
 
 /// Bars of [bar] px with [gap] px between them, mirrored around the middle;
