@@ -5,6 +5,7 @@
 #include <gdk/gdkx.h>
 #endif
 
+#include "clipboard_plugin.h"
 #include "flutter/generated_plugin_registrant.h"
 
 struct _MyApplication {
@@ -84,6 +85,13 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+  {
+    // Our own channel: images and files on the clipboard, Open with.
+    g_autoptr(FlPluginRegistrar) clipboard =
+        fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(view),
+                                                    "LootSiloClipboard");
+    clipboard_plugin_register_with_registrar(clipboard);
+  }
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

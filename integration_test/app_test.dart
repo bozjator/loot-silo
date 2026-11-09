@@ -31,6 +31,7 @@ import 'package:loot_silo/ui/tabs.dart';
 import 'package:loot_silo/ui/text_preview_dialog.dart';
 import 'package:loot_silo/ui/theme_colors.dart';
 import 'package:loot_silo/ui/widgets/thumb_size.dart';
+import 'package:loot_silo/ui/clipboard.dart';
 import 'package:loot_silo/ui/widgets/waveform.dart';
 import 'package:loot_silo/version.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
@@ -1618,6 +1619,74 @@ A **16×16** knight with *walk* and *idle* animations.
       findsWidgets,
     );
     await captureScreenshot(tester, 'm68_audio_rows_details', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m69: right-click menu copies through GTK (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField).first, 'Epic RPG World');
+    const village = 'Epic RPG World - The Village V2.2';
+    final tile = find.descendant(
+      of: find.byType(PackTile),
+      matching: find.text(village),
+    );
+    await pumpUntil(tester, tile);
+    await tester.tap(tile);
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    final cards = find.byType(ItemCard);
+    await pumpUntil(tester, cards);
+    await settleImages(tester);
+    final card = cards.at(1);
+    final rel = tester.widget<ItemCard>(card).path;
+    final path = p.join(real, 'RafaelMatos', village, rel);
+
+    Future<void> menu() async {
+      await tester.tap(card, buttons: kSecondaryButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    await menu();
+    expect(find.text('Copy image'), findsOneWidget);
+    expect(find.text('Open with…'), findsOneWidget);
+    await captureScreenshot(tester, 'm69_card_menu', settle: false);
+
+    // Copy image: PNG bytes at the image's own size.
+    await tester.tap(find.text('Copy image'));
+    await pumpUntil(tester, find.text('Image copied'));
+    final png = await tester.runAsync(
+      () => PlatformFileClipboard.read('image/png'),
+    );
+    expect(png, isNotNull);
+    final copied = img.decodePng(png!)!;
+    final source = img.decodeImage(File(path).readAsBytesSync())!;
+    expect((copied.width, copied.height), (source.width, source.height));
+
+    // Copy file: a URI list, the file managers' list, and the path.
+    await menu();
+    await tester.tap(find.text('Copy file'));
+    await pumpUntil(tester, find.text('File copied'));
+    final uris = await tester.runAsync(
+      () => PlatformFileClipboard.read('text/uri-list'),
+    );
+    expect(utf8.decode(uris!).trim(), Uri.file(path).toString());
+    final gnome = await tester.runAsync(
+      () => PlatformFileClipboard.read('x-special/gnome-copied-files'),
+    );
+    expect(utf8.decode(gnome!), 'copy\n${Uri.file(path)}');
+    final text = await tester.runAsync(
+      () => Clipboard.getData(Clipboard.kTextPlain),
+    );
+    expect(text?.text, path);
     expect(Directory(real).statSync().modified, before);
   });
 

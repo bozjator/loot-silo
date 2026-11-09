@@ -156,6 +156,9 @@ abstract final class AppKeys {
   static const viewerNext = KeyBinding('Next image', [
     SingleActivator(LogicalKeyboardKey.arrowRight),
   ]);
+  static const viewerCopy = KeyBinding('Copy the shown image (Linux)', [
+    SingleActivator(LogicalKeyboardKey.keyC, control: true),
+  ]);
 
   // Model viewer.
   static const modelPrevious = KeyBinding('Previous model', [
@@ -248,7 +251,10 @@ const shortcutSections = <(String, List<KeyBinding>)>[
       AppKeys.framesDown,
     ],
   ),
-  ('Image viewer', [AppKeys.viewerPrevious, AppKeys.viewerNext]),
+  (
+    'Image viewer',
+    [AppKeys.viewerPrevious, AppKeys.viewerNext, AppKeys.viewerCopy],
+  ),
   (
     'Model viewer',
     [
@@ -320,6 +326,10 @@ const mouseHelp = [
     'Show that file (MaterialX, Godot, Blender…) in the file manager',
   ),
   MouseHelp('Open image icon on a card', 'Show it in the image viewer'),
+  MouseHelp(
+    'Right-click a file card or row (or the viewer\'s picture)',
+    'Copy image, Copy file, Copy path, Open, Open with…',
+  ),
   MouseHelp(
     'Wheel in the image viewer',
     'Zoom (opens at 1:1); drag to pan, double-click fits',

@@ -7,8 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/animation_detector.dart' show readImageSize;
+import 'clipboard.dart';
 import 'format.dart';
 import 'reveal.dart';
+import 'widgets/file_menu.dart';
 import 'widgets/pixel_image.dart';
 import 'shortcuts.dart';
 
@@ -151,7 +153,26 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
       _go(1);
       return KeyEventResult.handled;
     }
+    if (AppKeys.viewerCopy.accepts(event)) {
+      _copy();
+      return KeyEventResult.handled;
+    }
     return KeyEventResult.ignored;
+  }
+
+  /// The shown image's file (an animation's sheet) as an image.
+  Future<void> _copy() async {
+    final clipboard = ref.read(fileClipboardProvider);
+    if (!clipboard.canCopyFiles) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final path = p.join(widget.packPath, widget.images[_index]);
+    messenger?.hideCurrentSnackBar();
+    try {
+      await clipboard.copyImage(path);
+      messenger?.showSnackBar(const SnackBar(content: Text('Image copied')));
+    } on Object catch (e) {
+      messenger?.showSnackBar(SnackBar(content: Text('Could not copy: $e')));
+    }
   }
 
   String _details(String rel, File file) {
@@ -303,6 +324,16 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                         }
                         return GestureDetector(
                           onDoubleTap: _fit,
+                          onSecondaryTapUp: (d) => showFileMenu(
+                            context,
+                            ref,
+                            d.globalPosition,
+                            FileMenuTarget(
+                              files: [file.path],
+                              image: file.path,
+                              open: file.path,
+                            ),
+                          ),
                           child: InteractiveViewer(
                             transformationController: _transform,
                             // Below the fit, down to [minViewerZoom] actual

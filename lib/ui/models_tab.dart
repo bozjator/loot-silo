@@ -22,6 +22,7 @@ import 'model_viewer.dart';
 import 'reveal.dart';
 import 'shortcuts.dart';
 import 'widgets/format_chips.dart';
+import 'widgets/file_menu.dart';
 import 'widgets/item_card.dart';
 import 'widgets/tab_toolbar.dart';
 import 'widgets/thumb_size.dart';
@@ -285,55 +286,58 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
       for (final f in m.files)
         if (favorites.contains(f)) f,
     ];
-    return ItemCard(
-      key: ValueKey('model:${m.key}'),
-      path: rel,
-      title: prettyName(p.basename(rel)),
-      details: details,
-      stagePadding: 0,
-      // Only the drawn format's chip until hovered, so a stack of five
-      // doesn't cover small cards.
-      stage: (hover) => Stack(
-        fit: StackFit.expand,
-        children: [
-          ModelStage(path: path, turning: hover),
-          if (m.files.length > 1)
-            Positioned(
-              top: 6,
-              left: 6,
-              child: FormatChips(
-                files: hover ? m.files : [rel],
-                shown: rel,
-                vertical: true,
-                onPick: (f) => _pick(m, f),
-                tooltip: (f) => f == rel
-                    ? p.basename(f)
-                    : readableModelExts.contains(formatOf(f))
-                    ? 'Draw ${p.basename(f)}'
-                    : '${p.basename(f)}: not drawn; show in file manager',
+    return FileMenuArea(
+      target: () => FileMenuTarget(files: [path], open: path),
+      child: ItemCard(
+        key: ValueKey('model:${m.key}'),
+        path: rel,
+        title: prettyName(p.basename(rel)),
+        details: details,
+        stagePadding: 0,
+        // Only the drawn format's chip until hovered, so a stack of five
+        // doesn't cover small cards.
+        stage: (hover) => Stack(
+          fit: StackFit.expand,
+          children: [
+            ModelStage(path: path, turning: hover),
+            if (m.files.length > 1)
+              Positioned(
+                top: 6,
+                left: 6,
+                child: FormatChips(
+                  files: hover ? m.files : [rel],
+                  shown: rel,
+                  vertical: true,
+                  onPick: (f) => _pick(m, f),
+                  tooltip: (f) => f == rel
+                      ? p.basename(f)
+                      : readableModelExts.contains(formatOf(f))
+                      ? 'Draw ${p.basename(f)}'
+                      : '${p.basename(f)}: not drawn; show in file manager',
+                ),
               ),
-            ),
+          ],
+        ),
+        focused: _focused == m.key,
+        dimmed: _focused != null && _focused != m.key,
+        starred: starred.isNotEmpty,
+        // Starring stars the shown file; unstarring unstars every format.
+        onToggleStar: () {
+          final favs = ref.read(favoritesProvider.notifier);
+          for (final f in starred.isEmpty ? [rel] : starred) {
+            favs.toggleFile(pack.id, f);
+          }
+        },
+        onTap: () => _tapped(m),
+        actions: [
+          CardIconButton(
+            tooltip: 'Open in viewer',
+            icon: Icons.open_in_full,
+            onPressed: () => _openViewer(m),
+          ),
+          RevealButton(path),
         ],
       ),
-      focused: _focused == m.key,
-      dimmed: _focused != null && _focused != m.key,
-      starred: starred.isNotEmpty,
-      // Starring stars the shown file; unstarring unstars every format.
-      onToggleStar: () {
-        final favs = ref.read(favoritesProvider.notifier);
-        for (final f in starred.isEmpty ? [rel] : starred) {
-          favs.toggleFile(pack.id, f);
-        }
-      },
-      onTap: () => _tapped(m),
-      actions: [
-        CardIconButton(
-          tooltip: 'Open in viewer',
-          icon: Icons.open_in_full,
-          onPressed: () => _openViewer(m),
-        ),
-        RevealButton(path),
-      ],
     );
   }
 }

@@ -16,6 +16,7 @@ import 'package:loot_silo/state/providers.dart';
 import 'package:loot_silo/state/settings.dart';
 import 'package:loot_silo/ui/app.dart';
 import 'package:loot_silo/core/audio_duration.dart';
+import 'package:loot_silo/ui/clipboard.dart';
 import 'package:loot_silo/ui/format.dart';
 import 'package:loot_silo/ui/help_screen.dart';
 import 'package:loot_silo/ui/image_viewer.dart';
@@ -30,6 +31,7 @@ import 'package:loot_silo/ui/folder_groups.dart';
 import 'package:loot_silo/ui/track_player.dart';
 import 'package:loot_silo/ui/widgets/favorite_star.dart';
 import 'package:loot_silo/ui/widgets/animated_sprite.dart';
+import 'package:loot_silo/ui/widgets/file_menu.dart';
 import 'package:loot_silo/ui/widgets/item_card.dart';
 import 'package:loot_silo/ui/widgets/measure_size.dart';
 import 'package:loot_silo/ui/widgets/project_links.dart';
@@ -90,6 +92,36 @@ class _FakePlayer implements TrackPlayer {
   Stream<void> get onComplete => complete.stream;
   @override
   Future<void> dispose() async {}
+}
+
+/// Records clipboard and open calls.
+class _FakeClipboard implements FileClipboard {
+  _FakeClipboard({this.linux = true});
+
+  final bool linux;
+  final calls = <String>[];
+
+  @override
+  bool get canCopyFiles => linux;
+  @override
+  bool get canOpenWith => linux;
+  @override
+  Future<void> copyImage(String path) async => calls.add('image:$path');
+  @override
+  Future<void> copyFiles(
+    List<String> paths, {
+    String? mime,
+    Uint8List? bytes,
+  }) async => calls.add('files:${paths.join('|')}');
+  @override
+  Future<void> copyText(String text) async => calls.add('text:$text');
+  @override
+  Future<void> open(String path) async => calls.add('open:$path');
+  @override
+  Future<bool> openWith(String path) async {
+    calls.add('openWith:$path');
+    return true;
+  }
 }
 
 void main() {
@@ -1864,6 +1896,261 @@ void main() {
       final elapsed = tester.getRect(find.byKey(const ValueKey('elapsed')));
       expect(elapsed.right, lessThanOrEqualTo(seek.left));
       expect(elapsed.center.dy, closeTo(seek.center.dy, 2));
+    });
+  });
+
+  group('Right-click menu (M69)', () {
+    late _FakeClipboard clip;
+    String abs(String rel) =>
+        p.join(tmp.path, 'library', 'HeroMaker', 'Knight Pack', rel);
+
+    Future<void> open(
+      WidgetTester tester, {
+      List<String> files = const [
+        'heroes/a.png',
+        'heroes/b.png',
+        'heroes/c.png',
+        'sfx/coin.wav',
+        'notes/readme.txt',
+      ],
+      Map<String, img.Image> images = const {},
+      bool linux = true,
+    }) async {
+      clip = _FakeClipboard(linux: linux);
+      await openKnight(
+        tester,
+        files: files,
+        images: images,
+        overrides: [
+          fileClipboardProvider.overrideWithValue(clip),
+          trackPlayerFactoryProvider.overrideWithValue(_FakePlayer.new),
+          audioDurationProvider.overrideWithValue((_) async => null),
+          audioInfoProvider.overrideWithValue((_) async => null),
+          audioPeaksProvider.overrideWithValue(
+            AudioPeaksCache(read: (_) async => Float32List(0)),
+          ),
+        ],
+      );
+    }
+
+    Future<void> tab(WidgetTester tester, String name) async {
+      await tester.tap(find.textContaining('$name ('));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    Future<void> rightClick(WidgetTester tester, Finder target) async {
+      await tester.tap(target, buttons: kSecondaryButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    /// The open menu's items, in order.
+    List<String> items(WidgetTester tester) => [
+      for (final e
+          in find
+              .byWidgetPredicate(
+                (w) =>
+                    w is PopupMenuItem &&
+                    w.key is ValueKey<String> &&
+                    (w.key! as ValueKey<String>).value.startsWith('menu:'),
+              )
+              .evaluate())
+        (e.widget.key! as ValueKey<String>).value.substring(5),
+    ];
+
+    Future<void> pick(WidgetTester tester, String action) async {
+      await tester.tap(find.byKey(ValueKey('menu:$action')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    const all = ['copyImage', 'copyFiles', 'copyPath', 'open', 'openWith'];
+    const file = ['copyFiles', 'copyPath', 'open', 'openWith'];
+
+    testWidgets('image card: every item in order, each does its job', (
+      tester,
+    ) async {
+      await open(tester);
+      await tab(tester, 'Images');
+      final card = find.byKey(const ValueKey('image:heroes/a.png'));
+      await rightClick(tester, card);
+      expect(items(tester), all);
+      // Nothing the card's icons already do, and no Play.
+      for (final text in [
+        'Show in file manager',
+        'Add to favorites',
+        'Select',
+        'Open image',
+        'Play',
+      ]) {
+        expect(
+          find.descendant(
+            of: find.byType(PopupMenuItem<FileMenuAction>),
+            matching: find.text(text),
+          ),
+          findsNothing,
+        );
+      }
+      expect(find.text('Copy image'), findsOneWidget);
+      expect(find.text('Copy file'), findsOneWidget);
+      expect(find.text('Open with…'), findsOneWidget);
+      await pick(tester, 'copyImage');
+      expect(clip.calls.last, 'image:${abs('heroes/a.png')}');
+      expect(find.text('Image copied'), findsOneWidget);
+
+      final expected = {
+        'copyFiles': ('files:${abs('heroes/a.png')}', 'File copied'),
+        'copyPath': ('text:${abs('heroes/a.png')}', 'Path copied'),
+        'open': ('open:${abs('heroes/a.png')}', null),
+        'openWith': ('openWith:${abs('heroes/a.png')}', null),
+      };
+      for (final MapEntry(key: action, value: (call, snack))
+          in expected.entries) {
+        await rightClick(tester, card);
+        await pick(tester, action);
+        expect(clip.calls.last, call);
+        if (snack != null) expect(find.text(snack), findsWidgets);
+      }
+    });
+
+    testWidgets('several selected images: the menu acts on all of them', (
+      tester,
+    ) async {
+      await open(tester);
+      await tab(tester, 'Images');
+      final a = find.byKey(const ValueKey('image:heroes/a.png'));
+      final b = find.byKey(const ValueKey('image:heroes/b.png'));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.tap(a);
+      await tester.tap(b);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump(const Duration(milliseconds: 300));
+      await rightClick(tester, b);
+      // No Copy image (or Open) for more than one.
+      expect(items(tester), ['copyFiles', 'copyPath']);
+      expect(find.text('Copy 2 files'), findsOneWidget);
+      await pick(tester, 'copyFiles');
+      expect(
+        clip.calls.last,
+        'files:${abs('heroes/a.png')}|${abs('heroes/b.png')}',
+      );
+      expect(find.text('2 files copied'), findsOneWidget);
+      // An unselected image still gets its own menu.
+      await rightClick(
+        tester,
+        find.byKey(const ValueKey('image:heroes/c.png')),
+      );
+      expect(items(tester), all);
+    });
+
+    testWidgets('animation card: copies its one image file', (tester) async {
+      final sheet = img.Image(width: 64, height: 16, numChannels: 4);
+      img.fill(sheet, color: img.ColorRgba8(220, 120, 40, 255));
+      await open(
+        tester,
+        files: const [],
+        images: {'fx/Explosion(16x16).png': sheet},
+      );
+      await tab(tester, 'Animations');
+      final card = find.byWidgetPredicate(
+        (w) => w is ItemCard && w.path == 'fx/Explosion(16x16).png',
+      );
+      await rightClick(tester, card.first);
+      expect(items(tester), all);
+      await pick(tester, 'copyFiles');
+      expect(clip.calls.last, 'files:${abs('fx/Explosion(16x16).png')}');
+      await rightClick(tester, card.first);
+      await pick(tester, 'copyImage');
+      expect(clip.calls.last, 'image:${abs('fx/Explosion(16x16).png')}');
+    });
+
+    testWidgets('audio rows and cards, Other files rows: file items', (
+      tester,
+    ) async {
+      await open(tester);
+      await tab(tester, 'Audio');
+      await rightClick(tester, find.text('coin'));
+      expect(items(tester), file);
+      await pick(tester, 'copyFiles');
+      expect(clip.calls.last, 'files:${abs('sfx/coin.wav')}');
+      // Right-click doesn't play.
+      expect(find.byKey(const ValueKey('progress')), findsNothing);
+
+      await tester.tap(find.text('Cards'));
+      await tester.pump();
+      await rightClick(tester, find.text('Coin'));
+      expect(items(tester), file);
+      await pick(tester, 'openWith');
+      expect(clip.calls.last, 'openWith:${abs('sfx/coin.wav')}');
+      expect(find.byKey(const ValueKey('progress')), findsNothing);
+
+      await tab(tester, 'Other files');
+      await rightClick(tester, find.text('notes/readme.txt'));
+      expect(items(tester), file);
+      await pick(tester, 'copyPath');
+      expect(clip.calls.last, 'text:${abs('notes/readme.txt')}');
+    });
+
+    testWidgets('material card: Copy file copies all its maps', (tester) async {
+      await open(
+        tester,
+        files: const [
+          'Stone/Rock_Color.png',
+          'Stone/Rock_Normal.png',
+          'Stone/Rock_Roughness.png',
+        ],
+      );
+      await tab(tester, 'Materials');
+      await rightClick(
+        tester,
+        find.byKey(const ValueKey('material:Stone/Rock')),
+      );
+      expect(items(tester), ['copyFiles', 'copyPath']);
+      expect(find.text('Copy 3 files'), findsOneWidget);
+      await pick(tester, 'copyFiles');
+      final copied = clip.calls.last.substring(6).split('|');
+      expect(copied.toSet(), {
+        abs('Stone/Rock_Color.png'),
+        abs('Stone/Rock_Normal.png'),
+        abs('Stone/Rock_Roughness.png'),
+      });
+      expect(find.text('3 files copied'), findsOneWidget);
+    });
+
+    testWidgets('image viewer: right-click menu and Ctrl+C', (tester) async {
+      await open(tester);
+      await tab(tester, 'Images');
+      await openImage(tester, 'heroes/a.png');
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(ImageViewer), findsOneWidget);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(clip.calls.last, 'image:${abs('heroes/a.png')}');
+      expect(find.text('Image copied'), findsOneWidget);
+      await rightClick(
+        tester,
+        find.descendant(
+          of: find.byType(ImageViewer),
+          matching: find.byType(InteractiveViewer),
+        ),
+      );
+      expect(items(tester), all);
+      await pick(tester, 'open');
+      expect(clip.calls.last, 'open:${abs('heroes/a.png')}');
+    });
+
+    testWidgets('other platforms: only Copy path and Open', (tester) async {
+      await open(tester, linux: false);
+      await tab(tester, 'Images');
+      await rightClick(
+        tester,
+        find.byKey(const ValueKey('image:heroes/a.png')),
+      );
+      expect(items(tester), ['copyPath', 'open']);
     });
   });
 

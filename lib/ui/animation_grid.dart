@@ -16,6 +16,7 @@ import 'format.dart';
 import 'image_viewer.dart';
 import 'reveal.dart';
 import 'widgets/animated_sprite.dart';
+import 'widgets/file_menu.dart';
 import 'widgets/item_card.dart';
 import 'widgets/pixel_image.dart';
 import 'widgets/tab_toolbar.dart';
@@ -326,51 +327,56 @@ class _AnimationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final a = anim;
-    return ItemCard(
-      path: a.path,
-      focused: focused,
-      dimmed: dimmed,
-      onTap: onTap,
-      starred: starred,
-      onToggleStar: onToggleStar,
-      title: prettyName(a.label, isFile: false),
-      details: switch (a.kind) {
-        AnimKind.sheet =>
-          '${a.frameW}×${a.frameH} · ${a.frameCount} frames · '
-              '${a.fps.round()} fps',
-        AnimKind.gif => 'GIF',
-      },
-      stage: (hover) {
-        final playing = focused || !dimmed && (playAll || hover);
-        return a.kind == AnimKind.gif
-            ? PixelImage(File(p.join(packPath, a.path)), animate: playing)
-            : AnimatedSprite(packPath: packPath, anim: a, playing: playing);
-      },
-      badge: edited
-          ? Tooltip(
-              message: 'Edited',
-              child: Container(
-                key: const ValueKey('edited-badge'),
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: scheme.primary,
-                  shape: BoxShape.circle,
+    final file = p.join(packPath, a.path);
+    // An animation is one image file: the menu copies and opens that.
+    return FileMenuArea(
+      target: () => FileMenuTarget(files: [file], image: file, open: file),
+      child: ItemCard(
+        path: a.path,
+        focused: focused,
+        dimmed: dimmed,
+        onTap: onTap,
+        starred: starred,
+        onToggleStar: onToggleStar,
+        title: prettyName(a.label, isFile: false),
+        details: switch (a.kind) {
+          AnimKind.sheet =>
+            '${a.frameW}×${a.frameH} · ${a.frameCount} frames · '
+                '${a.fps.round()} fps',
+          AnimKind.gif => 'GIF',
+        },
+        stage: (hover) {
+          final playing = focused || !dimmed && (playAll || hover);
+          return a.kind == AnimKind.gif
+              ? PixelImage(File(p.join(packPath, a.path)), animate: playing)
+              : AnimatedSprite(packPath: packPath, anim: a, playing: playing);
+        },
+        badge: edited
+            ? Tooltip(
+                message: 'Edited',
+                child: Container(
+                  key: const ValueKey('edited-badge'),
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-            )
-          : null,
-      actions: [
-        if (a.kind != AnimKind.gif)
-          CardIconButton(
-            tooltip: edited ? 'Edit animation (edited)' : 'Edit animation',
-            color: edited ? scheme.primary : null,
-            icon: Icons.tune,
-            onPressed: onEdit,
-          ),
-        OpenImageButton(onPressed: onOpen),
-        RevealButton(p.join(packPath, a.path)),
-      ],
+              )
+            : null,
+        actions: [
+          if (a.kind != AnimKind.gif)
+            CardIconButton(
+              tooltip: edited ? 'Edit animation (edited)' : 'Edit animation',
+              color: edited ? scheme.primary : null,
+              icon: Icons.tune,
+              onPressed: onEdit,
+            ),
+          OpenImageButton(onPressed: onOpen),
+          RevealButton(file),
+        ],
+      ),
     );
   }
 }

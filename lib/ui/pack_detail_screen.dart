@@ -42,6 +42,7 @@ import 'text_preview_dialog.dart';
 import 'track_player.dart';
 import 'widgets/animated_sprite.dart';
 import 'widgets/favorite_star.dart';
+import 'widgets/file_menu.dart';
 import 'widgets/format_chips.dart';
 import 'widgets/tab_toolbar.dart';
 import 'widgets/item_card.dart';
@@ -2025,60 +2026,75 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
         );
         final dims = _dims.putIfAbsent(rel, () => readImageSize(file.path));
         // Plain click focuses; Ctrl/Shift-click select in the Flat view.
-        return ItemCard(
-          key: ValueKey('image:$rel'),
-          path: rel,
-          title: prettyName(p.basename(rel)),
-          details: switch (dims) {
-            (final w, final h) => '$w×$h',
-            null => p.extension(rel).replaceFirst('.', '').toUpperCase(),
-          },
-          stagePadding: 6,
-          stage: (_) => PixelImage(file),
-          focused: _focused == rel,
-          dimmed: _focused != null && _focused != rel,
-          selected: selected,
-          starred: favorites.contains(rel),
-          onToggleStar: () =>
-              ref.read(favoritesProvider.notifier).toggleFile(pack.id, rel),
-          showLeading: selected,
-          // An icon toggle, the size of the other card icons.
-          leading: IconButton(
-            key: ValueKey('select:$rel'),
-            tooltip: selected ? 'Deselect' : 'Select (Ctrl-click)',
-            iconSize: 18,
-            visualDensity: VisualDensity.compact,
-            isSelected: selected,
-            icon: const Icon(Icons.check_box_outline_blank),
-            selectedIcon: const Icon(Icons.check_box),
-            onPressed: () => _toggle(rel),
+        // A right-click on one of several selected images acts on them all.
+        return FileMenuArea(
+          target: () => _selected.length > 1 && _selected.contains(rel)
+              ? FileMenuTarget(
+                  files: [
+                    for (final s in shown)
+                      if (_selected.contains(s)) p.join(pack.path, s),
+                  ],
+                )
+              : FileMenuTarget(
+                  files: [file.path],
+                  image: file.path,
+                  open: file.path,
+                ),
+          child: ItemCard(
+            key: ValueKey('image:$rel'),
+            path: rel,
+            title: prettyName(p.basename(rel)),
+            details: switch (dims) {
+              (final w, final h) => '$w×$h',
+              null => p.extension(rel).replaceFirst('.', '').toUpperCase(),
+            },
+            stagePadding: 6,
+            stage: (_) => PixelImage(file),
+            focused: _focused == rel,
+            dimmed: _focused != null && _focused != rel,
+            selected: selected,
+            starred: favorites.contains(rel),
+            onToggleStar: () =>
+                ref.read(favoritesProvider.notifier).toggleFile(pack.id, rel),
+            showLeading: selected,
+            // An icon toggle, the size of the other card icons.
+            leading: IconButton(
+              key: ValueKey('select:$rel'),
+              tooltip: selected ? 'Deselect' : 'Select (Ctrl-click)',
+              iconSize: 18,
+              visualDensity: VisualDensity.compact,
+              isSelected: selected,
+              icon: const Icon(Icons.check_box_outline_blank),
+              selectedIcon: const Icon(Icons.check_box),
+              onPressed: () => _toggle(rel),
+            ),
+            onTap: () {
+              final keys = HardwareKeyboard.instance;
+              if (keys.isShiftPressed) {
+                _clicks.reset();
+                _selectRange(shown, rel);
+              } else if (keys.isControlPressed) {
+                _clicks.reset();
+                _toggle(rel);
+              } else if (_clicks.second(rel)) {
+                // Focused, without taking the keyboard from the viewer.
+                setState(() => _focused = rel);
+                open();
+              } else {
+                _focus(_focused == rel ? null : rel);
+              }
+            },
+            actions: [
+              if (canAnimate)
+                CardIconButton(
+                  tooltip: 'Make animation…',
+                  icon: Icons.animation,
+                  onPressed: () => _makeAnimation(rel),
+                ),
+              OpenImageButton(onPressed: open),
+              RevealButton(file.path),
+            ],
           ),
-          onTap: () {
-            final keys = HardwareKeyboard.instance;
-            if (keys.isShiftPressed) {
-              _clicks.reset();
-              _selectRange(shown, rel);
-            } else if (keys.isControlPressed) {
-              _clicks.reset();
-              _toggle(rel);
-            } else if (_clicks.second(rel)) {
-              // Focused, without taking the keyboard from the viewer.
-              setState(() => _focused = rel);
-              open();
-            } else {
-              _focus(_focused == rel ? null : rel);
-            }
-          },
-          actions: [
-            if (canAnimate)
-              CardIconButton(
-                tooltip: 'Make animation…',
-                icon: Icons.animation,
-                onPressed: () => _makeAnimation(rel),
-              ),
-            OpenImageButton(onPressed: open),
-            RevealButton(file.path),
-          ],
         );
       },
     );
@@ -3694,14 +3710,18 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
           ),
           onTap: () => _toggle(rel),
         );
+        final menu = FileMenuArea(
+          target: () => FileMenuTarget(files: [path], open: path),
+          child: tile,
+        );
         return KeyedSubtree(
           key: _keyFor(rel),
           child: !playing || !_seekable(rel)
-              ? tile
+              ? menu
               : Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    tile,
+                    menu,
                     _SeekBar(
                       position: _position,
                       length: _lengthOf(rel)!,
@@ -3734,28 +3754,32 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
       final track = audio[i];
       final rel = _fileOf(track);
       final playing = _playing == rel;
+      final path = p.join(widget.pack.path, rel);
       return KeyedSubtree(
         key: _keyFor(rel),
-        child: _AudioCard(
-          key: ValueKey(track.key),
-          rel: rel,
-          folder: track.folder,
-          formats: FormatChips(
-            files: track.files,
-            shown: rel,
-            onPick: (f) => _switchFormat(track, f),
-            vertical: true,
-            details: _chipDetails,
+        child: FileMenuArea(
+          target: () => FileMenuTarget(files: [path], open: path),
+          child: _AudioCard(
+            key: ValueKey(track.key),
+            rel: rel,
+            folder: track.folder,
+            formats: FormatChips(
+              files: track.files,
+              shown: rel,
+              onPick: (f) => _switchFormat(track, f),
+              vertical: true,
+              details: _chipDetails,
+            ),
+            packPath: widget.pack.path,
+            length: readLength(rel),
+            selected: _selected == rel,
+            playing: playing,
+            position: playing ? _position : null,
+            playingLength: playing ? _lengthOf(rel) : null,
+            onToggle: () => _toggle(rel),
+            onSeek: _seek,
+            star: _trackStar(track, rel, favorites),
           ),
-          packPath: widget.pack.path,
-          length: readLength(rel),
-          selected: _selected == rel,
-          playing: playing,
-          position: playing ? _position : null,
-          playingLength: playing ? _lengthOf(rel) : null,
-          onToggle: () => _toggle(rel),
-          onSeek: _seek,
-          star: _trackStar(track, rel, favorites),
         ),
       );
     },
@@ -4272,22 +4296,26 @@ class _FilesTab extends ConsumerWidget {
       itemBuilder: (context, i) {
         final rel = files[i];
         final previewable = isTextPreviewable(rel);
-        return ListTile(
-          dense: true,
-          leading: Icon(_iconFor(rel)),
-          title: Text(rel),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(formatBytes(contents.sizes[rel] ?? 0)),
-              fileStar(ref, pack.id, rel, starred: favorites.contains(rel)),
-              RevealButton(p.join(pack.path, rel)),
-            ],
+        final path = p.join(pack.path, rel);
+        return FileMenuArea(
+          target: () => FileMenuTarget(files: [path], open: path),
+          child: ListTile(
+            dense: true,
+            leading: Icon(_iconFor(rel)),
+            title: Text(rel),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(formatBytes(contents.sizes[rel] ?? 0)),
+                fileStar(ref, pack.id, rel, starred: favorites.contains(rel)),
+                RevealButton(p.join(pack.path, rel)),
+              ],
+            ),
+            // Text files open in the preview; the rest only reveal.
+            onTap: previewable
+                ? () => showTextPreview(context, packPath: pack.path, rel: rel)
+                : null,
           ),
-          // Text files open in the preview; the rest only reveal.
-          onTap: previewable
-              ? () => showTextPreview(context, packPath: pack.path, rel: rel)
-              : null,
         );
       },
     );

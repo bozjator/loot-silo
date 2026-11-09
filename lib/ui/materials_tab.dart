@@ -22,6 +22,7 @@ import 'reveal.dart';
 import 'shortcuts.dart';
 import 'theme_colors.dart';
 import 'widgets/format_chips.dart';
+import 'widgets/file_menu.dart';
 import 'widgets/item_card.dart';
 import 'widgets/tab_toolbar.dart';
 import 'widgets/thumb_size.dart';
@@ -231,68 +232,74 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
       ?m.resolution,
       '$count ${count == 1 ? 'map' : 'maps'}',
     ].join(' · ');
-    return ItemCard(
-      key: ValueKey('material:${m.key}'),
-      path: m.key,
-      title: materialTitle(m.name),
-      details: details,
-      stagePadding: 0,
-      stage: (hover) {
-        // The picked map shows only while hovered.
-        if (!hover) _picked.remove(m.key);
-        final picked = hover ? _picked[m.key] : null;
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            MaterialPicture(packPath: pack.path, material: m, map: picked),
-            if (hover && m.toolFiles.isNotEmpty)
-              Positioned(
-                top: 6,
-                left: 6,
-                child: FormatChips(
-                  files: m.toolFiles,
-                  shown: '',
-                  vertical: true,
-                  pickSingle: true,
-                  label: (f) =>
-                      materialToolFormats[formatOf(f)] ??
-                      formatOf(f).toUpperCase(),
-                  tooltip: (f) => '${p.basename(f)}: show in file manager',
-                  onPick: (f) => ref.read(revealProvider)(p.join(pack.path, f)),
-                ),
-              ),
-            if (hover)
-              Positioned(
-                left: 6,
-                right: 6,
-                bottom: 6,
-                child: _MapChips(
-                  material: m,
-                  picked: picked,
-                  onPick: (f) => setState(
-                    () => f == picked
-                        ? _picked.remove(m.key)
-                        : _picked[m.key] = f,
+    return FileMenuArea(
+      target: () => FileMenuTarget(
+        files: [for (final map in m.maps) p.join(pack.path, map.path)],
+      ),
+      child: ItemCard(
+        key: ValueKey('material:${m.key}'),
+        path: m.key,
+        title: materialTitle(m.name),
+        details: details,
+        stagePadding: 0,
+        stage: (hover) {
+          // The picked map shows only while hovered.
+          if (!hover) _picked.remove(m.key);
+          final picked = hover ? _picked[m.key] : null;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              MaterialPicture(packPath: pack.path, material: m, map: picked),
+              if (hover && m.toolFiles.isNotEmpty)
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: FormatChips(
+                    files: m.toolFiles,
+                    shown: '',
+                    vertical: true,
+                    pickSingle: true,
+                    label: (f) =>
+                        materialToolFormats[formatOf(f)] ??
+                        formatOf(f).toUpperCase(),
+                    tooltip: (f) => '${p.basename(f)}: show in file manager',
+                    onPick: (f) =>
+                        ref.read(revealProvider)(p.join(pack.path, f)),
                   ),
                 ),
-              ),
-          ],
-        );
-      },
-      focused: _focused == m.key,
-      dimmed: _focused != null && _focused != m.key,
-      starred: favorites.contains(m.key),
-      onToggleStar: () =>
-          ref.read(favoritesProvider.notifier).toggleFile(pack.id, m.key),
-      onTap: () => _tapped(m),
-      actions: [
-        CardIconButton(
-          tooltip: 'Open in viewer',
-          icon: Icons.open_in_full,
-          onPressed: () => _openViewer(m),
-        ),
-        RevealButton(p.join(pack.path, m.preview ?? m.maps.first.path)),
-      ],
+              if (hover)
+                Positioned(
+                  left: 6,
+                  right: 6,
+                  bottom: 6,
+                  child: _MapChips(
+                    material: m,
+                    picked: picked,
+                    onPick: (f) => setState(
+                      () => f == picked
+                          ? _picked.remove(m.key)
+                          : _picked[m.key] = f,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+        focused: _focused == m.key,
+        dimmed: _focused != null && _focused != m.key,
+        starred: favorites.contains(m.key),
+        onToggleStar: () =>
+            ref.read(favoritesProvider.notifier).toggleFile(pack.id, m.key),
+        onTap: () => _tapped(m),
+        actions: [
+          CardIconButton(
+            tooltip: 'Open in viewer',
+            icon: Icons.open_in_full,
+            onPressed: () => _openViewer(m),
+          ),
+          RevealButton(p.join(pack.path, m.preview ?? m.maps.first.path)),
+        ],
+      ),
     );
   }
 }

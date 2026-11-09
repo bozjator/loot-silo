@@ -424,6 +424,23 @@ class HelpScreen extends StatelessWidget {
                   'close the viewer.',
                 ),
               ]),
+              const _Section('Right-click menu', [
+                _P(
+                  'Right-click an image, animation, audio, model or material '
+                  'card, an audio or Other files row, or the picture in the '
+                  'image viewer for a menu with only what applies: Copy image '
+                  'puts the picture itself on the clipboard (at its own '
+                  'size), to paste into a chat or an image editor; Copy file '
+                  'copies the file, to paste into a game\'s assets folder in '
+                  'the file manager (an animation copies its one image file, '
+                  'a material all its maps); Copy path copies the full path '
+                  'as text; Open opens the file in its default app and Open '
+                  'with… asks which app. With several images selected, a '
+                  'right-click on one of them copies all selected files. '
+                  'Ctrl+C in the image viewer copies the shown image. Copy '
+                  'image, Copy file and Open with… are Linux only for now.',
+                ),
+              ]),
               const _Section('Favorites', [
                 _P(
                   'Star packs and single files to find them again. The star '
