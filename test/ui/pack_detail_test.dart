@@ -1232,6 +1232,99 @@ void main() {
       }, hasLength(1));
     });
 
+    Future<void> openRaw(WidgetTester tester, List<String> files) async {
+      fake = _FakePlayer();
+      await openKnight(
+        tester,
+        files: const [],
+        raw: {
+          for (final f in files) f: const [0],
+        },
+        types: ['sfx'],
+        overrides: [
+          trackPlayerFactoryProvider.overrideWithValue(() => fake),
+          audioDurationProvider.overrideWithValue(
+            (path) async => const Duration(seconds: 5),
+          ),
+        ],
+      );
+      await tester.pump();
+    }
+
+    Rect chipRect(WidgetTester tester, String file) =>
+        tester.getRect(find.byKey(ValueKey('format:$file')));
+
+    testWidgets('M66: each format keeps its own column slot', (tester) async {
+      await openRaw(tester, const [
+        'a.ogg', 'a.wav', 'a.mp3', //
+        'b.ogg', 'b.wav', 'b.mp3', //
+        'c.wav', 'd.mp3', 'e.ogg', 'e.mp3',
+      ]);
+      expect(find.byType(ListTile), findsNWidgets(5));
+      for (final (ext, names) in [
+        ('ogg', ['a', 'b', 'e']),
+        ('wav', ['a', 'b', 'c']),
+        ('mp3', ['a', 'b', 'd', 'e']),
+      ]) {
+        expect(
+          {for (final n in names) chipRect(tester, '$n.$ext').left},
+          hasLength(1),
+          reason: ext,
+        );
+      }
+      // In the fixed order: OGG, WAV, MP3.
+      expect(
+        chipRect(tester, 'c.wav').left,
+        greaterThan(chipRect(tester, 'a.ogg').right),
+      );
+      expect(
+        chipRect(tester, 'd.mp3').left,
+        greaterThan(chipRect(tester, 'a.wav').right),
+      );
+      // Every row's column is as wide as all three slots, and the length
+      // after it starts at the same x.
+      double left(String key) =>
+          tester.getTopLeft(find.byKey(ValueKey(key))).dx;
+      for (final key in ['formats-column', 'length']) {
+        expect(
+          {
+            for (final r in ['a.ogg', 'c.wav', 'd.mp3']) left('$key:$r'),
+          },
+          hasLength(1),
+          reason: key,
+        );
+      }
+      final column = tester.getRect(
+        find.byKey(const ValueKey('formats-column:c.wav')),
+      );
+      expect(
+        column.width,
+        greaterThanOrEqualTo(chipRect(tester, 'a.mp3').right - column.left),
+      );
+    });
+
+    testWidgets('M66: a tab with the same formats everywhere packs them', (
+      tester,
+    ) async {
+      await openRaw(tester, const ['a.ogg', 'a.wav', 'b.ogg', 'b.wav']);
+      for (final n in ['a', 'b']) {
+        final column = tester.getRect(
+          find.byKey(ValueKey('formats-column:$n.ogg')),
+        );
+        final ogg = chipRect(tester, '$n.ogg');
+        final wav = chipRect(tester, '$n.wav');
+        expect(ogg.left, column.left);
+        // Only the chip's 4 px gap between them, as before.
+        expect(wav.left, ogg.right + 4);
+        expect(column.width, closeTo(wav.right + 4 - column.left, 1));
+      }
+      // Cards still pack the chips without gaps.
+      await tester.tap(find.text('Cards'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('format-slot:ogg')), findsNothing);
+    });
+
     testWidgets('one row per sound; a format chip switches mid-play', (
       tester,
     ) async {

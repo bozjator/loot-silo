@@ -289,7 +289,9 @@ class HelpScreen extends StatelessWidget {
                   'song.mp3, side by side or in MP3 / OGG / WAV folders) is '
                   'one row or card with a chip per format. The highlighted '
                   'chip is the file that plays; click another to switch '
-                  '(a playing sound carries on from the same spot). '
+                  '(a playing sound carries on from the same spot). In the '
+                  'list, each format keeps its own column, so a sound saved '
+                  'only as WAV shows its chip under the other WAV chips. '
                   'Settings → Audio picks the format shown first.',
                 ),
                 _P(

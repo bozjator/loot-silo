@@ -1543,6 +1543,56 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m66: each format in its own column (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    const title = 'Achievements Sound Effects 1 - Universal Sound Effects';
+    await tester.enterText(
+      find.byType(TextField),
+      'Achievements Sound Effects 1',
+    );
+    await pumpUntil(tester, find.text(title));
+    await tester.tap(find.text(title));
+    await pumpUntil(tester, find.byKey(const ValueKey('loop')));
+    await tester.tap(find.text('Rows'));
+    await tester.pump(const Duration(milliseconds: 300));
+    // The last tracks have only WAV: scroll to them.
+    await tester.drag(find.byType(ListView).last, const Offset(0, -20000));
+    await tester.pump(const Duration(milliseconds: 300));
+    Map<String, Set<double>> lefts() {
+      final byFormat = <String, Set<double>>{};
+      for (final e
+          in find
+              .byWidgetPredicate(
+                (w) =>
+                    w.key is ValueKey<String> &&
+                    (w.key! as ValueKey<String>).value.startsWith('format:'),
+              )
+              .evaluate()) {
+        final key = (e.widget.key! as ValueKey<String>).value;
+        final box = e.renderObject! as RenderBox;
+        byFormat
+            .putIfAbsent(p.extension(key).toLowerCase(), () => {})
+            .add(box.localToGlobal(Offset.zero).dx);
+      }
+      return byFormat;
+    }
+
+    final byFormat = lefts();
+    expect(byFormat['.wav'], isNotNull);
+    for (final MapEntry(:key, :value) in byFormat.entries) {
+      expect(value, hasLength(1), reason: key);
+    }
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm66_audio_format_columns', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m25: audio cards on a real SFX pack, loop restart (real)', (
     tester,
   ) async {

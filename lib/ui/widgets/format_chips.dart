@@ -17,6 +17,7 @@ class FormatChips extends StatelessWidget {
     this.tooltip,
     this.label,
     this.pickSingle = false,
+    this.slots,
   });
 
   final List<String> files;
@@ -35,60 +36,85 @@ class FormatChips extends StatelessWidget {
   /// A lone chip is clickable too (it reveals a file, say).
   final bool pickSingle;
 
+  /// List rows only: a slot per format (`ogg` → width), in order. Each chip
+  /// sits in its format's slot and a missing format leaves its slot empty,
+  /// so the same format lines up down a list.
+  final Map<String, double>? slots;
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final style = Theme.of(context).textTheme.labelSmall;
+    final chipOf = {for (final f in files) f: _chip(context, f)};
+    final slots = this.slots;
+    if (slots != null && !vertical) {
+      final byFormat = {for (final f in files) formatOf(f): f};
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final MapEntry(key: format, value: width) in slots.entries)
+            SizedBox(
+              key: ValueKey('format-slot:$format'),
+              width: width,
+              child: switch (byFormat[format]) {
+                final f? => Align(
+                  alignment: Alignment.centerLeft,
+                  child: chipOf[f],
+                ),
+                null => null,
+              },
+            ),
+        ],
+      );
+    }
     final chips = Flex(
       direction: vertical ? Axis.vertical : Axis.horizontal,
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: vertical
           ? CrossAxisAlignment.stretch
           : CrossAxisAlignment.center,
-      children: [
-        for (final f in files)
-          Padding(
-            padding: vertical
-                ? const EdgeInsets.only(bottom: 4)
-                : const EdgeInsets.only(right: 4),
-            child: Tooltip(
-              message:
-                  tooltip?.call(f) ??
-                  (f == shown ? p.basename(f) : 'Switch to ${p.basename(f)}'),
-              child: Material(
-                key: ValueKey('format:$f'),
-                color: f == shown
-                    ? scheme.primaryContainer
-                    : scheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(4),
-                child: InkWell(
-                  mouseCursor: f == shown ? null : clickCursor,
-                  borderRadius: BorderRadius.circular(4),
-                  onTap: f == shown || (files.length == 1 && !pickSingle)
-                      ? null
-                      : () => onPick(f),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 2,
-                    ),
-                    child: Text(
-                      label?.call(f) ?? formatOf(f).toUpperCase(),
-                      textAlign: TextAlign.center,
-                      style: style?.copyWith(
-                        color: f == shown
-                            ? scheme.onPrimaryContainer
-                            : scheme.onSurfaceVariant,
-                        fontWeight: f == shown ? FontWeight.bold : null,
-                      ),
-                    ),
-                  ),
+      children: [for (final f in files) chipOf[f]!],
+    );
+    return vertical ? IntrinsicWidth(child: chips) : chips;
+  }
+
+  Widget _chip(BuildContext context, String f) {
+    final scheme = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.labelSmall;
+    return Padding(
+      padding: vertical
+          ? const EdgeInsets.only(bottom: 4)
+          : const EdgeInsets.only(right: 4),
+      child: Tooltip(
+        message:
+            tooltip?.call(f) ??
+            (f == shown ? p.basename(f) : 'Switch to ${p.basename(f)}'),
+        child: Material(
+          key: ValueKey('format:$f'),
+          color: f == shown
+              ? scheme.primaryContainer
+              : scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(4),
+          child: InkWell(
+            mouseCursor: f == shown ? null : clickCursor,
+            borderRadius: BorderRadius.circular(4),
+            onTap: f == shown || (files.length == 1 && !pickSingle)
+                ? null
+                : () => onPick(f),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              child: Text(
+                label?.call(f) ?? formatOf(f).toUpperCase(),
+                textAlign: TextAlign.center,
+                style: style?.copyWith(
+                  color: f == shown
+                      ? scheme.onPrimaryContainer
+                      : scheme.onSurfaceVariant,
+                  fontWeight: f == shown ? FontWeight.bold : null,
                 ),
               ),
             ),
           ),
-      ],
+        ),
+      ),
     );
-    return vertical ? IntrinsicWidth(child: chips) : chips;
   }
 }

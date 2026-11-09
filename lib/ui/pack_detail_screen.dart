@@ -3510,16 +3510,37 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   ) {
     final theme = Theme.of(context);
     // Fixed columns, so formats, length and size line up down the list:
-    // the chips as wide as the widest set in the tab (left-aligned), the
-    // size as wide as the widest size there can be (right-aligned).
+    // one slot per format used in the tab (in [audioFormatOrder], each as
+    // wide as its chip), the size as wide as the widest size there can be
+    // (right-aligned).
     final chip = theme.textTheme.labelSmall?.copyWith(
       fontWeight: FontWeight.bold,
     );
-    var chipsWidth = 0.0;
-    for (final track in audio) {
+    final used = {
+      for (final track in audio)
+        for (final f in track.files) formatOf(f),
+    };
+    int rank(String f) {
+      final i = audioFormatOrder.indexOf(f);
+      return i < 0 ? audioFormatOrder.length : i;
+    }
+
+    final slots = {
+      for (final f
+          in used.toList()..sort((a, b) {
+            final r = rank(a).compareTo(rank(b));
+            return r != 0 ? r : a.compareTo(b);
+          }))
+        // Text, the chip's padding and the gap after it ([FormatChips]).
+        f: _textWidth(f.toUpperCase(), chip) + 10 + 4,
+    };
+    // Slots only when the tracks differ: the same formats everywhere are
+    // packed as they always were.
+    final mixed = audio.any((t) => t.files.length != used.length);
+    var chipsWidth = mixed ? slots.values.fold(0.0, (a, b) => a + b) : 0.0;
+    for (final track in audio.take(mixed ? 0 : audio.length)) {
       var w = 0.0;
       for (final f in track.files) {
-        // Text, the chip's padding and the gap after it ([FormatChips]).
         w += _textWidth(formatOf(f).toUpperCase(), chip) + 10 + 4;
       }
       chipsWidth = math.max(chipsWidth, w);
@@ -3564,6 +3585,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
                     files: track.files,
                     shown: rel,
                     onPick: (f) => _switchFormat(track, f),
+                    slots: mixed ? slots : null,
                   ),
                 ),
               ),
