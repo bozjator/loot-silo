@@ -1319,15 +1319,18 @@ class _Info extends ConsumerWidget {
   final PackRow pack;
   final PackContents contents;
 
+  /// Takes the notifier rather than [WidgetRef]: the header collapses
+  /// once the pointer leaves it for a dialog, unmounting this widget, so
+  /// its ref is dead by the time the dialog returns.
   Future<void> _save(
-    WidgetRef ref, {
+    LibraryNotifier library, {
     String? title,
     List<String>? types,
     List<String>? tags,
   }) async {
     if (!packExists(pack.path)) return;
     updatePackSidecar(pack.path, title: title, types: types, tags: tags);
-    await ref.read(libraryProvider.notifier).reload();
+    await library.reload();
   }
 
   /// The pack's author folder: the first path segment under the library.
@@ -1344,6 +1347,7 @@ class _Info extends ConsumerWidget {
   Future<void> _editAuthor(BuildContext context, WidgetRef ref) async {
     final dir = _authorDir(ref);
     if (dir == null) return;
+    final library = ref.read(libraryProvider.notifier);
     final edit = await showDialog<AuthorEdit>(
       context: context,
       builder: (_) => AuthorInfoDialog(
@@ -1358,7 +1362,7 @@ class _Info extends ConsumerWidget {
       credit: edit.credit,
       attribution: edit.attribution == 'unknown' ? '' : edit.attribution,
     );
-    await ref.read(libraryProvider.notifier).reload();
+    await library.reload();
   }
 
   @override
@@ -1380,6 +1384,7 @@ class _Info extends ConsumerWidget {
                 tooltip: 'Edit title',
                 icon: const Icon(Icons.edit, size: 18),
                 onPressed: () async {
+                  final library = ref.read(libraryProvider.notifier);
                   final title = await showDialog<String>(
                     context: context,
                     builder: (_) => TitleDialog(
@@ -1387,7 +1392,7 @@ class _Info extends ConsumerWidget {
                       folderName: p.basename(pack.path),
                     ),
                   );
-                  if (title != null) await _save(ref, title: title);
+                  if (title != null) await _save(library, title: title);
                 },
               ),
             ],
@@ -1435,11 +1440,12 @@ class _Info extends ConsumerWidget {
             label: 'Types',
             values: pack.types,
             onEdit: () async {
+              final library = ref.read(libraryProvider.notifier);
               final types = await showDialog<List<String>>(
                 context: context,
                 builder: (_) => TypesDialog(initial: pack.types),
               );
-              if (types != null) await _save(ref, types: types);
+              if (types != null) await _save(library, types: types);
             },
           ),
           const SizedBox(height: 8),
@@ -1447,12 +1453,13 @@ class _Info extends ConsumerWidget {
             label: 'Tags',
             values: sortedTags(pack.tags),
             onEdit: () async {
+              final library = ref.read(libraryProvider.notifier);
               final tags = await showDialog<List<String>>(
                 context: context,
                 builder: (_) =>
                     TagsDialog(initial: pack.tags, known: knownTags(ref)),
               );
-              if (tags != null) await _save(ref, tags: tags);
+              if (tags != null) await _save(library, tags: tags);
             },
           ),
           const SizedBox(height: 8),
@@ -1462,6 +1469,7 @@ class _Info extends ConsumerWidget {
             editIcon: Icons.add,
             editTooltip: 'Mark as used in a game',
             onDelete: (game) async {
+              final library = ref.read(libraryProvider.notifier);
               final ok = await confirmRemoveFromGame(
                 context,
                 pack: pack.title,
@@ -1469,9 +1477,10 @@ class _Info extends ConsumerWidget {
               );
               if (!ok || !packExists(pack.path)) return;
               setUsedIn(pack.path, game, used: false);
-              await ref.read(libraryProvider.notifier).reload();
+              await library.reload();
             },
             onEdit: () async {
+              final library = ref.read(libraryProvider.notifier);
               final packs = ref.read(libraryProvider).value?.packs ?? const [];
               final game = await showDialog<String>(
                 context: context,
@@ -1479,7 +1488,7 @@ class _Info extends ConsumerWidget {
               );
               if (game == null || !packExists(pack.path)) return;
               setUsedIn(pack.path, game, used: true);
-              await ref.read(libraryProvider.notifier).reload();
+              await library.reload();
             },
           ),
           const SizedBox(height: 16),
