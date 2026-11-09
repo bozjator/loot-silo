@@ -49,6 +49,7 @@ import 'widgets/meta_dialogs.dart';
 import 'widgets/pack_tile.dart' show iconForTypes;
 import 'widgets/pixel_image.dart';
 import 'widgets/thumb_size.dart';
+import 'widgets/waveform.dart';
 import 'cursors.dart';
 
 /// Everything about one pack: previews, files, animations, metadata.
@@ -3476,6 +3477,13 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   /// the header's.
   Duration? _lengthOf(String rel) => _length ?? _known[rel];
 
+  /// How far the playing track [rel] is (0..1), once its length is known.
+  double? _progressOf(String rel) {
+    final length = _lengthOf(rel);
+    if (length == null || length <= Duration.zero) return null;
+    return (_position.inMilliseconds / length.inMilliseconds).clamp(0.0, 1.0);
+  }
+
   /// Long tracks get a seek bar while playing; short ones show only their
   /// length.
   bool _seekable(String rel) {
@@ -3560,6 +3568,15 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
                 ),
               ),
               const SizedBox(width: 12),
+              // Built only for visible rows, so only they are decoded.
+              Waveform(
+                key: ValueKey('waveform:$rel'),
+                path: path,
+                progress: playing ? _progressOf(rel) : null,
+                width: 80,
+                height: 20,
+              ),
+              const SizedBox(width: 12),
               // Built only for visible rows, so only they are read.
               _TrackLength(
                 key: ValueKey('length:$rel'),
@@ -3611,9 +3628,10 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     padding: const EdgeInsets.fromLTRB(16, tabContentGap, 16, 16),
     gridDelegate: ThumbGridDelegate(
       maxTileWidth: 220,
-      // Room for the button and, while a long track plays, its seek bar.
+      // Room for the button and, while a long track plays, its seek bar;
+      // the footer holds the waveform and the name.
       imageAspect: 1.6,
-      footer: (_) => 60,
+      footer: (_) => 60 + _AudioCard.waveformHeight + 6,
     ),
     itemCount: audio.length,
     itemBuilder: (context, i) {
@@ -3695,8 +3713,9 @@ class _AudioViewToggle extends StatelessWidget {
 }
 
 /// One sound as a grid card: a big play / stop button with a progress
-/// ring while playing, the prettified name, its length and folder; long
-/// tracks get a seek bar while they play.
+/// ring while playing, the waveform (the played part highlighted), the
+/// prettified name, its length and folder; long tracks get a seek bar
+/// under the button while they play.
 class _AudioCard extends StatelessWidget {
   const _AudioCard({
     super.key,
@@ -3722,6 +3741,9 @@ class _AudioCard extends StatelessWidget {
   /// The format chips, stacked on the left edge.
   final Widget formats;
   final String packPath;
+
+  /// The waveform strip between the button and the name.
+  static const waveformHeight = 32.0;
 
   /// The favorites star, beside the reveal button.
   final Widget? star;
@@ -3762,10 +3784,14 @@ class _AudioCard extends StatelessWidget {
             Expanded(
               child: Stack(
                 children: [
-                  Center(
+                  // At the top, so the seek bar of a long track fits
+                  // between it and the waveform.
+                  Align(
+                    alignment: Alignment.topCenter,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        const SizedBox(height: 8),
                         SizedBox.square(
                           dimension: 56,
                           child: Stack(
@@ -3814,6 +3840,15 @@ class _AudioCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 6),
+              child: Waveform(
+                key: ValueKey('waveform:$rel'),
+                path: p.join(packPath, rel),
+                progress: progress,
+                height: waveformHeight,
               ),
             ),
             Padding(

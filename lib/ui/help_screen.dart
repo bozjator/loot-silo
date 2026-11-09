@@ -292,6 +292,16 @@ class HelpScreen extends StatelessWidget {
                   '(a playing sound carries on from the same spot). '
                   'Settings → Audio picks the format shown first.',
                 ),
+                _P(
+                  'Each row and card shows the sound\'s waveform, so a '
+                  'short hit, a swell or a loop with a gap can be told '
+                  'apart before you play it. It is read the first time the '
+                  'row or card appears (WAV, MP3 and Ogg Vorbis; other '
+                  'formats leave the strip empty). While a sound plays, the '
+                  'part already heard is drawn in the accent colour. Sounds '
+                  'of 10 seconds or more also get a seek bar while they '
+                  'play.',
+                ),
               ]),
               const _Section('3D models', [
                 _P(

@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/audio_peaks.dart';
 import '../core/library_index.dart';
 import '../core/library_service.dart';
 import '../core/model_cache.dart';
@@ -25,6 +26,11 @@ final folderFoldsProvider = Provider<FolderFolds>((ref) => FolderFolds());
 /// Parsed 3D models for the Models tab, in memory; tests may read them on
 /// the test's own thread instead of an isolate.
 final modelCacheProvider = Provider<ModelCache>((ref) => ModelCache());
+
+/// Waveform peaks for the Audio tab, in memory; tests swap the decoding.
+final audioPeaksProvider = Provider<AudioPeaksCache>(
+  (ref) => AudioPeaksCache(),
+);
 
 /// Overridden in `main` with the on-disk index, in tests with memory.
 final libraryIndexProvider = Provider<LibraryIndex>(

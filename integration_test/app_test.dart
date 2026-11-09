@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
+import 'package:loot_silo/core/audio_duration.dart';
 import 'package:loot_silo/core/library_index.dart';
 import 'package:loot_silo/itch/itch_api.dart';
 import 'package:loot_silo/itch/itch_key.dart';
@@ -30,6 +31,7 @@ import 'package:loot_silo/ui/tabs.dart';
 import 'package:loot_silo/ui/text_preview_dialog.dart';
 import 'package:loot_silo/ui/theme_colors.dart';
 import 'package:loot_silo/ui/widgets/thumb_size.dart';
+import 'package:loot_silo/ui/widgets/waveform.dart';
 import 'package:loot_silo/version.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
@@ -1470,6 +1472,74 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.byTooltip('Stop'));
     await tester.pump();
     expect(find.byKey(const ValueKey('seek')), findsNothing);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m65: waveforms on audio cards and rows (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    final fake = _FakeTrackPlayer();
+    fakePlayer = () => fake;
+    addTearDown(() => fakePlayer = null);
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    const title = 'Achievements Sound Effects 1 - Universal Sound Effects';
+    await tester.enterText(
+      find.byType(TextField),
+      'Achievements Sound Effects 1',
+    );
+    await pumpUntil(tester, find.text(title));
+    await tester.tap(find.text(title));
+    await pumpUntil(tester, find.byKey(const ValueKey('loop')));
+    await tester.tap(find.text('Cards'));
+    await tester.pump(const Duration(milliseconds: 300));
+    // Decoded in isolates by our own decoders: wait for every visible card.
+    final bars = find.byKey(const ValueKey('waveform-bars'));
+    await pumpUntil(tester, bars);
+    final strips = find.byWidgetPredicate((w) => w is Waveform);
+    final end = DateTime.now().add(const Duration(seconds: 30));
+    while (bars.evaluate().length < strips.evaluate().length &&
+        DateTime.now().isBefore(end)) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+    }
+    expect(bars.evaluate().length, strips.evaluate().length);
+
+    // The second card plays, halfway: its played part is highlighted.
+    await tester.tap(find.byTooltip('Play').at(1));
+    await tester.pump();
+    final playing = fake.played.single;
+    final length = await tester.runAsync(
+      () => Future.value(audioDuration(playing)),
+    );
+    fake.position.add(length! * 0.5);
+    await tester.pump();
+    await tester.pump();
+    final painters = [
+      for (final e in bars.evaluate())
+        (e.widget as CustomPaint).painter! as WaveformPainter,
+    ];
+    expect(painters.where((w) => w.progress != null), hasLength(1));
+    await captureScreenshot(tester, 'm65_audio_cards', settle: false);
+
+    await tester.tap(find.text('Rows'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await pumpUntil(tester, bars);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await tester.pump();
+    final rowStrips = strips.evaluate().length;
+    expect(bars.evaluate().length, rowStrips);
+    expect(tester.getSize(bars.first), const Size(80, 20));
+    await captureScreenshot(tester, 'm65_audio_rows', settle: false);
+    await tester.tap(find.byTooltip('Stop'));
+    await tester.pump();
     expect(Directory(real).statSync().modified, before);
   });
 

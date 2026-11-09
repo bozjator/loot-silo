@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:loot_silo/core/audio_peaks.dart';
 import 'package:loot_silo/core/library_index.dart';
 import 'package:loot_silo/core/model_cache.dart';
 import 'package:loot_silo/core/sidecar.dart';
@@ -33,6 +35,7 @@ import 'package:loot_silo/version.dart';
 import 'package:loot_silo/ui/widgets/pack_tile.dart';
 import 'package:loot_silo/ui/widgets/tab_toolbar.dart';
 import 'package:loot_silo/ui/widgets/thumb_size.dart';
+import 'package:loot_silo/ui/widgets/waveform.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -1369,6 +1372,158 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       await tester.pump();
       expect(find.byKey(const ValueKey('progress')), findsNothing);
+    });
+  });
+
+  group('Audio waveforms (M65)', () {
+    final lengths = {
+      'music/long_theme.ogg': const Duration(minutes: 1, seconds: 40),
+      'sfx/coin_pickup.wav': const Duration(seconds: 2),
+      'sfx/odd_format.m4a': const Duration(seconds: 2),
+    };
+    final peaks = Float32List.fromList([
+      for (var i = 0; i < 200; i++) (i % 20) / 20,
+    ]);
+
+    /// Opens the Audio tab with peaks that arrive when [gate] completes.
+    Future<_FakePlayer> open(
+      WidgetTester tester,
+      Completer<void> gate, {
+      bool cards = true,
+    }) async {
+      final fake = _FakePlayer();
+      await openKnight(
+        tester,
+        files: lengths.keys.toList(),
+        types: ['music', 'sfx'],
+        overrides: [
+          trackPlayerFactoryProvider.overrideWithValue(() => fake),
+          audioDurationProvider.overrideWithValue(
+            (path) async => lengths.entries
+                .where((e) => path.endsWith(e.key))
+                .firstOrNull
+                ?.value,
+          ),
+          audioPeaksProvider.overrideWithValue(
+            AudioPeaksCache(
+              read: (path) async {
+                await gate.future;
+                return peaks;
+              },
+            ),
+          ),
+        ],
+      );
+      if (cards) {
+        await tester.tap(find.text('Cards'));
+        await tester.pump();
+      }
+      await tester.pump();
+      return fake;
+    }
+
+    Finder wave(String rel) => find.byKey(ValueKey('waveform:$rel'));
+    Finder bars(String rel) => find.descendant(
+      of: wave(rel),
+      matching: find.byKey(const ValueKey('waveform-bars')),
+    );
+    double? progressOf(WidgetTester tester, String rel) =>
+        (tester.widget<CustomPaint>(bars(rel)).painter! as WaveformPainter)
+            .progress;
+
+    testWidgets('cards: a strip between the button and the name', (
+      tester,
+    ) async {
+      final gate = Completer<void>();
+      await open(tester, gate);
+      const ogg = 'music/long_theme.ogg';
+      const m4a = 'sfx/odd_format.m4a';
+      // Before the peaks arrive: the strip is there, empty.
+      expect(wave(ogg), findsOneWidget);
+      expect(bars(ogg), findsNothing);
+      final empty = tester.getRect(wave(ogg));
+      gate.complete();
+      await tester.pump();
+      await tester.pump();
+      expect(bars(ogg), findsOneWidget);
+      expect(bars('sfx/coin_pickup.wav'), findsOneWidget);
+      // No waveform for M4A, and no layout change.
+      expect(bars(m4a), findsNothing);
+      expect(tester.getRect(wave(ogg)), empty);
+      expect(tester.getSize(wave(m4a)), empty.size);
+      expect(empty.height, 32);
+      // Between the play button and the name, nearly the card's width.
+      final card = tester.getRect(
+        find.ancestor(of: wave(ogg), matching: find.byType(Card)).first,
+      );
+      final button = tester.getRect(
+        find
+            .descendant(
+              of: find.ancestor(of: wave(ogg), matching: find.byType(Card)),
+              matching: find.byIcon(Icons.play_circle),
+            )
+            .first,
+      );
+      final name = tester.getRect(find.text('Long theme'));
+      expect(button.bottom, lessThanOrEqualTo(empty.top));
+      expect(empty.bottom, lessThanOrEqualTo(name.top));
+      expect(empty.width, card.width - 20);
+    });
+
+    testWidgets('cards and rows: the played part follows the position', (
+      tester,
+    ) async {
+      final gate = Completer<void>()..complete();
+      final fake = await open(tester, gate);
+      await tester.pump();
+      const ogg = 'music/long_theme.ogg';
+      expect(progressOf(tester, ogg), isNull);
+      await tester.tap(find.text('Long theme'));
+      await tester.pump();
+      fake.position.add(const Duration(seconds: 50));
+      await tester.pump();
+      expect(progressOf(tester, ogg), closeTo(0.5, 0.01));
+      expect(progressOf(tester, 'sfx/coin_pickup.wav'), isNull);
+      // The seek bar of a long track still sits under the button.
+      expect(find.byKey(const ValueKey('seek')), findsOneWidget);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('seek'))).bottom,
+        lessThanOrEqualTo(tester.getRect(wave(ogg)).top),
+      );
+
+      await tester.tap(find.text('Rows'));
+      await tester.pump();
+      await tester.pump();
+      expect(tester.getSize(wave(ogg)), const Size(80, 20));
+      expect(progressOf(tester, ogg), closeTo(0.5, 0.01));
+      fake.position.add(const Duration(seconds: 75));
+      await tester.pump();
+      expect(progressOf(tester, ogg), closeTo(0.75, 0.01));
+    });
+
+    testWidgets('rows: the column lines up, also without a waveform', (
+      tester,
+    ) async {
+      final gate = Completer<void>()..complete();
+      await open(tester, gate, cards: false);
+      await tester.pump();
+      const m4a = 'sfx/odd_format.m4a';
+      const wav = 'sfx/coin_pickup.wav';
+      expect(bars(wav), findsOneWidget);
+      expect(bars(m4a), findsNothing);
+      expect(tester.getSize(wave(m4a)), const Size(80, 20));
+      expect(tester.getRect(wave(m4a)).left, tester.getRect(wave(wav)).left);
+      // Between the formats and the length.
+      final chips = tester.getRect(
+        find.byKey(const ValueKey('formats-column:$wav')),
+      );
+      final length = tester.getRect(find.byKey(const ValueKey('length:$wav')));
+      expect(chips.right, lessThan(tester.getRect(wave(wav)).left));
+      expect(tester.getRect(wave(wav)).right, lessThan(length.left));
+      expect(
+        tester.getRect(find.byKey(const ValueKey('length:$m4a'))).left,
+        length.left,
+      );
     });
   });
 
