@@ -970,16 +970,26 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
 
+    // M79: the saved size is the cards' real width, a stop of the grid.
+    double saved(String key) =>
+        ((jsonDecode(settings.readAsStringSync()) as Map)[key] as num)
+            .toDouble();
+    double card(Finder f) => tester.getSize(f.first).width;
+
     // Slider to the far left, then the far right.
-    for (final (dx, size, shot) in [
-      (-400.0, 140, 'm14_dashboard_min'),
-      (400.0, 480, 'm14_dashboard_max'),
+    for (final (dx, shot) in [
+      (-400.0, 'm14_dashboard_min'),
+      (400.0, 'm14_dashboard_max'),
     ]) {
       await tester.drag(find.byType(Slider), Offset(dx, 0));
       await tester.pump(const Duration(milliseconds: 300));
+      final size = saved('dashboard_tile_size');
+      expect(size, closeTo(card(find.byType(PackTile)), 1e-6));
       expect(
-        settings.readAsStringSync(),
-        contains('"dashboard_tile_size": $size'),
+        size,
+        dx < 0
+            ? inInclusiveRange(140, 140 + 40)
+            : inInclusiveRange(480 - 120, 480),
       );
       await settleImages(tester);
       await captureScreenshot(tester, shot, settle: false);
@@ -1003,13 +1013,17 @@ A **16×16** knight with *walk* and *idle* animations.
       await tester.pump();
     }
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    expect(settings.readAsStringSync(), contains('"image_thumb_size": 220'));
+    final bigger = saved('image_thumb_size');
+    expect(bigger, greaterThan(160));
+    expect(bigger, closeTo(card(find.byType(ItemCard)), 1e-6));
     await settleImages(tester);
     await captureScreenshot(tester, 'm14_images_220', settle: false);
 
     await tester.drag(find.byType(Slider), const Offset(-400, 0));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(settings.readAsStringSync(), contains('"image_thumb_size": 80'));
+    final smallest = saved('image_thumb_size');
+    expect(smallest, inInclusiveRange(80, 100));
+    expect(smallest, closeTo(card(find.byType(ItemCard)), 1e-6));
     await settleImages(tester);
     await captureScreenshot(tester, 'm14_images_min', settle: false);
     expect(Directory(real).statSync().modified, before);
@@ -1125,9 +1139,15 @@ A **16×16** knight with *walk* and *idle* animations.
       await tester.pump();
     }
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    expect(
+    // M79: two stops up, saved as the cards' real width.
+    final json = jsonDecode(
       File(p.join(tmp.path, 'settings.json')).readAsStringSync(),
-      contains('"animation_thumb_size": 240'),
+    ) as Map;
+    final anim = (json['animation_thumb_size'] as num).toDouble();
+    expect(anim, greaterThan(200));
+    expect(
+      anim,
+      closeTo(tester.getSize(find.byType(ItemCard).first).width, 1e-6),
     );
     await settleImages(tester);
     await captureScreenshot(tester, 'm15_bigger', settle: false);
@@ -1773,6 +1793,55 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.byKey(const ValueKey('audio-sort:name')));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byKey(const ValueKey('audio-sort:duration')), findsNothing);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m79: every slider stop changes the card size (real)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.pump(const Duration(milliseconds: 300));
+    final bar = find.byKey(const ValueKey('dashboard-size-slider'));
+    final s = find.descendant(
+      of: bar,
+      matching: find.byKey(const ValueKey('thumb-slider')),
+    );
+    double card() => tester.getSize(find.byType(PackTile).first).width;
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(Dashboard)),
+    );
+    final saved = container.read(settingsProvider).dashboardTileSize;
+    // Every stop, smallest to largest: a new card width each time.
+    final n = tester.widget<Slider>(s).divisions! + 1;
+    expect(n, greaterThan(2));
+    final widths = <double>[];
+    for (var i = 0; i < n; i++) {
+      tester.widget<Slider>(s).onChanged!(i.toDouble());
+      await tester.pump();
+      await tester.pump();
+      widths.add(card());
+      if (i > 0) expect(widths[i], greaterThan(widths[i - 1]));
+    }
+    // A middle stop, the label showing while the thumb is held.
+    tester.widget<Slider>(s).onChanged!((n ~/ 2).toDouble());
+    await tester.pump();
+    await tester.pump();
+    final thumb = tester.getRect(s);
+    final x = thumb.left + 10 + (thumb.width - 20) * (n ~/ 2) / (n - 1);
+    final drag = await tester.startGesture(Offset(x, thumb.center.dy));
+    await tester.pump(const Duration(milliseconds: 300));
+    await settleImages(tester);
+    expect(tester.widget<Slider>(s).label, '${card().round()} px');
+    await captureScreenshot(tester, 'm79_slider_stops', settle: false);
+    await drag.up();
+    await tester.pump();
+    // Back to the saved size for the other tests.
+    container.read(settingsProvider.notifier).setDashboardTileSize(saved);
+    await tester.pump();
     expect(Directory(real).statSync().modified, before);
   });
 
@@ -2665,7 +2734,13 @@ A **16×16** knight with *walk* and *idle* animations.
     final container = ProviderScope.containerOf(
       tester.element(find.byType(Dashboard)),
     );
-    expect(container.read(settingsProvider).dashboardTileSize, 260);
+    // M79: one stop up, saved as the cards' real width.
+    final tile = tester.getSize(find.byType(PackTile).first).width;
+    expect(tile, greaterThan(240));
+    expect(
+      container.read(settingsProvider).dashboardTileSize,
+      closeTo(tile, 1e-6),
+    );
     await settleImages(tester);
     await captureScreenshot(tester, 'm50_dashboard_top_row', settle: false);
 

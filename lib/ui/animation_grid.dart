@@ -79,8 +79,12 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
   @override
   void dispose() {
     _keys.dispose();
+    _scale.dispose();
     super.dispose();
   }
+
+  /// The grid's slider stops (M79).
+  final _scale = ThumbScale(animationThumbRange);
 
   void _focus(int? i) {
     setState(() => _focused = i);
@@ -177,15 +181,15 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                   width: detailControlWidth,
                   range: animationThumbRange,
                   value: size,
+                  scale: _scale,
                   onChanged: settings.setAnimationThumbSize,
                 ),
               ],
             ),
             Expanded(
               child: CtrlWheelResize(
-                onSteps: (n) => settings.setAnimationThumbSize(
-                  animationThumbRange.nudge(size, n),
-                ),
+                onSteps: (n) =>
+                    settings.setAnimationThumbSize(_scale.step(size, n)),
                 // Taps that miss every card clear the focus.
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -210,6 +214,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                     // A square stage over a title and a details line.
                     gridDelegate: ThumbGridDelegate(
                       maxTileWidth: size,
+                      scale: _scale,
                       imageAspect: 1,
                       footer: (_) => itemCardFooter,
                     ),

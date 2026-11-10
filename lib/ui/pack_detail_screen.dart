@@ -1714,9 +1714,13 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
   /// Image sizes read from the file headers, for the card footers.
   final _dims = <String, (int, int)?>{};
 
+  /// The grid's slider stops (M79).
+  final _scale = ThumbScale(imageThumbRange, spacing: 8);
+
   @override
   void dispose() {
     _keys.dispose();
+    _scale.dispose();
     super.dispose();
   }
 
@@ -1914,6 +1918,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
               width: detailControlWidth,
               range: imageThumbRange,
               value: size,
+              scale: _scale,
               onChanged: settings.setImageThumbSize,
             ),
           ],
@@ -1950,8 +1955,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
           ),
         Expanded(
           child: CtrlWheelResize(
-            onSteps: (n) =>
-                settings.setImageThumbSize(imageThumbRange.nudge(size, n)),
+            onSteps: (n) => settings.setImageThumbSize(_scale.step(size, n)),
             // Taps that miss every card clear the focus.
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -2009,6 +2013,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
         imageAspect: 1,
         footer: (_) => itemCardFooter,
         spacing: 8,
+        scale: _scale,
       ),
       itemBuilder: (context, i) {
         final rel = images[i];

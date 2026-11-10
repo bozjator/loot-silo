@@ -12,6 +12,9 @@ import 'tabs.dart';
 import 'widgets/pixel_image.dart';
 import 'widgets/thumb_size.dart';
 
+/// The space between file result cards.
+const fileResultsSpacing = 8.0;
+
 /// The dashboard's Files view: one tile per file matching the search, an
 /// image thumbnail or an icon, with the file's pack and folder below.
 class FileResultsGrid extends StatelessWidget {
@@ -21,10 +24,14 @@ class FileResultsGrid extends StatelessWidget {
     required this.tileSize,
     required this.onOpen,
     this.onOpenInNewTab,
+    this.scale,
   });
 
   final List<FileTile> files;
   final double tileSize;
+
+  /// The slider's stops: columns follow them.
+  final ThumbScale? scale;
   final ValueChanged<FileTile> onOpen;
 
   /// Middle-click or the right-click menu: the file's pack in a new tab.
@@ -39,7 +46,8 @@ class FileResultsGrid extends StatelessWidget {
       maxTileWidth: tileSize,
       imageAspect: 1,
       footer: (_) => 44,
-      spacing: 8,
+      spacing: fileResultsSpacing,
+      scale: scale,
     ),
     itemCount: files.length,
     itemBuilder: (context, i) => OpenInNewTab(

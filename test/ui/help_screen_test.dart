@@ -234,4 +234,14 @@ void main() {
     expect(text, contains('even when it is empty'));
     expect(text, contains('emptied on start'));
   });
+
+  testWidgets('M79: the size slider\'s stops are cards per row', (
+    tester,
+  ) async {
+    await pumpHelp(tester);
+    final text = pageText(tester);
+    expect(text, contains('Each stop of a size slider is one number of cards'));
+    expect(text, contains('the cards\' real width'));
+    expect(text, contains('The end icons and Ctrl + wheel move one stop.'));
+  });
 }

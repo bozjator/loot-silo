@@ -83,8 +83,12 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
   @override
   void dispose() {
     _keys.dispose();
+    _scale.dispose();
     super.dispose();
   }
+
+  /// The grid's slider stops (M79).
+  final _scale = ThumbScale(modelThumbRange, spacing: 8);
 
   @override
   void didUpdateWidget(ModelsTab old) {
@@ -222,14 +226,14 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
               width: detailControlWidth,
               range: modelThumbRange,
               value: size,
+              scale: _scale,
               onChanged: settings.setModelThumbSize,
             ),
           ],
         ),
         Expanded(
           child: CtrlWheelResize(
-            onSteps: (n) =>
-                settings.setModelThumbSize(modelThumbRange.nudge(size, n)),
+            onSteps: (n) => settings.setModelThumbSize(_scale.step(size, n)),
             // Taps that miss every card clear the focus.
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -247,6 +251,7 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
                 physics: const CtrlWheelPhysics(),
                 gridDelegate: ThumbGridDelegate(
                   maxTileWidth: size,
+                  scale: _scale,
                   imageAspect: 1,
                   footer: (_) => itemCardFooter,
                   spacing: 8,

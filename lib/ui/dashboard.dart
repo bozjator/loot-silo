@@ -54,6 +54,10 @@ class _DashboardState extends ConsumerState<Dashboard> {
   /// this widget's key handler.
   final _gridFocus = FocusNode(debugLabel: 'dashboard');
 
+  /// The pack grid's and the file results' slider stops (M79).
+  final _packScale = ThumbScale(dashboardTileRange);
+  final _fileScale = ThumbScale(imageThumbRange, spacing: fileResultsSpacing);
+
   @override
   void initState() {
     super.initState();
@@ -76,6 +80,8 @@ class _DashboardState extends ConsumerState<Dashboard> {
     _search.dispose();
     _searchFocus.dispose();
     _gridFocus.dispose();
+    _packScale.dispose();
+    _fileScale.dispose();
     super.dispose();
   }
 
@@ -135,12 +141,12 @@ class _DashboardState extends ConsumerState<Dashboard> {
     }
     final settings = ref.read(settingsProvider.notifier);
     return CtrlWheelResize(
-      onSteps: (n) =>
-          settings.setImageThumbSize(imageThumbRange.nudge(size, n)),
+      onSteps: (n) => settings.setImageThumbSize(_fileScale.step(size, n)),
       child: FileResultsGrid(
         key: const PageStorageKey('files'),
         files: files,
         tileSize: size,
+        scale: _fileScale,
         onOpen: (f) => openPackDetail(
           context,
           f.pack.id,
@@ -262,6 +268,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                         range: imageThumbRange,
                         value: imageSize,
                         width: sliderWidth,
+                        scale: _fileScale,
                         onChanged: settings.setImageThumbSize,
                       )
                     else
@@ -270,6 +277,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                         range: dashboardTileRange,
                         value: tileSize,
                         width: sliderWidth,
+                        scale: _packScale,
                         onChanged: settings.setDashboardTileSize,
                       ),
                   ],
@@ -346,7 +354,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                       )
                     : CtrlWheelResize(
                         onSteps: (n) => settings.setDashboardTileSize(
-                          dashboardTileRange.nudge(tileSize, n),
+                          _packScale.step(tileSize, n),
                         ),
                         child: ThumbRows(
                           // Root and each bundle keep their own scroll position.
@@ -356,6 +364,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                           physics: const CtrlWheelPhysics(),
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                           maxTileWidth: tileSize,
+                          scale: _packScale,
                           itemCount: tiles.length,
                           itemBuilder: (context, i) {
                             final DashboardTile(:tile, :pack, :folder) =

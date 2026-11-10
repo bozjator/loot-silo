@@ -65,8 +65,12 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
   @override
   void dispose() {
     _keys.dispose();
+    _scale.dispose();
     super.dispose();
   }
+
+  /// The grid's slider stops (M79).
+  final _scale = ThumbScale(materialThumbRange, spacing: 8);
 
   @override
   void didUpdateWidget(MaterialsTab old) {
@@ -182,15 +186,14 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
               width: detailControlWidth,
               range: materialThumbRange,
               value: size,
+              scale: _scale,
               onChanged: settings.setMaterialThumbSize,
             ),
           ],
         ),
         Expanded(
           child: CtrlWheelResize(
-            onSteps: (n) => settings.setMaterialThumbSize(
-              materialThumbRange.nudge(size, n),
-            ),
+            onSteps: (n) => settings.setMaterialThumbSize(_scale.step(size, n)),
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => _focus(null),
@@ -207,6 +210,7 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
                 physics: const CtrlWheelPhysics(),
                 gridDelegate: ThumbGridDelegate(
                   maxTileWidth: size,
+                  scale: _scale,
                   imageAspect: 1,
                   footer: (_) => itemCardFooter,
                   spacing: 8,

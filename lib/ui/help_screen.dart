@@ -283,6 +283,16 @@ class HelpScreen extends StatelessWidget {
                   'icons at their ends.',
                 ),
                 _P(
+                  'Each stop of a size slider is one number of cards per '
+                  'row: the cards share the row\'s width, so every stop '
+                  'changes their size, and the size the slider shows (and '
+                  'its tooltip, with the cards per row) is the cards\' real '
+                  'width. The stops follow the window: a wider or narrower '
+                  'window gives other sizes, and the grid keeps the one '
+                  'nearest the size you picked. The end icons and Ctrl + '
+                  'wheel move one stop.',
+                ),
+                _P(
                   'Audio tab: click a sound (or Space) to play or stop it; '
                   'Loop repeats it. Play all (Shift+Space) plays every sound '
                   'shown, in order (the file search and folder filter '

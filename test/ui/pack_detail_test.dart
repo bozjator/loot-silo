@@ -820,7 +820,8 @@ void main() {
         matching: find.byType(Slider),
       );
       final s = tester.widget<Slider>(slider);
-      expect(s.divisions, 17);
+      // M79: one division per column count that fits the grid.
+      expect(s.divisions, greaterThan(2));
       // Flutter paints the dots only when they are at least three reported
       // dot widths apart, on the track inside 24 px of thumb room a side,
       // less the 4 px track height.
@@ -5641,7 +5642,7 @@ void main() {
       expect(store.load().dashboardView, DashboardView.expanded);
     });
 
-    testWidgets('slider end icons step the size, disabled at the ends', (
+    testWidgets('M79: slider end icons step one stop, disabled at the ends', (
       tester,
     ) async {
       await openKnight(tester, open: false);
@@ -5654,26 +5655,71 @@ void main() {
         of: slider,
         matching: find.byTooltip('Larger'),
       );
+      double card() => tester.getSize(find.byType(PackTile).first).width;
+      final start = card();
       await tester.tap(larger);
       await tester.pump();
-      expect(store.load().dashboardTileSize, 240 + dashboardTileRange.step);
+      // The saved value is the card's real width, one stop up.
+      expect(card(), greaterThan(start));
+      expect(store.load().dashboardTileSize, closeTo(card(), 1e-6));
       await tester.tap(smaller);
       await tester.pump();
+      expect(card(), closeTo(start, 1e-6));
       await tester.tap(smaller);
       await tester.pump();
-      expect(store.load().dashboardTileSize, 240 - dashboardTileRange.step);
+      expect(card(), lessThan(start));
       IconButton button(Finder f) => tester.widget<IconButton>(
         find.ancestor(of: f, matching: find.byType(IconButton)).first,
       );
+      var last = card();
       for (var i = 0; i < 30; i++) {
         if (button(smaller).onPressed == null) break;
         await tester.tap(smaller);
         await tester.pump();
+        // Every stop changes the size.
+        expect(card(), lessThan(last));
+        last = card();
       }
-      expect(store.load().dashboardTileSize, dashboardTileRange.min);
+      expect(card(), greaterThanOrEqualTo(dashboardTileRange.min));
       expect(button(smaller).onPressed, isNull);
       expect(button(larger).onPressed, isNotNull);
     });
+
+    for (final images in [false, true]) {
+      testWidgets('M79: dragging through all stops changes the card '
+          '(${images ? 'Images tab' : 'dashboard'})', (tester) async {
+        await openKnight(tester, open: images);
+        if (images) {
+          await tester.tap(find.textContaining('Images ('));
+          await tester.pumpAndSettle();
+        }
+        await tester.pump();
+        final bar = images
+            ? find.byType(ThumbSizeSlider)
+            : find.byKey(const ValueKey('dashboard-size-slider'));
+        final s = find.descendant(
+          of: bar,
+          matching: find.byKey(const ValueKey('thumb-slider')),
+        );
+        final cards = images ? find.byType(ItemCard) : find.byType(PackTile);
+        double card() => tester.getSize(cards.first).width;
+        final n = tester.widget<Slider>(s).divisions! + 1;
+        expect(n, greaterThan(2));
+        final widths = <double>[];
+        for (var i = 0; i < n; i++) {
+          tester.widget<Slider>(s).onChanged!(i.toDouble());
+          await tester.pump();
+          await tester.pump();
+          widths.add(card());
+          expect(tester.widget<Slider>(s).label, '${card().round()} px');
+          if (i > 0) expect(widths[i], greaterThan(widths[i - 1]));
+        }
+        final saved = images
+            ? store.load().imageThumbSize
+            : store.load().dashboardTileSize;
+        expect(saved, closeTo(widths.last, 1e-6));
+      });
+    }
 
     testWidgets('detail search box and Favorites chip share a radius', (
       tester,
