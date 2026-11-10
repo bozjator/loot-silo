@@ -287,6 +287,13 @@ class HelpScreen extends StatelessWidget {
                   'instead of one sound.',
                 ),
                 _P(
+                  'One sound plays at a time in the whole app: starting a '
+                  'sound in one pack tab stops the one playing in another. '
+                  'A sound also stops when you leave its tab (another pack '
+                  'tab, the Dashboard, another tab of the pack, or closing '
+                  'the tab); it does not start again when you come back.',
+                ),
+                _P(
                   'A sound saved in several formats (song.ogg, song.wav, '
                   'song.mp3, side by side or in MP3 / OGG / WAV folders) is '
                   'one row or card with a chip per format. The highlighted '

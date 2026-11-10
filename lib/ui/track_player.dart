@@ -139,3 +139,35 @@ final audioDurationProvider = Provider<Future<Duration?> Function(String)>((
   final read = ref.watch(audioInfoProvider);
   return (path) => read(path).then((info) => info?.duration);
 });
+
+/// The one sound playing in the app. Whoever starts a sound claims it;
+/// the previous owner's stop callback runs, so a sound elsewhere (another
+/// pack tab) ends.
+class NowPlaying {
+  Object? _owner;
+  void Function()? _stop;
+
+  /// [owner] starts a sound; [stop] ends it when another owner claims.
+  void claim(Object owner, void Function() stop) {
+    final previous = identical(_owner, owner) ? null : _stop;
+    _owner = owner;
+    _stop = stop;
+    previous?.call();
+  }
+
+  /// [owner]'s sound ended (or it went away).
+  void release(Object owner) {
+    if (!identical(_owner, owner)) return;
+    _owner = null;
+    _stop = null;
+  }
+
+  /// Whether [owner] holds the sound.
+  bool owns(Object owner) => identical(_owner, owner);
+
+  /// Whether anything holds the sound.
+  bool get playing => _owner != null;
+}
+
+/// The app's [NowPlaying].
+final nowPlayingProvider = Provider<NowPlaying>((ref) => NowPlaying());

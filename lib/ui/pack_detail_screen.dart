@@ -3294,6 +3294,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
           }
           // Looping players report each pass as complete; they keep playing.
           if (_player?.looping ?? false) return;
+          _release();
           if (mounted) setState(() => _playing = null);
         }),
       )
@@ -3320,6 +3321,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     if (_playing == rel) {
       _all = false;
       _gap?.cancel();
+      _release();
       await _ensurePlayer().stop();
       if (mounted) setState(() => _playing = null);
       return;
@@ -3337,11 +3339,14 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
       _length = null;
     });
     if (_all) _reveal(rel);
+    // One sound in the app: one playing elsewhere stops.
+    ref.read(nowPlayingProvider).claim(this, _stopHere);
     try {
       await player.stop();
       await player.setLoop(!_all && ref.read(settingsProvider).audioLoop);
       await player.play(p.join(widget.pack.path, rel));
     } on Object catch (e) {
+      _release();
       if (!mounted) return;
       setState(() {
         _playing = null;
@@ -3370,6 +3375,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   Future<void> _stopAll() async {
     _all = false;
     _gap?.cancel();
+    _release();
     if (mounted) setState(() => _playing = null);
     await _player?.stop();
   }
@@ -3382,6 +3388,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     if (next >= tracks.length) {
       if (tracks.isEmpty || !ref.read(settingsProvider).audioLoop) {
         _all = false;
+        _release();
         setState(() => _playing = null);
         return;
       }
@@ -3470,6 +3477,38 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     return KeyEventResult.ignored;
   }
 
+  /// This tab no longer plays the app's sound.
+  void _release() => _nowPlaying.release(this);
+
+  /// Read in [initState]: [dispose] can't read providers.
+  late final NowPlaying _nowPlaying;
+
+  @override
+  void initState() {
+    super.initState();
+    _nowPlaying = ref.read(nowPlayingProvider);
+  }
+
+  /// Another sound started, or the tab was left: stops this tab's sound
+  /// (and Play all). Coming back does not resume it.
+  void _stopHere() {
+    _all = false;
+    _gap?.cancel();
+    _release();
+    _player?.stop();
+    if (mounted && _playing != null) setState(() => _playing = null);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Another pack tab or the dashboard is shown: this tab's sound stops.
+    if (!TabActive.of(context) && _nowPlaying.owns(this)) {
+      // Not during the build that hid it.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _stopHere());
+    }
+  }
+
   /// Turning loop off lets the current sound finish its pass. During
   /// Play all, Loop repeats the list, not the sound.
   void _setLoop(bool on) {
@@ -3479,6 +3518,7 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
 
   @override
   void dispose() {
+    _release();
     _gap?.cancel();
     _scroll.dispose();
     for (final s in _subs) {

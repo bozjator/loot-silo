@@ -1776,6 +1776,75 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m74: one sound at a time across pack tabs (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    final players = <_FakeTrackPlayer>[];
+    fakePlayer = () {
+      final f = _FakeTrackPlayer();
+      players.add(f);
+      return f;
+    };
+    addTearDown(() => fakePlayer = null);
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    // One search shows both (a second search after a tab opened did not
+    // reach the query in this harness; see the M74 report).
+    const music = 'Monster Sound Effects 3';
+    const sfx = 'Footsteps Sound Effects 3 - Universal Sound Effects';
+    Finder tile(String t) =>
+        find.descendant(of: find.byType(PackTile), matching: find.text(t));
+    Finder strip(String t) =>
+        find.descendant(of: find.byType(PackTabStrip), matching: find.text(t));
+    await tester.enterText(find.byType(TextField).first, 'Sound Effects 3');
+    await pumpUntil(tester, tile(music));
+    await pumpUntil(tester, tile(sfx));
+    for (final title in [music, sfx]) {
+      final g = await tester.startGesture(
+        tester.getCenter(tile(title)),
+        kind: PointerDeviceKind.mouse,
+        buttons: kMiddleMouseButton,
+      );
+      await g.up();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    Future<void> show(String title) async {
+      await tester.tap(strip(title));
+      await tester.pump(const Duration(milliseconds: 500));
+      await pumpUntil(tester, find.byKey(const ValueKey('loop')).hitTestable());
+    }
+
+    // Play in the music tab.
+    await show(music);
+    await tester.tap(find.byTooltip('Play').hitTestable().first);
+    await tester.pump();
+    final a = players.single;
+    expect(a.played, hasLength(1));
+    expect(find.byTooltip('Stop').hitTestable(), findsOneWidget);
+    final stops = a.stops;
+
+    // The sound effects tab: the music stopped; play one here.
+    await show(sfx);
+    expect(a.stops, greaterThan(stops));
+    await tester.tap(find.byTooltip('Play').hitTestable().first);
+    await tester.pump();
+    expect(players, hasLength(2));
+    expect(players.last.played, hasLength(1));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm74_second_tab_playing', settle: false);
+
+    // Back to the music: nothing plays there, nothing resumed.
+    await show(music);
+    expect(a.played, hasLength(1));
+    expect(find.byTooltip('Stop').hitTestable(), findsNothing);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm74_first_tab_stopped', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m69: right-click menu copies through GTK (real, read-only)', (
     tester,
   ) async {
@@ -4667,8 +4736,9 @@ class _FakeTrackPlayer implements TrackPlayer {
 
   @override
   Future<void> play(String path) async => played.add(path);
+  var stops = 0;
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async => stops++;
   @override
   Future<void> seek(Duration to) async => seeks.add(to);
   @override

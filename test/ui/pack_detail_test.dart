@@ -93,8 +93,9 @@ class _FakePlayer implements TrackPlayer {
   Stream<Duration> get onDuration => length.stream;
   @override
   Stream<void> get onComplete => complete.stream;
+  var disposed = false;
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() async => disposed = true;
 }
 
 /// Records clipboard and open calls.
@@ -174,6 +175,8 @@ void main() {
     bool open = true,
     Map<String, img.Image> images = const {},
     Map<String, List<int>> raw = const {},
+    // Files written into the Slimes pack.
+    Map<String, List<int>> slimes = const {},
     List<String>? types,
     Map<String, Object?> sidecar = const {},
     List<Override> overrides = const [],
@@ -187,6 +190,11 @@ void main() {
       File(p.join(pack, rel))
         ..parent.createSync(recursive: true)
         ..writeAsBytesSync(img.encodePng(img.Image(width: 8, height: 8)));
+    }
+    for (final MapEntry(key: rel, value: bytes) in slimes.entries) {
+      File(p.join(lib, 'HeroMaker', 'Slimes', rel))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(bytes);
     }
     for (final MapEntry(key: rel, value: bytes) in raw.entries) {
       File(p.join(pack, rel))
@@ -4076,6 +4084,179 @@ void main() {
       isEmpty,
     );
     expect(find.text('Knight Pack'), findsOneWidget);
+  });
+
+  group('One sound at a time (M74)', () {
+    late List<_FakePlayer> players;
+    Finder strip(String label) => find.descendant(
+      of: find.byType(PackTabStrip),
+      matching: find.text(label),
+    );
+    Finder tile(String title) =>
+        find.descendant(of: find.byType(PackTile), matching: find.text(title));
+
+    Future<void> settle(WidgetTester tester) async {
+      for (var i = 0; i < 6; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    NowPlaying nowPlaying(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(TabsHost)))
+            .read(nowPlayingProvider);
+
+    /// Knight Pack and Slimes, each with a sound, open in background tabs.
+    Future<void> open(WidgetTester tester) async {
+      players = [];
+      await openKnight(
+        tester,
+        open: false,
+        files: const [],
+        raw: {
+          'sfx/sword.wav': const [1, 2, 3],
+        },
+        slimes: {
+          'sfx/splat.wav': const [1, 2, 3],
+        },
+        overrides: [
+          trackPlayerFactoryProvider.overrideWithValue(() {
+            final p = _FakePlayer();
+            players.add(p);
+            return p;
+          }),
+          audioInfoProvider.overrideWithValue((_) async => null),
+          audioDurationProvider.overrideWithValue((_) async => null),
+          audioPeaksProvider.overrideWithValue(
+            AudioPeaksCache(read: (_) async => Float32List(0)),
+          ),
+        ],
+      );
+      for (final title in ['Knight Pack', 'Slimes']) {
+        await tester.tapAt(
+          tester.getCenter(tile(title)),
+          buttons: kSecondaryMouseButton,
+        );
+        await settle(tester);
+        await tester.tap(find.text('Open in new tab'));
+        await settle(tester);
+      }
+    }
+
+    /// Shows the [pack] tab and its Audio tab.
+    Future<void> show(WidgetTester tester, String pack) async {
+      await tester.tap(strip(pack));
+      await settle(tester);
+      await tester.tap(find.textContaining('Audio (').hitTestable());
+      await settle(tester);
+    }
+
+    Future<void> play(WidgetTester tester, String name) async {
+      await tester.tap(find.text(name).hitTestable());
+      await tester.pump();
+    }
+
+    test('NowPlaying: a new owner stops the last one', () {
+      final now = NowPlaying();
+      final a = Object();
+      final b = Object();
+      final stopped = <String>[];
+      now.claim(a, () => stopped.add('a'));
+      // Claiming again (the next track) keeps it.
+      now.claim(a, () => stopped.add('a2'));
+      expect(stopped, isEmpty);
+      now.claim(b, () => stopped.add('b'));
+      expect(stopped, ['a2']);
+      expect(now.owns(b), isTrue);
+      // A release by someone else does nothing.
+      now.release(a);
+      expect(now.owns(b), isTrue);
+      now.release(b);
+      expect(now.owns(b), isFalse);
+    });
+
+    testWidgets('play in A, show tab B: A stops and does not resume', (
+      tester,
+    ) async {
+      await open(tester);
+      await show(tester, 'Knight Pack');
+      await play(tester, 'sword');
+      final a = players.single;
+      expect(a.played, hasLength(1));
+      final stops = a.stops;
+
+      await show(tester, 'Slimes');
+      expect(a.stops, greaterThan(stops));
+      expect(nowPlaying(tester).playing, isFalse);
+
+      // Back in A: stopped, not playing again.
+      await tester.tap(strip('Knight Pack'));
+      await settle(tester);
+      expect(a.played, hasLength(1));
+      expect(find.byTooltip('Stop').hitTestable(), findsNothing);
+    });
+
+    testWidgets('play in A, then in B: A stops', (tester) async {
+      await open(tester);
+      await show(tester, 'Knight Pack');
+      await play(tester, 'sword');
+      await show(tester, 'Slimes');
+      await play(tester, 'splat');
+      expect(players, hasLength(2));
+      expect(players.last.played, hasLength(1));
+      // Only B's sound plays.
+      await tester.tap(strip('Knight Pack'));
+      await settle(tester);
+      expect(find.byTooltip('Stop').hitTestable(), findsNothing);
+      await tester.tap(strip('Slimes'));
+      await settle(tester);
+      // Leaving B stopped it too; both are stopped now.
+      expect(find.byTooltip('Stop').hitTestable(), findsNothing);
+    });
+
+    testWidgets('a sound started elsewhere stops this one', (tester) async {
+      await open(tester);
+      await show(tester, 'Knight Pack');
+      await play(tester, 'sword');
+      final a = players.single;
+      expect(find.byTooltip('Stop').hitTestable(), findsOneWidget);
+      final stops = a.stops;
+      // Any other owner (a future player anywhere in the app).
+      nowPlaying(tester).claim(Object(), () {});
+      await tester.pump();
+      expect(a.stops, greaterThan(stops));
+      expect(find.byTooltip('Stop').hitTestable(), findsNothing);
+    });
+
+    testWidgets('play in A, show the dashboard: A stops', (tester) async {
+      await open(tester);
+      await show(tester, 'Knight Pack');
+      await play(tester, 'sword');
+      final a = players.single;
+      final stops = a.stops;
+      await tester.tap(strip('Dashboard'));
+      await settle(tester);
+      expect(a.stops, greaterThan(stops));
+      expect(nowPlaying(tester).playing, isFalse);
+    });
+
+    testWidgets('closing A while it plays (Ctrl+W) stops it', (tester) async {
+      await open(tester);
+      await show(tester, 'Knight Pack');
+      await play(tester, 'sword');
+      final a = players.single;
+      final now = nowPlaying(tester);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await settle(tester);
+      expect(strip('Knight Pack'), findsNothing);
+      // The player went away with the tab (audioplayers stops on dispose).
+      expect(a.disposed, isTrue);
+      expect(now.playing, isFalse);
+    });
   });
 
   group('Pack tabs (M31)', () {
