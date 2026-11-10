@@ -175,7 +175,7 @@ class ItchJobsNotifier extends Notifier<Map<int, ItchJob>> {
             api,
             k,
             libraryRoot: root,
-            workRoot: p.join(ref.read(extractRootProvider), 'itch'),
+            workRoot: itchWorkRoot(ref.read(extractRootProvider)),
             onStatus: (s, progress) =>
                 _set(k.game.id, ItchJob(s, progress: progress)),
           );
@@ -226,3 +226,7 @@ class ItchJobsNotifier extends Notifier<Map<int, ItchJob>> {
 final itchJobsProvider = NotifierProvider<ItchJobsNotifier, Map<int, ItchJob>>(
   ItchJobsNotifier.new,
 );
+
+/// Where itch.io downloads are unpacked before they are copied into the
+/// library (one folder per install, deleted when it ends; emptied on start).
+String itchWorkRoot(String extractRoot) => p.join(extractRoot, 'itch');

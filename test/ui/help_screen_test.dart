@@ -213,4 +213,22 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     expect(seen, isTrue);
   });
+
+  testWidgets('M76: first-run choices and the itch.io tabs', (tester) async {
+    await pumpHelp(tester);
+    final text = pageText(tester);
+    expect(text, contains('An empty library shows three ways to start'));
+    expect(text, contains('Download from itch.io (Connect itch.io until'));
+    expect(text, contains('counts your owned assets'));
+    for (final tab in [
+      'Missing:',
+      'To link:',
+      'Inside a pack:',
+      'In library:',
+    ]) {
+      expect(text, contains(tab));
+    }
+    expect(text, contains('even when it is empty'));
+    expect(text, contains('emptied on start'));
+  });
 }

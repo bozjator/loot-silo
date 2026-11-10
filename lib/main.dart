@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'core/leftovers.dart';
 import 'core/library_index.dart';
 import 'state/folder_folds.dart';
+import 'state/itch.dart' show itchWorkRoot;
 import 'state/providers.dart';
 import 'state/settings.dart';
 import 'ui/app.dart';
@@ -16,13 +18,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final support = await getApplicationSupportDirectory();
   final cache = await getApplicationCacheDirectory();
-  // Copy as GIF's files from the last run.
+  // Copy as GIF's files from the last run, and itch.io downloads a crash
+  // left behind (each install deletes its own folder when it ends).
   final gifCache = Directory(p.join(cache.path, 'gif_cache'));
-  try {
-    if (gifCache.existsSync()) gifCache.deleteSync(recursive: true);
-  } on FileSystemException {
-    // In use or gone: left for next time.
-  }
+  final extractRoot = p.join(cache.path, 'extract');
+  deleteLeftovers(gifCache.path);
+  deleteLeftovers(itchWorkRoot(extractRoot));
   final index = LibraryIndex(
     driftDatabase(
       name: 'library_index',
@@ -39,7 +40,7 @@ Future<void> main() async {
           FolderFolds(File(p.join(support.path, 'ui_state.json'))),
         ),
         libraryIndexProvider.overrideWithValue(index),
-        extractRootProvider.overrideWithValue(p.join(cache.path, 'extract')),
+        extractRootProvider.overrideWithValue(extractRoot),
         gifCacheProvider.overrideWithValue(gifCache.path),
       ],
       child: const LootSiloApp(),

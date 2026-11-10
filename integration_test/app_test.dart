@@ -4266,6 +4266,87 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm9_in_library');
   });
 
+  testWidgets('m76: empty library choices, itch.io tabs when empty', (
+    tester,
+  ) async {
+    // A temp, empty library and a mock itch.io: one owned asset, missing.
+    itchClient = MockClient((r) async {
+      if (r.url.host == 'api.itch.io' &&
+          r.headers['Authorization'] != 'Bearer test-key') {
+        return http.Response('{"errors":["invalid key"]}', 401);
+      }
+      return switch ('${r.url.host}${r.url.path}') {
+        'api.itch.io/profile' => http.Response(
+          '{"user":{"id":1,"username":"tester"}}',
+          200,
+        ),
+        'api.itch.io/profile/owned-keys' => http.Response(
+          jsonEncode(
+            r.url.queryParameters['page'] == '1'
+                ? {
+                    'owned_keys': [
+                      {
+                        'id': 20,
+                        'game': {
+                          'id': 2,
+                          'title': 'Orc Pack',
+                          'url': 'https://orcmaker.itch.io/orc-pack',
+                          'classification': 'assets',
+                          'user': {'id': 2, 'username': 'orcmaker'},
+                        },
+                      },
+                    ],
+                    'per_page': 50,
+                  }
+                : {'owned_keys': {}},
+          ),
+          200,
+        ),
+        _ => http.Response('<html></html>', 200),
+      };
+    });
+    addTearDown(() => itchClient = null);
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Your library is empty'));
+    for (final k in [
+      'first-import-folder',
+      'first-import-archive',
+      'first-itch',
+    ]) {
+      expect(find.byKey(ValueKey(k)), findsOneWidget, reason: k);
+    }
+    expect(find.text('Connect itch.io'), findsOneWidget);
+    await captureScreenshot(tester, 'm76_empty_library');
+
+    await tester.tap(find.byKey(const ValueKey('first-itch')));
+    await pumpUntil(tester, find.text('Create a key on itch.io'));
+    await tester.enterText(find.byType(TextField), 'test-key');
+    await tester.pump();
+    await tester.tap(find.text('Connect'));
+    await pumpUntil(
+      tester,
+      find.text('Signed in as tester · 1 owned assets · 0 in the library'),
+    );
+    expect(find.text('Orc Pack'), findsOneWidget);
+    expect(find.textContaining('never downloaded, only assets'), findsOne);
+
+    // An empty tab still says what it holds.
+    await tester.tap(find.text('To link'));
+    await pumpUntil(tester, find.text('Nothing left to link.'));
+    expect(find.textContaining('Probably already in the library'), findsOne);
+    await captureScreenshot(tester, 'm76_itch_empty_tabs');
+    await tester.tap(find.text('In library'));
+    await pumpUntil(tester, find.text('No pack is linked to itch yet.'));
+    expect(find.text('Packs that know their itch.io page.'), findsOneWidget);
+
+    // Back on the empty library, the itch.io choice now downloads.
+    await tester.pageBack();
+    await pumpUntil(tester, find.text('Download from itch.io'));
+    expect(find.text('Connect itch.io'), findsNothing);
+    expect(Directory(lib).listSync(), isEmpty);
+  });
+
   testWidgets('itch on the real account and library (read-only)', (
     tester,
   ) async {

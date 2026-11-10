@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
+import 'package:loot_silo/core/leftovers.dart';
 import 'package:loot_silo/core/library_index.dart';
 import 'package:loot_silo/core/sidecar.dart';
 import 'package:loot_silo/itch/itch_api.dart';
@@ -9,6 +10,7 @@ import 'package:loot_silo/itch/itch_key.dart';
 import 'package:loot_silo/itch/itch_matcher.dart';
 import 'package:loot_silo/itch/itch_page_scraper.dart';
 import 'package:loot_silo/itch/itch_sync.dart';
+import 'package:loot_silo/state/itch.dart' show itchWorkRoot;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -372,5 +374,57 @@ void main() {
     expect(author.itchUser, 'orcmaker');
     expect(Directory(p.join(tmp.path, 'work')).listSync(), isEmpty);
     expect(statuses, contains('Downloading Orc Pack.zip'));
+  });
+
+  test('installItchGame leaves no work folder when a download fails', () async {
+    final tmp = Directory.systemTemp.createTempSync('itch');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final library = Directory(p.join(tmp.path, 'library'))..createSync();
+    final work = Directory(p.join(tmp.path, 'work'))..createSync();
+    final api = ItchApi(
+      secret,
+      client: MockClient(
+        (r) async => switch ('${r.url.host}${r.url.path}') {
+          'api.itch.io/games/1/uploads' => http.Response(
+            jsonEncode({
+              'uploads': [
+                {'id': 5, 'filename': 'Orc Pack.zip', 'size': 10},
+              ],
+            }),
+            200,
+          ),
+          'api.itch.io/uploads/5/download' => http.Response(
+            '',
+            302,
+            headers: {'location': 'https://cdn.example/orc.zip'},
+          ),
+          _ => http.Response('gone', 404),
+        },
+      ),
+    );
+    final result = await installItchGame(
+      api,
+      key(1, 'Orc Pack'),
+      libraryRoot: library.path,
+      workRoot: work.path,
+    );
+    expect(result.error, isNotNull);
+    expect(result.target, isNull);
+    expect(work.listSync(), isEmpty);
+    expect(library.listSync(), isEmpty, reason: 'nothing half-imported');
+  });
+
+  test('deleteLeftovers empties a work folder and ignores a missing one', () {
+    final tmp = Directory.systemTemp.createTempSync('left');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final root = itchWorkRoot(p.join(tmp.path, 'extract'));
+    expect(root, p.join(tmp.path, 'extract', 'itch'));
+    File(p.join(root, 'itch-1-2', 'big.zip'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync('x');
+    deleteLeftovers(root);
+    expect(Directory(root).existsSync(), isFalse);
+    expect(Directory(p.join(tmp.path, 'extract')).existsSync(), isTrue);
+    deleteLeftovers(root); // gone: no error
   });
 }

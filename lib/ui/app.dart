@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../install/archive_extractor.dart';
 import '../state/dashboard.dart';
+import '../state/itch.dart' show itchKeyProvider;
 import '../state/providers.dart';
 import '../state/settings.dart';
 import 'archive_import.dart';
@@ -175,6 +176,12 @@ void rescanLibrary(WidgetRef ref) {
   }
 }
 
+/// The itch.io view (connect, or download what you own).
+void openItch(BuildContext context) => Navigator.of(
+  context,
+  rootNavigator: true,
+).push(MaterialPageRoute<void>(builder: (_) => const ItchScreen()));
+
 void openSettings(BuildContext context) =>
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
@@ -281,12 +288,7 @@ class HomeScreen extends ConsumerWidget {
               children: [
                 IconButton(
                   tooltip: 'itch.io',
-                  onPressed: () =>
-                      Navigator.of(context, rootNavigator: true).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const ItchScreen(),
-                        ),
-                      ),
+                  onPressed: () => openItch(context),
                   icon: const Icon(Icons.storefront_outlined),
                 ),
                 IconButton(
@@ -346,19 +348,100 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
           ),
-          AsyncValue(hasValue: true) => _Message(
+          AsyncValue(hasValue: true) => const _Message(
             icon: Icons.inventory_2_outlined,
             title: 'Your library is empty',
-            body: 'Import a folder or drop an archive to get started.',
-            action: FilledButton.icon(
-              onPressed: () => importFolder(context, ref),
-              icon: const Icon(Icons.drive_folder_upload_outlined),
-              label: const Text('Import folder'),
-            ),
+            body: 'Add your first packs in one of these ways:',
+            action: _FirstPacks(),
           ),
           _ => const Center(child: Text('Scanning library…')),
         },
       ),
+    );
+  }
+}
+
+/// An empty library's ways to add packs: the same actions as the top
+/// bar's import menu and itch.io button, each with a line on what it does.
+class _FirstPacks extends ConsumerWidget {
+  const _FirstPacks();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final connected = ref.watch(itchKeyProvider).value != null;
+    Widget choice({
+      required Key key,
+      required IconData icon,
+      required String label,
+      required String line,
+      required VoidCallback onPressed,
+      bool primary = false,
+    }) {
+      final button = primary
+          ? FilledButton.icon(
+              key: key,
+              onPressed: onPressed,
+              icon: Icon(icon),
+              label: Text(label),
+            )
+          : OutlinedButton.icon(
+              key: key,
+              onPressed: onPressed,
+              icon: Icon(icon),
+              label: Text(label),
+            );
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 190,
+              child: Align(alignment: Alignment.centerLeft, child: button),
+            ),
+            const SizedBox(width: 12),
+            // Narrow windows wrap the line instead of overflowing.
+            Flexible(
+              child: SizedBox(
+                width: 320,
+                child: Text(line, style: Theme.of(context).textTheme.bodySmall),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        choice(
+          key: const ValueKey('first-import-folder'),
+          icon: Icons.drive_folder_upload_outlined,
+          label: 'Import folder',
+          line: 'Copy packs from a folder on your computer.',
+          onPressed: () => importFolder(context, ref),
+          primary: true,
+        ),
+        choice(
+          key: const ValueKey('first-import-archive'),
+          icon: Icons.archive_outlined,
+          label: 'Import archive',
+          line:
+              'Unpack zip, tar, 7z or rar files into the library '
+              '(or drop them on the window).',
+          onPressed: () => importArchive(context, ref),
+        ),
+        choice(
+          key: const ValueKey('first-itch'),
+          icon: Icons.storefront_outlined,
+          label: connected ? 'Download from itch.io' : 'Connect itch.io',
+          line: connected
+              ? 'Download the assets you own on itch.io.'
+              : 'Sign in with an API key to download the assets you own.',
+          onPressed: () => openItch(context),
+        ),
+      ],
     );
   }
 }
@@ -477,18 +560,28 @@ class _Message extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // The text keeps to a readable width; the action may be wider (the
+    // empty library's three choices, each with a line beside it).
     return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (header != null) ...[header!, const SizedBox(height: 32)],
-            Icon(icon, size: 64, color: theme.colorScheme.primary),
-            const SizedBox(height: 16),
-            Text(title, style: theme.textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(body, textAlign: TextAlign.center),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (header != null) ...[header!, const SizedBox(height: 32)],
+                  Icon(icon, size: 64, color: theme.colorScheme.primary),
+                  const SizedBox(height: 16),
+                  Text(title, style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  Text(body, textAlign: TextAlign.center),
+                ],
+              ),
+            ),
             if (action != null) ...[const SizedBox(height: 20), action!],
           ],
         ),

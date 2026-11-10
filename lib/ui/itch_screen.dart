@@ -7,7 +7,7 @@ import '../itch/itch_matcher.dart';
 import '../state/itch.dart';
 import 'dashboard.dart' show openPackDetail;
 
-/// itch.io sync: connect with an API key, then see which owned games are
+/// itch.io sync: connect with an API key, then see which owned assets are
 /// in the library, which can be linked, and download the missing ones.
 class ItchScreen extends ConsumerWidget {
   const ItchScreen({super.key});
@@ -21,7 +21,7 @@ class ItchScreen extends ConsumerWidget {
         actions: [
           if (key.value != null) ...[
             IconButton(
-              tooltip: 'Refresh owned games',
+              tooltip: 'Refresh owned assets',
               icon: const Icon(Icons.refresh),
               onPressed: () => ref.invalidate(itchAccountProvider),
             ),
@@ -168,7 +168,7 @@ class _Sync extends ConsumerWidget {
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 12),
-            Text('Loading owned games…'),
+            Text('Loading owned assets…'),
           ],
         ),
       );
@@ -193,7 +193,7 @@ class _Sync extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
               'Signed in as ${account.value!.user.username} · '
-              '${list.length} owned games · ${linked.length + fuzzy.length} '
+              '${list.length} owned assets · ${linked.length + fuzzy.length} '
               'in the library',
               style: Theme.of(context).textTheme.titleMedium,
             ),
@@ -223,10 +223,11 @@ class _Sync extends ConsumerWidget {
                   matches: missing,
                   empty: 'Every owned asset is in the library.',
                   hint:
-                      'Not in the library. Platform builds are skipped. Tools '
-                      'and bundles from authors you already have are left out '
-                      'of "Download all". Items from bundles appear here only '
-                      'after you claim them on itch.io.',
+                      'Not in the library. Game builds and programs (Windows, '
+                      'macOS, Linux and Android files) are never downloaded, '
+                      'only assets. Tools and bundles from authors you already '
+                      'have are left out of "Download all". Items from bundles '
+                      'appear here only after you claim them on itch.io.',
                   bulkLabel: 'Download all missing (${bulk.length})',
                   onBulk: bulk.isEmpty
                       ? null
@@ -252,7 +253,7 @@ class _Sync extends ConsumerWidget {
                 _Group(
                   matches: linked,
                   empty: 'No pack is linked to itch yet.',
-                  hint: 'Packs that know their itch.io game.',
+                  hint: 'Packs that know their itch.io page.',
                 ),
               ],
             ),
@@ -298,7 +299,8 @@ class _Group extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (matches.isEmpty) return Center(child: Text(empty));
+    // The hint shows when the tab is empty too: it says what the tab is
+    // for.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -309,16 +311,18 @@ class _Group extends ConsumerWidget {
               Expanded(
                 child: Text(hint, style: Theme.of(context).textTheme.bodySmall),
               ),
-              if (bulkLabel != null)
+              if (bulkLabel != null && matches.isNotEmpty)
                 FilledButton(onPressed: onBulk, child: Text(bulkLabel!)),
             ],
           ),
         ),
         Expanded(
-          child: ListView.builder(
-            itemCount: matches.length,
-            itemBuilder: (context, i) => _GameTile(match: matches[i]),
-          ),
+          child: matches.isEmpty
+              ? Center(child: Text(empty))
+              : ListView.builder(
+                  itemCount: matches.length,
+                  itemBuilder: (context, i) => _GameTile(match: matches[i]),
+                ),
         ),
       ],
     );

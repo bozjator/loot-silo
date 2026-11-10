@@ -73,6 +73,12 @@ class HelpScreen extends StatelessWidget {
               ]),
               const _Section('Import', [
                 _P(
+                  'An empty library shows three ways to start: Import folder '
+                  '(copy packs from a folder on your computer), Import '
+                  'archive (unpack zip, tar, 7z or rar files) and Download '
+                  'from itch.io (Connect itch.io until a key is set).',
+                ),
+                _P(
                   'The import button in the top bar (next to Help) opens a '
                   'menu: Import folder (Ctrl+I) and Import archive (Ctrl+O, '
                   'or drop files on the window) copy packs into the library '
@@ -543,6 +549,18 @@ class HelpScreen extends StatelessWidget {
                   'the match in the pack file; Download fetches a missing '
                   'pack through the usual import, with its cover and '
                   'screenshots in _itch/.',
+                ),
+                _P(
+                  'The itch.io screen counts your owned assets and sorts them '
+                  'into four tabs. Missing: not in the library yet (game '
+                  'builds and programs are never downloaded, only assets). '
+                  'To link: probably in the library already; Link stores the '
+                  'itch id in the pack. Inside a pack: a folder in one of '
+                  'the author\'s packs has this name. In library: packs that '
+                  'know their itch.io page. Each tab says what it holds, '
+                  'even when it is empty. Downloads are unpacked in a '
+                  'temporary folder that is deleted when they end, and '
+                  'emptied on start in case the app was closed mid-way.',
                 ),
               ]),
               const _Section('Settings', [
