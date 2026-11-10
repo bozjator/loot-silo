@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/audio_formats.dart' show AudioSort;
 import '../core/audio_peaks.dart';
 import '../core/library_index.dart';
 import '../core/library_service.dart';
@@ -123,6 +124,10 @@ class SettingsNotifier extends Notifier<AppSettings> {
       _save(state.copyWith(detailAnimateMode: mode));
 
   void setAudioView(AudioView view) => _save(state.copyWith(audioView: view));
+
+  /// The Audio tab's sort; [descending] left out keeps the direction.
+  void setAudioSort(AudioSort key, {bool? descending}) =>
+      _save(state.copyWith(audioSort: key, audioSortDesc: descending));
 
   void setAudioFormat(String format) =>
       _save(state.copyWith(audioFormat: format));

@@ -16,6 +16,7 @@ import 'package:loot_silo/state/providers.dart';
 import 'package:loot_silo/state/settings.dart';
 import 'package:loot_silo/ui/app.dart';
 import 'package:loot_silo/core/audio_duration.dart';
+import 'package:loot_silo/core/audio_formats.dart' show AudioSort;
 import 'package:loot_silo/ui/clipboard.dart';
 import 'package:loot_silo/ui/format.dart';
 import 'package:loot_silo/ui/help_screen.dart';
@@ -176,6 +177,8 @@ void main() {
     List<String>? types,
     Map<String, Object?> sidecar = const {},
     List<Override> overrides = const [],
+    // Changes the settings saved before the app starts.
+    AppSettings Function(AppSettings)? settings,
   }) async {
     final lib = p.join(tmp.path, 'library');
     copyTree('test/fixtures/managed', lib);
@@ -203,7 +206,7 @@ void main() {
         ..writeAsBytesSync(img.encodePng(image));
     }
     store = SettingsStore(File(p.join(tmp.path, 'settings.json')))
-      ..save(AppSettings(libraryPath: lib));
+      ..save((settings ?? (s) => s)(AppSettings(libraryPath: lib)));
     final index = LibraryIndex(NativeDatabase.memory());
     addTearDown(index.close);
     await tester.binding.setSurfaceSize(size);
@@ -1298,7 +1301,9 @@ void main() {
         'b.ogg', 'b.wav', 'b.mp3', //
         'c.wav', 'd.mp3', 'e.ogg', 'e.mp3',
       ]);
-      expect(find.byType(ListTile), findsNWidgets(5));
+      // One row per sound, under the column headers (M73).
+      expect(find.byType(ListTile), findsNWidgets(5 + 1));
+      expect(find.byKey(const ValueKey('audio-list-header')), findsOneWidget);
       for (final (ext, names) in [
         ('ogg', ['a', 'b', 'e']),
         ('wav', ['a', 'b', 'c']),
@@ -1368,7 +1373,9 @@ void main() {
     ) async {
       await open(tester);
       expect(find.textContaining('Audio (2)'), findsOneWidget);
-      expect(find.byType(ListTile), findsNWidgets(2));
+      // One row per sound, under the column headers (M73).
+      expect(find.byType(ListTile), findsNWidgets(2 + 1));
+      expect(find.byKey(const ValueKey('audio-list-header')), findsOneWidget);
       // No folder line under the name (M72); the name's tooltip is the
       // path in the pack.
       expect(
@@ -2081,6 +2088,213 @@ void main() {
       final elapsed = tester.getRect(find.byKey(const ValueKey('elapsed')));
       expect(elapsed.right, lessThanOrEqualTo(seek.left));
       expect(elapsed.center.dy, closeTo(seek.center.dy, 2));
+    });
+  });
+
+  group('Audio sort (M73)', () {
+    const infos = {
+      'sfx/a_long.wav': AudioInfo(
+        duration: Duration(seconds: 30),
+        sampleRate: 44100,
+        channels: 2,
+        bitDepth: 16,
+      ),
+      'sfx/b_short.wav': AudioInfo(
+        duration: Duration(seconds: 1),
+        sampleRate: 22050,
+        channels: 1,
+        bitDepth: 8,
+      ),
+      'sfx/c_mid.wav': AudioInfo(
+        duration: Duration(seconds: 5),
+        sampleRate: 48000,
+        channels: 2,
+        bitDepth: 24,
+      ),
+    };
+    // Sizes: c biggest, then a, then b.
+    final raw = {
+      'sfx/a_long.wav': List.filled(3000, 1),
+      'sfx/b_short.wav': List.filled(1000, 1),
+      'sfx/c_mid.wav': List.filled(9000, 1),
+    };
+    late Completer<void> gate;
+    late int reads;
+
+    Future<void> open(
+      WidgetTester tester, {
+      bool cards = false,
+      AppSettings Function(AppSettings)? settings,
+    }) async {
+      gate = Completer<void>();
+      reads = 0;
+      AudioInfo? infoOf(String path) =>
+          infos.entries.where((e) => path.endsWith(e.key)).firstOrNull?.value;
+      await openKnight(
+        tester,
+        files: const [],
+        raw: raw,
+        types: ['sfx'],
+        settings: settings,
+        overrides: [
+          trackPlayerFactoryProvider.overrideWithValue(_FakePlayer.new),
+          audioInfoProvider.overrideWithValue((path) async {
+            reads++;
+            await gate.future;
+            return infoOf(path);
+          }),
+          audioDurationProvider.overrideWithValue(
+            (path) async => infoOf(path)?.duration,
+          ),
+          audioPeaksProvider.overrideWithValue(
+            AudioPeaksCache(read: (_) async => Float32List(0)),
+          ),
+        ],
+      );
+      if (cards) {
+        await tester.tap(find.text('Cards'));
+        await tester.pump();
+      }
+      await tester.pump();
+    }
+
+    /// The tracks' names in on-screen order (cards: rows of the grid).
+    List<String> shown(WidgetTester tester, {bool cards = false}) {
+      final names = cards
+          ? ['A long', 'B short', 'C mid']
+          : ['a_long', 'b_short', 'c_mid'];
+      Offset at(String n) => tester.getTopLeft(find.text(n).first);
+      return names..sort((a, b) {
+        final pa = at(a);
+        final pb = at(b);
+        final dy = pa.dy.compareTo(pb.dy);
+        return dy != 0 ? dy : pa.dx.compareTo(pb.dx);
+      });
+    }
+
+    Future<void> pickSort(WidgetTester tester, String label) async {
+      await tester.tap(find.byKey(const ValueKey('audio-sort')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text(label).last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    testWidgets('the menu reads the headers, then sorts the cards', (
+      tester,
+    ) async {
+      await open(tester, cards: true);
+      expect(shown(tester, cards: true), ['A long', 'B short', 'C mid']);
+      await pickSort(tester, 'Duration');
+      // Reading every track's header first: a small progress, same order.
+      // Each file is read once (the cards had asked already).
+      expect(reads, 3);
+      expect(find.byKey(const ValueKey('audio-sort-progress')), findsOneWidget);
+      expect(shown(tester, cards: true), ['A long', 'B short', 'C mid']);
+      gate.complete();
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('audio-sort-progress')), findsNothing);
+      expect(shown(tester, cards: true), ['B short', 'C mid', 'A long']);
+      expect(store.load().audioSort, AudioSort.duration);
+
+      // The arrow flips the direction.
+      await tester.tap(find.byKey(const ValueKey('audio-sort-direction')));
+      await tester.pump();
+      expect(shown(tester, cards: true), ['A long', 'C mid', 'B short']);
+      expect(store.load().audioSortDesc, isTrue);
+
+      // File size needs no header; the direction stays.
+      await pickSort(tester, 'File size');
+      expect(shown(tester, cards: true), ['C mid', 'A long', 'B short']);
+    });
+
+    testWidgets('list headers sort and flip; the sorted one has an arrow', (
+      tester,
+    ) async {
+      await open(tester);
+      gate.complete();
+      await tester.pump();
+      Finder arrowIn(String label) => find.descendant(
+        of: find.byKey(ValueKey('audio-header:$label')),
+        matching: find.byKey(const ValueKey('sort-arrow')),
+      );
+      expect(arrowIn('Name'), findsOneWidget);
+      expect(arrowIn('Duration'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('audio-header:Duration')));
+      await tester.pump();
+      await tester.pump();
+      expect(shown(tester), ['b_short', 'c_mid', 'a_long']);
+      expect(arrowIn('Duration'), findsOneWidget);
+      expect(arrowIn('Name'), findsNothing);
+      // Again: the other way, and the menu shows the same key.
+      await tester.tap(find.byKey(const ValueKey('audio-header:Duration')));
+      await tester.pump();
+      expect(shown(tester), ['a_long', 'c_mid', 'b_short']);
+      expect(
+        tester
+            .widget<DropdownButton<AudioSort>>(
+              find.byKey(const ValueKey('audio-sort')),
+            )
+            .value,
+        AudioSort.duration,
+      );
+      expect(
+        tester.widget<Icon>(arrowIn('Duration')).icon,
+        Icons.arrow_downward,
+      );
+
+      // Size: a new column starts ascending.
+      await tester.tap(find.byKey(const ValueKey('audio-header:Size')));
+      await tester.pump();
+      expect(shown(tester), ['b_short', 'a_long', 'c_mid']);
+
+      // Details: the sample rate (the menu's key is not a detail) ...
+      await tester.tap(find.byKey(const ValueKey('audio-header:Details')));
+      await tester.pump();
+      expect(store.load().audioSort, AudioSort.sampleRate);
+      expect(shown(tester), ['b_short', 'a_long', 'c_mid']);
+      // ... or the menu's detail key.
+      await pickSort(tester, 'Bit depth');
+      expect(arrowIn('Details'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('audio-header:Details')));
+      await tester.pump();
+      expect(store.load().audioSort, AudioSort.bitDepth);
+      expect(store.load().audioSortDesc, isTrue);
+      expect(shown(tester), ['c_mid', 'a_long', 'b_short']);
+
+      // The headers sit over their columns.
+      final size = tester.getRect(
+        find.byKey(const ValueKey('audio-header:Size')),
+      );
+      final cell = tester.getRect(
+        find.byKey(const ValueKey('size:sfx/a_long.wav')),
+      );
+      expect(size.right, closeTo(cell.right, 3));
+      final details = tester.getRect(
+        find.byKey(const ValueKey('audio-header:Details')),
+      );
+      final column = tester.getRect(
+        find.byKey(const ValueKey('details-column:sfx/a_long.wav')),
+      );
+      expect(details.left, closeTo(column.left, 0.5));
+    });
+
+    testWidgets('a saved sort is restored and read on open', (tester) async {
+      await open(
+        tester,
+        settings: (s) =>
+            s.copyWith(audioSort: AudioSort.channels, audioSortDesc: true),
+      );
+      expect(find.byKey(const ValueKey('audio-sort-progress')), findsOneWidget);
+      gate.complete();
+      await tester.pump();
+      await tester.pump();
+      // Stereo first (a, c in pack order), then mono.
+      expect(shown(tester), ['a_long', 'c_mid', 'b_short']);
+      expect(find.text('Channels'), findsOneWidget);
     });
   });
 
@@ -4774,9 +4988,18 @@ void main() {
         final list = tester.getRect(
           find.descendant(of: column, matching: find.byType(Scrollable)).first,
         );
+        // Audio rows: the content starts with the column headers (M73),
+        // inside the same top gap the lists have as padding.
+        final header = find.descendant(
+          of: column,
+          matching: find.byKey(const ValueKey('audio-list-header')),
+        );
+        final top = header.evaluate().isEmpty
+            ? list.top
+            : tester.getRect(header).top - tabContentGap;
         return (
           top: bar.top - view.top,
-          gap: list.top - bar.bottom,
+          gap: top - bar.bottom,
           height: bar.height,
         );
       }
@@ -4790,9 +5013,19 @@ void main() {
       final audio = measure();
       expect(audio, images);
       expect(images.height, tabToolbarHeight + tabToolbarPadding.vertical);
-      // The content's own top padding: the same small gap.
+      // The content's own top padding: the same small gap, above the
+      // list's column headers (M73), which the rows follow directly.
+      final header = find.byKey(const ValueKey('audio-list-header'));
+      final padding = tester.widget<Padding>(
+        find.ancestor(of: header, matching: find.byType(Padding)).first,
+      );
+      expect(padding.padding.resolve(TextDirection.ltr).top, tabContentGap);
       final rows = tester.widget<ListView>(find.byType(ListView).last);
-      expect(rows.padding!.resolve(TextDirection.ltr).top, tabContentGap);
+      expect(rows.padding!.resolve(TextDirection.ltr).top, 0);
+      expect(
+        tester.getRect(find.byType(ListView).last).top,
+        tester.getRect(header).bottom,
+      );
       expect(grid.padding.top, tabContentGap);
       await tester.tap(find.text('Cards'));
       await tester.pumpAndSettle();

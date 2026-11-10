@@ -1706,6 +1706,76 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m73: audio sorted by duration (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField), 'chiptune');
+    await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
+    await tester.tap(find.text('music-loop-bundle-chiptune'));
+    await pumpUntil(tester, find.byKey(const ValueKey('loop')));
+    await tester.tap(find.text('Rows'));
+    await tester.pump(const Duration(milliseconds: 300));
+    final header = find.byKey(const ValueKey('audio-header:Duration'));
+    await pumpUntil(tester, header);
+    // Longest first: click twice.
+    await tester.tap(header);
+    await tester.pump();
+    await tester.tap(header);
+    await tester.pump();
+    final progress = find.byKey(const ValueKey('audio-sort-progress'));
+    for (var i = 0; i < 100 && progress.evaluate().isNotEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+    }
+    expect(progress, findsNothing);
+    await pumpUntil(tester, find.byKey(const ValueKey('waveform-bars')));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await tester.pump();
+    // The lengths down the list never grow.
+    final texts = [
+      for (final e
+          in find
+              .descendant(
+                of: find.byWidgetPredicate(
+                  (w) =>
+                      w.key is ValueKey<String> &&
+                      (w.key! as ValueKey<String>).value.startsWith('length:'),
+                ),
+                matching: find.byType(Text),
+              )
+              .evaluate())
+        (
+          tester.getTopLeft(find.byWidget(e.widget)).dy,
+          (e.widget as Text).data!,
+        ),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    int secs(String s) {
+      final [m, sec] = s.split(':');
+      return int.parse(m) * 60 + int.parse(sec);
+    }
+
+    final shown = [
+      for (final (_, s) in texts)
+        if (s.isNotEmpty) secs(s),
+    ];
+    expect(shown.length, greaterThan(3));
+    expect(shown, orderedEquals([...shown]..sort((a, b) => b - a)));
+    await captureScreenshot(tester, 'm73_audio_sorted', settle: false);
+    // Back to the default for the other tests.
+    await tester.tap(find.byKey(const ValueKey('audio-header:Name')));
+    await tester.pump();
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m69: right-click menu copies through GTK (real, read-only)', (
     tester,
   ) async {

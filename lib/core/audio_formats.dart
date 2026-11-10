@@ -1,5 +1,7 @@
 import 'package:path/path.dart' as p;
 
+import 'audio_duration.dart' show AudioInfo;
+
 /// Audio formats in the order a track picks one when the preferred format
 /// is missing: lossless and open formats first.
 const audioFormatOrder = ['ogg', 'wav', 'flac', 'opus', 'mp3', 'm4a', 'aiff'];
@@ -75,4 +77,71 @@ List<AudioTrack> groupAudioFormats(List<String> audio) {
     for (final MapEntry(:key, :value) in byKey.entries)
       AudioTrack(key, value..sort((a, b) => _rank(a) - _rank(b))),
   ];
+}
+
+/// What the Audio tab sorts its tracks by.
+enum AudioSort {
+  name('Name'),
+  duration('Duration'),
+  size('File size'),
+  sampleRate('Sample rate'),
+  channels('Channels'),
+  bitrate('Bitrate'),
+  bitDepth('Bit depth');
+
+  const AudioSort(this.label);
+  final String label;
+
+  /// Sorting by it needs each track's header ([AudioInfo]).
+  bool get needsInfo => this != name && this != size;
+
+  /// One of the details the list's Details column shows.
+  bool get isDetail => index >= sampleRate.index;
+}
+
+/// [tracks] sorted by [key] of the file each one shows ([fileOf]); with
+/// [AudioSort.name] they keep their order (reversed when [descending]).
+/// Tracks without the value go last in both directions; ties keep their
+/// order. [sizeOf] gives a file's size, [infoOf] its header if read.
+List<AudioTrack> sortAudioTracks(
+  List<AudioTrack> tracks,
+  AudioSort key, {
+  required bool descending,
+  required String Function(AudioTrack) fileOf,
+  required int? Function(String) sizeOf,
+  required AudioInfo? Function(String) infoOf,
+}) {
+  if (key == AudioSort.name) {
+    return descending ? tracks.reversed.toList() : [...tracks];
+  }
+  num? valueOf(AudioTrack t) {
+    final rel = fileOf(t);
+    if (key == AudioSort.size) return sizeOf(rel);
+    final info = infoOf(rel);
+    final v = switch (key) {
+      AudioSort.duration => info?.duration?.inMicroseconds,
+      AudioSort.sampleRate => info?.sampleRate,
+      AudioSort.channels => info?.channels,
+      AudioSort.bitrate => info?.kbps,
+      AudioSort.bitDepth => info?.bitDepth,
+      AudioSort.name || AudioSort.size => null,
+    };
+    return v == null || v <= 0 ? null : v;
+  }
+
+  final keyed = [
+    for (var i = 0; i < tracks.length; i++) (i, valueOf(tracks[i])),
+  ];
+  keyed.sort((a, b) {
+    final (ai, av) = a;
+    final (bi, bv) = b;
+    if (av == null || bv == null) {
+      if (av != null) return -1;
+      if (bv != null) return 1;
+      return ai - bi;
+    }
+    final c = descending ? bv.compareTo(av) : av.compareTo(bv);
+    return c != 0 ? c : ai - bi;
+  });
+  return [for (final (i, _) in keyed) tracks[i]];
 }

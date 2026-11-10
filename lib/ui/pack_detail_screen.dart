@@ -3171,14 +3171,87 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   List<String>? _groupedFrom;
   var _grouped = const <AudioTrack>[];
 
-  /// The shown sounds, one per track, whatever formats they come in.
-  List<AudioTrack> get _tracks {
+  /// The sounds, one per track, whatever formats they come in, in the
+  /// pack's order.
+  List<AudioTrack> get _byName {
     final audio = widget.contents.audio;
     if (!identical(audio, _groupedFrom)) {
       _groupedFrom = audio;
       _grouped = groupAudioFormats(audio);
     }
     return _grouped;
+  }
+
+  /// Headers read so far, by file (null: nothing to read in it).
+  final _infoKnown = <String, AudioInfo?>{};
+
+  /// Reading the headers a sort needs; the list shows a progress bar.
+  var _loadingInfos = false;
+
+  /// Bumped when a picked format or a read header changes the order.
+  var _orderVersion = 0;
+  Object? _sortedFor;
+  var _sorted = const <AudioTrack>[];
+
+  /// The shown sounds in the shown order (the tab's sort, each track by
+  /// the format it shows); Play all and ←/→ go by it.
+  List<AudioTrack> get _tracks {
+    final settings = ref.read(settingsProvider);
+    final grouped = _byName;
+    final signature = (
+      grouped,
+      settings.audioSort,
+      settings.audioSortDesc,
+      settings.audioFormat,
+      _orderVersion,
+    );
+    if (signature != _sortedFor) {
+      _sortedFor = signature;
+      _sorted = sortAudioTracks(
+        grouped,
+        settings.audioSort,
+        descending: settings.audioSortDesc,
+        fileOf: _fileOf,
+        sizeOf: (rel) => widget.contents.sizes[rel],
+        infoOf: (rel) => _infoKnown[rel],
+      );
+    }
+    return _sorted;
+  }
+
+  /// A sort by a header value: reads the shown files' headers that are
+  /// not read yet (all at once, off the UI thread), then sorts.
+  void _readForSort(AudioSort key) {
+    if (!key.needsInfo || _loadingInfos) return;
+    final missing = [
+      for (final t in _byName)
+        if (!_infoKnown.containsKey(_fileOf(t))) _fileOf(t),
+    ];
+    if (missing.isEmpty) return;
+    _loadingInfos = true;
+    Future.wait(missing.map(_info)).whenComplete(() {
+      if (!mounted) return;
+      setState(() {
+        _loadingInfos = false;
+        _orderVersion++;
+      });
+      // A format picked meanwhile may still be missing.
+      _readForSort(ref.read(settingsProvider).audioSort);
+    });
+  }
+
+  /// Picks [key] (the dropdown or a header); [flip] turns the direction
+  /// when it is already the sort.
+  void _sortBy(AudioSort key, {bool flip = false}) {
+    final settings = ref.read(settingsProvider);
+    final same = settings.audioSort == key;
+    ref
+        .read(settingsProvider.notifier)
+        .setAudioSort(
+          key,
+          descending: flip && same ? !settings.audioSortDesc : null,
+        );
+    _readForSort(key);
   }
 
   /// The file [t] plays: the format picked on it, else the preferred one.
@@ -3200,7 +3273,9 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     setState(() {
       _chosen[t.key] = rel;
       if (t.files.contains(_selected)) _selected = rel;
+      _orderVersion++;
     });
+    _readForSort(ref.read(settingsProvider).audioSort);
     if (was == rel || was == null || !t.files.contains(was)) return;
     await _start(rel);
     if (mounted && _playing == rel && at > Duration.zero) await _seek(at);
@@ -3416,9 +3491,14 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
 
   @override
   Widget build(BuildContext context) {
-    final audio = _tracks;
-    // Rebuilt when it changes: cards without a picked format follow it.
+    // Rebuilt when they change: cards without a picked format follow the
+    // format; the order follows the sort.
     ref.watch(settingsProvider.select((s) => s.audioFormat));
+    final sort = ref.watch(settingsProvider.select((s) => s.audioSort));
+    final desc = ref.watch(settingsProvider.select((s) => s.audioSortDesc));
+    // A saved sort, or a format changed elsewhere, may need headers.
+    _readForSort(sort);
+    final audio = _tracks;
     final theme = Theme.of(context);
     final loop = ref.watch(settingsProvider.select((s) => s.audioLoop));
     final read = ref.watch(audioDurationProvider);
@@ -3445,6 +3525,13 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
               _AudioViewToggle(
                 view: view,
                 onChanged: ref.read(settingsProvider.notifier).setAudioView,
+              ),
+              const SizedBox(width: 16),
+              _AudioSortMenu(
+                sort: sort,
+                descending: desc,
+                onSort: _sortBy,
+                onFlip: () => _sortBy(sort, flip: true),
               ),
               const Spacer(),
               Tooltip(
@@ -3483,6 +3570,12 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
               ),
             ],
           ),
+          // Reading the headers a sort needs.
+          if (_loadingInfos && sort.needsInfo)
+            const LinearProgressIndicator(
+              key: ValueKey('audio-sort-progress'),
+              minHeight: 2,
+            ),
           Expanded(
             child: switch (view) {
               AudioView.rows => _rows(audio, readLength, favorites),
@@ -3497,7 +3590,11 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
   /// The file's [AudioInfo], read once (header only, off the UI thread).
   Future<AudioInfo?> _info(String rel) => _infos.putIfAbsent(
     rel,
-    () => ref.read(audioInfoProvider)(p.join(widget.pack.path, rel)),
+    () =>
+        ref.read(audioInfoProvider)(p.join(widget.pack.path, rel)).then((info) {
+          _infoKnown[rel] = info;
+          return info;
+        }),
   );
 
   /// A format chip's tooltip: `WAV · 44.1 kHz · Stereo · 16-bit · 1.2 MB`.
@@ -3632,9 +3729,9 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     required TextStyle sizeStyle,
     required double detailsWidth,
   }) {
-    return ListView.builder(
+    final list = ListView.builder(
       controller: _scroll,
-      padding: const EdgeInsets.only(top: tabContentGap, bottom: 8),
+      padding: const EdgeInsets.only(bottom: 8),
       itemCount: audio.length,
       itemBuilder: (context, i) {
         final track = audio[i];
@@ -3739,6 +3836,106 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
         );
       },
     );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: tabContentGap),
+          child: _listHeader(
+            chipsWidth: chipsWidth,
+            sizeWidth: sizeWidth,
+            detailsWidth: detailsWidth,
+          ),
+        ),
+        Expanded(child: list),
+      ],
+    );
+  }
+
+  /// The list's column headers, laid out like a row (an invisible play
+  /// button, star and reveal icon keep them over their columns). A click
+  /// sorts by the column, a second click flips the direction.
+  Widget _listHeader({
+    required double chipsWidth,
+    required double sizeWidth,
+    required double detailsWidth,
+  }) {
+    // Watched in build; read here (a layout callback).
+    final settings = ref.read(settingsProvider);
+    final sort = settings.audioSort;
+    final desc = settings.audioSortDesc;
+    // Details sorts by the menu's detail key, else by sample rate.
+    final detail = sort.isDetail ? sort : AudioSort.sampleRate;
+    void pick(AudioSort key) => key == sort
+        ? _sortBy(key, flip: true)
+        : ref
+              .read(settingsProvider.notifier)
+              .setAudioSort(key, descending: false);
+    Widget cell(
+      String label,
+      AudioSort key, {
+      required bool sorted,
+      bool end = false,
+    }) => _SortHeader(
+      key: ValueKey('audio-header:$label'),
+      label: label,
+      sorted: sorted,
+      descending: desc,
+      end: end,
+      onTap: () {
+        pick(key);
+        _readForSort(key);
+      },
+    );
+    Widget hidden(Widget child) => Visibility.maintain(
+      visible: false,
+      child: ExcludeSemantics(child: child),
+    );
+    return ListTile(
+      key: const ValueKey('audio-list-header'),
+      dense: true,
+      minTileHeight: 28,
+      visualDensity: const VisualDensity(vertical: -4),
+      leading: hidden(
+        const IconButton(icon: Icon(Icons.play_circle), onPressed: null),
+      ),
+      title: cell('Name', AudioSort.name, sorted: sort == AudioSort.name),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(width: chipsWidth),
+          const SizedBox(width: 12),
+          if (detailsWidth > 0) ...[
+            SizedBox(
+              width: detailsWidth,
+              child: cell('Details', detail, sorted: sort.isDetail),
+            ),
+            const SizedBox(width: 12),
+          ],
+          // Over the waveform and the length, ending with the length.
+          SizedBox(
+            width: 80 + 12 + 56,
+            child: cell(
+              'Duration',
+              AudioSort.duration,
+              sorted: sort == AudioSort.duration,
+              end: true,
+            ),
+          ),
+          SizedBox(
+            width: 16 + sizeWidth,
+            child: cell(
+              'Size',
+              AudioSort.size,
+              sorted: sort == AudioSort.size,
+              end: true,
+            ),
+          ),
+          hidden(FavoriteStar(starred: false, onPressed: () {})),
+          hidden(RevealButton(widget.pack.path)),
+        ],
+      ),
+    );
   }
 
   Widget _cards(
@@ -3839,6 +4036,131 @@ class _AudioViewToggle extends StatelessWidget {
     ],
     selected: {view},
     onSelectionChanged: (s) => onChanged(s.single),
+  );
+}
+
+/// A clickable column header of the audio list; the sorted one shows an
+/// arrow for the direction.
+class _SortHeader extends StatelessWidget {
+  const _SortHeader({
+    super.key,
+    required this.label,
+    required this.sorted,
+    required this.descending,
+    required this.onTap,
+    this.end = false,
+  });
+
+  final String label;
+  final bool sorted;
+  final bool descending;
+  final VoidCallback onTap;
+
+  /// Right-aligned (numbers), the arrow before the label.
+  final bool end;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = sorted
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+    final text = Flexible(
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: color,
+          fontWeight: sorted ? FontWeight.bold : null,
+        ),
+      ),
+    );
+    final arrow = sorted
+        ? Icon(
+            descending ? Icons.arrow_downward : Icons.arrow_upward,
+            key: const ValueKey('sort-arrow'),
+            size: 14,
+            color: color,
+          )
+        : null;
+    // The whole cell takes the click, not only the label.
+    return InkWell(
+      mouseCursor: clickCursor,
+      borderRadius: BorderRadius.circular(4),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          mainAxisAlignment: end
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          children: [
+            if (end && arrow != null) ...[arrow, const SizedBox(width: 2)],
+            text,
+            if (!end && arrow != null) ...[const SizedBox(width: 2), arrow],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The Audio tab's sort: a menu of [AudioSort] keys and an arrow that
+/// flips the direction.
+class _AudioSortMenu extends StatelessWidget {
+  const _AudioSortMenu({
+    required this.sort,
+    required this.descending,
+    required this.onSort,
+    required this.onFlip,
+  });
+
+  final AudioSort sort;
+  final bool descending;
+  final ValueChanged<AudioSort> onSort;
+  final VoidCallback onFlip;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      DropdownButton<AudioSort>(
+        key: const ValueKey('audio-sort'),
+        mouseCursor: clickCursor,
+        dropdownMenuItemMouseCursor: clickCursor,
+        value: sort,
+        underline: const SizedBox(),
+        // As the dashboard's sort menu: the icon left of the label.
+        icon: const SizedBox.shrink(),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        borderRadius: BorderRadius.circular(8),
+        selectedItemBuilder: (context) => [
+          for (final s in AudioSort.values)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.sort, size: 20),
+                const SizedBox(width: 8),
+                Text(s.label),
+              ],
+            ),
+        ],
+        items: [
+          for (final s in AudioSort.values)
+            DropdownMenuItem(value: s, child: Text(s.label)),
+        ],
+        onChanged: (s) => onSort(s!),
+      ),
+      IconButton(
+        key: const ValueKey('audio-sort-direction'),
+        tooltip: descending ? 'Descending' : 'Ascending',
+        visualDensity: VisualDensity.compact,
+        iconSize: 18,
+        icon: Icon(descending ? Icons.arrow_downward : Icons.arrow_upward),
+        onPressed: onFlip,
+      ),
+    ],
   );
 }
 

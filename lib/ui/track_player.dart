@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:isolate';
+import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -77,8 +78,51 @@ final trackPlayerFactoryProvider = Provider<TrackPlayer Function()>(
 /// (unknown format) are cached too.
 final _infos = <String, Future<AudioInfo?>>{};
 
-Future<AudioInfo?> _readInIsolate(String path) =>
-    Isolate.run(() => audioInfo(path));
+/// Paths asked for in this microtask, read together by [_flush].
+List<(String, Completer<AudioInfo?>)>? _pending;
+
+/// Most isolates one batch is split over (the reads are file IO and a
+/// little parsing; a few in parallel are enough).
+const _maxIsolates = 4;
+
+/// Requests made in the same microtask (a frame's rows, or a sort reading
+/// a whole tab) share isolates instead of starting one per file.
+Future<AudioInfo?> _readInIsolate(String path) {
+  final c = Completer<AudioInfo?>();
+  (_pending ??= []).add((path, c));
+  // One flush per request: the first takes the whole batch, the others
+  // find it gone (and none is left waiting on a microtask that never ran).
+  scheduleMicrotask(_flush);
+  return c.future;
+}
+
+/// Top level, so the isolate's closure captures only [paths] (a closure
+/// in [_flush] would carry the completers along, which can't be sent).
+Future<List<AudioInfo?>> _readAll(List<String> paths) =>
+    Isolate.run(() => [for (final path in paths) audioInfo(path)]);
+
+void _flush() {
+  final batch = _pending;
+  if (batch == null) return;
+  _pending = null;
+  final per = math.max(16, (batch.length / _maxIsolates).ceil());
+  for (var start = 0; start < batch.length; start += per) {
+    final part = batch.sublist(start, math.min(start + per, batch.length));
+    final paths = [for (final (path, _) in part) path];
+    _readAll(paths).then(
+      (infos) {
+        for (var i = 0; i < part.length; i++) {
+          part[i].$2.complete(infos[i]);
+        }
+      },
+      onError: (Object _) {
+        for (final (_, c) in part) {
+          c.complete(null);
+        }
+      },
+    );
+  }
+}
 
 /// Reads an audio file's header ([AudioInfo]: length, rate, channels, bit
 /// depth or bitrate) off the UI thread, once per path.

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../core/audio_formats.dart' show audioFormatOrder;
+import '../core/audio_formats.dart' show AudioSort, audioFormatOrder;
 
 /// Light, dark or follow the system.
 enum ThemeChoice { system, light, dark }
@@ -192,6 +192,8 @@ class AppSettings {
     this.dashboardView = DashboardView.packs,
     this.detailAnimateMode = AnimateMode.hover,
     this.audioView = AudioView.rows,
+    this.audioSort = AudioSort.name,
+    this.audioSortDesc = false,
     this.audioFormat = 'ogg',
     this.previewsColumns = 4,
     this.resumeSession = true,
@@ -242,6 +244,11 @@ class AppSettings {
 
   final AudioView audioView;
 
+  /// What the Audio tab sorts by (the shown format's values), and whether
+  /// largest / last first.
+  final AudioSort audioSort;
+  final bool audioSortDesc;
+
   /// The format an Audio tab card plays when its sound comes in several
   /// (one of `audioFormatOrder`).
   final String audioFormat;
@@ -287,6 +294,9 @@ class AppSettings {
         AnimateMode.hover,
     audioView:
         AudioView.values.asNameMap()[json['audio_view']] ?? AudioView.rows,
+    audioSort:
+        AudioSort.values.asNameMap()[json['audio_sort']] ?? AudioSort.name,
+    audioSortDesc: json['audio_sort_desc'] == true,
     audioFormat: switch (json['audio_format']) {
       final String f when audioFormatOrder.contains(f) => f,
       _ => 'ogg',
@@ -323,6 +333,8 @@ class AppSettings {
     'dashboard_view': dashboardView.name,
     'detail_animate_mode': detailAnimateMode.name,
     'audio_view': audioView.name,
+    'audio_sort': audioSort.name,
+    'audio_sort_desc': audioSortDesc,
     'audio_format': audioFormat,
     'previews_columns': previewsColumns,
     'resume_session': resumeSession,
@@ -348,6 +360,8 @@ class AppSettings {
     DashboardView? dashboardView,
     AnimateMode? detailAnimateMode,
     AudioView? audioView,
+    AudioSort? audioSort,
+    bool? audioSortDesc,
     String? audioFormat,
     int? previewsColumns,
     bool? resumeSession,
@@ -371,6 +385,8 @@ class AppSettings {
     dashboardView: dashboardView ?? this.dashboardView,
     detailAnimateMode: detailAnimateMode ?? this.detailAnimateMode,
     audioView: audioView ?? this.audioView,
+    audioSort: audioSort ?? this.audioSort,
+    audioSortDesc: audioSortDesc ?? this.audioSortDesc,
     audioFormat: audioFormat ?? this.audioFormat,
     previewsColumns: previewsColumns ?? this.previewsColumns,
     resumeSession: resumeSession ?? this.resumeSession,

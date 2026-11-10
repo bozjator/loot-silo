@@ -309,6 +309,20 @@ class HelpScreen extends StatelessWidget {
                   'end); in the list, use the seek bar under the row.',
                 ),
                 _P(
+                  'Sort the sounds with the menu in the toolbar: Name (the '
+                  'pack\'s order), Duration, File size, Sample rate, '
+                  'Channels, Bitrate or Bit depth; the arrow beside it '
+                  'flips the direction. Each sound is sorted by the format '
+                  'it shows. Sounds without the value (a WAV has no '
+                  'bitrate, an MP3 no bit depth) go last either way. The '
+                  'first sort by a detail reads every sound\'s header, '
+                  'with a thin progress bar under the toolbar. In the list, '
+                  'click the Name, Details, Duration or Size heading to sort '
+                  'by it, and again to flip; Details sorts by the menu\'s '
+                  'detail, or by sample rate. Play all follows the shown '
+                  'order. The sort is remembered.',
+                ),
+                _P(
                   'Under a card\'s name is a line about the file it plays: '
                   'size, Mono or Stereo, sample rate and bit depth (WAV, '
                   'AIFF, FLAC) or bitrate (MP3, Ogg; ~ when it varies or is '
