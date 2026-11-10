@@ -322,10 +322,12 @@ class HelpScreen extends StatelessWidget {
                   'end); in the list, use the seek bar under the row.',
                 ),
                 _P(
-                  'Sort the sounds with the menu in the toolbar: Name (the '
-                  'pack\'s order), Duration, File size, Sample rate, '
-                  'Channels, Bitrate or Bit depth; the arrow beside it '
-                  'flips the direction. Each sound is sorted by the format '
+                  'Sort the sounds with the sort button in the toolbar: '
+                  'click its name for the menu (Name, the pack\'s order, '
+                  'Duration, File size, Sample rate, Channels, Bitrate or '
+                  'Bit depth); the arrow at its left shows the direction '
+                  '(up: ascending, down: descending) and a click on it '
+                  'flips it. Each sound is sorted by the format '
                   'it shows. Sounds without the value (a WAV has no '
                   'bitrate, an MP3 no bit depth) go last either way. The '
                   'first sort by a detail reads every sound\'s header, '
@@ -337,9 +339,11 @@ class HelpScreen extends StatelessWidget {
                 ),
                 _P(
                   'Under a card\'s name is a line about the file it plays: '
-                  'size, Mono or Stereo, sample rate and bit depth (WAV, '
-                  'AIFF, FLAC) or bitrate (MP3, Ogg; ~ when it varies or is '
-                  'an average), e.g. "1.2 MB · Stereo · 44.1 kHz · 16-bit". '
+                  'S (stereo) or M (mono; 6ch for six channels), size, '
+                  'sample rate and bit depth (WAV, AIFF, FLAC) or bitrate '
+                  '(MP3, Ogg; ~ when it varies or is an average), e.g. '
+                  '"S · 1.2 MB · 44.1 kHz · 16-bit". Rest the pointer on '
+                  'the line to read it with the words spelled out. '
                   'Rest the pointer on the name to see the file\'s path in '
                   'the pack.',
                 ),

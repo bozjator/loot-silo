@@ -45,11 +45,16 @@ class AudioInfo {
       '${vbr ? 'VBR ~' : (approximate ? '~' : '')}$k kbps',
   ].join(' · ');
 
-  /// The audio card's line after the size: `Stereo · 44.1 kHz · 16-bit`,
-  /// `Mono · 48 kHz · ~112 kbps`; bit depth when known, else the bitrate
-  /// (VBR and nominal rates as `~245 kbps`). Unknown parts are left out.
-  String get shortDetails => [
-    if (channels case final c? when c > 0) channelWords(c),
+  /// The audio card's line: channels first as a letter (`S`, `M`, `6ch`),
+  /// then [size] when given, the sample rate and the bit depth when known,
+  /// else the bitrate (VBR and nominal rates as `~245 kbps`):
+  /// `S · 1.2 MB · 44.1 kHz · 16-bit`. With [words] the channels are
+  /// spelled out (`Stereo · 1.2 MB · …`), for the line's tooltip. Unknown
+  /// parts are left out.
+  String shortDetails({String? size, bool words = false}) => [
+    if (channels case final c? when c > 0)
+      words ? channelWords(c) : channelLetter(c),
+    ?size,
     if (sampleRate case final r? when r > 0) formatSampleRate(r),
     if (bitDepth case final b? when b > 0)
       '$b-bit'
@@ -73,6 +78,13 @@ String channelWords(int channels) => switch (channels) {
   1 => 'Mono',
   2 => 'Stereo',
   _ => '$channels ch',
+};
+
+/// `M`, `S`, `6ch`: the audio card's short form of [channelWords].
+String channelLetter(int channels) => switch (channels) {
+  1 => 'M',
+  2 => 'S',
+  _ => '${channels}ch',
 };
 
 /// Play length of an audio file, read from its headers ([audioInfo]).

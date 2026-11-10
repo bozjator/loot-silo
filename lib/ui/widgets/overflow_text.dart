@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 /// One line of text cut with an ellipsis; when it is cut, hovering shows
 /// the whole text in a tooltip.
 class OverflowText extends StatelessWidget {
-  const OverflowText(this.text, {super.key, this.style});
+  const OverflowText(this.text, {super.key, this.style, this.tooltip});
 
   final String text;
   final TextStyle? style;
+
+  /// Shown on hover whether or not the line is cut (a longer form of it).
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -18,6 +21,7 @@ class OverflowText extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: style,
       );
+      if (tooltip case final tip?) return Tooltip(message: tip, child: line);
       if (!constraints.hasBoundedWidth) return line;
       final painter = TextPainter(
         text: TextSpan(

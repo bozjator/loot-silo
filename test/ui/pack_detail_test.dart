@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:loot_silo/core/audio_peaks.dart';
@@ -1770,35 +1769,7 @@ void main() {
       ),
     );
 
-    /// The card's top row (chips and corner icons, whichever is lower) and
-    /// the top of its times.
-    ({double rowBottom, double timesTop}) bounds(
-      WidgetTester tester,
-      String rel,
-    ) {
-      final card = cardOf(rel);
-      final chips = tester.getRect(
-        find.descendant(of: card, matching: find.byType(FormatChips)),
-      );
-      final icons = tester.getRect(
-        find.descendant(
-          of: card,
-          matching: find.byKey(const ValueKey('audio-card-icons')),
-        ),
-      );
-      final total = tester.getRect(
-        find.descendant(
-          of: card,
-          matching: find.byKey(const ValueKey('total')),
-        ),
-      );
-      return (
-        rowBottom: math.max(chips.bottom, icons.bottom),
-        timesTop: total.top,
-      );
-    }
-
-    testWidgets('M72: the button sits halfway between top row and times', (
+    testWidgets('M77: the button sits halfway between top edge and waveform', (
       tester,
     ) async {
       await open(tester);
@@ -1807,16 +1778,65 @@ void main() {
       // The card's size is unchanged (M65): 220 / 1.6 plus the footer.
       expect(card.height, closeTo(220 / 1.6 + 60 + 32 + 6, 0.5));
       for (final rel in [ogg, coin]) {
+        final cardRect = tester.getRect(cardOf(rel));
         final button = buttonOf(tester, rel);
-        expect(
-          button.center.dx,
-          closeTo(tester.getRect(cardOf(rel)).center.dx, 0.5),
-        );
-        final b = bounds(tester, rel);
-        expect(button.center.dy, closeTo((b.rowBottom + b.timesTop) / 2, 0.5));
-        expect(button.top, greaterThan(b.rowBottom));
-        expect(button.bottom, lessThan(b.timesTop));
+        expect(button.center.dx, closeTo(cardRect.center.dx, 0.5));
+        final strip = tester.getRect(wave(rel));
+        expect(button.center.dy, closeTo((cardRect.top + strip.top) / 2, 0.5));
+        // Clear of the top row's parts and the times.
+        final ring = Rect.fromCircle(center: button.center, radius: 28);
+        final card = cardOf(rel);
+        for (final f in [
+          find.byType(FormatChips),
+          find.byKey(const ValueKey('audio-card-icons')),
+          find.byKey(const ValueKey('total')),
+        ]) {
+          final part = tester.getRect(
+            find.descendant(of: card, matching: f).first,
+          );
+          expect(ring.overlaps(part), isFalse, reason: '$f');
+        }
+        expect(button.bottom, lessThan(strip.top));
       }
+    });
+
+    test('M77: buttonCentre clears the top row and the times', () {
+      const d = 56.0;
+      // Nothing in the ring's column: the middle of the area.
+      expect(
+        audioButtonCentre(areaHeight: 137.5, width: 220, timeHeight: 20),
+        closeTo(137.5 / 2, 1e-9),
+      );
+      // Chips under the ring push it down just enough.
+      expect(
+        audioButtonCentre(
+          areaHeight: 137.5,
+          width: 220,
+          timeHeight: 20,
+          chips: const Rect.fromLTWH(8, 8, 120, 50),
+        ),
+        closeTo(58 + d / 2, 1e-9),
+      );
+      // Wide times under the ring push it up just enough.
+      expect(
+        audioButtonCentre(
+          areaHeight: 120,
+          width: 140,
+          timeHeight: 40,
+          timeWidth: 70,
+        ),
+        closeTo(120 - 2 - 40 - d / 2, 1e-9),
+      );
+      // The same times outside the ring's column don't count.
+      expect(
+        audioButtonCentre(
+          areaHeight: 120,
+          width: 300,
+          timeHeight: 40,
+          timeWidth: 70,
+        ),
+        closeTo(60, 1e-9),
+      );
     });
 
     testWidgets('M72: narrow cards: the ring overlaps nothing', (tester) async {
@@ -1911,8 +1931,14 @@ void main() {
             ),
           )
           .data!;
-      expect(line(coin), '${sizeOf(coin)} · Stereo · 44.1 kHz · 16-bit');
-      expect(line(ogg), '${sizeOf(ogg)} · Mono · 48 kHz · ~112 kbps');
+      // M77: S / M first, then the size.
+      expect(line(coin), 'S · ${sizeOf(coin)} · 44.1 kHz · 16-bit');
+      expect(line(ogg), 'M · ${sizeOf(ogg)} · 48 kHz · ~112 kbps');
+      // The tooltip spells the channels out, cut or not.
+      expect(
+        find.byTooltip('Stereo · ${sizeOf(coin)} · 44.1 kHz · 16-bit'),
+        findsOneWidget,
+      );
       // No folder text on the cards.
       for (final (rel, folder) in [(ogg, 'music'), (coin, 'sfx')]) {
         expect(
@@ -1963,11 +1989,12 @@ void main() {
           ),
         ),
       );
-      expect(
-        find.byTooltip('1.2 MB · Stereo · 44.1 kHz · 16-bit'),
-        findsOneWidget,
-      );
+      expect(find.byTooltip('S · 1.2 MB · 44.1 kHz · 16-bit'), findsOneWidget);
       expect(audioCardDetails(1234567, null), '1.2 MB');
+      expect(
+        audioCardDetails(1234567, const AudioInfo(channels: 2), words: true),
+        'Stereo · 1.2 MB',
+      );
     });
 
     testWidgets('tap and drag on the waveform seek; elapsed above its left', (
@@ -2193,6 +2220,68 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     }
 
+    testWidgets('M77: the sort button looks like Play all, arrow leading', (
+      tester,
+    ) async {
+      await open(tester, cards: true);
+      gate.complete();
+      await tester.pump();
+      final play = tester.getRect(find.byKey(const ValueKey('play-all')));
+      final arrow = find.byKey(const ValueKey('audio-sort-direction'));
+      final label = find.byKey(const ValueKey('audio-sort'));
+      final a = tester.getRect(arrow);
+      final l = tester.getRect(label);
+      // One height and one line with Play all; the two halves touch.
+      expect(a.height, play.height);
+      expect(l.height, play.height);
+      expect(a.top, play.top);
+      expect(a.right, closeTo(l.left, 0.5));
+      expect(a.left, lessThan(l.left));
+      // The same tonal colour as Play all, stadium ends outside.
+      Material material(Finder f) => tester.widget<Material>(
+        find.descendant(of: f, matching: find.byType(Material)).first,
+      );
+      final playMaterial = material(find.byKey(const ValueKey('play-all')));
+      expect(material(arrow).color, playMaterial.color);
+      expect(material(label).color, playMaterial.color);
+      final shape = material(arrow).shape! as RoundedRectangleBorder;
+      final r = (shape.borderRadius as BorderRadius).topLeft.x;
+      expect(r, greaterThanOrEqualTo(a.height / 2));
+      expect((shape.borderRadius as BorderRadius).topRight.x, 0);
+      // The arrow leads: an icon left of the label's text.
+      final icon = find.descendant(of: arrow, matching: find.byType(Icon));
+      expect(tester.widget<Icon>(icon).icon, Icons.arrow_upward);
+      expect(
+        tester.getRect(icon).right,
+        lessThan(tester.getRect(find.text('Name').first).left),
+      );
+      expect(find.byTooltip('Ascending'), findsOneWidget);
+
+      // The arrow flips the direction, without opening the menu.
+      await tester.tap(arrow);
+      await tester.pump();
+      expect(tester.widget<Icon>(icon).icon, Icons.arrow_downward);
+      expect(find.byTooltip('Descending'), findsOneWidget);
+      expect(find.byKey(const ValueKey('audio-sort:duration')), findsNothing);
+      expect(store.load().audioSortDesc, isTrue);
+
+      // The label opens the menu.
+      await tester.tap(label);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byKey(const ValueKey('audio-sort:duration')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('audio-sort:size')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('audio-sort-label')))
+            .data,
+        'File size',
+      );
+      expect(store.load().audioSort, AudioSort.size);
+    });
+
     testWidgets('the menu reads the headers, then sorts the cards', (
       tester,
     ) async {
@@ -2247,11 +2336,9 @@ void main() {
       expect(shown(tester), ['a_long', 'c_mid', 'b_short']);
       expect(
         tester
-            .widget<DropdownButton<AudioSort>>(
-              find.byKey(const ValueKey('audio-sort')),
-            )
-            .value,
-        AudioSort.duration,
+            .widget<Text>(find.byKey(const ValueKey('audio-sort-label')))
+            .data,
+        AudioSort.duration.label,
       );
       expect(
         tester.widget<Icon>(arrowIn('Duration')).icon,

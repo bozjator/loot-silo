@@ -4146,8 +4146,11 @@ class _SortHeader extends StatelessWidget {
   }
 }
 
-/// The Audio tab's sort: a menu of [AudioSort] keys and an arrow that
-/// flips the direction.
+/// The Audio tab's sort, shaped like the Play all / Loop buttons (one
+/// tonal stadium): the leading arrow flips the direction, the label (with
+/// a small drop arrow) opens the menu of [AudioSort] keys. Two halves of
+/// real [FilledButton]s, so the height, padding and colours follow the
+/// theme exactly like Play all's.
 class _AudioSortMenu extends StatelessWidget {
   const _AudioSortMenu({
     required this.sort,
@@ -4161,44 +4164,77 @@ class _AudioSortMenu extends StatelessWidget {
   final ValueChanged<AudioSort> onSort;
   final VoidCallback onFlip;
 
+  /// A [FilledButton.tonal] side: rounded on [start] or the other end
+  /// (the radius is cut to half the height, a stadium end).
+  static ButtonStyle _half({required bool start, required EdgeInsets pad}) {
+    const round = Radius.circular(999);
+    return FilledButton.styleFrom(
+      minimumSize: const Size(0, 40),
+      padding: pad,
+      shape: RoundedRectangleBorder(
+        borderRadius: start
+            ? const BorderRadius.horizontal(left: round)
+            : const BorderRadius.horizontal(right: round),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Row(
+    key: const ValueKey('audio-sort-button'),
     mainAxisSize: MainAxisSize.min,
     children: [
-      DropdownButton<AudioSort>(
-        key: const ValueKey('audio-sort'),
-        mouseCursor: clickCursor,
-        dropdownMenuItemMouseCursor: clickCursor,
-        value: sort,
-        underline: const SizedBox(),
-        // As the dashboard's sort menu: the icon left of the label.
-        icon: const SizedBox.shrink(),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        borderRadius: BorderRadius.circular(8),
-        selectedItemBuilder: (context) => [
+      // Like Play all's icon: 16 px in, 18 px; its own hit area.
+      Tooltip(
+        message: descending ? 'Descending' : 'Ascending',
+        child: FilledButton.tonal(
+          key: const ValueKey('audio-sort-direction'),
+          style: _half(
+            start: true,
+            pad: const EdgeInsets.only(left: 16, right: 4),
+          ),
+          onPressed: onFlip,
+          child: Icon(
+            descending ? Icons.arrow_downward : Icons.arrow_upward,
+            size: 18,
+          ),
+        ),
+      ),
+      MenuAnchor(
+        menuChildren: [
           for (final s in AudioSort.values)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.sort, size: 20),
-                const SizedBox(width: 8),
-                Text(s.label),
-              ],
+            MenuItemButton(
+              key: ValueKey('audio-sort:${s.name}'),
+              style: MenuItemButton.styleFrom(
+                enabledMouseCursor: clickCursor,
+                backgroundColor: s == sort
+                    ? Theme.of(context).colorScheme.secondaryContainer
+                    : null,
+              ),
+              onPressed: () => onSort(s),
+              child: Text(s.label),
             ),
         ],
-        items: [
-          for (final s in AudioSort.values)
-            DropdownMenuItem(value: s, child: Text(s.label)),
-        ],
-        onChanged: (s) => onSort(s!),
-      ),
-      IconButton(
-        key: const ValueKey('audio-sort-direction'),
-        tooltip: descending ? 'Descending' : 'Ascending',
-        visualDensity: VisualDensity.compact,
-        iconSize: 18,
-        icon: Icon(descending ? Icons.arrow_downward : Icons.arrow_upward),
-        onPressed: onFlip,
+        builder: (context, controller, _) => Tooltip(
+          message: 'Sort by',
+          child: FilledButton.tonal(
+            key: const ValueKey('audio-sort'),
+            style: _half(
+              start: false,
+              pad: const EdgeInsets.only(left: 4, right: 12),
+            ),
+            onPressed: () =>
+                controller.isOpen ? controller.close() : controller.open(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(sort.label, key: const ValueKey('audio-sort-label')),
+                const SizedBox(width: 2),
+                const Icon(Icons.arrow_drop_down, size: 20),
+              ],
+            ),
+          ),
+        ),
       ),
     ],
   );
@@ -4209,7 +4245,7 @@ class _AudioSortMenu extends StatelessWidget {
 /// elapsed time above its left end while a long track plays), the waveform
 /// (the played part highlighted; the seek bar while a long track plays),
 /// the prettified name (its path in the pack as the tooltip) and a details
-/// line: size, channels, sample rate, bit depth or bitrate.
+/// line: channels (S / M), size, sample rate, bit depth or bitrate.
 class _AudioCard extends StatefulWidget {
   const _AudioCard({
     super.key,
@@ -4252,34 +4288,6 @@ class _AudioCard extends StatefulWidget {
   /// The times' gap to the waveform below them.
   static const timeBottom = 2.0;
 
-  /// Where the button's centre goes, from the top of the area above the
-  /// waveform ([areaHeight] tall, [width] wide): halfway between the
-  /// bottom of the top row ([chips] and [icons], whichever is lower) and
-  /// the top of the times ([timeHeight] tall, [timeBottom] above the
-  /// waveform). When the ring doesn't fit there, only the top-row parts
-  /// above the ring count; when it still doesn't fit, the ring sits just
-  /// above the times (it never covers them or the waveform).
-  static double buttonCentre({
-    required double areaHeight,
-    required double width,
-    required double timeHeight,
-    Rect? chips,
-    Rect? icons,
-  }) {
-    const d = buttonSize;
-    final bottom = areaHeight - timeBottom - timeHeight;
-    final row = [?chips, ?icons];
-    double lowest(Iterable<Rect> rects) =>
-        rects.fold(0.0, (a, r) => math.max(a, r.bottom));
-    final top = lowest(row);
-    if (bottom - top >= d) return (top + bottom) / 2;
-    final left = width / 2 - d / 2;
-    final right = width / 2 + d / 2;
-    final above = lowest(row.where((r) => r.right > left && r.left < right));
-    if (bottom - above >= d) return (above + bottom) / 2;
-    return math.max(d / 2, bottom - d / 2);
-  }
-
   /// The favorites star, in the top-right corner.
   final Widget? star;
   final Future<Duration?> length;
@@ -4296,17 +4304,62 @@ class _AudioCard extends StatefulWidget {
   State<_AudioCard> createState() => _AudioCardState();
 }
 
+/// Where the button's centre goes, from the top of the area above the
+/// waveform ([areaHeight] tall, [width] wide): halfway between the card's
+/// top edge and the waveform. The times ([timeWidth] × [timeHeight],
+/// [_AudioCard.timeBottom] above the waveform's ends) and the top row ([chips],
+/// [icons]) only count where they are under the ring's column: the ring
+/// moves down or up just enough to clear them. When nothing fits that
+/// way, the M72 rule: halfway between the top row and the times band,
+/// only the top-row parts above the ring counting, else just above the
+/// times (it never covers them or the waveform).
+@visibleForTesting
+double audioButtonCentre({
+  required double areaHeight,
+  required double width,
+  required double timeHeight,
+  double timeWidth = 0,
+  Rect? chips,
+  Rect? icons,
+}) {
+  const d = _AudioCard.buttonSize;
+  final bottom = areaHeight - _AudioCard.timeBottom - timeHeight;
+  final row = [?chips, ?icons];
+  double lowest(Iterable<Rect> rects) =>
+      rects.fold(0.0, (a, r) => math.max(a, r.bottom));
+  final left = width / 2 - d / 2;
+  final right = width / 2 + d / 2;
+  bool under(Rect r) => r.right > left && r.left < right;
+  final above = lowest(row.where(under));
+  // The times sit 10 px in from both edges.
+  final times = [
+    Rect.fromLTWH(10, bottom, timeWidth, timeHeight),
+    Rect.fromLTWH(width - 10 - timeWidth, bottom, timeWidth, timeHeight),
+  ];
+  final floor = times.any(under) ? bottom : areaHeight;
+  final lo = above + d / 2;
+  final hi = floor - d / 2;
+  if (lo <= hi) return (areaHeight / 2).clamp(lo, hi);
+  final top = lowest(row);
+  if (bottom - top >= d) return (top + bottom) / 2;
+  if (bottom - above >= d) return (above + bottom) / 2;
+  return math.max(d / 2, bottom - d / 2);
+}
+
 /// The parts of an audio card above its waveform.
 enum _CardPart { chips, icons, elapsed, total, button }
 
 /// Lays out [_CardPart]s with their real sizes: chips top-left, icons
 /// top-right, the times above the waveform's ends and the button where
-/// [_AudioCard.buttonCentre] puts it.
+/// [audioButtonCentre] puts it.
 class _AudioCardLayout extends MultiChildLayoutDelegate {
-  _AudioCardLayout({required this.timeHeight});
+  _AudioCardLayout({required this.timeHeight, required this.timeWidth});
 
   /// The times' line height, kept free even before the length is read.
   final double timeHeight;
+
+  /// A time's width (`00:00`), kept free at both ends the same way.
+  final double timeWidth;
 
   @override
   void performLayout(Size size) {
@@ -4330,10 +4383,11 @@ class _AudioCardLayout extends MultiChildLayoutDelegate {
       _CardPart.total,
       (s) => Offset(size.width - 10 - s.width, timeTop(s)),
     );
-    final centre = _AudioCard.buttonCentre(
+    final centre = audioButtonCentre(
       areaHeight: size.height,
       width: size.width,
       timeHeight: timeHeight,
+      timeWidth: timeWidth,
       chips: chips,
       icons: icons,
     );
@@ -4344,7 +4398,8 @@ class _AudioCardLayout extends MultiChildLayoutDelegate {
   }
 
   @override
-  bool shouldRelayout(_AudioCardLayout old) => old.timeHeight != timeHeight;
+  bool shouldRelayout(_AudioCardLayout old) =>
+      old.timeHeight != timeHeight || old.timeWidth != timeWidth;
 }
 
 class _AudioCardState extends State<_AudioCard> {
@@ -4401,6 +4456,7 @@ class _AudioCardState extends State<_AudioCard> {
       textScaler: MediaQuery.textScalerOf(context),
     )..layout());
     final timeHeight = timeBox.height;
+    final timeWidth = timeBox.width;
     timeBox.dispose();
     final button = SizedBox.square(
       dimension: _AudioCard.buttonSize,
@@ -4435,7 +4491,7 @@ class _AudioCardState extends State<_AudioCard> {
       playhead: long,
     );
     final area = CustomMultiChildLayout(
-      delegate: _AudioCardLayout(timeHeight: timeHeight),
+      delegate: _AudioCardLayout(timeHeight: timeHeight, timeWidth: timeWidth),
       children: [
         LayoutId(id: _CardPart.chips, child: widget.formats),
         LayoutId(
@@ -4559,6 +4615,11 @@ class _AudioCardState extends State<_AudioCard> {
                     builder: (context, snap) => OverflowText(
                       audioCardDetails(widget.size, snap.data),
                       key: ValueKey('card-details:${widget.rel}'),
+                      tooltip: audioCardDetails(
+                        widget.size,
+                        snap.data,
+                        words: true,
+                      ),
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
@@ -4587,13 +4648,13 @@ TextStyle _audioCardTimeStyle(ThemeData theme) {
   );
 }
 
-/// An audio card's details line: `1.2 MB · Stereo · 44.1 kHz · 16-bit`;
-/// only the size until the header is read (or when it says nothing).
+/// An audio card's details line: `S · 1.2 MB · 44.1 kHz · 16-bit` (with
+/// [words]: `Stereo · 1.2 MB · …`, the line's tooltip); only the size until
+/// the header is read (or when it says nothing).
 @visibleForTesting
-String audioCardDetails(int bytes, AudioInfo? info) => [
-  formatBytes(bytes),
-  if (info != null && info.shortDetails.isNotEmpty) info.shortDetails,
-].join(' · ');
+String audioCardDetails(int bytes, AudioInfo? info, {bool words = false}) =>
+    info?.shortDetails(size: formatBytes(bytes), words: words) ??
+    formatBytes(bytes);
 
 /// A file's audio details (`44.1 kHz · Stereo · 16-bit`) once its header
 /// has been read; empty when it says nothing.

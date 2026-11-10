@@ -123,39 +123,54 @@ void main() {
       expect(audioInfo(p.join(fixtures, 'nope.m4a')), isNull);
     });
 
-    test('M72: the card line: channels, kHz, bit depth or ~ bitrate', () {
+    test('M77: the card line: S / M first, size, kHz, bit depth or kbps', () {
+      // Mono WAV.
+      const wav = AudioInfo(sampleRate: 44100, channels: 1, bitDepth: 16);
       expect(
-        const AudioInfo(
-          sampleRate: 44100,
-          channels: 2,
-          bitDepth: 16,
-        ).shortDetails,
-        'Stereo · 44.1 kHz · 16-bit',
+        wav.shortDetails(size: '1.2 MB'),
+        'M · 1.2 MB · 44.1 kHz · 16-bit',
       );
       expect(
-        const AudioInfo(sampleRate: 44100, channels: 2, kbps: 320).shortDetails,
-        'Stereo · 44.1 kHz · 320 kbps',
+        wav.shortDetails(size: '1.2 MB', words: true),
+        'Mono · 1.2 MB · 44.1 kHz · 16-bit',
       );
+      // Stereo MP3 (CBR).
+      const mp3 = AudioInfo(sampleRate: 44100, channels: 2, kbps: 320);
+      expect(
+        mp3.shortDetails(size: '1.2 MB'),
+        'S · 1.2 MB · 44.1 kHz · 320 kbps',
+      );
+      expect(
+        mp3.shortDetails(size: '1.2 MB', words: true),
+        'Stereo · 1.2 MB · 44.1 kHz · 320 kbps',
+      );
+      // Six channels.
+      const six = AudioInfo(sampleRate: 48000, channels: 6, bitDepth: 24);
+      expect(six.shortDetails(size: '9 MB'), '6ch · 9 MB · 48 kHz · 24-bit');
+      expect(six.shortDetails(words: true), '6 ch · 48 kHz · 24-bit');
       // VBR and nominal rates: `~`, no "VBR".
+      const vbr = AudioInfo(
+        sampleRate: 48000,
+        channels: 1,
+        kbps: 245,
+        vbr: true,
+      );
+      expect(vbr.shortDetails(size: '3 MB'), 'M · 3 MB · 48 kHz · ~245 kbps');
       expect(
         const AudioInfo(
-          sampleRate: 48000,
           channels: 1,
-          kbps: 245,
-          vbr: true,
-        ).shortDetails,
-        'Mono · 48 kHz · ~245 kbps',
+          kbps: 112,
+          approximate: true,
+        ).shortDetails(),
+        'M · ~112 kbps',
       );
+      // Unknown parts are left out; the size alone when nothing is known.
+      expect(const AudioInfo().shortDetails(), '');
+      expect(const AudioInfo().shortDetails(size: '4 KB'), '4 KB');
+      final real = audioInfo(p.join(fixtures, 'tone_cbr.mp3'))!;
       expect(
-        const AudioInfo(channels: 1, kbps: 112, approximate: true).shortDetails,
-        'Mono · ~112 kbps',
-      );
-      expect(const AudioInfo(channels: 6).shortDetails, '6 ch');
-      expect(const AudioInfo().shortDetails, '');
-      final mp3 = audioInfo(p.join(fixtures, 'tone_cbr.mp3'))!;
-      expect(
-        mp3.shortDetails,
-        matches(RegExp(r'^Mono · 22\.05 kHz · \d+ kbps$')),
+        real.shortDetails(),
+        matches(RegExp(r'^M · 22\.05 kHz · \d+ kbps$')),
       );
     });
 

@@ -1664,7 +1664,7 @@ A **16×16** knight with *walk* and *idle* animations.
     final details = find.byWidgetPredicate(
       (w) =>
           w is Text &&
-          RegExp(r'^[\d.]+ [KMG]?B · (Mono|Stereo) · [\d.]+ kHz')
+          RegExp(r'^(M|S) · [\d.]+ [KMG]?B · [\d.]+ kHz')
               .hasMatch(w.data ?? ''),
     );
     await pumpUntil(tester, details);
@@ -1688,8 +1688,9 @@ A **16×16** knight with *walk* and *idle* animations.
     final icons = part(find.byKey(const ValueKey('audio-card-icons')));
     expect(icons.right, closeTo(box.right, 0.5));
     final button = part(find.byTooltip('Play'));
-    expect(button.top, greaterThan(icons.bottom));
-    expect(button.bottom, lessThan(total.top));
+    expect(button.overlaps(icons), isFalse);
+    expect(button.overlaps(total), isFalse);
+    expect(button.bottom, lessThan(wave.top));
     await captureScreenshot(tester, 'm72_audio_card', settle: false);
 
     await tester.tap(
@@ -1704,6 +1705,74 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm72_audio_card_playing', settle: false);
     await tester.tap(find.byTooltip('Stop').first);
     await tester.pump();
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m77: audio card S / M line, centred button, sort button', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField), 'chiptune');
+    await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
+    await tester.tap(find.text('music-loop-bundle-chiptune'));
+    await pumpUntil(tester, find.byKey(const ValueKey('loop')));
+    await tester.tap(find.text('Cards'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await pumpUntil(tester, find.byKey(const ValueKey('waveform-bars')));
+    final details = find.byWidgetPredicate(
+      (w) =>
+          w is Text &&
+          RegExp(r'^(M|S) · [\d.]+ [KMG]?B · [\d.]+ kHz · ~?\d+')
+              .hasMatch(w.data ?? ''),
+    );
+    await pumpUntil(tester, details);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await tester.pump();
+    final card = find
+        .ancestor(of: details.first, matching: find.byType(Card))
+        .first;
+    Rect part(Finder f) =>
+        tester.getRect(find.descendant(of: card, matching: f).first);
+    final box = tester.getRect(card);
+    final wave = part(find.byKey(const ValueKey('waveform-bars')));
+    final button = part(find.byTooltip('Play'));
+    // Halfway between the card's top edge and the waveform (the strip's
+    // padding: the bars may sit inside it).
+    final strip = part(
+      find.byWidgetPredicate(
+        (w) =>
+            w.key is ValueKey<String> &&
+            (w.key! as ValueKey<String>).value.startsWith('waveform:'),
+      ),
+    );
+    expect(button.center.dy, closeTo((box.top + strip.top) / 2, 1));
+    expect(button.bottom, lessThan(wave.top));
+    await captureScreenshot(tester, 'm77_audio_card', settle: false);
+
+    // The sort button: Play all's height, the arrow leading.
+    final play = tester.getRect(find.byKey(const ValueKey('play-all')));
+    final arrow = tester.getRect(
+      find.byKey(const ValueKey('audio-sort-direction')),
+    );
+    final label = tester.getRect(find.byKey(const ValueKey('audio-sort')));
+    expect(arrow.height, play.height);
+    expect(label.height, play.height);
+    expect(arrow.right, closeTo(label.left, 0.5));
+    await tester.tap(find.byKey(const ValueKey('audio-sort')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('audio-sort:duration')), findsOneWidget);
+    await captureScreenshot(tester, 'm77_audio_toolbar', settle: false);
+    // Picking the current key closes the menu; the sort stays Name.
+    await tester.tap(find.byKey(const ValueKey('audio-sort:name')));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('audio-sort:duration')), findsNothing);
     expect(Directory(real).statSync().modified, before);
   });
 
