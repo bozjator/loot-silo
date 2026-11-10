@@ -23,12 +23,36 @@ class FileMenuTarget {
   /// The file for Open and Open with…; null: no items (several files).
   final String? open;
 
-  /// Animations: Copy as GIF, saved as `<name>.gif` in the GIF cache.
+  /// Animations: Copy as GIF to clipboard / file; the file is saved as
+  /// `<name>.gif` in the GIF cache.
   final ({String name, Future<Uint8List?> Function() make})? gif;
 }
 
-/// The menu's items, in the order they show.
-enum FileMenuAction { copyImage, copyGif, copyFiles, copyPath, open, openWith }
+/// The menu's items, in the order they show: on animations the two GIF
+/// items first, then the image card's items.
+enum FileMenuAction {
+  /// The GIF as a picture only (`image/gif`): chats, email.
+  copyGif,
+
+  /// The GIF as a file only: file managers, a game's folder.
+  copyGifFile,
+  copyImage,
+  copyFiles,
+  copyPath,
+  open,
+  openWith,
+}
+
+/// The item's label; [n] files are copied.
+String fileMenuLabel(FileMenuAction a, int n) => switch (a) {
+  FileMenuAction.copyGif => 'Copy as GIF to clipboard',
+  FileMenuAction.copyGifFile => 'Copy as GIF file',
+  FileMenuAction.copyImage => 'Copy image to clipboard',
+  FileMenuAction.copyFiles => n == 1 ? 'Copy file' : 'Copy $n files',
+  FileMenuAction.copyPath => n == 1 ? 'Copy path' : 'Copy $n paths',
+  FileMenuAction.open => 'Open',
+  FileMenuAction.openWith => 'Open with…',
+};
 
 /// The items [target] gets on this platform: only what applies, never
 /// greyed out. Nothing that a card's own icons already do (star, select,
@@ -37,8 +61,11 @@ List<FileMenuAction> fileMenuActions(
   FileMenuTarget target,
   FileClipboard clipboard,
 ) => [
+  if (target.gif != null && clipboard.canCopyFiles) ...[
+    FileMenuAction.copyGif,
+    FileMenuAction.copyGifFile,
+  ],
   if (target.image != null && clipboard.canCopyFiles) FileMenuAction.copyImage,
-  if (target.gif != null && clipboard.canCopyFiles) FileMenuAction.copyGif,
   if (target.files.isNotEmpty && clipboard.canCopyFiles)
     FileMenuAction.copyFiles,
   if (target.files.isNotEmpty) FileMenuAction.copyPath,
@@ -72,20 +99,13 @@ Future<void> showFileMenu(
             leading: Icon(switch (a) {
               FileMenuAction.copyImage => Icons.image_outlined,
               FileMenuAction.copyGif => Icons.gif_box_outlined,
+              FileMenuAction.copyGifFile => Icons.insert_drive_file_outlined,
               FileMenuAction.copyFiles => Icons.file_copy_outlined,
               FileMenuAction.copyPath => Icons.link,
               FileMenuAction.open => Icons.open_in_new,
               FileMenuAction.openWith => Icons.apps,
             }),
-            title: Text(switch (a) {
-              FileMenuAction.copyImage => 'Copy image',
-              FileMenuAction.copyGif => 'Copy as GIF',
-              FileMenuAction.copyFiles =>
-                n == 1 ? 'Copy file' : 'Copy $n files',
-              FileMenuAction.copyPath => n == 1 ? 'Copy path' : 'Copy $n paths',
-              FileMenuAction.open => 'Open',
-              FileMenuAction.openWith => 'Open with…',
-            }),
+            title: Text(fileMenuLabel(a, n)),
           ),
         ),
     ],
@@ -99,18 +119,24 @@ Future<void> showFileMenu(
       case FileMenuAction.copyImage:
         await clipboard.copyImage(target.image!);
         say('Image copied');
-      case FileMenuAction.copyGif:
+      case FileMenuAction.copyGif || FileMenuAction.copyGifFile:
         final (:name, :make) = target.gif!;
         say('Making GIF…');
         final bytes = await make();
         if (bytes == null) throw const FormatException('no frames');
-        // A file too, for apps that take a pasted file (and keep it moving).
-        final dir = Directory(ref.read(gifCacheProvider))
-          ..createSync(recursive: true);
-        final file = File(p.join(dir.path, '${gifFileName(name)}.gif'))
-          ..writeAsBytesSync(bytes);
-        await clipboard.copyFiles([file.path], mime: 'image/gif', bytes: bytes);
-        say('GIF copied');
+        if (choice == FileMenuAction.copyGif) {
+          // Only the picture: a file manager would save it as a still.
+          await clipboard.copyBytes('image/gif', bytes);
+          say('GIF copied');
+        } else {
+          // Only the file: pasted, it stays a moving .gif.
+          final dir = Directory(ref.read(gifCacheProvider))
+            ..createSync(recursive: true);
+          final file = File(p.join(dir.path, '${gifFileName(name)}.gif'))
+            ..writeAsBytesSync(bytes);
+          await clipboard.copyFiles([file.path]);
+          say('GIF file copied');
+        }
       case FileMenuAction.copyFiles:
         await clipboard.copyFiles(target.files);
         say(n == 1 ? 'File copied' : '$n files copied');

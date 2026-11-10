@@ -7,27 +7,37 @@
 
 namespace {
 
-// What copyFiles offers until something else takes the clipboard.
+// What copyFiles offers until something else takes the clipboard: the
+// files only, never an image (so a file manager pastes the file itself).
 struct FileData {
-  gchar** uris;        // file:// URIs
-  gchar* text;         // the paths, one per line
-  gchar* extra_mime;   // e.g. "image/gif", or null
-  GBytes* extra_bytes;
+  gchar** uris;  // file:// URIs
+  gchar* text;   // the paths, one per line
 };
 
 enum Target {
   kUriList,
   kGnomeCopied,
   kText,
-  kExtra,
 };
 
 void free_file_data(FileData* data) {
   g_strfreev(data->uris);
   g_free(data->text);
-  g_free(data->extra_mime);
-  if (data->extra_bytes != nullptr) g_bytes_unref(data->extra_bytes);
   g_free(data);
+}
+
+// What copyBytes offers: one target (e.g. image/gif) with its bytes.
+void get_bytes(GtkClipboard* clipboard, GtkSelectionData* selection,
+               guint info, gpointer user_data) {
+  gsize size = 0;
+  const guchar* bytes = static_cast<const guchar*>(
+      g_bytes_get_data(static_cast<GBytes*>(user_data), &size));
+  gtk_selection_data_set(selection, gtk_selection_data_get_target(selection),
+                         8, bytes, size);
+}
+
+void clear_bytes(GtkClipboard* clipboard, gpointer user_data) {
+  g_bytes_unref(static_cast<GBytes*>(user_data));
 }
 
 void get_files(GtkClipboard* clipboard, GtkSelectionData* selection,
@@ -52,14 +62,6 @@ void get_files(GtkClipboard* clipboard, GtkSelectionData* selection,
     case kText:
       gtk_selection_data_set_text(selection, data->text, -1);
       break;
-    case kExtra: {
-      gsize size = 0;
-      const guchar* bytes = static_cast<const guchar*>(
-          g_bytes_get_data(data->extra_bytes, &size));
-      gtk_selection_data_set(selection, gtk_selection_data_get_target(selection),
-                             8, bytes, size);
-      break;
-    }
   }
 }
 
@@ -123,17 +125,6 @@ FlMethodResponse* copy_files(FlValue* args) {
   data->text = g_strdup(text->str);
 
   g_autoptr(GtkTargetList) list = gtk_target_list_new(nullptr, 0);
-  FlValue* mime = fl_value_lookup_string(args, "mime");
-  FlValue* bytes = fl_value_lookup_string(args, "bytes");
-  if (mime != nullptr && bytes != nullptr &&
-      fl_value_get_type(mime) == FL_VALUE_TYPE_STRING &&
-      fl_value_get_type(bytes) == FL_VALUE_TYPE_UINT8_LIST) {
-    data->extra_mime = g_strdup(fl_value_get_string(mime));
-    data->extra_bytes = g_bytes_new(fl_value_get_uint8_list(bytes),
-                                    fl_value_get_length(bytes));
-    gtk_target_list_add(list, gdk_atom_intern(data->extra_mime, FALSE), 0,
-                        kExtra);
-  }
   gtk_target_list_add(list, gdk_atom_intern_static_string("x-special/gnome-copied-files"), 0,
                       kGnomeCopied);
   gtk_target_list_add_uri_targets(list, kUriList);
@@ -146,6 +137,30 @@ FlMethodResponse* copy_files(FlValue* args) {
   if (!set) {
     free_file_data(data);
     return error("clipboard", "the clipboard refused the files");
+  }
+  gtk_clipboard_store(clipboard());
+  return ok();
+}
+
+// {mime, bytes}: offers only [mime] (e.g. image/gif for chats and email).
+FlMethodResponse* copy_bytes(FlValue* args) {
+  if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+    return error("bad-args", "copyBytes takes a map");
+  }
+  FlValue* mime = fl_value_lookup_string(args, "mime");
+  FlValue* bytes = fl_value_lookup_string(args, "bytes");
+  if (mime == nullptr || bytes == nullptr ||
+      fl_value_get_type(mime) != FL_VALUE_TYPE_STRING ||
+      fl_value_get_type(bytes) != FL_VALUE_TYPE_UINT8_LIST) {
+    return error("bad-args", "copyBytes takes mime and bytes");
+  }
+  GBytes* data = g_bytes_new(fl_value_get_uint8_list(bytes),
+                             fl_value_get_length(bytes));
+  GtkTargetEntry target = {const_cast<gchar*>(fl_value_get_string(mime)), 0, 0};
+  if (!gtk_clipboard_set_with_data(clipboard(), &target, 1, get_bytes,
+                                   clear_bytes, data)) {
+    g_bytes_unref(data);
+    return error("clipboard", "the clipboard refused the data");
   }
   gtk_clipboard_store(clipboard());
   return ok();
@@ -216,6 +231,8 @@ void method_call_cb(FlMethodChannel* channel, FlMethodCall* call,
     response = copy_image(args);
   } else if (strcmp(method, "copyFiles") == 0) {
     response = copy_files(args);
+  } else if (strcmp(method, "copyBytes") == 0) {
+    response = copy_bytes(args);
   } else if (strcmp(method, "read") == 0) {
     response = read(args);
   } else if (strcmp(method, "targets") == 0) {

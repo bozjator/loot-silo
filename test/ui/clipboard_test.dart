@@ -64,9 +64,9 @@ void main() {
     const many = FileMenuTarget(files: ['/a.png', '/b.png']);
     expect(fileMenuActions(one, _Caps(true)), [
       for (final a in FileMenuAction.values)
-        if (a != FileMenuAction.copyGif) a,
+        if (a != FileMenuAction.copyGif && a != FileMenuAction.copyGifFile) a,
     ]);
-    // An animation adds Copy as GIF after Copy image.
+    // An animation puts the two GIF items first (M75).
     final anim = FileMenuTarget(
       files: const ['/a.png'],
       image: '/a.png',
@@ -74,6 +74,25 @@ void main() {
       gif: (name: 'a', make: () async => null),
     );
     expect(fileMenuActions(anim, _Caps(true)), FileMenuAction.values);
+    expect(FileMenuAction.values.take(3), [
+      FileMenuAction.copyGif,
+      FileMenuAction.copyGifFile,
+      FileMenuAction.copyImage,
+    ]);
+    expect(
+      [for (final a in FileMenuAction.values) fileMenuLabel(a, 1)],
+      [
+        'Copy as GIF to clipboard',
+        'Copy as GIF file',
+        'Copy image to clipboard',
+        'Copy file',
+        'Copy path',
+        'Open',
+        'Open with…',
+      ],
+    );
+    expect(fileMenuLabel(FileMenuAction.copyFiles, 3), 'Copy 3 files');
+    expect(fileMenuLabel(FileMenuAction.copyPath, 3), 'Copy 3 paths');
     expect(fileMenuActions(anim, _Caps(false)), [
       FileMenuAction.copyPath,
       FileMenuAction.open,

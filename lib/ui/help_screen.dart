@@ -471,7 +471,7 @@ class HelpScreen extends StatelessWidget {
                   'Right-click an image, animation, audio, model or material '
                   'card, an audio or Other files row, or the picture in the '
                   'image viewer for a menu with only what applies: Copy image '
-                  'puts the picture itself on the clipboard (at its own '
+                  'to clipboard puts the picture itself on the clipboard (at its own '
                   'size), to paste into a chat or an image editor; Copy file '
                   'copies the file, to paste into a game\'s assets folder in '
                   'the file manager (an animation copies its one image file, '
@@ -482,14 +482,15 @@ class HelpScreen extends StatelessWidget {
                   'Ctrl+C in the image viewer copies the shown image.',
                 ),
                 _P(
-                  'Copy as GIF, on animation cards and in the image viewer '
-                  'opened from them, makes a looping GIF of the animation '
-                  'as its card plays it (its frames at their own size, at '
-                  'its speed) and copies it both as a .gif file and as a GIF '
-                  'picture. Some chat apps show a pasted GIF as a still '
-                  'picture; pasting the file (or dropping it in) keeps it '
-                  'moving. Copy image, Copy as GIF, Copy file and Open with… '
-                  'are Linux only for now.',
+                  'On animation cards and in the image viewer opened from '
+                  'them, two GIF items come first. Both make a looping GIF '
+                  'of the animation as its card plays it (its frames at '
+                  'their own size, at its speed). Copy as GIF to clipboard '
+                  'copies it as a picture, to paste into a chat or an email; '
+                  'some chat apps show a pasted GIF as a still. Copy as GIF '
+                  'file copies it as a .gif file, to paste into a file '
+                  'manager or a game\'s folder, where it stays moving. The '
+                  'copy items and Open with… are Linux only for now.',
                 ),
               ]),
               const _Section('Favorites', [

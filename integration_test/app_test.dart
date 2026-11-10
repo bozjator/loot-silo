@@ -21,6 +21,7 @@ import 'package:loot_silo/ui/material_viewer.dart';
 import 'package:loot_silo/ui/model_viewer.dart';
 import 'package:loot_silo/ui/pack_detail_screen.dart';
 import 'package:loot_silo/ui/track_player.dart';
+import 'package:loot_silo/ui/widgets/file_menu.dart';
 import 'package:loot_silo/ui/widgets/favorite_star.dart';
 import 'package:loot_silo/ui/widgets/pack_tile.dart';
 import 'package:loot_silo/ui/widgets/animated_sprite.dart';
@@ -1879,12 +1880,12 @@ A **16×16** knight with *walk* and *idle* animations.
     }
 
     await menu();
-    expect(find.text('Copy image'), findsOneWidget);
+    expect(find.text('Copy image to clipboard'), findsOneWidget);
     expect(find.text('Open with…'), findsOneWidget);
     await captureScreenshot(tester, 'm69_card_menu', settle: false);
 
     // Copy image: PNG bytes at the image's own size.
-    await tester.tap(find.text('Copy image'));
+    await tester.tap(find.text('Copy image to clipboard'));
     await pumpUntil(tester, find.text('Image copied'));
     final png = await clipRead(tester, 'image/png');
     expect(png, isNotNull);
@@ -1900,6 +1901,9 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(utf8.decode(uris!).trim(), Uri.file(path).toString());
     final gnome = await clipRead(tester, 'x-special/gnome-copied-files');
     expect(utf8.decode(gnome!), 'copy\n${Uri.file(path)}');
+    // A file only: no picture for a file manager to paste instead (M75).
+    final offered = await tester.runAsync(PlatformFileClipboard.targets);
+    expect(offered!.where((t) => t.startsWith('image/')), isEmpty);
     final text = await tester.runAsync(
       () => Clipboard.getData(Clipboard.kTextPlain),
     );
@@ -1932,13 +1936,38 @@ A **16×16** knight with *walk* and *idle* animations.
     await settleImages(tester);
     // A sheet with several frames.
     final card = cards.first;
-    await tester.tap(card, buttons: kSecondaryButton);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Copy as GIF'), findsOneWidget);
-    await captureScreenshot(tester, 'm70_copy_as_gif', settle: false);
+    Future<void> menu() async {
+      await tester.tap(card, buttons: kSecondaryButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
 
-    await tester.tap(find.text('Copy as GIF'));
+    await menu();
+    // The GIF items first, then the image card's (M75).
+    final labels = [
+      for (final e
+          in find
+              .descendant(
+                of: find.byType(PopupMenuItem<FileMenuAction>),
+                matching: find.byType(ListTile),
+              )
+              .evaluate())
+        ((e.widget as ListTile).title! as Text).data!,
+    ];
+    expect(labels, [
+      'Copy as GIF to clipboard',
+      'Copy as GIF file',
+      'Copy image to clipboard',
+      'Copy file',
+      'Copy path',
+      'Open',
+      'Open with…',
+    ]);
+    await captureScreenshot(tester, 'm70_copy_as_gif', settle: false);
+    await captureScreenshot(tester, 'm75_card_menu', settle: false);
+
+    // To clipboard: only the picture (image/gif), no file.
+    await tester.tap(find.text('Copy as GIF to clipboard'));
     await pumpUntil(tester, find.text('GIF copied'));
     final gif = await clipRead(tester, 'image/gif');
     expect(gif, isNotNull);
@@ -1950,10 +1979,22 @@ A **16×16** knight with *walk* and *idle* animations.
       return n;
     });
     expect(frames, greaterThan(1));
+    var offered = (await tester.runAsync(PlatformFileClipboard.targets))!;
+    expect(offered, contains('image/gif'));
+    expect(offered, isNot(contains('text/uri-list')));
+    expect(offered, isNot(contains('x-special/gnome-copied-files')));
+
+    // GIF file: only the file (a moving .gif), no image target.
+    await menu();
+    await tester.tap(find.text('Copy as GIF file'));
+    await pumpUntil(tester, find.text('GIF file copied'));
     final uris = await clipRead(tester, 'text/uri-list');
     final file = File.fromUri(Uri.parse(utf8.decode(uris!).trim()));
     expect(p.extension(file.path), '.gif');
     expect(file.readAsBytesSync(), gif);
+    offered = (await tester.runAsync(PlatformFileClipboard.targets))!;
+    expect(offered.where((t) => t.startsWith('image/')), isEmpty);
+    expect(offered, contains('x-special/gnome-copied-files'));
     expect(p.isWithin(real, file.path), isFalse);
     expect(Directory(real).statSync().modified, before);
   });

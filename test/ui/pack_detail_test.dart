@@ -112,13 +112,17 @@ class _FakeClipboard implements FileClipboard {
   @override
   Future<void> copyImage(String path) async => calls.add('image:$path');
   @override
-  Future<void> copyFiles(
-    List<String> paths, {
-    String? mime,
-    Uint8List? bytes,
-  }) async => calls.add(
-    'files:${paths.join('|')}${mime == null ? '' : ' $mime ${bytes?.length}'}',
-  );
+  Future<void> copyFiles(List<String> paths) async =>
+      calls.add('files:${paths.join('|')}');
+
+  /// The last [copyBytes] data.
+  Uint8List? bytes;
+  @override
+  Future<void> copyBytes(String mime, Uint8List bytes) async {
+    this.bytes = bytes;
+    calls.add('bytes:$mime ${bytes.length}');
+  }
+
   @override
   Future<void> copyText(String text) async => calls.add('text:$text');
   @override
@@ -2353,6 +2357,18 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     }
 
+    /// The open menu's labels, in order (M75).
+    List<String> labels(WidgetTester tester) => [
+      for (final e
+          in find
+              .descendant(
+                of: find.byType(PopupMenuItem<FileMenuAction>),
+                matching: find.byType(ListTile),
+              )
+              .evaluate())
+        ((e.widget as ListTile).title! as Text).data!,
+    ];
+
     /// The open menu's items, in order.
     List<String> items(WidgetTester tester) => [
       for (final e
@@ -2400,9 +2416,14 @@ void main() {
           findsNothing,
         );
       }
-      expect(find.text('Copy image'), findsOneWidget);
-      expect(find.text('Copy file'), findsOneWidget);
-      expect(find.text('Open with…'), findsOneWidget);
+      // The labels, in order (M75).
+      expect(labels(tester), [
+        'Copy image to clipboard',
+        'Copy file',
+        'Copy path',
+        'Open',
+        'Open with…',
+      ]);
       await pick(tester, 'copyImage');
       expect(clip.calls.last, 'image:${abs('heroes/a.png')}');
       expect(find.text('Image copied'), findsOneWidget);
@@ -2465,33 +2486,72 @@ void main() {
         (w) => w is ItemCard && w.path == 'fx/Explosion(16x16).png',
       );
       await rightClick(tester, card.first);
-      // Copy as GIF right after Copy image (M70).
-      expect(items(tester), ['copyImage', 'copyGif', ...all.skip(1)]);
+      // The two GIF items first, then the image card's (M75).
+      expect(items(tester), ['copyGif', 'copyGifFile', ...all]);
+      expect(labels(tester), [
+        'Copy as GIF to clipboard',
+        'Copy as GIF file',
+        'Copy image to clipboard',
+        'Copy file',
+        'Copy path',
+        'Open',
+        'Open with…',
+      ]);
       await pick(tester, 'copyFiles');
       expect(clip.calls.last, 'files:${abs('fx/Explosion(16x16).png')}');
       await rightClick(tester, card.first);
       await pick(tester, 'copyImage');
       expect(clip.calls.last, 'image:${abs('fx/Explosion(16x16).png')}');
 
-      // Copy as GIF: built off the UI thread, written to the GIF cache,
-      // copied as that file plus image/gif bytes.
+      Future<void> until(bool Function() done) async {
+        for (var i = 0; i < 50 && !done(); i++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 50)),
+          );
+          await tester.pump();
+        }
+      }
+
+      // Copy as GIF to clipboard: built off the UI thread, offered only as
+      // image/gif bytes (no file, nothing written).
+      final gif = p.join(tmp.path, 'gif_cache', 'Explosion(16x16).gif');
       await rightClick(tester, card.first);
       await pick(tester, 'copyGif');
       expect(find.text('Making GIF…'), findsOneWidget);
-      final gif = p.join(tmp.path, 'gif_cache', 'Explosion(16x16).gif');
-      final copied = RegExp(r'^files:(.*) image/gif (\d+)$');
-      for (var i = 0; i < 50 && !copied.hasMatch(clip.calls.last); i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)),
-        );
-        await tester.pump();
-      }
-      final match = copied.firstMatch(clip.calls.last)!;
-      expect(match[1], gif);
-      final bytes = File(gif).readAsBytesSync();
-      expect(int.parse(match[2]!), bytes.length);
+      await until(() => clip.calls.last.startsWith('bytes:'));
+      final bytes = clip.bytes!;
+      expect(clip.calls.last, 'bytes:image/gif ${bytes.length}');
       expect(String.fromCharCodes(bytes.take(6)), 'GIF89a');
+      expect(File(gif).existsSync(), isFalse);
       expect(find.text('GIF copied'), findsOneWidget);
+
+      // Copy as GIF file: written to the GIF cache, offered only as that
+      // file.
+      await rightClick(tester, card.first);
+      await pick(tester, 'copyGifFile');
+      await until(() => clip.calls.last.startsWith('files:'));
+      expect(clip.calls.last, 'files:$gif');
+      expect(File(gif).readAsBytesSync(), bytes);
+      expect(find.text('GIF file copied'), findsOneWidget);
+
+      // The viewer opened from the animation card has the same menu.
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(card.first));
+      await tester.pump();
+      await tester.tap(
+        find.descendant(of: card.first, matching: find.byTooltip('Open image')),
+      );
+      await mouse.removePointer();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(ImageViewer), findsOneWidget);
+      await rightClick(
+        tester,
+        find.descendant(
+          of: find.byType(ImageViewer),
+          matching: find.byType(InteractiveViewer),
+        ),
+      );
+      expect(items(tester), ['copyGif', 'copyGifFile', ...all]);
     });
 
     testWidgets('audio rows and cards, Other files rows: file items', (
@@ -2501,6 +2561,7 @@ void main() {
       await tab(tester, 'Audio');
       await rightClick(tester, find.text('coin'));
       expect(items(tester), file);
+      expect(labels(tester), ['Copy file', 'Copy path', 'Open', 'Open with…']);
       await pick(tester, 'copyFiles');
       expect(clip.calls.last, 'files:${abs('sfx/coin.wav')}');
       // Right-click doesn't play.
@@ -2536,7 +2597,7 @@ void main() {
         find.byKey(const ValueKey('material:Stone/Rock')),
       );
       expect(items(tester), ['copyFiles', 'copyPath']);
-      expect(find.text('Copy 3 files'), findsOneWidget);
+      expect(labels(tester), ['Copy 3 files', 'Copy 3 paths']);
       await pick(tester, 'copyFiles');
       final copied = clip.calls.last.substring(6).split('|');
       expect(copied.toSet(), {
@@ -5655,6 +5716,33 @@ void main() {
       }
       await tester.pump();
     }
+
+    testWidgets('M75: a model card\'s right-click menu: file items', (
+      tester,
+    ) async {
+      await open(tester);
+      final card = find.byKey(const ValueKey('model:models/tree'));
+      await tester.tap(card, buttons: kSecondaryButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        [
+          for (final e
+              in find
+                  .descendant(
+                    of: find.byType(PopupMenuItem<FileMenuAction>),
+                    matching: find.byType(ListTile),
+                  )
+                  .evaluate())
+            ((e.widget as ListTile).title! as Text).data!,
+        ],
+        Platform.isLinux
+            ? ['Copy file', 'Copy path', 'Open', 'Open with…']
+            : ['Copy path', 'Open'],
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump(const Duration(milliseconds: 300));
+    });
 
     testWidgets('one card per model; FBX-only models stay other files', (
       tester,

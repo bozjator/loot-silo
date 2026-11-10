@@ -22,9 +22,11 @@ abstract class FileClipboard {
   Future<void> copyImage(String path);
 
   /// [paths] as files to paste into a file manager (`text/uri-list`,
-  /// `x-special/gnome-copied-files`, the paths as text); plus [bytes] as
-  /// [mime] when given.
-  Future<void> copyFiles(List<String> paths, {String? mime, Uint8List? bytes});
+  /// `x-special/gnome-copied-files`, the paths as text); never an image.
+  Future<void> copyFiles(List<String> paths);
+
+  /// [bytes] offered only as [mime] (`image/gif`), for chats and email.
+  Future<void> copyBytes(String mime, Uint8List bytes);
 
   Future<void> copyText(String text);
 
@@ -60,15 +62,12 @@ class PlatformFileClipboard implements FileClipboard {
   }
 
   @override
-  Future<void> copyFiles(
-    List<String> paths, {
-    String? mime,
-    Uint8List? bytes,
-  }) => channel.invokeMethod<void>('copyFiles', {
-    'paths': paths,
-    'mime': ?mime,
-    'bytes': ?bytes,
-  });
+  Future<void> copyFiles(List<String> paths) =>
+      channel.invokeMethod<void>('copyFiles', {'paths': paths});
+
+  @override
+  Future<void> copyBytes(String mime, Uint8List bytes) =>
+      channel.invokeMethod<void>('copyBytes', {'mime': mime, 'bytes': bytes});
 
   @override
   Future<void> copyText(String text) =>
