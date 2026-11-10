@@ -1642,6 +1642,70 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m72: audio card details and times (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    final fake = _FakeTrackPlayer();
+    fakePlayer = () => fake;
+    addTearDown(() => fakePlayer = null);
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField), 'chiptune');
+    await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
+    await tester.tap(find.text('music-loop-bundle-chiptune'));
+    await pumpUntil(tester, find.byKey(const ValueKey('loop')));
+    await tester.tap(find.text('Cards'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await pumpUntil(tester, find.byKey(const ValueKey('waveform-bars')));
+    final details = find.byWidgetPredicate(
+      (w) =>
+          w is Text &&
+          RegExp(r'^[\d.]+ [KMG]?B · (Mono|Stereo) · [\d.]+ kHz')
+              .hasMatch(w.data ?? ''),
+    );
+    await pumpUntil(tester, details);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await tester.pump();
+
+    // The first card: star in the corner, the length above the
+    // waveform's right end, the button between the top row and the times.
+    final card = find
+        .ancestor(of: details.first, matching: find.byType(Card))
+        .first;
+    Rect part(Finder f) =>
+        tester.getRect(find.descendant(of: card, matching: f).first);
+    final box = tester.getRect(card);
+    final wave = part(find.byKey(const ValueKey('waveform-bars')));
+    final total = part(find.byKey(const ValueKey('total')));
+    expect(total.right, closeTo(wave.right, 1));
+    expect(total.bottom, lessThanOrEqualTo(wave.top));
+    final icons = part(find.byKey(const ValueKey('audio-card-icons')));
+    expect(icons.right, closeTo(box.right, 0.5));
+    final button = part(find.byTooltip('Play'));
+    expect(button.top, greaterThan(icons.bottom));
+    expect(button.bottom, lessThan(total.top));
+    await captureScreenshot(tester, 'm72_audio_card', settle: false);
+
+    await tester.tap(
+      find.descendant(of: card, matching: find.byTooltip('Play')),
+    );
+    await pumpUntil(tester, find.byKey(const ValueKey('waveform-seek')));
+    fake.position.add(const Duration(seconds: 42));
+    await tester.pump();
+    await tester.pump();
+    final elapsed = tester.getRect(find.byKey(const ValueKey('elapsed')));
+    expect(elapsed.bottom, closeTo(total.bottom, 0.5));
+    await captureScreenshot(tester, 'm72_audio_card_playing', settle: false);
+    await tester.tap(find.byTooltip('Stop').first);
+    await tester.pump();
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m69: right-click menu copies through GTK (real, read-only)', (
     tester,
   ) async {

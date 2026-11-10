@@ -123,6 +123,42 @@ void main() {
       expect(audioInfo(p.join(fixtures, 'nope.m4a')), isNull);
     });
 
+    test('M72: the card line: channels, kHz, bit depth or ~ bitrate', () {
+      expect(
+        const AudioInfo(
+          sampleRate: 44100,
+          channels: 2,
+          bitDepth: 16,
+        ).shortDetails,
+        'Stereo · 44.1 kHz · 16-bit',
+      );
+      expect(
+        const AudioInfo(sampleRate: 44100, channels: 2, kbps: 320).shortDetails,
+        'Stereo · 44.1 kHz · 320 kbps',
+      );
+      // VBR and nominal rates: `~`, no "VBR".
+      expect(
+        const AudioInfo(
+          sampleRate: 48000,
+          channels: 1,
+          kbps: 245,
+          vbr: true,
+        ).shortDetails,
+        'Mono · 48 kHz · ~245 kbps',
+      );
+      expect(
+        const AudioInfo(channels: 1, kbps: 112, approximate: true).shortDetails,
+        'Mono · ~112 kbps',
+      );
+      expect(const AudioInfo(channels: 6).shortDetails, '6 ch');
+      expect(const AudioInfo().shortDetails, '');
+      final mp3 = audioInfo(p.join(fixtures, 'tone_cbr.mp3'))!;
+      expect(
+        mp3.shortDetails,
+        matches(RegExp(r'^Mono · 22\.05 kHz · \d+ kbps$')),
+      );
+    });
+
     test(
       'real library: 50 files per format read without errors (read-only)',
       () {

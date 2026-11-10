@@ -305,8 +305,27 @@ class HelpScreen extends StatelessWidget {
                   'part already heard is drawn in the accent colour. Sounds '
                   'of 10 seconds or more can be sought while they play: on '
                   'a card, click or drag the waveform (the elapsed time '
-                  'shows above its left end; the length stays under the '
-                  'name); in the list, use the seek bar under the row.',
+                  'shows above its left end, the length above its right '
+                  'end); in the list, use the seek bar under the row.',
+                ),
+                _P(
+                  'Under a card\'s name is a line about the file it plays: '
+                  'size, Mono or Stereo, sample rate and bit depth (WAV, '
+                  'AIFF, FLAC) or bitrate (MP3, Ogg; ~ when it varies or is '
+                  'an average), e.g. "1.2 MB · Stereo · 44.1 kHz · 16-bit". '
+                  'Rest the pointer on the name to see the file\'s path in '
+                  'the pack.',
+                ),
+                _P(
+                  'Mono does not mean one side only: a mono file has one '
+                  'channel and plays the same sound on both speakers. '
+                  'Stereo has a separate left and right. Mono is common '
+                  'and often wanted for sound effects, since game engines '
+                  'place mono sounds in 2D or 3D space themselves; music '
+                  'and ambience are usually stereo. The sample rate (kHz) '
+                  'is how many samples per second the sound is stored at, '
+                  'the bit depth how fine each sample is, and the bitrate '
+                  'how much data a second of a compressed file takes.',
                 ),
                 _P(
                   'Rest the pointer on a format chip to see that file\'s '

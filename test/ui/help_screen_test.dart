@@ -16,7 +16,7 @@ void main() {
 
   Future<void> pumpHelp(WidgetTester tester) async {
     // Tall enough that the whole list is built.
-    await tester.binding.setSurfaceSize(const Size(1200, 12000));
+    await tester.binding.setSurfaceSize(const Size(1200, 16000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const MaterialApp(home: HelpScreen()));
     await tester.pump();

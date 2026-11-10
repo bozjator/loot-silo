@@ -47,6 +47,7 @@ import 'widgets/format_chips.dart';
 import 'widgets/tab_toolbar.dart';
 import 'widgets/item_card.dart';
 import 'widgets/meta_dialogs.dart';
+import 'widgets/overflow_text.dart';
 import 'widgets/pack_tile.dart' show iconForTypes;
 import 'widgets/pixel_image.dart';
 import 'widgets/thumb_size.dart';
@@ -3648,8 +3649,14 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
             icon: Icon(playing ? Icons.stop_circle : Icons.play_circle),
             onPressed: () => _toggle(rel),
           ),
-          title: Text(p.basenameWithoutExtension(rel)),
-          subtitle: track.folder == '.' ? null : Text(track.folder),
+          // The path in the pack, not a folder line under the name.
+          title: Tooltip(
+            message: rel,
+            child: Text(
+              p.basenameWithoutExtension(rel),
+              key: ValueKey('name:$rel'),
+            ),
+          ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -3744,8 +3751,8 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
     padding: const EdgeInsets.fromLTRB(16, tabContentGap, 16, 16),
     gridDelegate: ThumbGridDelegate(
       maxTileWidth: 220,
-      // Room for the button; the footer holds the waveform (the seek bar
-      // while a long track plays) and the name.
+      // Room for the button and the times; the footer holds the waveform
+      // (the seek bar while a long track plays), the name and details.
       imageAspect: 1.6,
       footer: (_) => 60 + _AudioCard.waveformHeight + 6,
     ),
@@ -3762,7 +3769,6 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
           child: _AudioCard(
             key: ValueKey(track.key),
             rel: rel,
-            folder: track.folder,
             formats: FormatChips(
               files: track.files,
               shown: rel,
@@ -3772,6 +3778,8 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
             ),
             packPath: widget.pack.path,
             length: readLength(rel),
+            size: widget.contents.sizes[rel] ?? 0,
+            info: _info(rel),
             selected: _selected == rel,
             playing: playing,
             position: playing ? _position : null,
@@ -3835,17 +3843,20 @@ class _AudioViewToggle extends StatelessWidget {
 }
 
 /// One sound as a grid card: a big play / stop button with a progress
-/// ring while playing, the waveform (the played part highlighted; the seek
-/// bar while a long track plays, with the elapsed time above its left
-/// end), the prettified name, its length and folder.
+/// ring while playing, the length above the waveform's right end (the
+/// elapsed time above its left end while a long track plays), the waveform
+/// (the played part highlighted; the seek bar while a long track plays),
+/// the prettified name (its path in the pack as the tooltip) and a details
+/// line: size, channels, sample rate, bit depth or bitrate.
 class _AudioCard extends StatefulWidget {
   const _AudioCard({
     super.key,
     required this.rel,
-    required this.folder,
     required this.formats,
     required this.packPath,
     required this.length,
+    required this.size,
+    required this.info,
     required this.selected,
     required this.playing,
     required this.position,
@@ -3856,17 +3867,19 @@ class _AudioCard extends StatefulWidget {
     this.starred = false,
   });
 
+  /// The shown file, relative to the pack: the name's tooltip.
   final String rel;
 
   /// The star shows without hover (the reveal icon still hides).
   final bool starred;
 
-  /// The track's folder, format folders left out.
-  final String folder;
-
   /// The format chips, stacked on the left edge.
   final Widget formats;
   final String packPath;
+
+  /// The shown file's size in bytes and header details.
+  final int size;
+  final Future<AudioInfo?> info;
 
   /// The waveform strip between the button and the name.
   static const waveformHeight = 32.0;
@@ -3874,48 +3887,38 @@ class _AudioCard extends StatefulWidget {
   /// The play button with its progress ring.
   static const buttonSize = 56.0;
 
-  /// Space kept between the ring and the waveform.
-  static const waveformGap = 4.0;
-
-  /// The star / reveal row in the top-right corner (compact icon buttons).
-  static const iconRowHeight = 40.0;
+  /// The times' gap to the waveform below them.
+  static const timeBottom = 2.0;
 
   /// Where the button's centre goes, from the top of the area above the
-  /// waveform ([areaHeight] tall) in a card [cardHeight] tall and [width]
-  /// wide: on the card's vertical centre, never below it, and higher only
-  /// when the ring would come closer than [waveformGap] to the waveform
-  /// (or cover the elapsed time, [timeWidth] × [timeHeight] at the
-  /// waveform's left end, on narrow cards). Clear of the corner icons it
-  /// takes from that gap first.
+  /// waveform ([areaHeight] tall, [width] wide): halfway between the
+  /// bottom of the top row ([chips] and [icons], whichever is lower) and
+  /// the top of the times ([timeHeight] tall, [timeBottom] above the
+  /// waveform). When the ring doesn't fit there, only the top-row parts
+  /// above the ring count; when it still doesn't fit, the ring sits just
+  /// above the times (it never covers them or the waveform).
   static double buttonCentre({
-    required double cardHeight,
     required double areaHeight,
     required double width,
-    required double timeWidth,
     required double timeHeight,
+    Rect? chips,
+    Rect? icons,
   }) {
-    const r = buttonSize / 2;
-    var limit = areaHeight - waveformGap - r;
-    // The time sits at x 10..10 + timeWidth, just above the waveform.
-    if (width / 2 - r < 10 + timeWidth + 4) {
-      limit = math.min(limit, areaHeight - _timeBottom - timeHeight - 2 - r);
-    }
-    var centre = math.min(cardHeight / 2, limit);
-    // The ring under the corner icons (two 40 px buttons): down into the
-    // gap first, at most onto the waveform's edge, never below the centre.
-    if (centre - r < iconRowHeight && width / 2 + r > width - 2 * 40) {
-      centre = math.min(
-        cardHeight / 2,
-        math.max(centre, math.min(iconRowHeight + r, areaHeight - r)),
-      );
-    }
-    return centre;
+    const d = buttonSize;
+    final bottom = areaHeight - timeBottom - timeHeight;
+    final row = [?chips, ?icons];
+    double lowest(Iterable<Rect> rects) =>
+        rects.fold(0.0, (a, r) => math.max(a, r.bottom));
+    final top = lowest(row);
+    if (bottom - top >= d) return (top + bottom) / 2;
+    final left = width / 2 - d / 2;
+    final right = width / 2 + d / 2;
+    final above = lowest(row.where((r) => r.right > left && r.left < right));
+    if (bottom - above >= d) return (above + bottom) / 2;
+    return math.max(d / 2, bottom - d / 2);
   }
 
-  /// The elapsed time's gap to the waveform below it.
-  static const _timeBottom = 2.0;
-
-  /// The favorites star, beside the reveal button.
+  /// The favorites star, in the top-right corner.
   final Widget? star;
   final Future<Duration?> length;
   final bool selected;
@@ -3929,6 +3932,57 @@ class _AudioCard extends StatefulWidget {
 
   @override
   State<_AudioCard> createState() => _AudioCardState();
+}
+
+/// The parts of an audio card above its waveform.
+enum _CardPart { chips, icons, elapsed, total, button }
+
+/// Lays out [_CardPart]s with their real sizes: chips top-left, icons
+/// top-right, the times above the waveform's ends and the button where
+/// [_AudioCard.buttonCentre] puts it.
+class _AudioCardLayout extends MultiChildLayoutDelegate {
+  _AudioCardLayout({required this.timeHeight});
+
+  /// The times' line height, kept free even before the length is read.
+  final double timeHeight;
+
+  @override
+  void performLayout(Size size) {
+    final loose = BoxConstraints.loose(size);
+    Rect? place(_CardPart part, Offset Function(Size) at) {
+      if (!hasChild(part)) return null;
+      final s = layoutChild(part, loose);
+      final o = at(s);
+      positionChild(part, o);
+      return o & s;
+    }
+
+    final chips = place(_CardPart.chips, (_) => const Offset(8, 8));
+    final icons = place(
+      _CardPart.icons,
+      (s) => Offset(size.width - s.width, 0),
+    );
+    double timeTop(Size s) => size.height - _AudioCard.timeBottom - s.height;
+    place(_CardPart.elapsed, (s) => Offset(10, timeTop(s)));
+    place(
+      _CardPart.total,
+      (s) => Offset(size.width - 10 - s.width, timeTop(s)),
+    );
+    final centre = _AudioCard.buttonCentre(
+      areaHeight: size.height,
+      width: size.width,
+      timeHeight: timeHeight,
+      chips: chips,
+      icons: icons,
+    );
+    place(
+      _CardPart.button,
+      (s) => Offset((size.width - s.width) / 2, centre - s.height / 2),
+    );
+  }
+
+  @override
+  bool shouldRelayout(_AudioCardLayout old) => old.timeHeight != timeHeight;
 }
 
 class _AudioCardState extends State<_AudioCard> {
@@ -3977,17 +4031,14 @@ class _AudioCardState extends State<_AudioCard> {
         : null;
     final long = playing && total != null && total >= seekBarMinLength;
     final shown = long ? (_drag ?? progress) : progress;
-    final timeStyle = theme.textTheme.labelSmall?.copyWith(
-      fontFeatures: const [FontFeature.tabularFigures()],
-      color: scheme.onSurfaceVariant,
-    );
-    // Sized for the widest time, so the button never moves as it counts.
+    final timeStyle = _audioCardTimeStyle(theme);
+    // Kept free for the times, so the button never moves as they show.
     final timeBox = (TextPainter(
       text: TextSpan(text: '00:00', style: timeStyle),
       textDirection: TextDirection.ltr,
       textScaler: MediaQuery.textScalerOf(context),
     )..layout());
-    final timeSize = timeBox.size;
+    final timeHeight = timeBox.height;
     timeBox.dispose();
     final button = SizedBox.square(
       dimension: _AudioCard.buttonSize,
@@ -4021,6 +4072,55 @@ class _AudioCardState extends State<_AudioCard> {
       height: _AudioCard.waveformHeight,
       playhead: long,
     );
+    final area = CustomMultiChildLayout(
+      delegate: _AudioCardLayout(timeHeight: timeHeight),
+      children: [
+        LayoutId(id: _CardPart.chips, child: widget.formats),
+        LayoutId(
+          id: _CardPart.icons,
+          child: Row(
+            key: const ValueKey('audio-card-icons'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _hoverIcon(
+                RevealButton(p.join(widget.packPath, widget.rel)),
+                shown: _hover,
+              ),
+              if (widget.star case final star?)
+                _hoverIcon(star, shown: _hover || widget.starred),
+            ],
+          ),
+        ),
+        if (long)
+          LayoutId(
+            id: _CardPart.elapsed,
+            child: Text(
+              formatDuration(
+                Duration(
+                  milliseconds: ((shown ?? 0) * total.inMilliseconds).round(),
+                ),
+              ),
+              key: const ValueKey('elapsed'),
+              style: timeStyle,
+            ),
+          ),
+        LayoutId(
+          id: _CardPart.total,
+          child: FutureBuilder(
+            future: widget.length,
+            builder: (context, snap) {
+              final d = total ?? snap.data;
+              return Text(
+                d == null ? '' : formatDuration(d),
+                key: const ValueKey('total'),
+                style: timeStyle,
+              );
+            },
+          ),
+        ),
+        LayoutId(id: _CardPart.button, child: button),
+      ],
+    );
     final card = Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
@@ -4033,147 +4133,77 @@ class _AudioCardState extends State<_AudioCard> {
       child: InkWell(
         mouseCursor: clickCursor,
         onTap: widget.onToggle,
-        child: LayoutBuilder(
-          builder: (context, card) => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, area) {
-                    final centre = _AudioCard.buttonCentre(
-                      cardHeight: card.maxHeight,
-                      areaHeight: area.maxHeight,
-                      width: area.maxWidth,
-                      timeWidth: timeSize.width,
-                      timeHeight: timeSize.height,
-                    );
-                    return Stack(
-                      children: [
-                        Positioned(
-                          top: centre - _AudioCard.buttonSize / 2,
-                          left: 0,
-                          right: 0,
-                          child: Center(child: button),
-                        ),
-                        // Only the elapsed time: the total is the length
-                        // under the name.
-                        if (long)
-                          Positioned(
-                            left: 10,
-                            bottom: _AudioCard._timeBottom,
-                            child: Text(
-                              formatDuration(
-                                Duration(
-                                  milliseconds:
-                                      ((shown ?? 0) * total.inMilliseconds)
-                                          .round(),
-                                ),
-                              ),
-                              key: const ValueKey('elapsed'),
-                              style: timeStyle,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: area),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 6),
+              // While a long track plays the strip seeks (a click or a
+              // drag); otherwise a click plays or stops, like the card.
+              child: !long
+                  ? waveform
+                  : LayoutBuilder(
+                      builder: (context, strip) => MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          key: const ValueKey('waveform-seek'),
+                          behavior: HitTestBehavior.opaque,
+                          onTapUp: (d) => _seekTo(
+                            _fractionAt(d.localPosition, strip.maxWidth),
+                          ),
+                          onHorizontalDragStart: (d) => setState(
+                            () => _drag = _fractionAt(
+                              d.localPosition,
+                              strip.maxWidth,
                             ),
                           ),
-                        Positioned(top: 8, left: 8, child: widget.formats),
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: Row(
-                            key: const ValueKey('audio-card-icons'),
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (widget.star case final star?)
-                                _hoverIcon(
-                                  star,
-                                  shown: _hover || widget.starred,
-                                ),
-                              _hoverIcon(
-                                RevealButton(
-                                  p.join(widget.packPath, widget.rel),
-                                ),
-                                shown: _hover,
-                              ),
-                            ],
+                          onHorizontalDragUpdate: (d) => setState(
+                            () => _drag = _fractionAt(
+                              d.localPosition,
+                              strip.maxWidth,
+                            ),
                           ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 0, 10, 6),
-                // While a long track plays the strip seeks (a click or a
-                // drag); otherwise a click plays or stops, like the card.
-                child: !long
-                    ? waveform
-                    : LayoutBuilder(
-                        builder: (context, strip) => MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            key: const ValueKey('waveform-seek'),
-                            behavior: HitTestBehavior.opaque,
-                            onTapUp: (d) => _seekTo(
-                              _fractionAt(d.localPosition, strip.maxWidth),
-                            ),
-                            onHorizontalDragStart: (d) => setState(
-                              () => _drag = _fractionAt(
-                                d.localPosition,
-                                strip.maxWidth,
-                              ),
-                            ),
-                            onHorizontalDragUpdate: (d) => setState(
-                              () => _drag = _fractionAt(
-                                d.localPosition,
-                                strip.maxWidth,
-                              ),
-                            ),
-                            onHorizontalDragEnd: (_) {
-                              final to = _drag;
-                              setState(() => _drag = null);
-                              if (to != null) _seekTo(to);
-                            },
-                            onHorizontalDragCancel: () =>
-                                setState(() => _drag = null),
-                            child: waveform,
-                          ),
+                          onHorizontalDragEnd: (_) {
+                            final to = _drag;
+                            setState(() => _drag = null);
+                            if (to != null) _seekTo(to);
+                          },
+                          onHorizontalDragCancel: () =>
+                              setState(() => _drag = null),
+                          child: waveform,
                         ),
                       ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Tooltip(
+                    message: widget.rel,
+                    child: Text(
                       prettyName(p.basename(widget.rel)),
+                      key: ValueKey('name:${widget.rel}'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall,
                     ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        _TrackLength(
-                          future: widget.length,
-                          align: TextAlign.start,
-                          width: null,
-                        ),
-                        if (widget.folder != '.')
-                          Expanded(
-                            child: Text(
-                              ' · ${widget.folder}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ),
-                      ],
+                  ),
+                  const SizedBox(height: 2),
+                  FutureBuilder(
+                    future: widget.info,
+                    builder: (context, snap) => OverflowText(
+                      audioCardDetails(widget.size, snap.data),
+                      key: ValueKey('card-details:${widget.rel}'),
+                      style: theme.textTheme.bodySmall,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -4184,6 +4214,24 @@ class _AudioCardState extends State<_AudioCard> {
     );
   }
 }
+
+/// The audio card's times: a bit bigger than body text, tabular figures.
+TextStyle _audioCardTimeStyle(ThemeData theme) {
+  final body = theme.textTheme.bodyMedium ?? const TextStyle(fontSize: 14);
+  return body.copyWith(
+    fontSize: (body.fontSize ?? 14) + 1,
+    fontFeatures: const [FontFeature.tabularFigures()],
+    color: theme.colorScheme.onSurfaceVariant,
+  );
+}
+
+/// An audio card's details line: `1.2 MB · Stereo · 44.1 kHz · 16-bit`;
+/// only the size until the header is read (or when it says nothing).
+@visibleForTesting
+String audioCardDetails(int bytes, AudioInfo? info) => [
+  formatBytes(bytes),
+  if (info != null && info.shortDetails.isNotEmpty) info.shortDetails,
+].join(' · ');
 
 /// A file's audio details (`44.1 kHz · Stereo · 16-bit`) once its header
 /// has been read; empty when it says nothing.
@@ -4211,18 +4259,9 @@ class _AudioDetails extends StatelessWidget {
 
 /// `m:ss` once the header has been read; nothing for unknown formats.
 class _TrackLength extends StatelessWidget {
-  const _TrackLength({
-    super.key,
-    required this.future,
-    this.align = TextAlign.end,
-    this.width = 56,
-  });
+  const _TrackLength({super.key, required this.future});
 
   final Future<Duration?> future;
-  final TextAlign align;
-
-  /// Null: as wide as the text.
-  final double? width;
 
   @override
   Widget build(BuildContext context) => FutureBuilder(
@@ -4230,10 +4269,10 @@ class _TrackLength extends StatelessWidget {
     builder: (context, snap) {
       final d = snap.data;
       return SizedBox(
-        width: width,
+        width: 56,
         child: Text(
           d == null ? '' : formatDuration(d),
-          textAlign: align,
+          textAlign: TextAlign.end,
           style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
         ),
       );

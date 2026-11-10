@@ -45,6 +45,18 @@ class AudioInfo {
       '${vbr ? 'VBR ~' : (approximate ? '~' : '')}$k kbps',
   ].join(' · ');
 
+  /// The audio card's line after the size: `Stereo · 44.1 kHz · 16-bit`,
+  /// `Mono · 48 kHz · ~112 kbps`; bit depth when known, else the bitrate
+  /// (VBR and nominal rates as `~245 kbps`). Unknown parts are left out.
+  String get shortDetails => [
+    if (channels case final c? when c > 0) channelWords(c),
+    if (sampleRate case final r? when r > 0) formatSampleRate(r),
+    if (bitDepth case final b? when b > 0)
+      '$b-bit'
+    else if (kbps case final k? when k > 0)
+      '${vbr || approximate ? '~' : ''}$k kbps',
+  ].join(' · ');
+
   @override
   String toString() => 'AudioInfo($duration, $details)';
 }

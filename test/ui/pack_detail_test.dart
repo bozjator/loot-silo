@@ -34,6 +34,8 @@ import 'package:loot_silo/ui/widgets/animated_sprite.dart';
 import 'package:loot_silo/ui/widgets/file_menu.dart';
 import 'package:loot_silo/ui/widgets/item_card.dart';
 import 'package:loot_silo/ui/widgets/measure_size.dart';
+import 'package:loot_silo/ui/widgets/overflow_text.dart';
+import 'package:loot_silo/ui/widgets/format_chips.dart';
 import 'package:loot_silo/ui/widgets/project_links.dart';
 import 'package:loot_silo/version.dart';
 import 'package:loot_silo/ui/widgets/pack_tile.dart';
@@ -1367,13 +1369,27 @@ void main() {
       await open(tester);
       expect(find.textContaining('Audio (2)'), findsOneWidget);
       expect(find.byType(ListTile), findsNWidgets(2));
-      // Format folders are not shown as the folder.
+      // No folder line under the name (M72); the name's tooltip is the
+      // path in the pack.
       expect(
         find.descendant(
           of: find.byType(ListTile),
           matching: find.text('music'),
         ),
-        findsNWidgets(2),
+        findsNothing,
+      );
+      expect(
+        tester
+            .widget<Tooltip>(
+              find
+                  .ancestor(
+                    of: find.byKey(const ValueKey('name:music/OGG/theme.ogg')),
+                    matching: find.byType(Tooltip),
+                  )
+                  .first,
+            )
+            .message,
+        'music/OGG/theme.ogg',
       );
       expect(find.text('OGG'), findsOneWidget);
       expect(find.text('MP3'), findsOneWidget);
@@ -1452,7 +1468,7 @@ void main() {
       return fake;
     }
 
-    testWidgets('the view is saved; cards show name, length and folder', (
+    testWidgets('the view is saved; cards show name, length, no folder', (
       tester,
     ) async {
       await openCards(tester);
@@ -1460,7 +1476,16 @@ void main() {
       expect(find.text('Long theme'), findsOneWidget);
       expect(find.text('Coin pickup'), findsOneWidget);
       expect(find.text('1:40'), findsOneWidget);
-      expect(find.text(' · sfx'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('Coin pickup'),
+            matching: find.byType(Card),
+          ),
+          matching: find.textContaining('sfx'),
+        ),
+        findsNothing,
+      );
       await tester.tap(find.text('Rows'));
       await tester.pump();
       expect(store.load().audioView, AudioView.rows);
@@ -1726,46 +1751,204 @@ void main() {
       ),
     );
 
-    testWidgets('the button sits on the card centre at the default size', (
+    /// The card's top row (chips and corner icons, whichever is lower) and
+    /// the top of its times.
+    ({double rowBottom, double timesTop}) bounds(
+      WidgetTester tester,
+      String rel,
+    ) {
+      final card = cardOf(rel);
+      final chips = tester.getRect(
+        find.descendant(of: card, matching: find.byType(FormatChips)),
+      );
+      final icons = tester.getRect(
+        find.descendant(
+          of: card,
+          matching: find.byKey(const ValueKey('audio-card-icons')),
+        ),
+      );
+      final total = tester.getRect(
+        find.descendant(
+          of: card,
+          matching: find.byKey(const ValueKey('total')),
+        ),
+      );
+      return (
+        rowBottom: math.max(chips.bottom, icons.bottom),
+        timesTop: total.top,
+      );
+    }
+
+    testWidgets('M72: the button sits halfway between top row and times', (
       tester,
     ) async {
       await open(tester);
       final card = tester.getRect(cardOf(ogg));
       expect(card.width, closeTo(220, 0.5));
-      final button = buttonOf(tester, ogg);
-      expect(button.center.dx, closeTo(card.center.dx, 0.5));
-      // On the card's centre, or as near as the ring's ~4 px gap to the
-      // waveform allows (the footer's text height decides; 2 px here).
-      final waveTop = tester.getRect(wave(ogg)).top;
-      expect(
-        button.center.dy,
-        closeTo(math.min(card.center.dy, waveTop - 4 - 28), 0.5),
-      );
-      expect(button.center.dy, closeTo(card.center.dy, 3));
-      expect(button.center.dy, lessThanOrEqualTo(card.center.dy));
-      // The card's size is the M65 one: 220 / 1.6 plus the footer.
+      // The card's size is unchanged (M65): 220 / 1.6 plus the footer.
       expect(card.height, closeTo(220 / 1.6 + 60 + 32 + 6, 0.5));
+      for (final rel in [ogg, coin]) {
+        final button = buttonOf(tester, rel);
+        expect(
+          button.center.dx,
+          closeTo(tester.getRect(cardOf(rel)).center.dx, 0.5),
+        );
+        final b = bounds(tester, rel);
+        expect(button.center.dy, closeTo((b.rowBottom + b.timesTop) / 2, 0.5));
+        expect(button.top, greaterThan(b.rowBottom));
+        expect(button.bottom, lessThan(b.timesTop));
+      }
     });
 
-    testWidgets('small cards: the button moves up, above the waveform', (
+    testWidgets('M72: narrow cards: the ring overlaps nothing', (tester) async {
+      await open(tester);
+      // From the widest cards to the narrowest a desktop window gives.
+      for (var w = 1700.0; w >= 900; w -= 25) {
+        await tester.binding.setSurfaceSize(Size(w, 900));
+        await tester.pump();
+        // Narrow windows overflow the header's author line (not this
+        // milestone's); that error is dropped.
+        tester.takeException();
+        final card = cardOf(ogg);
+        final ring = Rect.fromCircle(
+          center: buttonOf(tester, ogg).center,
+          radius: 28,
+        );
+        Rect part(Finder f) =>
+            tester.getRect(find.descendant(of: card, matching: f).first);
+        final parts = {
+          'chips': part(find.byType(FormatChips)),
+          'star': part(find.byKey(const ValueKey('star:$ogg'))),
+          'reveal': part(find.byType(RevealButton)),
+          'total': part(find.byKey(const ValueKey('total'))),
+          'waveform': tester.getRect(wave(ogg)),
+        };
+        for (final MapEntry(:key, :value) in parts.entries) {
+          expect(
+            ring.overlaps(value),
+            isFalse,
+            reason: '$key at ${w}px (card ${tester.getRect(card).size})',
+          );
+        }
+      }
+    });
+
+    testWidgets('M72: star in the corner, reveal left of it', (tester) async {
+      await open(tester);
+      final card = tester.getRect(cardOf(ogg));
+      final star = tester.getRect(find.byKey(const ValueKey('star:$ogg')));
+      final reveal = tester.getRect(
+        find.descendant(of: cardOf(ogg), matching: find.byType(RevealButton)),
+      );
+      expect(star.right, closeTo(card.right, 0.5));
+      expect(star.top, closeTo(card.top, 0.5));
+      expect(reveal.right, closeTo(star.left, 0.5));
+      expect(reveal.top, star.top);
+    });
+
+    testWidgets('M72: the length above the waveform\'s right end', (
+      tester,
+    ) async {
+      final fake = await open(tester);
+      final total = find.descendant(
+        of: cardOf(ogg),
+        matching: find.byKey(const ValueKey('total')),
+      );
+      expect(tester.widget<Text>(total).data, '1:40');
+      final strip = tester.getRect(wave(ogg));
+      final t = tester.getRect(total);
+      expect(t.right, closeTo(strip.right, 0.5));
+      expect(t.bottom, lessThanOrEqualTo(strip.top));
+      expect(t.bottom, greaterThan(strip.top - 6));
+      // A bit bigger than the old length under the name (body text, 14).
+      final style = tester.widget<Text>(total).style!;
+      expect(style.fontSize, 15);
+      expect(style.fontFeatures, contains(const FontFeature.tabularFigures()));
+
+      // Playing: the elapsed time at the left end, in the same size.
+      await tester.tap(find.text('Long theme'));
+      await tester.pump();
+      fake.position.add(const Duration(seconds: 10));
+      await tester.pump();
+      final elapsed = find.byKey(const ValueKey('elapsed'));
+      expect(tester.widget<Text>(elapsed).style!.fontSize, style.fontSize);
+      expect(tester.getRect(elapsed).bottom, tester.getRect(total).bottom);
+      expect(tester.getRect(elapsed).left, closeTo(strip.left, 0.5));
+    });
+
+    testWidgets('M72: a details line; no folder, the path as the tooltip', (
       tester,
     ) async {
       await open(tester);
-      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      String sizeOf(String rel) => formatBytes(
+        File(p.join(tmp.path, 'library', 'HeroMaker', 'Knight Pack', rel))
+            .lengthSync(),
+      );
+      String line(String rel) => tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byKey(ValueKey('card-details:$rel')),
+              matching: find.byType(Text),
+            ),
+          )
+          .data!;
+      expect(line(coin), '${sizeOf(coin)} · Stereo · 44.1 kHz · 16-bit');
+      expect(line(ogg), '${sizeOf(ogg)} · Mono · 48 kHz · ~112 kbps');
+      // No folder text on the cards.
+      for (final (rel, folder) in [(ogg, 'music'), (coin, 'sfx')]) {
+        expect(
+          find.descendant(
+            of: cardOf(rel),
+            matching: find.textContaining(folder),
+          ),
+          findsNothing,
+        );
+      }
+      String tipOf(String rel) => tester
+          .widget<Tooltip>(
+            find
+                .ancestor(
+                  of: find.byKey(ValueKey('name:$rel')),
+                  matching: find.byType(Tooltip),
+                )
+                .first,
+          )
+          .message!;
+      expect(tipOf(coin), coin);
+      // The list rows too.
+      await tester.tap(find.text('Rows'));
       await tester.pump();
-      final card = tester.getRect(cardOf(ogg));
-      expect(card.width, lessThan(200));
-      final button = buttonOf(tester, ogg);
-      final waveTop = tester.getRect(wave(ogg)).top;
-      expect(button.center.dy, lessThan(card.center.dy - 10));
-      // At most 4 px from the waveform (more when the test font's wide
-      // time label needs the room beside the ring).
-      expect(button.center.dy + 28, lessThanOrEqualTo(waveTop - 4 + 0.01));
-      // Clear of the chips and the corner icons.
-      final chip = tester.getRect(find.byKey(const ValueKey('format:$ogg')));
-      final star = tester.getRect(find.byKey(const ValueKey('star:$ogg')));
-      expect(button.center.dy - 28, greaterThanOrEqualTo(star.bottom - 0.5));
-      expect(button.center.dx - 28, greaterThan(chip.right));
+      await tester.pump();
+      expect(tipOf(ogg), ogg);
+      expect(
+        find.descendant(of: find.byType(ListTile), matching: find.text('sfx')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('M72: a cut details line has the whole line as a tooltip', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: SizedBox(
+              width: 60,
+              child: OverflowText(
+                audioCardDetails(
+                  1234567,
+                  const AudioInfo(sampleRate: 44100, channels: 2, bitDepth: 16),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(
+        find.byTooltip('1.2 MB · Stereo · 44.1 kHz · 16-bit'),
+        findsOneWidget,
+      );
+      expect(audioCardDetails(1234567, null), '1.2 MB');
     });
 
     testWidgets('tap and drag on the waveform seek; elapsed above its left', (
@@ -2275,14 +2458,19 @@ void main() {
       await audioCards(tester);
       final audioMouse = await hover(tester, cardOf(star));
       final audioCard = tester.getRect(cardOf(star));
-      // The audio card's corner icon (reveal, the star beside it).
-      final corner = tester.getRect(
-        find.descendant(of: icons, matching: find.byType(RevealButton)),
-      );
+      // The audio card's corner icon: the star (M72; reveal to its left).
+      final corner = tester.getRect(star);
       final right = audioCard.right - corner.right;
       final top = corner.top - audioCard.top;
-      final size = tester.getRect(star).size;
-      expect(corner.size, size);
+      final size = corner.size;
+      expect(
+        tester
+            .getRect(
+              find.descendant(of: icons, matching: find.byType(RevealButton)),
+            )
+            .size,
+        size,
+      );
       await audioMouse.removePointer();
 
       await tester.tap(find.textContaining('Images ('));
