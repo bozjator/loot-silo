@@ -363,85 +363,79 @@ class HomeScreen extends ConsumerWidget {
 
 /// An empty library's ways to add packs: the same actions as the top
 /// bar's import menu and itch.io button, each with a line on what it does.
+/// All three are filled buttons of one width, the widest label's (a
+/// [Table]'s intrinsic column), so the lines beside them start at one x.
 class _FirstPacks extends ConsumerWidget {
   const _FirstPacks();
+
+  /// The column of lines at most this wide; narrow windows wrap them.
+  static const lineWidth = 320.0;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final connected = ref.watch(itchKeyProvider).value != null;
-    Widget choice({
+    final style = Theme.of(context).textTheme.bodySmall;
+    TableRow choice({
       required Key key,
       required IconData icon,
       required String label,
       required String line,
       required VoidCallback onPressed,
-      bool primary = false,
-    }) {
-      final button = primary
-          ? FilledButton.icon(
-              key: key,
-              onPressed: onPressed,
-              icon: Icon(icon),
-              label: Text(label),
-            )
-          : OutlinedButton.icon(
-              key: key,
-              onPressed: onPressed,
-              icon: Icon(icon),
-              label: Text(label),
-            );
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 190,
-              child: Align(alignment: Alignment.centerLeft, child: button),
-            ),
-            const SizedBox(width: 12),
-            // Narrow windows wrap the line instead of overflowing.
-            Flexible(
-              child: SizedBox(
-                width: 320,
-                child: Text(line, style: Theme.of(context).textTheme.bodySmall),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    }) => TableRow(
       children: [
-        choice(
-          key: const ValueKey('first-import-folder'),
-          icon: Icons.drive_folder_upload_outlined,
-          label: 'Import folder',
-          line: 'Copy packs from a folder on your computer.',
-          onPressed: () => importFolder(context, ref),
-          primary: true,
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          // The cell is the column's width; the button fills it.
+          child: FilledButton.icon(
+            key: key,
+            onPressed: onPressed,
+            icon: Icon(icon),
+            label: Text(label),
+          ),
         ),
-        choice(
-          key: const ValueKey('first-import-archive'),
-          icon: Icons.archive_outlined,
-          label: 'Import archive',
-          line:
-              'Unpack zip, tar, 7z or rar files into the library '
-              '(or drop them on the window).',
-          onPressed: () => importArchive(context, ref),
-        ),
-        choice(
-          key: const ValueKey('first-itch'),
-          icon: Icons.storefront_outlined,
-          label: connected ? 'Download from itch.io' : 'Connect itch.io',
-          line: connected
-              ? 'Download the assets you own on itch.io.'
-              : 'Sign in with an API key to download the assets you own.',
-          onPressed: () => openItch(context),
-        ),
+        const SizedBox(),
+        Text(line, style: style),
       ],
+    );
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 260 + 12 + lineWidth),
+      child: Table(
+        key: const ValueKey('first-choices'),
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        columnWidths: const {
+          0: IntrinsicColumnWidth(),
+          1: FixedColumnWidth(12),
+          2: FlexColumnWidth(),
+        },
+        children: [
+          choice(
+            key: const ValueKey('first-import-folder'),
+            icon: Icons.drive_folder_upload_outlined,
+            label: 'Import folder',
+            line: 'Copy packs from a folder on your computer.',
+            onPressed: () => importFolder(context, ref),
+          ),
+          choice(
+            key: const ValueKey('first-import-archive'),
+            icon: Icons.archive_outlined,
+            label: 'Import archive',
+            line:
+                'Unpack zip, tar, 7z or rar files into the library '
+                '(or drop them on the window).',
+            onPressed: () => importArchive(context, ref),
+          ),
+          choice(
+            key: const ValueKey('first-itch'),
+            icon: Icons.storefront_outlined,
+            label: connected ? 'Import from itch.io' : 'Connect itch.io',
+            line: connected
+                ? 'Download the assets you own on itch.io.'
+                : 'Sign in with an API key to download the assets you own.',
+            onPressed: () => openItch(context),
+          ),
+        ],
+      ),
     );
   }
 }

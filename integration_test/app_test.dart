@@ -4403,16 +4403,33 @@ A **16×16** knight with *walk* and *idle* animations.
     // An empty tab still says what it holds.
     await tester.tap(find.text('To link'));
     await pumpUntil(tester, find.text('Nothing left to link.'));
-    expect(find.textContaining('Probably already in the library'), findsOne);
+    expect(find.textContaining('Packs you added yourself'), findsOne);
     await captureScreenshot(tester, 'm76_itch_empty_tabs');
     await tester.tap(find.text('In library'));
     await pumpUntil(tester, find.text('No pack is linked to itch yet.'));
     expect(find.text('Packs that know their itch.io page.'), findsOneWidget);
 
-    // Back on the empty library, the itch.io choice now downloads.
+    // Back on the empty library, the itch.io choice now imports (M78):
+    // three filled buttons of one width.
     await tester.pageBack();
-    await pumpUntil(tester, find.text('Download from itch.io'));
+    await pumpUntil(tester, find.text('Import from itch.io'));
     expect(find.text('Connect itch.io'), findsNothing);
+    final widths = {
+      for (final k in [
+        'first-import-folder',
+        'first-import-archive',
+        'first-itch',
+      ])
+        tester.getSize(find.byKey(ValueKey(k))).width,
+    };
+    expect(widths, hasLength(1));
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is FilledButton && w.key.toString().contains('first-'),
+      ),
+      findsNWidgets(3),
+    );
+    await captureScreenshot(tester, 'm78_empty_library');
     expect(Directory(lib).listSync(), isEmpty);
   });
 

@@ -75,8 +75,9 @@ class HelpScreen extends StatelessWidget {
                 _P(
                   'An empty library shows three ways to start: Import folder '
                   '(copy packs from a folder on your computer), Import '
-                  'archive (unpack zip, tar, 7z or rar files) and Download '
-                  'from itch.io (Connect itch.io until a key is set).',
+                  'archive (unpack zip, tar, 7z or rar files) and Connect '
+                  'itch.io (Import from itch.io once a key is set), three '
+                  'buttons of one width with a line on each.',
                 ),
                 _P(
                   'The import button in the top bar (next to Help) opens a '
@@ -558,8 +559,10 @@ class HelpScreen extends StatelessWidget {
                   'The itch.io screen counts your owned assets and sorts them '
                   'into four tabs. Missing: not in the library yet (game '
                   'builds and programs are never downloaded, only assets). '
-                  'To link: probably in the library already; Link stores the '
-                  'itch id in the pack. Inside a pack: a folder in one of '
+                  'To link: packs you added yourself (folder or archive) '
+                  'that look like assets you own, by the same title and '
+                  'author; Link stores the itch id in the pack and fetches '
+                  'the cover and screenshots. Inside a pack: a folder in one of '
                   'the author\'s packs has this name. In library: packs that '
                   'know their itch.io page. Each tab says what it holds, '
                   'even when it is empty. Downloads are unpacked in a '

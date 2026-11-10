@@ -218,7 +218,10 @@ void main() {
     await pumpHelp(tester);
     final text = pageText(tester);
     expect(text, contains('An empty library shows three ways to start'));
-    expect(text, contains('Download from itch.io (Connect itch.io until'));
+    // M78: the button's two labels; "To link" explained.
+    expect(text, contains('Connect itch.io (Import from itch.io once a key'));
+    expect(text, contains('To link: packs you added yourself'));
+    expect(text, isNot(contains('probably in the library')));
     expect(text, contains('counts your owned assets'));
     for (final tab in [
       'Missing:',

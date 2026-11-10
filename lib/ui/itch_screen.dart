@@ -237,8 +237,10 @@ class _Sync extends ConsumerWidget {
                   matches: fuzzy,
                   empty: 'Nothing left to link.',
                   hint:
-                      'Probably already in the library. Linking stores the itch '
-                      'id in the pack and fetches the cover and screenshots.',
+                      'Packs you added yourself (folder or archive) that look '
+                      'like assets you own on itch.io: same title and author. '
+                      'Linking stores the itch id in the pack and fetches the '
+                      'cover and screenshots.',
                   bulkLabel: 'Link all (${fuzzy.length})',
                   onBulk: () => jobs.linkAll(fuzzy),
                 ),

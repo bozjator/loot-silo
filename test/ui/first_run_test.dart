@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'dart:io';
 
 import 'package:drift/drift.dart' show driftRuntimeOptions;
@@ -120,11 +122,66 @@ void main() {
       expect(find.byKey(const ValueKey('first-itch')), findsOneWidget);
     });
 
-    testWidgets('with a key the itch.io button says Download', (tester) async {
+    testWidgets('with a key the itch.io button says Import from itch.io', (
+      tester,
+    ) async {
       await pumpEmpty(tester, key: 'test-key');
-      expect(find.text('Download from itch.io'), findsOneWidget);
+      expect(find.text('Import from itch.io'), findsOneWidget);
       expect(find.text('Connect itch.io'), findsNothing);
+      expect(find.text('Download from itch.io'), findsNothing);
     });
+
+    for (final key in [null, 'test-key']) {
+      testWidgets('M78: three filled buttons, one width (key: $key)', (
+        tester,
+      ) async {
+        await pumpEmpty(tester, key: key);
+        const keys = [
+          'first-import-folder',
+          'first-import-archive',
+          'first-itch',
+        ];
+        final rects = [
+          for (final k in keys) tester.getRect(find.byKey(ValueKey(k))),
+        ];
+        for (final k in keys) {
+          final w = tester.widget(find.byKey(ValueKey(k)));
+          expect(w, isA<FilledButton>(), reason: k);
+          // One style: none of them overrides the theme's.
+          expect((w as FilledButton).style, isNull, reason: k);
+        }
+        for (final r in rects.skip(1)) {
+          expect(r.width, rects.first.width);
+          expect(r.left, rects.first.left);
+        }
+        // The widest label sets the width: its text is not cut, and the
+        // button is no wider than it needs (label + icon + padding).
+        final widest = keys
+            .map(
+              (k) => tester
+                  .getSize(
+                    find.descendant(
+                      of: find.byKey(ValueKey(k)),
+                      matching: find.byType(Text),
+                    ),
+                  )
+                  .width,
+            )
+            .reduce(math.max);
+        expect(rects.first.width, lessThan(widest + 80));
+        expect(rects.first.width, greaterThan(widest + 30));
+        // The lines beside them start at one x.
+        final lines = [
+          'Copy packs from a folder',
+          'Unpack zip, tar, 7z or rar',
+          key == null
+              ? 'Sign in with an API key'
+              : 'Download the assets you own',
+        ].map((t) => tester.getTopLeft(find.textContaining(t)).dx).toSet();
+        expect(lines, hasLength(1));
+        expect(lines.single, greaterThan(rects.first.right));
+      });
+    }
   });
 
   group('M76 itch.io screen', () {
@@ -174,7 +231,8 @@ void main() {
         ),
         'To link': (
           'Nothing left to link.',
-          'Probably already in the library.',
+          'Packs you added yourself (folder or archive) that look like '
+              'assets you own on itch.io: same title and author.',
         ),
         'Inside a pack': ('None.', 'A folder inside one of the author'),
         'In library': (
@@ -187,6 +245,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text(empty), findsOneWidget, reason: tab);
         expect(find.textContaining(hint), findsOneWidget, reason: tab);
+        expect(find.textContaining('Probably already'), findsNothing);
       }
       // No bulk button over an empty list.
       expect(find.byType(FilledButton), findsNothing);
