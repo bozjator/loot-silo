@@ -1729,6 +1729,58 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m81: sort button spacing and search placeholders (real)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    final dash = find.byWidgetPredicate(
+      (w) =>
+          w is TextField &&
+          w.decoration?.hintText == 'Search packs, authors, tags, file names',
+    );
+    expect(dash, findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'chiptune');
+    await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
+    await tester.tap(find.text('music-loop-bundle-chiptune'));
+    await pumpUntil(tester, find.byKey(const ValueKey('loop')));
+    await tester.pump(const Duration(milliseconds: 300));
+    final arrow = tester.getRect(
+      find.byKey(const ValueKey('audio-sort-direction')),
+    );
+    final icon = tester.getRect(
+      find.descendant(
+        of: find.byKey(const ValueKey('audio-sort-direction')),
+        matching: find.byType(Icon),
+      ),
+    );
+    // Arrow glyph → divider is the name's divider → first letter (12 px).
+    final name = tester.getRect(find.byKey(const ValueKey('audio-sort-label')));
+    final half = tester.getRect(find.byKey(const ValueKey('audio-sort')));
+    expect(
+      arrow.right - (icon.right - sortArrowGlyphInset),
+      closeTo(name.left - half.left, 1),
+    );
+    expect(
+      arrow.height,
+      tester.getSize(find.byKey(const ValueKey('play-all'))).height,
+    );
+    expect(find.widgetWithText(TextField, 'Search files'), findsOneWidget);
+    await captureScreenshot(tester, 'm81_audio_sort_button', settle: false);
+    // The dashboard's field, empty, shows its placeholder.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.enterText(dash, '');
+    await tester.pump(const Duration(milliseconds: 500));
+    await captureScreenshot(tester, 'm81_search_fields', settle: false);
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m77: audio card S / M line, centred button, sort button', (
     tester,
   ) async {
@@ -2547,7 +2599,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, find.textContaining('Audio ('));
     await tester.pump(const Duration(milliseconds: 500));
     final detailChip = find.byKey(const ValueKey('detail-favorites-chip'));
-    final search = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    final search = find.widgetWithText(TextField, 'Search files');
     final chipBox = tester.getRect(
       find.descendant(of: detailChip, matching: find.byType(Material)).first,
     );
@@ -2960,7 +3012,7 @@ A **16×16** knight with *walk* and *idle* animations.
     final play = find.byKey(const ValueKey('play-all'));
     expect(tester.getSize(loop).height, tester.getSize(play).height);
     // The search box and the Favorites chip: one height.
-    final search = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    final search = find.widgetWithText(TextField, 'Search files');
     final chip = find.byKey(const ValueKey('detail-favorites-chip'));
     expect(tester.getSize(search).height, tester.getSize(chip).height);
     await captureScreenshot(tester, 'm39_audio_toolbar', settle: false);
@@ -3612,7 +3664,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, find.byType(TabBar));
     await tester.pump(const Duration(seconds: 1));
     // Opened from a pack search (not a file search): no file filter yet.
-    final field = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    final field = find.widgetWithText(TextField, 'Search files');
     expect(field, findsOneWidget);
     expect(find.textContaining('Matching'), findsNothing);
     final images = find.textContaining('Images (');
@@ -3882,7 +3934,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(tile.first);
     await pumpUntil(tester, find.byType(TabBar));
     await tester.pump(const Duration(seconds: 1));
-    final field = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    final field = find.widgetWithText(TextField, 'Search files');
     expect(
       tester.getSize(find.byType(ThumbSizeSlider)).width,
       tester.getSize(field).width,
@@ -3939,7 +3991,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm34_sea_animations', settle: false);
 
     // banner-only.png: 12 frames of 96×128; gems-1.png an 8-frame strip.
-    final field = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    final field = find.widgetWithText(TextField, 'Search files');
     await tester.enterText(field, 'banner');
     await pumpUntil(tester, find.text('Matching “banner”'));
     await tester.pump(const Duration(milliseconds: 500));
@@ -3981,7 +4033,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, find.textContaining('Animations ('), seconds: 60);
     await tester.tap(find.textContaining('Animations ('));
     await tester.pump(const Duration(seconds: 1));
-    final field = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    final field = find.widgetWithText(TextField, 'Search files');
     await tester.enterText(field, 'ship-animations');
     await pumpUntil(tester, find.text('Matching “ship-animations”'));
     await tester.pump(const Duration(milliseconds: 500));
@@ -4023,7 +4075,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, find.textContaining('Animations ('), seconds: 60);
     await tester.tap(find.textContaining('Animations ('));
     await tester.pump(const Duration(seconds: 1));
-    final field = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    final field = find.widgetWithText(TextField, 'Search files');
     await tester.enterText(field, 'fisherman-beard-headband');
     await pumpUntil(tester, find.text('Matching “fisherman-beard-headband”'));
     await tester.pump(const Duration(milliseconds: 500));
@@ -4067,7 +4119,7 @@ A **16×16** knight with *walk* and *idle* animations.
       ..select(2);
     final field = find.descendant(
       of: find.byKey(const ValueKey('tab-1')),
-      matching: find.widgetWithText(TextField, 'Search files (Ctrl+F)'),
+      matching: find.widgetWithText(TextField, 'Search files'),
     );
     await pumpUntil(tester, field);
     await tester.enterText(field, 'knight');

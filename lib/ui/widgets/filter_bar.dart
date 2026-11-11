@@ -88,7 +88,7 @@ class FilterBar extends StatelessWidget {
                   decoration: InputDecoration(
                     isDense: true,
                     prefixIcon: const Icon(Icons.search),
-                    hintText: 'Search packs, authors, tags, file names   ( / )',
+                    hintText: 'Search packs, authors, tags, file names',
                     border: const OutlineInputBorder(),
                     // Follows the field, not the (debounced) query.
                     suffixIcon: ValueListenableBuilder(

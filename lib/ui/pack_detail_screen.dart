@@ -445,7 +445,7 @@ class _BodyState extends State<_Body> {
               minWidth: 36,
               minHeight: detailControlHeight,
             ),
-            hintText: 'Search files (Ctrl+F)',
+            hintText: 'Search files',
             border: const OutlineInputBorder(borderRadius: detailControlRadius),
             suffixIcon: ValueListenableBuilder(
               valueListenable: _searchText,
@@ -4152,6 +4152,23 @@ class _SortHeader extends StatelessWidget {
   }
 }
 
+/// Padding before the audio sort's direction arrow (from the stadium end).
+const sortArrowPad = 11.0;
+
+/// How far the arrow glyph sits inside its 18 px icon box.
+const sortArrowGlyphInset = 3.0;
+
+/// Padding after the arrow: plus the glyph's inset, the same visible gap
+/// to the divider as the name has on the other side ([sortNamePadLeft]).
+const sortArrowPadRight = sortNamePadLeft - sortArrowGlyphInset;
+
+/// Padding before the audio sort's name (from the divider).
+const sortNamePadLeft = 12.0;
+
+/// Padding after the drop-down caret: plus the glyph's ~5 px inset, the
+/// same visible gap as [sortNamePadLeft].
+const sortNamePadRight = 7.0;
+
 /// The Audio tab's sort, shaped like the Play all / Loop buttons (one
 /// tonal stadium): the leading arrow flips the direction, the label (with
 /// a small drop arrow) opens the menu of [AudioSort] keys. Two halves of
@@ -4190,14 +4207,18 @@ class _AudioSortMenu extends StatelessWidget {
     key: const ValueKey('audio-sort-button'),
     mainAxisSize: MainAxisSize.min,
     children: [
-      // Like Play all's icon: 16 px in, 18 px; its own hit area.
+      // The arrow's glyph as far from the divider as the name is on the
+      // other side of it.
       Tooltip(
         message: descending ? 'Descending' : 'Ascending',
         child: FilledButton.tonal(
           key: const ValueKey('audio-sort-direction'),
           style: _half(
             start: true,
-            pad: const EdgeInsets.only(left: 16, right: 4),
+            pad: const EdgeInsets.only(
+              left: sortArrowPad,
+              right: sortArrowPadRight,
+            ),
           ),
           onPressed: onFlip,
           child: Icon(
@@ -4227,7 +4248,12 @@ class _AudioSortMenu extends StatelessWidget {
             key: const ValueKey('audio-sort'),
             style: _half(
               start: false,
-              pad: const EdgeInsets.only(left: 4, right: 12),
+              // The same visible space before the name as after the
+              // drop-down glyph, which sits ~5 px inside its 20 px box.
+              pad: const EdgeInsets.only(
+                left: sortNamePadLeft,
+                right: sortNamePadRight,
+              ),
             ),
             onPressed: () =>
                 controller.isOpen ? controller.close() : controller.open(),

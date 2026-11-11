@@ -755,7 +755,7 @@ void main() {
       tester,
     ) async {
       await openKnight(tester);
-      final search = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+      final search = find.widgetWithText(TextField, 'Search files');
       final chip = find.byKey(const ValueKey('detail-favorites-chip'));
       final field = tester.getRect(search);
       expect(field.height, detailControlHeight);
@@ -1132,7 +1132,7 @@ void main() {
         files: const ['sfx/hit_1.wav', 'sfx/door.wav', 'sfx/hit_2.wav'],
       );
       await tester.enterText(
-        find.widgetWithText(TextField, 'Search files (Ctrl+F)'),
+        find.widgetWithText(TextField, 'Search files'),
         'hit',
       );
       await tester.pump(DashboardQueryNotifier.searchDebounce);
@@ -2220,6 +2220,47 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
     }
+
+    testWidgets('M81: the sort button\'s glyphs sit evenly', (tester) async {
+      await open(tester, cards: true);
+      gate.complete();
+      await tester.pump();
+      final play = tester.getRect(find.byKey(const ValueKey('play-all')));
+      final arrow = find.byKey(const ValueKey('audio-sort-direction'));
+      final label = find.byKey(const ValueKey('audio-sort'));
+      final a = tester.getRect(arrow);
+      final l = tester.getRect(label);
+      // Play all's height (40 on desktop; the test's touch target adds 8).
+      expect(a.height, play.height);
+      expect(l.height, play.height);
+      final icon = tester.getRect(
+        find.descendant(of: arrow, matching: find.byType(Icon)),
+      );
+      // Name half: divider → first letter equals caret glyph → edge (the
+      // caret's glyph sits ~5 px inside its 20 px box).
+      final name = tester.getRect(
+        find.byKey(const ValueKey('audio-sort-label')),
+      );
+      final caret = tester.getRect(
+        find.descendant(
+          of: label,
+          matching: find.byIcon(Icons.arrow_drop_down),
+        ),
+      );
+      final leftGap = name.left - l.left;
+      final rightGap = l.right - (caret.right - 5);
+      expect((leftGap - rightGap).abs(), lessThanOrEqualTo(1));
+      // Arrow glyph → divider equals divider → first letter (the glyph sits
+      // 3 px inside its 18 px box).
+      // The visible half (its Material): the key's rect is padded to the
+      // test's 48 px touch target.
+      final face = tester.getRect(
+        find.descendant(of: arrow, matching: find.byType(Material)).first,
+      );
+      final arrowGap = face.right - (icon.right - sortArrowGlyphInset);
+      expect(arrowGap, closeTo(leftGap, 1));
+      expect(arrowGap, closeTo(sortNamePadLeft, 0.01));
+    });
 
     testWidgets('M77: the sort button looks like Play all, arrow leading', (
       tester,
@@ -4040,7 +4081,7 @@ void main() {
       'docs/readme.txt',
     ];
 
-    Finder field() => find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+    Finder field() => find.widgetWithText(TextField, 'Search files');
 
     testWidgets('the size slider is as wide as the search box (M33)', (
       tester,
@@ -4516,7 +4557,7 @@ void main() {
       expect(tabs(tester).active, 1);
 
       // A detail search in the pack tab.
-      final field = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+      final field = find.widgetWithText(TextField, 'Search files');
       await tester.enterText(field, 'z root');
       await tester.pump(DashboardQueryNotifier.searchDebounce);
       await settle(tester);
@@ -5266,7 +5307,7 @@ void main() {
       tester,
     ) async {
       await openKnight(tester);
-      final search = find.widgetWithText(TextField, 'Search files (Ctrl+F)');
+      final search = find.widgetWithText(TextField, 'Search files');
       final chip = find.byKey(const ValueKey('detail-favorites-chip'));
       // The painted boxes: the chip's Material (RawChip centres it inside
       // the box it's given) and the field's outlined decorator.
@@ -5569,7 +5610,7 @@ void main() {
       await tester.tap(find.text('B'));
       await tester.pump();
       await tester.enterText(
-        find.widgetWithText(TextField, 'Search files (Ctrl+F)'),
+        find.widgetWithText(TextField, 'Search files'),
         'k1',
       );
       await tester.pump(const Duration(milliseconds: 500));
@@ -5581,7 +5622,7 @@ void main() {
       await tester.tap(fold);
       await tester.pump();
       await tester.enterText(
-        find.widgetWithText(TextField, 'Search files (Ctrl+F)'),
+        find.widgetWithText(TextField, 'Search files'),
         '',
       );
       await tester.pump(const Duration(milliseconds: 500));
@@ -5630,7 +5671,7 @@ void main() {
       expect(tester.getSize(slider).width, actionsRow(tester).width);
       final search = find.widgetWithText(
         TextField,
-        'Search packs, authors, tags, file names   ( / )',
+        'Search packs, authors, tags, file names',
       );
       expect(tester.getSize(search).width, greaterThan(200));
       // The facet menus are icons too, with their names as tooltips.
@@ -5640,6 +5681,49 @@ void main() {
       await tester.tap(find.byIcon(Icons.view_comfy_alt_outlined));
       await tester.pump();
       expect(store.load().dashboardView, DashboardView.expanded);
+    });
+
+    testWidgets('M81: search placeholders without shortcuts, no tooltip', (
+      tester,
+    ) async {
+      await openKnight(tester);
+      for (final hint in [
+        'Search packs, authors, tags, file names',
+        'Search files',
+      ]) {
+        // By the decoration: a field with text doesn't show its hint.
+        // The dashboard stays built, offstage, behind the pack tab.
+        final field = find.byWidgetPredicate(
+          (w) => w is TextField && w.decoration?.hintText == hint,
+          skipOffstage: false,
+        );
+        expect(field, findsOneWidget, reason: hint);
+        final text = tester.widget<TextField>(field).decoration!.hintText!;
+        for (final bad in ['/', 'Ctrl', '(', ')']) {
+          expect(text, isNot(contains(bad)));
+        }
+        expect(
+          find.ancestor(
+            of: field,
+            matching: find.byType(Tooltip, skipOffstage: false),
+          ),
+          findsNothing,
+          reason: hint,
+        );
+      }
+      // Ctrl+F still focuses the file search.
+      final files = tester
+          .widget<TextField>(
+            find.byWidgetPredicate(
+              (w) => w is TextField && w.decoration?.hintText == 'Search files',
+            ),
+          )
+          .focusNode!;
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(files.hasFocus, isTrue);
     });
 
     testWidgets('M79: slider end icons step one stop, disabled at the ends', (
@@ -5753,7 +5837,7 @@ void main() {
     ) async {
       await openKnight(tester);
       final field = tester.widget<TextField>(
-        find.widgetWithText(TextField, 'Search files (Ctrl+F)'),
+        find.widgetWithText(TextField, 'Search files'),
       );
       final border = field.decoration!.border! as OutlineInputBorder;
       final chip = tester.widget<FilterChip>(
