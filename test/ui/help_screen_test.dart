@@ -56,45 +56,6 @@ void main() {
     expect(text, contains('F1'));
   });
 
-  testWidgets('M38: Favorites section', (tester) async {
-    await pumpHelp(tester);
-    final text = pageText(tester);
-    expect(find.text('Favorites'), findsOneWidget);
-    expect(text, contains('on image and animation cards'));
-    expect(text, contains('The Favorites chip (★ and a count) in the'));
-    expect(text, contains('In the Files view it lists the starred files'));
-    expect(text, contains('Favorites chip on a pack page'));
-    expect(text, contains('asset_pack.json'));
-    expect(text, contains('Click a star'));
-  });
-
-  testWidgets('M45: import menu and the Not an animation confirmation', (
-    tester,
-  ) async {
-    await pumpHelp(tester);
-    final text = pageText(tester);
-    expect(text, contains('The import button in the top bar'));
-    expect(text, contains('"Not an animation" asks first'));
-    expect(text, isNot(contains('Favorites (')));
-  });
-
-  testWidgets('M46: collapse / expand all folders', (tester) async {
-    await pumpHelp(tester);
-    expect(
-      pageText(tester),
-      contains('the button left of the view switch collapses every'),
-    );
-  });
-
-  testWidgets('M47: cell size from the folder, Make animation guess', (
-    tester,
-  ) async {
-    await pumpHelp(tester);
-    final text = pageText(tester);
-    expect(text, contains('A sheet can take its cell size from other'));
-    expect(text, contains('starting from the best guess'));
-  });
-
   testWidgets('M48: the Help title says Loot Silo', (tester) async {
     await pumpHelp(tester);
     expect(
@@ -110,75 +71,65 @@ void main() {
     expect(logo, findsOneWidget);
     expect(
       tester.getTopLeft(logo).dy,
-      lessThan(tester.getTopLeft(find.text('Library layout')).dy),
+      lessThan(tester.getTopLeft(find.text('Getting started')).dy),
     );
     expectLockup(tester);
   });
 
-  testWidgets('M37: Play all and how Loop works with it', (tester) async {
+  testWidgets('M82: animation detection explained for users', (tester) async {
     await pumpHelp(tester);
     final text = pageText(tester);
-    expect(text, contains('Play all (Shift+Space)'));
-    expect(text, contains('Loop repeats the whole list'));
-    expect(text, contains(AppKeys.playAll.label));
-    expect(AppKeys.playAll.keys, 'Shift+Space');
-  });
-
-  testWidgets('M36: header icons, hover delay, Dashboard tab', (tester) async {
-    await pumpHelp(tester);
-    final text = pageText(tester);
-    expect(find.text('Pack page & tabs'), findsOneWidget);
-    expect(text, contains("in the header's top-right corner"));
-    expect(text, contains('Rest the pointer on the bar for a moment'));
-    expect(text, contains('clicking it takes you back to the dashboard'));
-  });
-
-  testWidgets('M35: whole frames, wheel zoom, Combine writes on Save', (
-    tester,
-  ) async {
-    await pumpHelp(tester);
-    final text = pageText(tester);
-    expect(text, contains('no cropping'));
-    expect(text, contains('Wheel over the Edit preview'));
-    expect(text, contains('mouse wheel over the Edit preview'));
-    expect(text, contains('Only Save writes it'));
-    expect(text, isNot(contains('and zoom.')));
-  });
-
-  testWidgets('M41: selection in both views, no confirm, a file name', (
-    tester,
-  ) async {
-    await pumpHelp(tester);
-    final text = pageText(tester);
-    expect(text, contains('in either view'));
-    expect(text, contains('opens in Edit straight away'));
-    expect(text, contains('file name field'));
-    expect(text, isNot(contains('It asks first')));
-    expect(text, contains('Ctrl / Shift-click images'));
-  });
-
-  testWidgets('M43: frame sizes from gaps, borrowed sizes, false strips', (
-    tester,
-  ) async {
-    await pumpHelp(tester);
-    final text = pageText(tester);
-    expect(text, contains("Frames don't have to be square"));
-    expect(text, contains('the transparent gaps between frames decide'));
-    expect(text, contains('borrows the frame size'));
-    expect(text, contains('exactly the same size in its folder'));
-    expect(text, contains('only if its frames look apart'));
+    expect(find.text('Animations'), findsOneWidget);
+    for (final heading in [
+      'What makes an image an animation',
+      'Why an image is not shown as an animation',
+      'Why an image is shown as an animation by mistake',
+      'Fixing it yourself',
+      'Naming tips for your own files',
+    ]) {
+      expect(text, contains(heading));
+    }
+    expect(text, contains('hero (32x32).png'));
+    expect(text, contains('walk_8f.png'));
+    expect(text, contains('transparent gaps'));
     expect(text, contains('stays one image'));
-    expect(text, isNot(contains('checked for strips whose')));
+    expect(text, contains('combine them into one'));
+    expect(text, contains('"Make animation…"'));
+    expect(text, contains('"Not an animation" asks first'));
+    expect(text, contains('Only Save writes it'));
   });
 
-  testWidgets('M44: Settings section explains resuming', (tester) async {
+  testWidgets('M82: Rescan library is explained', (tester) async {
     await pumpHelp(tester);
     final text = pageText(tester);
-    expect(find.text('Settings'), findsWidgets);
+    expect(find.text('Rescan library'), findsOneWidget);
+    expect(text, contains('(F5 or Ctrl+R)'));
+    expect(text, contains('added, removed or renamed outside the app'));
+    expect(text, contains('Nothing you set is lost'));
+    expect(text, contains('a pack file edited by hand'));
+  });
+
+  testWidgets('M82: user help, no implementation details', (tester) async {
+    await pumpHelp(tester);
+    final text = pageText(tester);
+    expect(text, contains('An empty library shows three'));
+    expect(text, contains('Play all (Shift+Space)'));
+    expect(text, contains(AppKeys.playAll.label));
+    expect(text, contains('The Favorites chip (★ and a count)'));
     expect(text, contains('Resume where I left off (on by default)'));
-    expect(text, contains('the same pack tabs'));
-    expect(text, contains('Packs no longer in the library'));
-    expect(text, contains('Off: every start shows a clean dashboard'));
+    expect(text, contains('To link: packs you imported yourself'));
+    for (final internal in [
+      'px',
+      'SHA-1',
+      'used to stop',
+      'emptied on start',
+      'tooltip gives the cards per row',
+      'rows are kept even',
+      'is_container',
+      '200,000',
+    ]) {
+      expect(text, isNot(contains(internal)), reason: internal);
+    }
   });
 
   test('keys are described as printed on the keyboard', () {
@@ -213,46 +164,4 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     expect(seen, isTrue);
   });
-
-  testWidgets('M76: first-run choices and the itch.io tabs', (tester) async {
-    await pumpHelp(tester);
-    final text = pageText(tester);
-    expect(text, contains('An empty library shows three ways to start'));
-    // M78: the button's two labels; "To link" explained.
-    expect(text, contains('Connect itch.io (Import from itch.io once a key'));
-    expect(text, contains('To link: packs you added yourself'));
-    expect(text, isNot(contains('probably in the library')));
-    expect(text, contains('counts your owned assets'));
-    for (final tab in [
-      'Missing:',
-      'To link:',
-      'Inside a pack:',
-      'In library:',
-    ]) {
-      expect(text, contains(tab));
-    }
-    expect(text, contains('even when it is empty'));
-    expect(text, contains('emptied on start'));
-  });
-
-  testWidgets('M79: the size slider\'s stops are cards per row', (
-    tester,
-  ) async {
-    await pumpHelp(tester);
-    final text = pageText(tester);
-    expect(text, contains('Each stop of a size slider is one number of cards'));
-    expect(text, contains('The end icons and Ctrl + wheel move one stop.'));
-  });
-
-  testWidgets(
-    'M80: the slider goes up to 800 px, two per row; why it stopped',
-    (tester) async {
-      await pumpHelp(tester);
-      final text = pageText(tester);
-      expect(text, contains('at least two per row, at most 800 px wide'));
-      expect(text, contains('the tooltip gives the cards per row'));
-      expect(text, contains('Why the slider used to stop at medium cards'));
-      expect(text, isNot(contains('the cards\' real width')));
-    },
-  );
 }

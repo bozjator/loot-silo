@@ -17,9 +17,10 @@ void openHelp(BuildContext context) =>
       ),
     );
 
-/// How Loot Silo works: plain text in sections. The word lists come
-/// from the animation detector and the shortcuts from [shortcutSections],
-/// so the page follows the code.
+/// How Loot Silo works, written for the people using it: what to do and
+/// why the app treats a file the way it does. The word lists come from
+/// the animation detector and the shortcuts from [shortcutSections], so
+/// the page follows the code.
 class HelpScreen extends StatelessWidget {
   /// Its route's name, so F1 doesn't open it twice.
   static const routeName = 'help';
@@ -40,516 +41,319 @@ class HelpScreen extends StatelessWidget {
                 padding: EdgeInsets.only(top: 16, bottom: 8),
                 child: Center(child: AppLogo(height: 120)),
               ),
-              const _Section('Library layout', [
+              const _Section('Getting started', [
                 _P(
-                  'The library is one folder that Loot Silo manages, '
-                  'arranged as <Author>/<Pack>. Each author folder holds '
-                  '$authorFileName; each pack folder may hold $packFileName. '
-                  'Both are plain text you can edit by hand; the app rewrites '
-                  'only the fields it changes and keeps the rest.',
+                  'Loot Silo keeps your game assets in one library folder, '
+                  'sorted as Author / Pack. An empty library shows three '
+                  'ways to start: Import folder copies packs from a folder '
+                  'on your computer, Import archive unpacks zip, tar, 7z or '
+                  'rar files, and Connect itch.io downloads the asset packs '
+                  'you own. Later, the import button in the top bar does the '
+                  'same (Ctrl+I, Ctrl+O, or drop files on the window). Your '
+                  'original folder or archive is never changed. 7z and rar '
+                  'need 7zz, 7z or unrar installed.',
                 ),
                 _P(
-                  'A bundle is a pack that contains other packs (sub-packs), '
-                  'for example a big collection with one folder per theme. '
-                  'Its tile opens the bundle; "Bundle details" shows the '
-                  'bundle itself. Sub-packs take their bundle\'s source.',
-                ),
-                _Bullets([
-                  '$authorFileName: user (the name shown), url, itch_user, '
-                      'license, and the credit and attribution wording used '
-                      'by Credits. Edit it with the pencil next to the author.',
-                  '$packFileName: title, types, tags, source and '
-                      'source_path, itch_game_id and itch_url, cover (your '
-                      'own preview), notes, used_in (games), is_container '
-                      '(bundle) and animations (your overrides).',
-                ]),
-                _P('Sources'),
-                _Bullets([
-                  'imported: copied in with Import folder or Import archive.',
-                  'itch: downloaded or linked from your itch.io library.',
-                  'manual: placed in the library by hand.',
-                  'unknown: no source on file.',
-                ]),
-              ]),
-              const _Section('Import', [
-                _P(
-                  'An empty library shows three ways to start: Import folder '
-                  '(copy packs from a folder on your computer), Import '
-                  'archive (unpack zip, tar, 7z or rar files) and Connect '
-                  'itch.io (Import from itch.io once a key is set), three '
-                  'buttons of one width with a line on each.',
+                  'Before anything is copied, a review lists the packs found: '
+                  'set each one\'s author, title, types and tags, and untick '
+                  'the ones you don\'t want.',
                 ),
                 _P(
-                  'The import button in the top bar (next to Help) opens a '
-                  'menu: Import folder (Ctrl+I) and Import archive (Ctrl+O, '
-                  'or drop files on the window) copy packs into the library '
-                  'and check '
-                  'every copied file against its SHA-1. The original folder or '
-                  'archive is never changed. Archives are zip, tar, tar.gz, 7z '
-                  'and rar (7z and rar need 7zz, 7z or unrar installed).',
+                  'A bundle is a pack that holds other packs, such as a big '
+                  'collection with one folder per theme. Its tile opens the '
+                  'list of its packs; "Bundle details" shows the bundle '
+                  'itself.',
                 ),
                 _P(
-                  'The review table lists the packs found. Before importing '
-                  'you can set each pack\'s author (pick one from the library '
-                  'or add a new one), title, types and tags, and choose which '
-                  'packs to import. Importing a folder that is already inside '
-                  'the library is refused.',
+                  'What you set on a pack (tags, notes, stars, animation '
+                  'fixes) is saved in $packFileName in the pack\'s folder, '
+                  'and an author\'s details in $authorFileName in theirs, '
+                  'so it moves with the pack. Both are plain text you can '
+                  'edit by hand.',
                 ),
               ]),
-              _Section('Animations', [
-                const _P(
-                  'Animations are found when the library is scanned. One file '
-                  'is one animation: numbered frame files (walk_0.png, '
-                  'walk_1.png …) stay separate images; use Combine into '
-                  'animation (below) to make one strip of them. Two kinds '
-                  'are detected:',
-                ),
-                const _Bullets([
-                  'Sheets: one image cut into frames, from a size hint in the '
-                      'name like (32x32) (or 7x7 for 7 × 7 frames), a frame '
-                      'count like _8f or 8frames, or a horizontal strip. A '
-                      'strip is cut into square frames, unless transparent '
-                      'gaps between its frames show another frame width. In '
-                      'effect packs, transparent gaps also find grids.',
-                  'Frames don\'t have to be square: for a file whose name or '
-                      'folder has an animation word (below), the transparent '
-                      'gaps between frames decide the frame width and height, '
-                      'even on big strips and grids (a ship of 608×640 '
-                      'frames). Empty cells at the end of a grid don\'t count '
-                      'as frames. A file named as one frame (sail-frame12.png) '
-                      'is not cut.',
-                  'A file with an animation word that nothing detects (its '
-                      'gaps are hidden by particles) borrows the frame size '
-                      'of an animation of exactly the same size in its '
-                      'folder.',
-                  'A sheet can take its cell size from other animations in '
-                      'its folder: an image that is a whole grid of their '
-                      'frames (a 6 × 6 grid of 192 px cells next to 192 px '
-                      'strips) is cut into those cells when the cuts fall on '
-                      'transparent lines and at least three cells hold '
-                      'something. Empty cells at the end don\'t count.',
-                  'A wide image without a sheet or animation word is a strip '
-                      'only if its frames look apart: a picture that runs '
-                      'across the square frame cuts (a bench, a row of bags) '
-                      'stays one image.',
-                  'GIF and animated WebP files.',
-                ]),
-                const _P(
-                  'A sheet with several rows plays all its rows, unless you '
-                  'save one row in Edit. A file shown in the Animations tab '
-                  'isn\'t listed again in the Images tab; "Not an animation" '
-                  'puts it back there.',
-                ),
-                const _P(
-                  'Cards, focus mode and the Edit preview show the whole '
-                  'frame, transparent border included (no cropping), scaled '
-                  'up in whole steps, so every animation of one character '
-                  'keeps the same size. Fully empty frames are skipped.',
-                ),
-                _P('Animation words: ${animationWords.join(', ')}.'),
-                _P('Sheet words: ${sheetWords.join(', ')}.'),
+              const _Section('Rescan library', [
                 _P(
-                  'Not sheets unless a sheet word is in the name: '
-                  '${notAnimationWords.join(', ')}.',
+                  'The rescan button in the top bar (F5 or Ctrl+R) reads the '
+                  'whole library folder again: it finds packs and files you '
+                  'added, removed or renamed outside the app, and detects '
+                  'animations again. Nothing you set is lost, since it is '
+                  'kept in the pack files.',
                 ),
-                const _P('Naming tips'),
-                const _Bullets([
-                  'Frame files: combine them into one animation.',
-                  '…_strip8.png or …_8f.png for a strip of 8 frames.',
-                  '(32x32) in the name for the frame size of a grid.',
-                ]),
-                const _P('Your overrides (saved in the pack\'s file)'),
-                const _Bullets([
-                  'Edit (on a card): fps, frame size, total frames (−/+, '
-                      '↑/↓ or the wheel step through counts that fit), and '
-                      'the row to play or all rows.',
-                  'Zoom: the mouse wheel over the Edit preview, or the −, + '
-                      'and reset buttons shown on hover (1×–8×; reset is '
-                      'Auto, the fit). Cards then use that zoom.',
-                  '"Not an animation" asks first, then moves a file to '
-                      'Images; Restore (or Undo on the message) brings it '
-                      'back.',
-                  '"Make animation…" on an image marks it as a sheet, '
-                      'starting from the best guess (the cells of an '
-                      'animation in its folder, then the transparent gaps, '
-                      'then square frames); "Back to image" undoes that.',
-                  'Combine frame files: the button after a folder\'s name '
-                      '(By folder), or select images (the checkbox, or Ctrl/'
-                      'Shift-click, in either view) and use the selection '
-                      'bar. The strip opens in Edit straight away, with a '
-                      'file name field (<folder>_animation to start with). '
-                      'Only Save writes it next to the frames (asking before '
-                      'replacing a file); Cancel or Esc writes nothing. The '
-                      'frame files stay.',
-                ]),
+                _P(
+                  'When the app starts, it notices files added, removed or '
+                  'renamed since last time and rescans on its own. Rescan '
+                  'yourself when you change the library while the app is '
+                  'open, or after changing a file in place, such as a '
+                  'redrawn image or a pack file edited by hand. Imports '
+                  'rescan for you.',
+                ),
               ]),
-              const _Section('Search', [
+              const _Section('Finding assets', [
                 _P(
                   'The dashboard search looks at pack titles, authors, tags '
-                  'and file names. Each word you type matches the start of a '
-                  'word (barr finds barrels, HumanSoldier counts as human '
-                  'and soldier). When nothing matches that way and every '
-                  'word has three or more letters, words are also found '
-                  'inside other words (arrel finds barrels).',
+                  'and file names. The start of a word is enough: barr finds '
+                  'barrels, and HumanSoldier is found by human or soldier. '
+                  'When that finds nothing, words of three or more letters '
+                  'are also looked for inside other words.',
                 ),
                 _P(
-                  'The Files view lists the matching files themselves. A '
-                  'pack opened from a file search, or from a tile\'s "N files '
-                  'match" line, shows only those files ("Matching …"; "Show '
-                  'all files" clears it). On a pack page, the search field '
-                  'next to the tabs filters its files by name the same way.',
+                  'The Files view lists the matching files instead of packs. '
+                  'A pack opened from there shows only those files; "Show '
+                  'all files" shows the rest. On a pack page, the search '
+                  'field next to the tabs filters that pack\'s files.',
                 ),
-              ]),
-              const _Section('Previews', [
-                _P('The tile image of a pack is chosen in this order:'),
-                _Bullets([
-                  'the cover set in its pack file;',
-                  'the itch.io cover or screenshots (in _itch/);',
-                  'files, or folders, named preview, mockup, cover, '
-                      'showcase, screenshot, thumbnail, all…, sample or '
-                      'example, in that order;',
-                  'a GIF or animated WebP, then a detected animation;',
-                  'else the largest image near the top of the pack.',
-                ]),
                 _P(
-                  'Promo images (logos, coupons, Patreon, licence …) are '
-                  'never picked. To choose your own, put "cover": '
-                  '"<path in the pack>" in its pack file, or name an image '
-                  'preview.png. The header of a pack page steps through all '
-                  'its preview candidates; "All previews" shows them in a '
-                  'grid whose cards share the dialog\'s width. −/+ in its '
-                  'title bar or Ctrl + wheel over it set how many columns '
-                  '(1–8, remembered); rows are kept even, so 8 previews at 5 '
-                  'columns show as two rows of 4.',
+                  'A pack\'s tile shows its cover: one you chose, the '
+                  'itch.io cover, an image named preview, cover, mockup, '
+                  'screenshot or similar, else an animation or its largest '
+                  'image. To choose your own, name an image preview.png, or '
+                  'set "cover" in the pack file. The header of a pack page '
+                  'steps through all its previews; "All previews" shows them '
+                  'together.',
                 ),
               ]),
               const _Section('Pack page & tabs', [
                 _P(
-                  'A pack page has a header (previews and info) above the '
-                  'Animations, Images, Audio, Models, Materials and Other '
-                  'files tabs. Music and sound packs open on Audio, packs '
-                  'of the material type on Materials, 3D packs on Models. '
-                  'The pin '
-                  '(H), itch.io page (when linked) and open folder icons sit '
-                  'in the header\'s top-right corner. When the header is '
-                  'unpinned, a slim bar replaces it: the pack\'s title, then '
-                  'author, types, file count and size (cut first when the '
-                  'bar is narrow), and the same icons at its right end. Rest the pointer on the bar for a moment '
-                  'to see the full header floating over the tabs; passing '
-                  'over it on the way to a tab doesn\'t open it.',
+                  'A pack page shows its previews and info at the top and '
+                  'its files in tabs: Animations, Images, Audio, Models, '
+                  'Materials and Other files. Press H, or the pin in the '
+                  'header\'s corner, to hide the header and give the files '
+                  'more room; rest the pointer on the slim bar left in its '
+                  'place to see it again.',
                 ),
                 _P(
-                  'Middle-click a pack (or right-click → Open in new tab) to '
-                  'open it in a tab. While tabs are open, the tab strip '
-                  'replaces the page\'s top bar; without tabs the bar with '
-                  'the back arrow stays. A plain click opens a pack inside '
-                  'the Dashboard tab, which then isn\'t shown as selected; '
-                  'clicking it takes you back to the dashboard. Esc and the '
-                  'mouse back button go back as well. Drag a pack tab to '
-                  'move it along the strip. When the tabs don\'t '
-                  'fit, scroll them with the mouse wheel or the ‹ › arrows, '
-                  'or pick one from the ⌄ list of all tabs.',
+                  'Click a pack to open it; Esc or the mouse back button '
+                  'goes back. Middle-click a pack (or right-click → Open in '
+                  'new tab) to open it in a tab of its own, so you can keep '
+                  'several packs open and switch between them.',
                 ),
                 _P(
-                  'Animations and Images tabs: the cards work alike. Click a '
-                  'card to focus it: it is outlined and the others dim (and '
-                  'pause). ←/→ move the focus in on-screen order; Esc, the '
-                  'mouse back button, a click on empty space or on the '
-                  'focused card leave it. On hover, a card shows its star '
-                  '(top right; always once starred), its select box (top '
-                  'left, images; always once selected) and its icons over '
-                  'the footer: Edit (animations) '
-                  'or Make animation… (images), Open image (the viewer, in '
-                  'on-screen order) and Show in file manager. A double-click '
-                  'on a card opens it in the image viewer as well (not with '
-                  'Ctrl or Shift held). Image cards '
-                  'show the image size under the name. Ctrl-click or '
-                  'Shift-click select images instead of focusing them, in '
-                  'the Flat and By folder views alike; Shift selects a range '
-                  'in on-screen order, across folders. Folding a folder or '
-                  'switching views keeps the selection. In the By folder '
-                  'view, the button left of the view switch collapses every '
-                  'folder shown (or expands them all when all are folded). Each '
-                  'pack remembers which folders you folded, per tab.',
+                  'Click a card to focus it, and ←/→ to move to the next. '
+                  'Double-click a card to open it large. Ctrl / Shift-click '
+                  'images to select several, to copy them or combine them '
+                  'into an animation. Flat shows all files in one grid; By '
+                  'folder groups them by the pack\'s folders, which you can '
+                  'fold away. The size slider (or Ctrl + wheel) makes the '
+                  'cards bigger or smaller.',
                 ),
                 _P(
-                  'The image viewer opens each image at 1:1 (actual pixels, '
-                  'as in a game); an image bigger than the window opens '
-                  'fitted instead. Fit and 1:1 in its toolbar switch, the '
-                  'wheel zooms, drag pans and a double-click fits. The '
-                  'thumbnail size sliders (dashboard, Images, Animations, '
-                  'Models, Materials) '
-                  'step one size smaller or larger with the small and big '
-                  'icons at their ends.',
+                  'The image viewer shows an image at its real size (1:1, '
+                  'as in a game), or fitted when it is bigger than the '
+                  'window. The wheel zooms and dragging moves it.',
+                ),
+              ]),
+              _Section('Animations', [
+                const _P(
+                  'Loot Silo looks for animations each time it scans the '
+                  'library. An animation is always a single file: a GIF, an '
+                  'animated WebP, or a sprite sheet (one image with all the '
+                  'frames side by side, in a row or a grid). It plays on its '
+                  'card in the Animations tab and is not listed again under '
+                  'Images.',
+                ),
+                const _P('What makes an image an animation'),
+                const _Bullets([
+                  'GIF and animated WebP files always are.',
+                  'A frame size in the name: hero (32x32).png is cut into '
+                      '32 × 32 frames. Small numbers count frames instead: '
+                      'sheet 7x7.png is 7 columns × 7 rows.',
+                  'A frame count in the name: walk_8f.png, run_strip8.png '
+                      'or 8frames is cut into 8 frames.',
+                  'An animation word (walk, idle, attack … the full list is '
+                      'below) in the file or folder name. Then the empty, '
+                      'transparent gaps between the drawings decide the '
+                      'frame size, so frames don\'t have to be square.',
+                  'A wide image with no such word, whose square frames '
+                      'clearly stand apart. A picture that runs across the '
+                      'cuts, like a bench or a row of bags, stays one image.',
+                  'An image next to an animation of exactly the same size, '
+                      'or made of a grid of its frames, uses that '
+                      'animation\'s frame size.',
+                ]),
+                const _P('Why an image is not shown as an animation'),
+                const _Bullets([
+                  'Its frames are separate files (walk_0.png, walk_1.png …). '
+                      'Each stays an image; combine them into one '
+                      'animation (below).',
+                  'Nothing tells the frame size: no size, count or '
+                      'animation word in the name, and the drawings touch, '
+                      'so there are no gaps to cut at.',
+                  'Its name says it is one frame (sail-frame12.png), or has '
+                      'a word for still images (tileset, icons, ui … listed '
+                      'below) and no sheet word.',
+                ]),
+                const _P('Why an image is shown as an animation by mistake'),
+                const _Bullets([
+                  'Its folder name has an animation word, for example a '
+                      'folder "Attack" that also holds still pictures.',
+                  'It is a row of separate pieces, like icons or items, '
+                      'that looks just like a strip of frames.',
+                ]),
+                const _P('Fixing it yourself'),
+                const _Bullets([
+                  '"Make animation…" on an image card turns it into an '
+                      'animation, starting from the best guess; set the '
+                      'frame size there. "Back to image" undoes it.',
+                  '"Not an animation" asks first, then moves the file back '
+                      'to Images; Restore (or Undo on the message) brings it '
+                      'back.',
+                  'Edit on an animation card sets the speed (fps), the '
+                      'frame size, the number of frames, and which row of a '
+                      'grid plays (or all rows). The mouse wheel over the '
+                      'Edit preview zooms.',
+                  'Combine frame files: select the frames and use the '
+                      'selection bar, or the button after a folder\'s name '
+                      'in By folder. The new strip opens in Edit straight '
+                      'away, with a file name field. Only Save writes it next '
+                      'to the frames; the frame files stay.',
+                ]),
+                const _P(
+                  'Your fixes are saved in the pack file, so they survive a '
+                  'rescan.',
+                ),
+                const _P('Naming tips for your own files'),
+                const _Bullets([
+                  '…_8f.png or …_strip8.png: a strip of 8 frames.',
+                  '(32x32) in the name: the frame size of a grid.',
+                  'An animation word (walk, idle, run …) in the name: the '
+                      'gaps between the frames decide their size.',
+                ]),
+                const _P(
+                  'Animations show the whole frame, empty border included '
+                  '(no cropping), so all animations of one character keep '
+                  'the same size.',
+                ),
+                _P('Animation words: ${animationWords.join(', ')}.'),
+                _P('Sheet words: ${sheetWords.join(', ')}.'),
+                _P(
+                  'Still-image words (not an animation unless a sheet word is '
+                  'in the name too): ${notAnimationWords.join(', ')}.',
+                ),
+              ]),
+              const _Section('Audio', [
+                _P(
+                  'Click a sound (or press Space) to play or stop it; Loop '
+                  'repeats it. Play all (Shift+Space) plays every sound '
+                  'shown, one after another, from the selected one; while it '
+                  'runs, Loop repeats the whole list. Only one sound plays '
+                  'at a time, and it stops when you leave the tab.',
                 ),
                 _P(
-                  'Each stop of a size slider is one number of cards per '
-                  'row: the cards share the row\'s width, so every stop '
-                  'changes their size; the tooltip gives the cards per row. '
-                  'The slider goes from many small cards to big ones: at '
-                  'least two per row, at most 800 px wide. Cards wider than '
-                  'before (480 px on the dashboard, 400 px in the pack tabs) '
-                  'are offered only when a whole card fits the grid\'s '
-                  'height, so they come and go as the window or the pack '
-                  'header changes size. The stops follow the window: the '
-                  'grid keeps the one nearest the size you picked (or the '
-                  'largest that still fits). The end icons and Ctrl + wheel '
-                  'move one stop. Big cards load their pictures at the '
-                  'card\'s size, so they stay sharp.',
-                ),
-                _P(
-                  'Why the slider used to stop at medium cards: each grid '
-                  'had a fixed largest card (480 px on the dashboard, 400 px '
-                  'in the pack tabs), so a wide window never got fewer than '
-                  'about four cards per row.',
-                ),
-                _P(
-                  'Audio tab: click a sound (or Space) to play or stop it; '
-                  'Loop repeats it. Play all (Shift+Space) plays every sound '
-                  'shown, in order (the file search and folder filter '
-                  'apply), with a short pause between them, starting from '
-                  'the selected one. The playing sound is highlighted and '
-                  'scrolled into view. Clicking another sound continues from '
-                  'there; Stop, Space or a click on the playing sound ends '
-                  'it. While Play all runs, Loop repeats the whole list '
-                  'instead of one sound.',
-                ),
-                _P(
-                  'One sound plays at a time in the whole app: starting a '
-                  'sound in one pack tab stops the one playing in another. '
-                  'A sound also stops when you leave its tab (another pack '
-                  'tab, the Dashboard, another tab of the pack, or closing '
-                  'the tab); it does not start again when you come back.',
+                  'The waveform shows what a sound looks like before you '
+                  'play it: a short hit, a slow swell, a loop with a gap. '
+                  'Sounds of 10 seconds or more can be sought by clicking '
+                  'the waveform (on a card) or the bar under the row (in the '
+                  'list).',
                 ),
                 _P(
                   'A sound saved in several formats (song.ogg, song.wav, '
-                  'song.mp3, side by side or in MP3 / OGG / WAV folders) is '
-                  'one row or card with a chip per format. The highlighted '
-                  'chip is the file that plays; click another to switch '
-                  '(a playing sound carries on from the same spot). In the '
-                  'list, each format keeps its own column, so a sound saved '
-                  'only as WAV shows its chip under the other WAV chips. '
-                  'Settings → Audio picks the format shown first.',
+                  'song.mp3) is shown once, with a chip per format; click a '
+                  'chip to play that file. Settings → Audio picks the format '
+                  'shown first. The sort button orders the sounds by name, '
+                  'length, size, sample rate, bitrate and more.',
                 ),
                 _P(
-                  'Each row and card shows the sound\'s waveform, so a '
-                  'short hit, a swell or a loop with a gap can be told '
-                  'apart before you play it. It is read the first time the '
-                  'row or card appears (WAV, MP3 and Ogg Vorbis; other '
-                  'formats leave the strip empty). While a sound plays, the '
-                  'part already heard is drawn in the accent colour. Sounds '
-                  'of 10 seconds or more can be sought while they play: on '
-                  'a card, click or drag the waveform (the elapsed time '
-                  'shows above its left end, the length above its right '
-                  'end); in the list, use the seek bar under the row.',
-                ),
-                _P(
-                  'Sort the sounds with the sort button in the toolbar: '
-                  'click its name for the menu (Name, the pack\'s order, '
-                  'Duration, File size, Sample rate, Channels, Bitrate or '
-                  'Bit depth); the arrow at its left shows the direction '
-                  '(up: ascending, down: descending) and a click on it '
-                  'flips it. Each sound is sorted by the format '
-                  'it shows. Sounds without the value (a WAV has no '
-                  'bitrate, an MP3 no bit depth) go last either way. The '
-                  'first sort by a detail reads every sound\'s header, '
-                  'with a thin progress bar under the toolbar. In the list, '
-                  'click the Name, Details, Duration or Size heading to sort '
-                  'by it, and again to flip; Details sorts by the menu\'s '
-                  'detail, or by sample rate. Play all follows the shown '
-                  'order. The sort is remembered.',
-                ),
-                _P(
-                  'Under a card\'s name is a line about the file it plays: '
-                  'S (stereo) or M (mono; 6ch for six channels), size, '
-                  'sample rate and bit depth (WAV, AIFF, FLAC) or bitrate '
-                  '(MP3, Ogg; ~ when it varies or is an average), e.g. '
-                  '"S · 1.2 MB · 44.1 kHz · 16-bit". Rest the pointer on '
-                  'the line to read it with the words spelled out. '
-                  'Rest the pointer on the name to see the file\'s path in '
-                  'the pack.',
-                ),
-                _P(
-                  'Mono does not mean one side only: a mono file has one '
-                  'channel and plays the same sound on both speakers. '
-                  'Stereo has a separate left and right. Mono is common '
-                  'and often wanted for sound effects, since game engines '
-                  'place mono sounds in 2D or 3D space themselves; music '
-                  'and ambience are usually stereo. The sample rate (kHz) '
-                  'is how many samples per second the sound is stored at, '
-                  'the bit depth how fine each sample is, and the bitrate '
-                  'how much data a second of a compressed file takes.',
-                ),
-                _P(
-                  'Rest the pointer on a format chip to see that file\'s '
-                  'details: sample rate, Mono / Stereo, bit depth (WAV, '
-                  'AIFF, FLAC) or bitrate (MP3, with VBR when it varies; '
-                  'Ogg as a ~ figure) and size, e.g. "WAV · 44.1 kHz · '
-                  'Stereo · 16-bit · 1.2 MB". The list shows the first '
-                  'format\'s details in a Details column (cut short in '
-                  'narrow windows).',
+                  'The line under a card\'s name tells S (stereo) or M '
+                  '(mono), size and quality. Mono doesn\'t mean one side '
+                  'only: it plays the same sound on both speakers. It is '
+                  'common for sound effects, since game engines place them '
+                  'in space themselves; music is usually stereo.',
                 ),
               ]),
               const _Section('3D models', [
                 _P(
-                  'The Models tab draws every GLB, glTF and OBJ model of the '
-                  'pack as a card, seen from a three-quarter view with '
-                  'simple lighting in the model\'s own colours (and its '
-                  'texture, when it has one). Hover a card to turn the '
-                  'model slowly. The footer shows the name, the formats and '
-                  'the triangle count. Cards work like image cards: click '
-                  'to focus, ←/→, the star, Flat or By folder, the size '
-                  'slider and Ctrl + wheel.',
+                  'The Models tab shows every GLB, glTF and OBJ model of the '
+                  'pack; hover a card to turn it. Double-click a card to '
+                  'look at it up close: drag to turn around it, the wheel '
+                  'zooms, right- or middle-drag moves it, and a double-click '
+                  'resets the view. The toolbar switches textures, '
+                  'wireframe, turntable and floor grid.',
                 ),
                 _P(
-                  'Double-click a card, or use its Open in viewer icon, to '
-                  'look at the model up close. Drag to orbit around it, use '
-                  'the wheel (or pinch) to zoom, right- or middle-drag to '
-                  'move it, and double-click to reset the camera. Keys: '
-                  'Shift+←/→ turn it, ↑/↓ look from higher or lower, + and '
-                  '− zoom, 0 resets; ←/→ go to the previous or next model of '
-                  'the tab, in on-screen order. The toolbar switches '
-                  'between the texture and flat colours, and turns on a '
-                  'wireframe, a turntable that keeps it turning, and a '
-                  'floor grid; these stay as you leave them until the app '
-                  'closes. The panel on the right shows the folder, the '
-                  'formats (click one to draw it), the triangle and vertex '
-                  'counts, the size in model units, the texture, the file '
-                  'size and each material the model uses (its colour as a '
-                  'swatch, its name and hex value; hover one to show its '
-                  'texture or .mtl file in the file manager), with Show in file '
-                  'manager and Copy path. Esc '
-                  'or the mouse back button close the viewer.',
-                ),
-                _P(
-                  'A model saved in several formats (tree.glb, tree.obj, '
-                  'tree.fbx, side by side or in "GLTF format" / "OBJ '
-                  'format" folders) is one card with a chip per format; the '
-                  'By folder view leaves the format folders out. Click GLB, '
-                  'glTF or OBJ to draw that file. FBX, DAE, STL, Blend, 3DS '
-                  'and VOX are not drawn: their chip shows the file in the '
-                  'file manager, and a model that only comes in those '
-                  'formats is listed under Other files.',
-                ),
-                _P(
-                  'A file that can\'t be read shows a broken-image icon (the '
-                  'reason in its tooltip). Models are drawn as they are '
-                  'stored, without their animations, and very large ones '
-                  '(over 200,000 triangles) show "Too large to preview".',
+                  'A model saved in several formats is one card with a chip '
+                  'per format. FBX, DAE, STL, Blend, 3DS and VOX are not '
+                  'drawn: their chip opens the file\'s folder, and a model in '
+                  'only those formats is listed under Other files. Models '
+                  'are shown without their animations.',
                 ),
               ]),
               const _Section('Materials', [
                 _P(
-                  'A texture is one image; a material is a whole surface '
-                  'made of several textures, its maps: Color (also called '
-                  'albedo, base colour or diffuse), Normal (GL or DX), '
-                  'Roughness, Metalness, AO (ambient occlusion), Height '
-                  '(displacement), Opacity, Emission, Specular, and ARM / ORM '
-                  '(several packed in one). Sites such as ambientCG call '
-                  'them materials, others "PBR textures" or a "texture set"; '
-                  'the app says Materials and maps.',
-                ),
-                _P(
-                  'Maps are grouped by a shared name plus a known ending '
-                  '(Wood_Color.png, Wood_Normal.png, rock_diff_1k.jpg), '
-                  'ignoring the resolution tag (_1K, _2K-JPG). It takes two '
+                  'A material is a surface made of several images, its '
+                  'maps: Color, Normal, Roughness, Metalness, AO, Height and '
+                  'others (sites also call them "PBR textures" or a "texture '
+                  'set"). Maps are grouped by their shared name, like '
+                  'Wood_Color.png and Wood_Normal.png. It takes at least two '
                   'maps, one of them Color or Normal, so a lone '
-                  'hero_normal.png stays an image. A .mtlx (MaterialX) file '
-                  'next to the maps names them itself, with their roles. '
-                  'A material\'s maps and the picture the pack ships for it '
-                  '(Wood.png, Wood_preview.png) leave the Images tab; its '
-                  'files for other tools leave Other files. Packs with a '
-                  'material get the material type (a type you set on a pack '
-                  'stays).',
+                  'hero_normal.png stays an image.',
                 ),
                 _P(
-                  'The Materials tab shows one card per material: the '
-                  'shipped picture, else the Color map tiled 2 × 2 so seams '
-                  'and scale show. The footer gives the name, the '
-                  'resolution and the number of maps. Hover a card for its '
-                  'chips: a map chip (Color, Normal, Roughness…) shows that '
-                  'map in the card until the pointer leaves (click it again '
-                  'for the picture); a tool chip (MaterialX, Godot, USD, '
-                  'Blender, Substance, Unity) shows its file in the file '
-                  'manager. Cards work like model cards: click to focus, '
-                  '←/→, the star, Flat or By folder, the size slider and '
-                  'Ctrl + wheel.',
-                ),
-                _P(
-                  'Double-click a card, or use its Open in viewer icon, to '
-                  'open the material viewer. Sphere (1) and Plane (2) draw '
-                  'the material lit by one light, from its Color, Normal, '
-                  'Roughness, Metalness and AO maps (a missing map counts as '
-                  'plain: white, flat, half rough, not metal, no shadow; the '
-                  'Height map and packed ARM maps are not used). Drag to '
-                  'move the light, right- or middle-drag to turn the sphere, '
-                  'the wheel or + and − zoom, double-click or 0 resets; the '
-                  'Tiling slider repeats the maps 1 to 8 times. Tiled 3 × 3 '
-                  '(3) shows the Color map nine times to judge its seams, '
-                  'and Map (4) one map at actual pixels (wheel to zoom, drag '
-                  'to pan). The strip under the stage lists the maps with '
-                  'their role, file and pixel size; click one to show it. '
-                  'The panel on the right gives the folder, resolution, '
-                  'maps, the files for other tools (click to show one in '
-                  'the file manager) and the total size, with Show in file '
-                  'manager and Copy path. ←/→ go to the previous or next '
-                  'material of the tab; the mode, tiling and light stay '
-                  'until the app closes. Esc or the mouse back button '
-                  'close the viewer.',
+                  'Hover a material card to show its maps one by one. '
+                  'Double-click it to see it on a sphere or a plane: drag to '
+                  'move the light, the Tiling slider repeats it, and Tiled '
+                  '3 × 3 shows whether its edges join without seams.',
                 ),
               ]),
-              const _Section('Right-click menu', [
+              const _Section('Copying files', [
                 _P(
-                  'Right-click an image, animation, audio, model or material '
-                  'card, an audio or Other files row, or the picture in the '
-                  'image viewer for a menu with only what applies: Copy image '
-                  'to clipboard puts the picture itself on the clipboard (at its own '
-                  'size), to paste into a chat or an image editor; Copy file '
-                  'copies the file, to paste into a game\'s assets folder in '
-                  'the file manager (an animation copies its one image file, '
-                  'a material all its maps); Copy path copies the full path '
-                  'as text; Open opens the file in its default app and Open '
-                  'with… asks which app. With several images selected, a '
-                  'right-click on one of them copies all selected files. '
-                  'Ctrl+C in the image viewer copies the shown image.',
+                  'Right-click a card or row for: Copy image to clipboard '
+                  '(to paste into a chat or an image editor), Copy file (to '
+                  'paste into your game\'s folder), Copy path, Open and Open '
+                  'with…. With several images selected, Copy file copies '
+                  'them all.',
                 ),
                 _P(
-                  'On animation cards and in the image viewer opened from '
-                  'them, two GIF items come first. Both make a looping GIF '
-                  'of the animation as its card plays it (its frames at '
-                  'their own size, at its speed). Copy as GIF to clipboard '
-                  'copies it as a picture, to paste into a chat or an email; '
-                  'some chat apps show a pasted GIF as a still. Copy as GIF '
-                  'file copies it as a .gif file, to paste into a file '
-                  'manager or a game\'s folder, where it stays moving. The '
-                  'copy items and Open with… are Linux only for now.',
+                  'Animations also have Copy as GIF to clipboard and Copy as '
+                  'GIF file, a looping GIF as the card plays it. Some chat '
+                  'apps show a pasted GIF as a still picture; the file always '
+                  'moves. The copy items and Open with… work on Linux only '
+                  'for now.',
                 ),
               ]),
               const _Section('Favorites', [
                 _P(
-                  'Star packs and single files to find them again. The star '
-                  'sits on a dashboard tile (shown on hover, always once '
-                  'starred), next to the title in a pack\'s header, on image '
-                  'and animation cards, on audio rows and cards (on cards '
-                  'the star and Show in file manager show on hover, a set '
-                  'star always), on model '
-                  'and material cards, and on Other files rows. Click it '
-                  'again to unstar.',
+                  'Click a star to keep a pack or a single file at hand. '
+                  'Stars sit on dashboard tiles, in a pack\'s header, on '
+                  'image and animation cards and on every other card and '
+                  'row. Click again to unstar.',
                 ),
                 _P(
                   'The Favorites chip (★ and a count) in the dashboard '
-                  'filter bar lists '
-                  'starred packs and packs with starred files (in the '
-                  'Expanded view, the folders holding them); its count '
-                  'follows the other filters. In the Files view it lists the '
-                  'starred files, all of them without a search. The '
-                  'Favorites chip on a pack page shows only that pack\'s '
-                  'starred files, and the tab counts follow.',
+                  'filter bar shows the starred packs and the packs holding '
+                  'starred files. In the Files view it lists the starred '
+                  'files themselves. The Favorites chip on a pack page shows '
+                  'only that pack\'s starred files. Stars are saved in the '
+                  'pack\'s asset_pack.json, so they move with the pack.',
+                ),
+              ]),
+              const _Section('Credits & itch.io', [
+                _P(
+                  'Mark a pack as used in a game with the + next to "Used in" '
+                  'on its page. The Credits screen lists each game\'s packs '
+                  'with their authors and licences, warns about authors '
+                  'without a licence, and copies or saves a CREDITS file.',
                 ),
                 _P(
-                  'Stars are saved in the pack\'s asset_pack.json '
-                  '(favorite and favorite_files), so they move with the '
-                  'pack and survive a rescan.',
+                  'itch.io: connect with an API key (kept in the system '
+                  'keychain). The itch.io screen sorts the assets you own '
+                  'into tabs. Missing: not in the library yet; Download '
+                  'fetches them (games and programs are never downloaded). '
+                  'To link: packs you imported yourself that look like ones '
+                  'you own; Link connects them and fetches their cover. '
+                  'Inside a pack: found as a folder inside another of the '
+                  'author\'s packs. In library: already linked.',
+                ),
+              ]),
+              const _Section('Settings', [
+                _P(
+                  'Appearance: light, dark or follow the system, and a '
+                  'colour for the whole app.',
+                ),
+                _P(
+                  'Resume where I left off (on by default): the next start '
+                  'opens the same pack tabs, search and filters. Off: every '
+                  'start shows a clean dashboard.',
                 ),
               ]),
               _Section('Keyboard & mouse', [
@@ -559,53 +363,6 @@ class HelpScreen extends StatelessWidget {
                 ],
                 const _P('Mouse'),
                 _Table([for (final m in mouseHelp) (m.gesture, m.label)]),
-              ]),
-              const _Section('Credits & itch.io', [
-                _P(
-                  'Mark a pack as used in a game with the + next to "Used in" '
-                  'on its page. The Credits screen lists each game\'s packs '
-                  'with their authors and licences, warns about authors '
-                  'without a licence, and copies or saves a CREDITS file '
-                  '(Markdown or text).',
-                ),
-                _P(
-                  'itch.io: connect with an API key (kept in the system '
-                  'keychain). Sync lists the asset packs you own and matches '
-                  'them to library packs by title and author. Link records '
-                  'the match in the pack file; Download fetches a missing '
-                  'pack through the usual import, with its cover and '
-                  'screenshots in _itch/.',
-                ),
-                _P(
-                  'The itch.io screen counts your owned assets and sorts them '
-                  'into four tabs. Missing: not in the library yet (game '
-                  'builds and programs are never downloaded, only assets). '
-                  'To link: packs you added yourself (folder or archive) '
-                  'that look like assets you own, by the same title and '
-                  'author; Link stores the itch id in the pack and fetches '
-                  'the cover and screenshots. Inside a pack: a folder in one of '
-                  'the author\'s packs has this name. In library: packs that '
-                  'know their itch.io page. Each tab says what it holds, '
-                  'even when it is empty. Downloads are unpacked in a '
-                  'temporary folder that is deleted when they end, and '
-                  'emptied on start in case the app was closed mid-way.',
-                ),
-              ]),
-              const _Section('Settings', [
-                _P(
-                  'Appearance: light, dark or follow the system, and a '
-                  'colour for the whole app (the swatches; teal by '
-                  'default). Both apply at once.',
-                ),
-                _P(
-                  'Resume where I left off (on by default): the next start '
-                  'opens the same pack tabs, the dashboard search, filters, '
-                  'sort and open bundle, and on each pack page its folder, '
-                  'tab, file search and Favorites chip. Packs no longer in '
-                  'the library and filter values no pack has are left out. '
-                  'Scroll positions, selections and playing sounds are not '
-                  'kept. Off: every start shows a clean dashboard.',
-                ),
               ]),
               const Divider(height: 32),
               const ProjectLinks(textAlign: TextAlign.center),
