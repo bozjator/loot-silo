@@ -47,6 +47,7 @@ class FileResultsGrid extends StatelessWidget {
       imageAspect: 1,
       footer: (_) => 44,
       spacing: fileResultsSpacing,
+      mainAxisPadding: 20,
       scale: scale,
     ),
     itemCount: files.length,

@@ -11,6 +11,17 @@ import 'favorite_star.dart';
 import 'pixel_image.dart';
 import '../cursors.dart';
 
+/// The tallest a pack tile [width] px wide gets: its 4 : 3 preview plus
+/// the footer with every optional line (two title lines, author, type
+/// chips, file matches, tags) at the default text size, rounded up. The
+/// dashboard's size stops keep this within the grid's height.
+double packTileMaxHeight(double width) => width * 3 / 4 + packTileFooterMax;
+
+/// See [packTileMaxHeight]: 18 padding + 40 title + 2 + 16 author + 6 +
+/// 2 × 18 + 4 chips (they wrap on narrow tiles) + 2 × (6 + 16) optional
+/// lines = 166, plus a little room.
+const packTileFooterMax = 172.0;
+
 IconData iconForTypes(List<String> types) => switch (types.firstOrNull) {
   'music' => Icons.music_note,
   'sfx' => Icons.graphic_eq,

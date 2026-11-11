@@ -8,7 +8,20 @@ import 'package:flutter/services.dart';
 import '../cursors.dart';
 
 /// Allowed thumbnail sizes, in logical pixels of tile width.
+///
+/// [min] is the smallest card a grid offers (except that a grid always
+/// keeps [minThumbColumns] columns). Stops up to [max] always exist; bigger
+/// ones, up to [maxCardWidth], only when the whole card fits the grid's
+/// height ([thumbStops]). [step] shapes the plain slider shown before a
+/// grid has been laid out.
 typedef SizeRange = ({double min, double max, double step});
+
+/// The widest card any grid offers, whatever the window: bigger previews
+/// cost decode time and memory.
+const maxCardWidth = 800.0;
+
+/// Every grid keeps at least this many cards per row, so it stays a grid.
+const minThumbColumns = 2;
 
 const dashboardTileRange = (min: 140.0, max: 480.0, step: 20.0);
 const imageThumbRange = (min: 80.0, max: 400.0, step: 20.0);
@@ -17,18 +30,25 @@ const modelThumbRange = (min: 120.0, max: 400.0, step: 20.0);
 const materialThumbRange = (min: 120.0, max: 400.0, step: 20.0);
 
 extension SizeRangeClamp on SizeRange {
-  double clamp(double v) => v.clamp(min, max).toDouble();
+  /// A saved tile width kept sane: at least [min], at most [maxCardWidth]
+  /// (not [max], so a large stop survives).
+  double clamp(double v) => v.clamp(min, maxCardWidth).toDouble();
 
-  /// [v] moved by [steps] whole steps, kept in range.
-  double nudge(double v, int steps) => clamp(v + steps * step);
+  /// [v] moved by [steps] whole steps, kept between [min] and [max]: the
+  /// plain slider's steps.
+  double nudge(double v, int steps) =>
+      (v.clamp(min, max) + steps * step).clamp(min, max).toDouble();
 }
+
+/// A grid tile's full height for a tile [width] px wide.
+typedef TileHeight = double Function(double width);
 
 /// A grid of cards that are an image area of fixed proportions plus a text
 /// footer of fixed height, so labels never clip however wide tiles get.
 ///
 /// With a [range] the columns are the stop ([thumbStop]) nearest
-/// [maxTileWidth], the saved slider value, and the width is reported to
-/// [scale]; without one they are counted like
+/// [maxTileWidth], the saved slider value, and the width and height are
+/// reported to [scale]; without one they are counted like
 /// [SliverGridDelegateWithMaxCrossAxisExtent].
 class ThumbGridDelegate extends SliverGridDelegate {
   const ThumbGridDelegate({
@@ -36,9 +56,14 @@ class ThumbGridDelegate extends SliverGridDelegate {
     required this.imageAspect,
     required this.footer,
     this.spacing = 12,
+    this.mainAxisPadding = 0,
     this.range,
     this.scale,
   });
+
+  /// The scroll view's padding along the scroll axis (top + bottom): taken
+  /// off the viewport's height, so the largest stop's card fits whole.
+  final double mainAxisPadding;
 
   /// The slider's value: the saved tile width.
   final double maxTileWidth;
@@ -59,14 +84,23 @@ class ThumbGridDelegate extends SliverGridDelegate {
   @override
   SliverGridLayout getLayout(SliverConstraints constraints) {
     final width = constraints.crossAxisExtent;
-    scale?.report(width);
+    final viewport = constraints.viewportMainAxisExtent;
+    final h = viewport.isFinite ? viewport - mainAxisPadding : null;
+    scale?.report(width, height: h, tileHeight: _tileHeight);
     final r = range ?? scale?.range;
     final (count, tile) = r == null
         ? thumbColumns(width, maxTileWidth, spacing)
-        : switch (thumbStop(width, maxTileWidth, r, spacing)) {
+        : switch (thumbStop(
+            width,
+            maxTileWidth,
+            r,
+            spacing,
+            height: h,
+            tileHeight: _tileHeight,
+          )) {
             (:final columns, :final tile) => (columns, tile),
           };
-    final height = tile / imageAspect + footer(tile);
+    final height = _tileHeight(tile);
     return SliverGridRegularTileLayout(
       crossAxisCount: count,
       mainAxisStride: height + spacing,
@@ -77,11 +111,14 @@ class ThumbGridDelegate extends SliverGridDelegate {
     );
   }
 
+  double _tileHeight(double tile) => tile / imageAspect + footer(tile);
+
   @override
   bool shouldRelayout(ThumbGridDelegate old) =>
       old.maxTileWidth != maxTileWidth ||
       old.imageAspect != imageAspect ||
       old.spacing != spacing ||
+      old.mainAxisPadding != mainAxisPadding ||
       old.range != range ||
       old.scale != scale;
 }
@@ -98,24 +135,42 @@ class ThumbGridDelegate extends SliverGridDelegate {
 typedef ThumbStop = ({int columns, double tile});
 
 /// The slider's stops for a grid [width] px wide (padding excluded): the
-/// tile width `(width - spacing·(n-1)) / n` of every column count `n`
-/// whose tile lies in [range], smallest tile first. Neighbouring stops
-/// always differ by one column, so every stop changes the card size. When
-/// no count fits the range (a very narrow grid), the one stop the old
-/// max-width rule gives.
-List<ThumbStop> thumbStops(double width, SizeRange range, double spacing) {
+/// tile width `(width - spacing·(n-1)) / n` of every column count
+/// `n ≥ minThumbColumns` whose tile is at least `range.min` and at most
+/// [maxCardWidth] wide, smallest tile first. A tile wider than `range.max`
+/// is a stop only when, with a [height] (the scroll area's, padding
+/// excluded) and [tileHeight], the whole tile fits that height; so the
+/// stops M79 offered always stay, and bigger cards come where there is
+/// room. Neighbouring stops always differ by one column, so every stop
+/// changes the card size.
+///
+/// A grid too narrow for [minThumbColumns] cards of `range.min` gets that
+/// many narrower cards as its one stop.
+List<ThumbStop> thumbStops(
+  double width,
+  SizeRange range,
+  double spacing, {
+  double? height,
+  TileHeight? tileHeight,
+}) {
   const eps = 1e-6;
   final stops = <ThumbStop>[];
   if (width > 0) {
-    for (var n = 1; ; n++) {
+    for (var n = minThumbColumns; ; n++) {
       final tile = (width - spacing * (n - 1)) / n;
       if (tile < range.min - eps) break;
-      if (tile <= range.max + eps) stops.add((columns: n, tile: tile));
+      if (tile > maxCardWidth + eps) continue;
+      final fits =
+          tile <= range.max + eps ||
+          height == null ||
+          tileHeight == null ||
+          tileHeight(tile) <= height + eps;
+      if (fits) stops.add((columns: n, tile: tile));
     }
   }
   if (stops.isEmpty) {
-    final (n, tile) = thumbColumns(width, range.max, spacing);
-    return [(columns: n, tile: tile)];
+    const n = minThumbColumns;
+    return [(columns: n, tile: math.max(0.0, (width - spacing * (n - 1)) / n))];
   }
   return stops.reversed.toList();
 }
@@ -133,21 +188,30 @@ int nearestStop(List<ThumbStop> stops, double saved) {
   return best;
 }
 
-/// The column count and tile width a grid [width] px wide uses for the
-/// saved tile width [saved]: its nearest stop.
+/// The column count and tile width a grid [width] px wide (and [height]
+/// tall) uses for the saved tile width [saved]: its nearest stop, so a
+/// saved card now too tall for the height becomes the largest that fits.
 ThumbStop thumbStop(
   double width,
   double saved,
   SizeRange range,
-  double spacing,
-) {
-  final stops = thumbStops(width, range, spacing);
+  double spacing, {
+  double? height,
+  TileHeight? tileHeight,
+}) {
+  final stops = thumbStops(
+    width,
+    range,
+    spacing,
+    height: height,
+    tileHeight: tileHeight,
+  );
   return stops[nearestStop(stops, saved)];
 }
 
 /// Ties a thumbnail grid to its [ThumbSizeSlider]: the grid reports its
-/// width after layout ([report]); the slider, the ± buttons and Ctrl +
-/// wheel then move between the stops of that width ([thumbStops]).
+/// width and height after layout ([report]); the slider, the ± buttons and
+/// Ctrl + wheel then move between the stops of that size ([thumbStops]).
 class ThumbScale {
   ThumbScale(this.range, {this.spacing = 12});
 
@@ -158,21 +222,43 @@ class ThumbScale {
   /// out.
   final width = ValueNotifier<double?>(null);
 
+  /// The grid's scroll area height without its padding; null when unknown
+  /// (no height limit).
+  final height = ValueNotifier<double?>(null);
+
+  /// The grid's tile height for a tile width, as last reported.
+  TileHeight? tileHeight;
+
+  /// Fires when the width or the height changes.
+  late final Listenable changes = Listenable.merge([width, height]);
+
   var _disposed = false;
 
-  /// Called from layout: the new width lands after the frame (a listener
+  /// Called from layout: the new size lands after the frame (a listener
   /// can't rebuild during layout).
-  void report(double w) {
-    if (width.value == w || _disposed) return;
+  void report(double w, {double? height, TileHeight? tileHeight}) {
+    if (_disposed) return;
+    if (tileHeight != null) this.tileHeight = tileHeight;
+    if (width.value == w && this.height.value == height) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_disposed) width.value = w;
+      if (_disposed) return;
+      width.value = w;
+      this.height.value = height;
     });
   }
 
-  /// The stops for the reported width; none before the first layout.
+  /// The stops for the reported size; none before the first layout.
   List<ThumbStop> get stops {
     final w = width.value;
-    return w == null ? const [] : thumbStops(w, range, spacing);
+    return w == null
+        ? const []
+        : thumbStops(
+            w,
+            range,
+            spacing,
+            height: height.value,
+            tileHeight: tileHeight,
+          );
   }
 
   /// [saved] moved by [steps] stops (+1: bigger cards, one column fewer),
@@ -187,6 +273,7 @@ class ThumbScale {
   void dispose() {
     _disposed = true;
     width.dispose();
+    height.dispose();
   }
 }
 
@@ -203,9 +290,14 @@ class ThumbRows extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.physics,
     this.scale,
+    this.tileHeight,
   });
 
   final double maxTileWidth;
+
+  /// The tallest a tile of a given width gets: the stops keep it within
+  /// the scroll area's height.
+  final TileHeight? tileHeight;
 
   /// Columns follow its stops; told the width after each layout.
   final ThumbScale? scale;
@@ -219,11 +311,21 @@ class ThumbRows extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.maxWidth - padding.horizontal;
+      final h = constraints.maxHeight.isFinite
+          ? constraints.maxHeight - padding.vertical
+          : null;
       final scale = this.scale;
-      scale?.report(width);
+      scale?.report(width, height: h, tileHeight: tileHeight);
       final (count, tile) = scale == null
           ? thumbColumns(width, maxTileWidth, spacing)
-          : switch (thumbStop(width, maxTileWidth, scale.range, spacing)) {
+          : switch (thumbStop(
+              width,
+              maxTileWidth,
+              scale.range,
+              spacing,
+              height: h,
+              tileHeight: tileHeight,
+            )) {
               (:final columns, :final tile) => (columns, tile),
             };
       final rows = (itemCount / count).ceil();
@@ -360,8 +462,9 @@ class _DenseTickMarkShape extends RoundSliderTickMarkShape {
 ///
 /// With a [scale] (once its grid has been laid out) the slider has one
 /// stop per column count that fits the grid ([ThumbScale.stops]), so every
-/// stop changes the card size, and the label is the cards' real width.
-/// Without one it moves through [range] in whole steps.
+/// stop changes the card size; the tooltip gives the cards per row. Without
+/// one it moves through [range] in whole steps. No value popup while
+/// dragging: the cards themselves show the size.
 class ThumbSizeSlider extends StatelessWidget {
   const ThumbSizeSlider({
     super.key,
@@ -387,27 +490,24 @@ class ThumbSizeSlider extends StatelessWidget {
   Widget build(BuildContext context) {
     final scale = this.scale;
     if (scale == null) return _plain(context);
-    return ValueListenableBuilder(
-      valueListenable: scale.width,
-      builder: (context, _, _) {
+    return ListenableBuilder(
+      listenable: scale.changes,
+      builder: (context, _) {
         final stops = scale.stops;
         return stops.isEmpty ? _plain(context) : _stops(context, stops);
       },
     );
   }
 
-  /// One stop per column count; the real card width as the label.
+  /// One stop per column count.
   Widget _stops(BuildContext context, List<ThumbStop> stops) {
     final i = nearestStop(stops, value);
-    final px = '${stops[i].tile.round()} px';
     final single = stops.length == 1;
     return _row(
       context,
       smaller: i > 0 ? () => onChanged(stops[i - 1].tile) : null,
       larger: i < stops.length - 1 ? () => onChanged(stops[i + 1].tile) : null,
-      tooltip:
-          'Card size: $px, ${stops[i].columns} per row '
-          '(Ctrl + mouse wheel)',
+      tooltip: '${stops[i].columns} per row (Ctrl + mouse wheel)',
       slider: Slider(
         key: const ValueKey('thumb-slider'),
         mouseCursor: WidgetStateMouseCursor.clickable,
@@ -417,7 +517,6 @@ class ThumbSizeSlider extends StatelessWidget {
         max: single ? 1 : stops.length - 1.0,
         divisions: single ? null : stops.length - 1,
         value: i.toDouble(),
-        label: px,
         onChanged: single
             ? null
             : (v) {
@@ -430,7 +529,7 @@ class ThumbSizeSlider extends StatelessWidget {
 
   /// Whole [range] steps, before the grid has a width.
   Widget _plain(BuildContext context) {
-    final v = range.clamp(value);
+    final v = value.clamp(range.min, range.max).toDouble();
     return _row(
       context,
       smaller: v > range.min ? () => onChanged(range.nudge(v, -1)) : null,
@@ -447,7 +546,6 @@ class ThumbSizeSlider extends StatelessWidget {
         max: range.max,
         divisions: ((range.max - range.min) / range.step).round(),
         value: v,
-        label: '${value.round()} px',
         onChanged: onChanged,
       ),
     );

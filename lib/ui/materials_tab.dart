@@ -17,6 +17,7 @@ import '../state/settings.dart';
 import 'cursors.dart';
 import 'double_click.dart';
 import 'folder_groups.dart';
+import 'widgets/pixel_image.dart';
 import 'material_viewer.dart';
 import 'reveal.dart';
 import 'shortcuts.dart';
@@ -214,6 +215,7 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
                   imageAspect: 1,
                   footer: (_) => itemCardFooter,
                   spacing: 8,
+                  mainAxisPadding: GroupedGrid.defaultPadding.vertical,
                 ),
                 itemBuilder: (context, i) => _card(sets[i], favorites),
               ),
@@ -365,6 +367,11 @@ class _MapChips extends StatelessWidget {
   }
 }
 
+/// The width a material map is decoded at for [physical] pixels: rounded
+/// up to a [decodeBucket], at most 4096 (the file's own size caps it too).
+int materialDecodeWidth(double physical) =>
+    ((physical / decodeBucket).ceil() * decodeBucket).clamp(decodeBucket, 4096);
+
 /// A material's picture: [map] when given, else the preview the pack
 /// ships, else the Color map tiled 2 × 2, else the first map. Decoded at
 /// the size shown (maps are often 1K–4K photos), smoothly filtered.
@@ -391,7 +398,9 @@ class MaterialPicture extends StatelessWidget {
         builder: (context, box) {
           final dpr = MediaQuery.devicePixelRatioOf(context);
           final side = math.max(box.maxWidth, box.maxHeight);
-          final px = (side * dpr / (tiled ? 2 : 1)).ceil().clamp(16, 2048);
+          // In [decodeBucket] steps, so a resize re-decodes only when the
+          // card crosses a step.
+          final px = materialDecodeWidth(side * dpr / (tiled ? 2 : 1));
           final image = ResizeImage(
             FileImage(File(p.join(packPath, rel))),
             width: px,

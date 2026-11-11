@@ -1131,6 +1131,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm15_scrolled', settle: false);
 
     // Ctrl + wheel: two steps bigger.
+    final startWidth = tester.getSize(find.byType(ItemCard).first).width;
     final mouse = TestPointer(1, PointerDeviceKind.mouse)
       ..hover(tester.getCenter(find.byType(CustomScrollView)));
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
@@ -1144,7 +1145,7 @@ A **16×16** knight with *walk* and *idle* animations.
       File(p.join(tmp.path, 'settings.json')).readAsStringSync(),
     ) as Map;
     final anim = (json['animation_thumb_size'] as num).toDouble();
-    expect(anim, greaterThan(200));
+    expect(anim, greaterThan(startWidth));
     expect(
       anim,
       closeTo(tester.getSize(find.byType(ItemCard).first).width, 1e-6),
@@ -1835,12 +1836,80 @@ A **16×16** knight with *walk* and *idle* animations.
     final drag = await tester.startGesture(Offset(x, thumb.center.dy));
     await tester.pump(const Duration(milliseconds: 300));
     await settleImages(tester);
-    expect(tester.widget<Slider>(s).label, '${card().round()} px');
+    // M80: no value popup while dragging.
+    expect(tester.widget<Slider>(s).label, isNull);
     await captureScreenshot(tester, 'm79_slider_stops', settle: false);
     await drag.up();
     await tester.pump();
     // Back to the saved size for the other tests.
     container.read(settingsProvider.notifier).setDashboardTileSize(saved);
+    await tester.pump();
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m80: the top slider stop, dashboard and Images (real)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.pump(const Duration(milliseconds: 300));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(Dashboard)),
+    );
+    final savedTile = container.read(settingsProvider).dashboardTileSize;
+    final savedImage = container.read(settingsProvider).imageThumbSize;
+
+    Future<void> toTop(Finder bar, Finder cards, String shot) async {
+      final s = find.descendant(
+        of: bar,
+        matching: find.byKey(const ValueKey('thumb-slider')),
+      );
+      final startWidth = tester.getSize(cards.first).width;
+      final slider = tester.widget<Slider>(s);
+      slider.onChanged!(slider.divisions!.toDouble());
+      await tester.pump();
+      await tester.pump();
+      await settleImages(tester);
+      final card = tester.getSize(cards.first);
+      final viewport = tester
+          .getSize(
+            find
+                .ancestor(of: cards.first, matching: find.byType(Scrollable))
+                .first,
+          )
+          .height;
+      // Grew; at most 800 px; over the old maximum only when it fits
+      // whole (the stops are unit-tested).
+      expect(card.width, greaterThan(startWidth));
+      expect(card.width, lessThanOrEqualTo(maxCardWidth));
+      if (card.width > 480) expect(card.height, lessThanOrEqualTo(viewport));
+      expect(tester.widget<Slider>(s).label, isNull);
+      await captureScreenshot(tester, shot, settle: false);
+    }
+
+    await toTop(
+      find.byKey(const ValueKey('dashboard-size-slider')),
+      find.byType(PackTile),
+      'm80_one_per_row_dashboard',
+    );
+    container.read(settingsProvider.notifier).setDashboardTileSize(savedTile);
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'Village(interiors)');
+    await pumpUntil(tester, find.text(villageInteriors));
+    await tester.tap(find.text(villageInteriors).first);
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await toTop(
+      find.byType(ThumbSizeSlider),
+      find.byType(ItemCard),
+      'm80_one_per_row_images',
+    );
+    container.read(settingsProvider.notifier).setImageThumbSize(savedImage);
     await tester.pump();
     expect(Directory(real).statSync().modified, before);
   });

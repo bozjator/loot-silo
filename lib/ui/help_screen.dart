@@ -285,12 +285,23 @@ class HelpScreen extends StatelessWidget {
                 _P(
                   'Each stop of a size slider is one number of cards per '
                   'row: the cards share the row\'s width, so every stop '
-                  'changes their size, and the size the slider shows (and '
-                  'its tooltip, with the cards per row) is the cards\' real '
-                  'width. The stops follow the window: a wider or narrower '
-                  'window gives other sizes, and the grid keeps the one '
-                  'nearest the size you picked. The end icons and Ctrl + '
-                  'wheel move one stop.',
+                  'changes their size; the tooltip gives the cards per row. '
+                  'The slider goes from many small cards to big ones: at '
+                  'least two per row, at most 800 px wide. Cards wider than '
+                  'before (480 px on the dashboard, 400 px in the pack tabs) '
+                  'are offered only when a whole card fits the grid\'s '
+                  'height, so they come and go as the window or the pack '
+                  'header changes size. The stops follow the window: the '
+                  'grid keeps the one nearest the size you picked (or the '
+                  'largest that still fits). The end icons and Ctrl + wheel '
+                  'move one stop. Big cards load their pictures at the '
+                  'card\'s size, so they stay sharp.',
+                ),
+                _P(
+                  'Why the slider used to stop at medium cards: each grid '
+                  'had a fixed largest card (480 px on the dashboard, 400 px '
+                  'in the pack tabs), so a wide window never got fewer than '
+                  'about four cards per row.',
                 ),
                 _P(
                   'Audio tab: click a sound (or Space) to play or stop it; '

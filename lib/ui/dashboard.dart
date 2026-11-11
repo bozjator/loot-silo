@@ -365,6 +365,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                           maxTileWidth: tileSize,
                           scale: _packScale,
+                          tileHeight: packTileMaxHeight,
                           itemCount: tiles.length,
                           itemBuilder: (context, i) {
                             final DashboardTile(:tile, :pack, :folder) =

@@ -1,8 +1,11 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:loot_silo/core/library_index.dart';
 import 'package:loot_silo/state/settings.dart';
 import 'package:loot_silo/ui/cursors.dart';
+import 'package:loot_silo/ui/materials_tab.dart';
+import 'package:loot_silo/ui/widgets/pixel_image.dart';
 import 'package:loot_silo/ui/widgets/pack_tile.dart';
 import 'package:loot_silo/ui/widgets/thumb_size.dart';
 import 'package:flutter/gestures.dart';
@@ -42,6 +45,7 @@ PackRow longPack(int i, {String? title}) => PackRow(
 
 void main() {
   m79();
+  m80();
 
   setUpAll(loadAppFonts);
 
@@ -95,8 +99,13 @@ void main() {
     });
 
     test('size ranges clamp and step', () {
-      expect(dashboardTileRange.clamp(9999), 480);
+      // M80: a saved large stop survives, up to the 800 px cap.
+      expect(dashboardTileRange.clamp(700), 700);
+      expect(dashboardTileRange.clamp(1200), maxCardWidth);
+      expect(maxCardWidth, 800);
+      expect(dashboardTileRange.clamp(10), 140);
       expect(dashboardTileRange.nudge(240, 1), 260);
+      expect(dashboardTileRange.nudge(1200, -1), 460);
       expect(dashboardTileRange.nudge(140, -1), 140);
       expect(imageThumbRange.nudge(400, 3), 400);
     });
@@ -399,6 +408,7 @@ class _HarnessState extends State<_Harness> {
                 imageAspect: 1,
                 footer: (_) => 40,
                 spacing: 8,
+                mainAxisPadding: 32,
                 scale: scale,
               ),
               itemCount: 60,
@@ -427,7 +437,9 @@ void m79() {
           expect(stops.length, greaterThan(2));
           for (var i = 0; i < stops.length; i++) {
             final s = stops[i];
-            expect(s.tile, inInclusiveRange(range.min, range.max));
+            // M80: up to 800 px, at least two per row.
+            expect(s.tile, inInclusiveRange(range.min, maxCardWidth));
+            expect(s.columns, greaterThanOrEqualTo(minThumbColumns));
             // The tiles and gaps fill the width exactly.
             expect(
               s.tile * s.columns + spacing * (s.columns - 1),
@@ -453,13 +465,13 @@ void m79() {
               );
             }
           }
-          // Every column count whose tile lies in the range has a stop.
+          // Every column count from two whose tile fits has a stop.
           final counts = stops.map((s) => s.columns).toSet();
           for (var n = 1; n < 40; n++) {
             final tile = (width - spacing * (n - 1)) / n;
             expect(
               counts.contains(n),
-              tile >= range.min && tile <= range.max,
+              n >= 2 && tile >= range.min && tile <= maxCardWidth,
               reason: 'n=$n tile=$tile',
             );
           }
@@ -468,8 +480,9 @@ void m79() {
     }
 
     test('a grid narrower than the range still gets one stop', () {
+      // M80: two narrower cards, so it stays a grid.
       expect(thumbStops(100, dashboardTileRange, 12), [
-        (columns: 1, tile: 100.0),
+        (columns: 2, tile: 44.0),
       ]);
       expect(thumbStops(0, dashboardTileRange, 12), hasLength(1));
     });
@@ -524,6 +537,19 @@ void m79() {
 
     double card(WidgetTester tester) =>
         tester.getSize(find.byKey(const ValueKey('card0'))).width;
+    // The harness grid's stops: its size without the 16 px padding, a
+    // square card over a 40 px footer.
+    List<ThumbStop> gridStops(WidgetTester tester) {
+      final grid = tester.getSize(find.byType(GridView));
+      return thumbStops(
+        grid.width - 32,
+        imageThumbRange,
+        8,
+        height: grid.height - 32,
+        tileHeight: (w) => w + 40,
+      );
+    }
+
     Slider slider(WidgetTester tester) =>
         tester.widget<Slider>(find.byKey(const ValueKey('thumb-slider')));
 
@@ -531,7 +557,7 @@ void m79() {
       tester,
     ) async {
       await pump(tester);
-      final stops = thumbStops(1200 - 32, imageThumbRange, 8);
+      final stops = gridStops(tester);
       expect(slider(tester).divisions, stops.length - 1);
       final seen = <double>[];
       for (var i = 0; i < stops.length; i++) {
@@ -540,13 +566,10 @@ void m79() {
         expect(card(tester), closeTo(stops[i].tile, 0.01));
         if (seen.isNotEmpty) expect(card(tester), isNot(seen.last));
         seen.add(card(tester));
-        // The label and tooltip give the real width.
-        expect(slider(tester).label, '${stops[i].tile.round()} px');
+        // M80: no value popup; the tooltip gives the cards per row.
+        expect(slider(tester).label, isNull);
         expect(
-          find.byTooltip(
-            'Card size: ${stops[i].tile.round()} px, ${stops[i].columns} '
-            'per row (Ctrl + mouse wheel)',
-          ),
+          find.byTooltip('${stops[i].columns} per row (Ctrl + mouse wheel)'),
           findsOneWidget,
         );
       }
@@ -557,7 +580,7 @@ void m79() {
       tester,
     ) async {
       await pump(tester);
-      final stops = thumbStops(1200 - 32, imageThumbRange, 8);
+      final stops = gridStops(tester);
       int at() => nearestStop(stops, card(tester));
       final start = at();
       await tester.tap(find.byTooltip('Larger'));
@@ -611,7 +634,7 @@ void m79() {
         await tester.binding.setSurfaceSize(Size(w, 800));
         await tester.pump();
         await tester.pump();
-        final stops = thumbStops(w - 32, imageThumbRange, 8);
+        final stops = gridStops(tester);
         // The grid shows a stop of the new width, the one nearest the
         // saved width (unchanged: a resize saves nothing).
         expect(
@@ -622,10 +645,299 @@ void m79() {
         final s = slider(tester);
         expect(s.divisions, stops.length - 1);
         expect(s.value, nearestStop(stops, before).toDouble());
-        expect(s.label, '${card(tester).round()} px');
+        expect(s.label, isNull);
       }
       // Resizing saved nothing.
       expect(saved, isEmpty);
+    });
+  });
+}
+
+void m80() {
+  group('M80 stops up to the grid height', () {
+    // The grids' tile heights: dashboard (pack tiles), Images tab (square
+    // over the item footer, as the harness).
+    final grids = {
+      'dashboard': (dashboardTileRange, 12.0, packTileMaxHeight),
+      'images': (imageThumbRange, 8.0, (double w) => w + 40),
+    };
+    double tileOf(double w, double spacing, int n) =>
+        (w - spacing * (n - 1)) / n;
+    // Grid width × scroll height for 1440×900 and 1920×1080 windows (the
+    // toolbar and padding taken off), and a short pack-page grid.
+    for (final (w, h) in [(1408.0, 740.0), (1888.0, 920.0), (1248.0, 240.0)]) {
+      for (final MapEntry(key: name, value: (range, spacing, tileHeight))
+          in grids.entries) {
+        test('$name ${w.round()}×${h.round()}: old stops kept, bigger ones '
+            'only when they fit the height', () {
+          final stops = thumbStops(
+            w,
+            range,
+            spacing,
+            height: h,
+            tileHeight: tileHeight,
+          );
+          final counts = stops.map((s) => s.columns).toSet();
+          for (var n = 1; n < 40; n++) {
+            final tile = tileOf(w, spacing, n);
+            if (tile < range.min) break;
+            final want =
+                n >= minThumbColumns &&
+                tile <= maxCardWidth &&
+                (tile <= range.max || tileHeight(tile) <= h);
+            expect(counts.contains(n), want, reason: 'n=$n tile=$tile');
+          }
+          for (var i = 1; i < stops.length; i++) {
+            expect(stops[i - 1].columns, stops[i].columns + 1);
+          }
+        });
+      }
+    }
+
+    test('a tall window: two per row at most, never over 800 px', () {
+      for (final MapEntry(value: (range, spacing, tileHeight))
+          in grids.entries) {
+        final small = thumbStops(
+          1000,
+          range,
+          spacing,
+          height: 2000,
+          tileHeight: tileHeight,
+        );
+        expect(small.last, (columns: 2, tile: tileOf(1000, spacing, 2)));
+        final wide = thumbStops(
+          1888,
+          range,
+          spacing,
+          height: 4000,
+          tileHeight: tileHeight,
+        );
+        expect(wide.last.columns, 3);
+        expect(wide.last.tile, lessThanOrEqualTo(maxCardWidth));
+        expect(wide.last.tile, greaterThan(range.max));
+      }
+    });
+
+    test('a short grid keeps the stops it had before M80', () {
+      final stops = thumbStops(
+        900,
+        imageThumbRange,
+        8,
+        height: 50,
+        tileHeight: (w) => w + 40,
+      );
+      expect(
+        stops,
+        thumbStops(900, imageThumbRange, 8).where((s) => s.tile <= 400),
+      );
+      expect(stops.last.tile, lessThanOrEqualTo(imageThumbRange.max));
+    });
+
+    test('a saved card too tall for the height uses the largest that fits', () {
+      double th(double w) => w + 40;
+      final s = thumbStop(
+        1200,
+        800,
+        imageThumbRange,
+        8,
+        height: 500,
+        tileHeight: th,
+      );
+      final stops = thumbStops(
+        1200,
+        imageThumbRange,
+        8,
+        height: 500,
+        tileHeight: th,
+      );
+      expect(s, stops.last);
+      expect(s.columns, 3);
+    });
+
+    testWidgets('a pack tile with every line stays within its max height', (
+      tester,
+    ) async {
+      await loadAppFonts();
+      await tester.binding.setSurfaceSize(const Size(1200, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      for (final w in [200.0, 480.0, 1000.0]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(
+              colorSchemeSeed: Colors.teal,
+              fontFamily: 'Roboto',
+            ),
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.topLeft,
+                // As the dashboard's rows lay it out.
+                child: SizedBox(
+                  width: w,
+                  child: IntrinsicHeight(
+                    child: PackTile(
+                      pack: longPack(1),
+                      showTags: true,
+                      fileMatches: '12 files match: a.png, b.png',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        expect(
+          tester.getSize(find.byType(PackTile)).height,
+          lessThanOrEqualTo(packTileMaxHeight(w)),
+          reason: 'width $w',
+        );
+      }
+    });
+
+    testWidgets('dragging to the top stop: the card fits the viewport', (
+      tester,
+    ) async {
+      for (final size in [const Size(1200, 800), const Size(900, 500)]) {
+        await tester.binding.setSurfaceSize(size);
+        await tester.pumpWidget(
+          MaterialApp(home: _Harness(range: imageThumbRange, initial: 160)),
+        );
+        await tester.pump();
+        final s = find.byKey(const ValueKey('thumb-slider'));
+        final slider = tester.widget<Slider>(s);
+        slider.onChanged!(slider.divisions!.toDouble());
+        await tester.pump();
+        await tester.pump();
+        final card = tester.getSize(find.byKey(const ValueKey('card0')));
+        final grid = tester.getSize(find.byType(GridView));
+        // A card over the old 400 px fits the height whole.
+        if (card.width > 400) {
+          expect(card.height, lessThanOrEqualTo(grid.height - 32));
+        }
+        // Bigger than the old cap where the height allows it.
+        if (size.height == 800) expect(card.width, greaterThan(400));
+        expect(card.width, lessThanOrEqualTo(maxCardWidth));
+        expect(tester.widget<Slider>(s).label, isNull);
+        expect(
+          find.byWidgetPredicate(
+            (w) => w is Tooltip && (w.message ?? '').contains('px'),
+          ),
+          findsNothing,
+        );
+        await tester.pumpWidget(const SizedBox());
+      }
+      await tester.binding.setSurfaceSize(null);
+    });
+
+    testWidgets('a resize caps a large saved stop by the height', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final saved = <double>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: _Harness(
+            range: imageThumbRange,
+            initial: 4000,
+            onSaved: saved.add,
+          ),
+        ),
+      );
+      await tester.pump();
+      for (final h in [900.0, 600.0, 400.0, 900.0]) {
+        await tester.binding.setSurfaceSize(Size(1200, h));
+        await tester.pump();
+        await tester.pump();
+        final card = tester.getSize(find.byKey(const ValueKey('card0')));
+        final grid = tester.getSize(find.byType(GridView));
+        final stops = thumbStops(
+          grid.width - 32,
+          imageThumbRange,
+          8,
+          height: grid.height - 32,
+          tileHeight: (w) => w + 40,
+        );
+        expect(card.width, closeTo(stops.last.tile, 0.01), reason: 'h=$h');
+        if (card.width > 400) {
+          expect(card.height, lessThanOrEqualTo(grid.height - 32));
+        }
+        final s = tester.widget<Slider>(
+          find.byKey(const ValueKey('thumb-slider')),
+        );
+        expect(s.value, stops.length - 1.0);
+      }
+      expect(saved, isEmpty);
+    });
+  });
+
+  group('M80 decode sizes follow the card', () {
+    test('decodeEdgeFor: 256 px buckets, never below today\'s 768', () {
+      expect(decodeEdgeFor(200, 1), maxDecodeEdge);
+      expect(decodeEdgeFor(768, 1), 768);
+      expect(decodeEdgeFor(769, 1), 1024);
+      expect(decodeEdgeFor(1000, 1), 1024);
+      expect(decodeEdgeFor(1000, 2), 2048);
+      expect(decodeEdgeFor(1100, 1.5), 1792);
+      expect(decodeEdgeFor(double.infinity, 1), maxDecodeEdge);
+      // Small moves inside a bucket keep the same decode.
+      expect(decodeEdgeFor(1030, 1), decodeEdgeFor(1100, 1));
+    });
+
+    test('materialDecodeWidth: buckets, at most 4096', () {
+      expect(materialDecodeWidth(10), 256);
+      expect(materialDecodeWidth(300), 512);
+      expect(materialDecodeWidth(512), 512);
+      expect(materialDecodeWidth(9000), 4096);
+    });
+
+    testWidgets('a big card decodes at its bucket, a small one at 768', (
+      tester,
+    ) async {
+      final dir = Directory.systemTemp.createTempSync('m80_decode');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final file = File(p.join(dir.path, 'big.png'));
+      await tester.runAsync(() async {
+        final rec = ui.PictureRecorder();
+        Canvas(rec).drawRect(
+          const Rect.fromLTWH(0, 0, 2400, 1200),
+          Paint()..color = Colors.teal,
+        );
+        final img = await rec.endRecording().toImage(2400, 1200);
+        final png = await img.toByteData(format: ui.ImageByteFormat.png);
+        file.writeAsBytesSync(png!.buffer.asUint8List());
+      });
+      int? decodedWidth() {
+        final raw = find.byType(RawImage);
+        if (raw.evaluate().isEmpty) return null;
+        return tester.widget<RawImage>(raw).image?.width;
+      }
+
+      Future<void> show(double side) async {
+        await tester.pumpWidget(
+          MediaQuery(
+            data: const MediaQueryData(devicePixelRatio: 1),
+            child: Center(
+              child: SizedBox.square(dimension: side, child: PixelImage(file)),
+            ),
+          ),
+        );
+        for (var i = 0; i < 20; i++) {
+          await tester.runAsync(
+            () => Future.delayed(const Duration(milliseconds: 20)),
+          );
+          await tester.pump();
+        }
+      }
+
+      await tester.binding.setSurfaceSize(const Size(1600, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await show(300);
+      expect(decodedWidth(), 768);
+      await show(1000);
+      expect(decodedWidth(), 1024);
+      await show(1100);
+      expect(decodedWidth(), 1280);
+      await tester.pumpWidget(const SizedBox());
     });
   });
 }

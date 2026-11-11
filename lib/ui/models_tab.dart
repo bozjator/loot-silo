@@ -255,6 +255,7 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
                   imageAspect: 1,
                   footer: (_) => itemCardFooter,
                   spacing: 8,
+                  mainAxisPadding: GroupedGrid.defaultPadding.vertical,
                 ),
                 itemBuilder: (context, i) => _card(models[i], favorites),
               ),

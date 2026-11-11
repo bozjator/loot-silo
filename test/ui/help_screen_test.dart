@@ -241,7 +241,18 @@ void main() {
     await pumpHelp(tester);
     final text = pageText(tester);
     expect(text, contains('Each stop of a size slider is one number of cards'));
-    expect(text, contains('the cards\' real width'));
     expect(text, contains('The end icons and Ctrl + wheel move one stop.'));
   });
+
+  testWidgets(
+    'M80: the slider goes up to 800 px, two per row; why it stopped',
+    (tester) async {
+      await pumpHelp(tester);
+      final text = pageText(tester);
+      expect(text, contains('at least two per row, at most 800 px wide'));
+      expect(text, contains('the tooltip gives the cards per row'));
+      expect(text, contains('Why the slider used to stop at medium cards'));
+      expect(text, isNot(contains('the cards\' real width')));
+    },
+  );
 }

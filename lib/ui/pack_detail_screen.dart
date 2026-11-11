@@ -2013,6 +2013,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
         imageAspect: 1,
         footer: (_) => itemCardFooter,
         spacing: 8,
+        mainAxisPadding: GroupedGrid.defaultPadding.vertical,
         scale: _scale,
       ),
       itemBuilder: (context, i) {

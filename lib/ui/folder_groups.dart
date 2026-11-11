@@ -162,9 +162,12 @@ class GroupedGrid extends StatelessWidget {
     required this.gridDelegate,
     required this.itemBuilder,
     this.physics,
-    this.padding = const EdgeInsets.fromLTRB(16, tabContentGap, 16, 16),
+    this.padding = defaultPadding,
     this.folderAction,
   });
+
+  /// The padding around the grid unless given.
+  static const defaultPadding = EdgeInsets.fromLTRB(16, tabContentGap, 16, 16);
 
   final List<String> rels;
   final ItemsView view;

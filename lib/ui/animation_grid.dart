@@ -217,6 +217,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                       scale: _scale,
                       imageAspect: 1,
                       footer: (_) => itemCardFooter,
+                      mainAxisPadding: 24,
                     ),
                     // Only built (so only playing) while on screen.
                     itemBuilder: (context, i) => _AnimationTile(

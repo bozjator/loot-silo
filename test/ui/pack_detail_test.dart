@@ -5711,13 +5711,40 @@ void main() {
           await tester.pump();
           await tester.pump();
           widths.add(card());
-          expect(tester.widget<Slider>(s).label, '${card().round()} px');
+          // M80: no value popup while dragging.
+          expect(tester.widget<Slider>(s).label, isNull);
           if (i > 0) expect(widths[i], greaterThan(widths[i - 1]));
         }
         final saved = images
             ? store.load().imageThumbSize
             : store.load().dashboardTileSize;
         expect(saved, closeTo(widths.last, 1e-6));
+        // M80: a top stop over the old maximum fits the scroll area whole;
+        // never over 800 px, always two per row.
+        final range = images ? imageThumbRange : dashboardTileRange;
+        expect(widths.last, lessThanOrEqualTo(maxCardWidth));
+        final viewport = tester
+            .getSize(
+              find
+                  .ancestor(of: cards.first, matching: find.byType(Scrollable))
+                  .first,
+            )
+            .height;
+        if (widths.last > range.max) {
+          expect(
+            tester.getSize(cards.first).height,
+            lessThanOrEqualTo(viewport),
+          );
+        }
+        expect(
+          find.descendant(
+            of: bar,
+            matching: find.byWidgetPredicate(
+              (w) => w is Tooltip && (w.message ?? '').contains('px'),
+            ),
+          ),
+          findsNothing,
+        );
       });
     }
 

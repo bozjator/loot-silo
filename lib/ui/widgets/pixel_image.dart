@@ -3,14 +3,31 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Largest edge an image is decoded at; mockups can be 4k+ pixels.
+/// The edge an image is decoded at in a small box; mockups can be 4k+
+/// pixels. Bigger boxes decode at [decodeEdgeFor].
 const maxDecodeEdge = 768;
+
+/// Decode sizes go up in steps of this many physical pixels, so resizing
+/// the window doesn't fill the image cache with one copy per pixel.
+const decodeBucket = 256;
+
+/// The long edge to decode an image at for a box [logical] px on its long
+/// edge at [devicePixelRatio]: the box's physical size rounded up to a
+/// [decodeBucket], never below [maxDecodeEdge] (small tiles decode as they
+/// always did). The file's own size still caps it (no upscaling).
+int decodeEdgeFor(double logical, double devicePixelRatio) {
+  if (!logical.isFinite || logical <= 0) return maxDecodeEdge;
+  final px = (logical * devicePixelRatio / decodeBucket).ceil() * decodeBucket;
+  return math.max(maxDecodeEdge, px);
+}
 
 /// Shows an image file the way pixel art should look: scaled up in whole
 /// steps with no smoothing, or scaled down to fit when it's too big.
 ///
-/// Big images are decoded at most [maxDecodeEdge] pixels on their long
-/// edge, by the engine, so a grid of mockups stays cheap. For animated
+/// Big images are decoded by the engine at the box's size ([decodeEdgeFor]:
+/// [maxDecodeEdge] for tiles of today's size, more for big cards, in
+/// [decodeBucket] steps), so a grid of mockups stays cheap and a card one
+/// per row stays sharp. For animated
 /// files only the first frame is shown unless [animate] is set.
 class PixelImage extends StatefulWidget {
   const PixelImage(
@@ -39,13 +56,15 @@ class PixelImage extends StatefulWidget {
   final bool fullResolution;
   final WidgetBuilder? errorBuilder;
 
-  static ImageProvider providerFor(File file) => ResizeImage(
-    FileImage(file),
-    width: maxDecodeEdge,
-    height: maxDecodeEdge,
-    policy: ResizeImagePolicy.fit,
-    allowUpscaling: false,
-  );
+  /// [file] decoded to fit [edge] × [edge] pixels.
+  static ImageProvider providerFor(File file, {int edge = maxDecodeEdge}) =>
+      ResizeImage(
+        FileImage(file),
+        width: edge,
+        height: edge,
+        policy: ResizeImagePolicy.fit,
+        allowUpscaling: false,
+      );
 
   @override
   State<PixelImage> createState() => _PixelImageState();
@@ -59,6 +78,10 @@ class _PixelImageState extends State<PixelImage> {
   var _listening = false;
   ImageInfo? _info;
   Object? _error;
+
+  /// The decode edge [_stream] uses; follows the box's size after layout.
+  int _edge = maxDecodeEdge;
+  var _edgePending = false;
   late final _listener = ImageStreamListener(_onImage, onError: _onError);
 
   @override
@@ -83,7 +106,7 @@ class _PixelImageState extends State<PixelImage> {
   void _resolve({bool force = false}) {
     final provider = widget.fullResolution
         ? FileImage(widget.file)
-        : PixelImage.providerFor(widget.file);
+        : PixelImage.providerFor(widget.file, edge: _edge);
     final stream = provider.resolve(createLocalImageConfiguration(context));
     if (!force && stream.key == _stream?.key) return;
     _unlisten();
@@ -118,8 +141,33 @@ class _PixelImageState extends State<PixelImage> {
     super.dispose();
   }
 
+  /// Re-decodes after the frame when the box needs another bucket; the old
+  /// picture stays until the new one is ready.
+  void _follow(BoxConstraints box) {
+    if (widget.fullResolution) return;
+    final edge = decodeEdgeFor(
+      math.max(box.maxWidth, box.maxHeight),
+      MediaQuery.devicePixelRatioOf(context),
+    );
+    if (edge == _edge || _edgePending) return;
+    _edgePending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _edgePending = false;
+      if (!mounted || edge == _edge) return;
+      _edge = edge;
+      _resolve();
+    });
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      _follow(box);
+      return _image(context);
+    },
+  );
+
+  Widget _image(BuildContext context) {
     if (_error != null) {
       return widget.errorBuilder?.call(context) ??
           const Center(child: Icon(Icons.broken_image_outlined));
