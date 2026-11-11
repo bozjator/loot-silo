@@ -1,6 +1,8 @@
 #include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
+
+#include <cstring>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
@@ -20,9 +22,55 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+// On Wayland (and in GNOME's dock on X11 too) the window icon set below is
+// ignored: the shell shows the icon of the desktop entry whose name matches
+// the app id. A portable bundle (unpacked tarball, `flutter run`) has none
+// installed, so register one in ~/.local/share/applications pointing at this
+// binary and its icon. Rewritten only when its content changes, e.g. after
+// the bundle folder was moved.
+static void register_desktop_entry(const gchar* bundle_dir, const gchar* exe) {
+  // Characters that would need escaping in Exec=; such paths are skipped.
+  if (strpbrk(exe, "\"`$\\\n") != nullptr ||
+      strpbrk(bundle_dir, "\\\n") != nullptr) {
+    return;
+  }
+  g_autofree gchar* icon =
+      g_build_filename(bundle_dir, "data", "app_icon.png", nullptr);
+  g_autofree gchar* content = g_strdup_printf(
+      "[Desktop Entry]\n"
+      "Type=Application\n"
+      "Name=Loot Silo\n"
+      "Comment=Your game assets. At a glance.\n"
+      "Exec=\"%s\"\n"
+      "Icon=%s\n"
+      "Terminal=false\n"
+      "Categories=Graphics;Development;\n"
+      "StartupWMClass=%s\n",
+      exe, icon, APPLICATION_ID);
+
+  g_autofree gchar* apps_dir =
+      g_build_filename(g_get_user_data_dir(), "applications", nullptr);
+  g_autofree gchar* path =
+      g_build_filename(apps_dir, APPLICATION_ID ".desktop", nullptr);
+  g_autofree gchar* existing = nullptr;
+  if (g_file_get_contents(path, &existing, nullptr, nullptr) &&
+      g_strcmp0(existing, content) == 0) {
+    return;
+  }
+  if (g_mkdir_with_parents(apps_dir, 0755) != 0) return;
+  g_file_set_contents(path, content, -1, nullptr);
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+
+  // The bundle folder: the binary sits next to data/ and lib/.
+  g_autofree gchar* exe = g_file_read_link("/proc/self/exe", nullptr);
+  g_autofree gchar* bundle_dir =
+      exe != nullptr ? g_path_get_dirname(exe) : nullptr;
+  if (exe != nullptr) register_desktop_entry(bundle_dir, exe);
+
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
@@ -56,12 +104,10 @@ static void my_application_activate(GApplication* application) {
   gtk_window_set_default_size(window, 1280, 720);
 
   // The window / taskbar icon, installed next to the binary
-  // (bundle/data/app_icon.png).
-  g_autofree gchar* exe = g_file_read_link("/proc/self/exe", nullptr);
-  if (exe != nullptr) {
-    g_autofree gchar* dir = g_path_get_dirname(exe);
+  // (bundle/data/app_icon.png). Used by X11 window managers other than GNOME.
+  if (bundle_dir != nullptr) {
     g_autofree gchar* icon =
-        g_build_filename(dir, "data", "app_icon.png", nullptr);
+        g_build_filename(bundle_dir, "data", "app_icon.png", nullptr);
     gtk_window_set_icon_from_file(window, icon, nullptr);
   }
 

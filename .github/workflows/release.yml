@@ -1,0 +1,41 @@
+# Builds the itch.io packages (Linux and Windows zips) on GitHub's machines.
+# Run it from the Actions tab ("Run workflow"); download the zips from the
+# run's Artifacts. Linux builds on Ubuntu 22.04 so the app also runs on
+# older distros (glibc 2.35+).
+name: Release packages
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+
+      - name: Linux build tools and libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev libsecret-1-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev zip
+
+      - name: Package
+        shell: bash
+        run: FLUTTER=flutter bash tool/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: loot-silo-${{ runner.os }}
+          path: build/dist/*.zip
+          if-no-files-found: error
