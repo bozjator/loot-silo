@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "dev.uzo" "\0"
+            VALUE "CompanyName", "Bozjatorium" "\0"
             VALUE "FileDescription", "Loot Silo" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "loot_silo" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 dev.uzo. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Bozjatorium. All rights reserved." "\0"
             VALUE "OriginalFilename", "loot_silo.exe" "\0"
             VALUE "ProductName", "Loot Silo" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

@@ -38,7 +38,7 @@ void main() {
     expect(load('linux/runner/resources/app_icon.png').width, 256);
     expect(File('windows/runner/resources/app_icon.ico').existsSync(), isTrue);
     expect(
-      File('linux/runner/resources/dev.uzo.loot_silo.desktop')
+      File('linux/runner/resources/com.bozjatorium.LootSilo.desktop')
           .readAsStringSync(),
       contains('Name=Loot Silo'),
     );
