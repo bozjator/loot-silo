@@ -20,7 +20,16 @@ abstract class KeyStore {
 /// Windows).
 class SecureKeyStore implements KeyStore {
   static const _name = 'itch_api_key';
-  final _storage = const FlutterSecureStorage();
+
+  /// macOS: the login keychain, not the data protection keychain. The latter
+  /// needs a `keychain-access-groups` entitlement and a Developer Team
+  /// signature, which itch.io and source builds (ad-hoc signed) don't have.
+  final _storage = const FlutterSecureStorage(
+    mOptions: MacOsOptions(
+      usesDataProtectionKeychain: false,
+      label: 'Loot Silo itch.io API key',
+    ),
+  );
 
   @override
   Future<String?> read() => _storage.read(key: _name);
