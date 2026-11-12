@@ -1,4 +1,4 @@
-# Builds the itch.io packages (Linux and Windows zips) on GitHub's machines.
+# Builds the itch.io packages (Linux, Windows and macOS zips) on GitHub's machines.
 # Run it from the Actions tab ("Run workflow"); download the zips from the
 # run's Artifacts. Linux builds on Ubuntu 22.04 so the app also runs on
 # older distros (glibc 2.35+).
@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest]
+        os: [ubuntu-22.04, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
