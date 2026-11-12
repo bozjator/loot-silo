@@ -5980,7 +5980,7 @@ void main() {
                   .evaluate())
             ((e.widget as ListTile).title! as Text).data!,
         ],
-        Platform.isLinux
+        Platform.isLinux || Platform.isMacOS
             ? ['Copy file', 'Copy path', 'Open', 'Open with…']
             : ['Copy path', 'Open'],
       );

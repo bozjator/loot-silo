@@ -8,8 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 /// Files and images on the system clipboard, and opening files in other
 /// apps. Text uses Flutter's own [Clipboard]; images and files go through
-/// our `loot_silo/clipboard` channel (Linux runner, GTK), so [canCopyFiles]
-/// and [canOpenWith] are false elsewhere.
+/// our `loot_silo/clipboard` channel (Linux runner on GTK, macOS runner on
+/// NSPasteboard), so [canCopyFiles] and [canOpenWith] are false elsewhere.
 abstract class FileClipboard {
   /// Copy image / Copy file are offered.
   bool get canCopyFiles;
@@ -21,8 +21,9 @@ abstract class FileClipboard {
   /// at its own size.
   Future<void> copyImage(String path);
 
-  /// [paths] as files to paste into a file manager (`text/uri-list`,
-  /// `x-special/gnome-copied-files`, the paths as text); never an image.
+  /// [paths] as files to paste into a file manager (Linux: `text/uri-list`,
+  /// `x-special/gnome-copied-files`; macOS: file URLs; and the paths as
+  /// text); never an image.
   Future<void> copyFiles(List<String> paths);
 
   /// [bytes] offered only as [mime] (`image/gif`), for chats and email.
@@ -43,16 +44,19 @@ final fileClipboardProvider = Provider<FileClipboard>(
 );
 
 class PlatformFileClipboard implements FileClipboard {
-  PlatformFileClipboard({bool? linux}) : _linux = linux ?? Platform.isLinux;
+  PlatformFileClipboard({bool? native})
+    : _native = native ?? (Platform.isLinux || Platform.isMacOS);
 
   static const channel = MethodChannel('loot_silo/clipboard');
-  final bool _linux;
+
+  /// The runner has the channel.
+  final bool _native;
 
   @override
-  bool get canCopyFiles => _linux;
+  bool get canCopyFiles => _native;
 
   @override
-  bool get canOpenWith => _linux;
+  bool get canOpenWith => _native;
 
   @override
   Future<void> copyImage(String path) async {

@@ -2158,8 +2158,10 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, find.text('File copied'));
     final uris = await clipRead(tester, 'text/uri-list');
     expect(utf8.decode(uris!).trim(), Uri.file(path).toString());
-    final gnome = await clipRead(tester, 'x-special/gnome-copied-files');
-    expect(utf8.decode(gnome!), 'copy\n${Uri.file(path)}');
+    if (Platform.isLinux) {
+      final gnome = await clipRead(tester, 'x-special/gnome-copied-files');
+      expect(utf8.decode(gnome!), 'copy\n${Uri.file(path)}');
+    }
     // A file only: no picture for a file manager to paste instead (M75).
     final offered = await tester.runAsync(PlatformFileClipboard.targets);
     expect(offered!.where((t) => t.startsWith('image/')), isEmpty);
@@ -2253,7 +2255,9 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(file.readAsBytesSync(), gif);
     offered = (await tester.runAsync(PlatformFileClipboard.targets))!;
     expect(offered.where((t) => t.startsWith('image/')), isEmpty);
-    expect(offered, contains('x-special/gnome-copied-files'));
+    if (Platform.isLinux) {
+      expect(offered, contains('x-special/gnome-copied-files'));
+    }
     expect(p.isWithin(real, file.path), isFalse);
     expect(Directory(real).statSync().modified, before);
   });
