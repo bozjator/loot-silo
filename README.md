@@ -150,7 +150,9 @@ that is mostly Loot Silo. See the [license](LICENSE).
 
 Needs the Flutter SDK (stable) with Linux desktop support, plus
 `libsecret-1-dev` (for the itch.io key) and, for 7z and rar archives, `7zz`,
-`7z` or `unrar` on the PATH.
+`7z` or `unrar` on the PATH. On macOS the system `tar` reads most 7z and rar
+archives; 7-Zip (`brew install sevenzip`) covers the rest, such as encrypted
+or multi-volume ones.
 
 ```bash
 flutter pub get

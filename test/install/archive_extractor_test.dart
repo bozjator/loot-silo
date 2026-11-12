@@ -147,6 +147,42 @@ void main() {
     expect(Link(p.join(r.folder, 'link')).existsSync(), isFalse);
   }, skip: sevenZip == null ? '7-Zip not installed' : false);
 
+  test('7z through the macOS built-in tar, with a symlink dropped', () {
+    final src = Directory(p.join(tmp.path, 'src', 'Slime Pack'))
+      ..createSync(recursive: true);
+    File(p.join(src.path, 'slime.png')).writeAsStringSync('x');
+    Link(p.join(src.path, 'link')).createSync('/etc/passwd');
+    final path = p.join(tmp.path, 'slimes.7z');
+    final made = Process.runSync(systemBsdtar!, [
+      '--format',
+      '7zip',
+      '-cf',
+      path,
+      '-C',
+      p.join(tmp.path, 'src'),
+      'Slime Pack',
+    ]);
+    expect(made.exitCode, 0, reason: '${made.stderr}');
+    final r = extractArchive(path, out);
+    expect(p.basename(r.folder), 'Slime Pack');
+    expect(files(r.folder), ['slime.png']);
+  }, skip: systemBsdtar == null ? 'macOS only' : false);
+
+  test('a broken rar names the reason', () {
+    final bad = p.join(tmp.path, 'bad.rar');
+    File(bad).writeAsStringSync('not a rar');
+    expect(
+      () => extractArchive(bad, out),
+      throwsA(
+        isA<ExtractError>().having(
+          (e) => e.message,
+          'message',
+          startsWith('Could not extract bad.rar: '),
+        ),
+      ),
+    );
+  }, skip: systemBsdtar == null && sevenZip == null ? 'no rar tool' : false);
+
   test('missing tools give an actionable error', () {
     expect(findTool(['7z'], environment: {'PATH': tmp.path}), isNull);
   });

@@ -54,13 +54,15 @@ class ExtractError implements Exception {
   String toString() => message;
 }
 
-/// Finds the first of [names] on PATH (plus the usual 7-Zip install folder
-/// on Windows).
+/// Finds the first of [names] on PATH, plus the usual install folders:
+/// 7-Zip's on Windows, and Homebrew's on macOS (an app opened from Finder
+/// gets a PATH without them).
 String? findTool(List<String> names, {Map<String, String>? environment}) {
   final env = environment ?? Platform.environment;
   final dirs = [
     ...(env['PATH'] ?? '').split(Platform.isWindows ? ';' : ':'),
     if (Platform.isWindows) r'C:\Program Files\7-Zip',
+    if (Platform.isMacOS) ...['/opt/homebrew/bin', '/usr/local/bin'],
   ];
   for (final name in names) {
     for (final dir in dirs.where((d) => d.isNotEmpty)) {
@@ -73,6 +75,21 @@ String? findTool(List<String> names, {Map<String, String>? environment}) {
     }
   }
   return null;
+}
+
+/// macOS ships bsdtar (libarchive), which reads 7z and rar (RAR4 and
+/// RAR5) but not encrypted ones; the fallback when 7-Zip and unrar are
+/// missing.
+String? get systemBsdtar =>
+    Platform.isMacOS && File('/usr/bin/tar').existsSync()
+    ? '/usr/bin/tar'
+    : null;
+
+/// How to install a tool for 7z/rar on this OS, for error messages.
+String get archiveToolInstallHint {
+  if (Platform.isMacOS) return 'install 7-Zip with: brew install sevenzip';
+  if (Platform.isWindows) return 'install 7-Zip from https://7-zip.org';
+  return 'install it (for example: sudo apt install 7zip unrar)';
 }
 
 /// Unpacks [archivePath] into a new folder under [destParent] and
@@ -199,6 +216,7 @@ void _extractWithPackage(String path, ArchiveKind format, String dest) {
 void _extractWithTool(String path, ArchiveKind format, String dest) {
   final sevenZip = findTool(['7zz', '7z', '7za']);
   final unrar = format == ArchiveKind.rar ? findTool(['unrar']) : null;
+  final bsdtar = systemBsdtar;
   final ProcessResult result;
   if (sevenZip != null) {
     // -p- fails encrypted archives instead of waiting for a password.
@@ -212,18 +230,33 @@ void _extractWithTool(String path, ArchiveKind format, String dest) {
     ]);
   } else if (unrar != null) {
     result = Process.runSync(unrar, ['x', '-o+', '-y', '-p-', path, '$dest/']);
+  } else if (bsdtar != null) {
+    // bsdtar refuses absolute and `..` entries unless given -P.
+    result = Process.runSync(bsdtar, ['-x', '-f', path, '-C', dest]);
   } else {
     throw ExtractError(
       'Extracting ${p.basename(path)} needs 7-Zip'
       '${format == ArchiveKind.rar ? ' or unrar' : ''}; '
-      'install it (Linux: sudo apt install 7zip unrar).',
+      '$archiveToolInstallHint.',
     );
   }
   if (result.exitCode != 0) {
-    final message = '${result.stderr}'.trim().split('\n').last;
+    final usedTar = sevenZip == null && unrar == null;
+    final lines = [
+      for (final l in '${result.stderr}'.split('\n'))
+        if (l.trim().isNotEmpty) l.trim(),
+    ];
+    // 7-Zip and unrar end with the reason; bsdtar starts with it and ends
+    // with "Error exit delayed from previous errors".
+    final message = lines.isEmpty
+        ? ''
+        : usedTar
+        ? lines.first.replaceFirst('tar: ', '')
+        : lines.last;
     throw ExtractError(
       'Could not extract ${p.basename(path)}'
-      '${message.isEmpty ? '' : ': $message'}',
+      '${message.isEmpty ? '' : ': $message'}'
+      '${usedTar ? '. If it opens elsewhere, $archiveToolInstallHint' : ''}',
     );
   }
 }

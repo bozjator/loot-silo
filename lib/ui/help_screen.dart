@@ -51,7 +51,8 @@ class HelpScreen extends StatelessWidget {
                   'you own. Later, the import button in the top bar does the '
                   'same (Ctrl+I, Ctrl+O, or drop files on the window). Your '
                   'original folder or archive is never changed. 7z and rar '
-                  'need 7zz, 7z or unrar installed.',
+                  'use 7-Zip or unrar if installed; on macOS the built-in '
+                  'tar opens most of them without either.',
                 ),
                 _P(
                   'Before anything is copied, a review lists the packs found: '
