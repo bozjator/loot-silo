@@ -4752,19 +4752,25 @@ void main() {
         expectNextTo(used, game);
       });
 
-      testWidgets('no values: the dash, then the icon', (tester) async {
+      testWidgets('no values: just the icon, at the start', (tester) async {
         await openKnight(tester, sidecar: const {'used_in': <String>[]});
         tester.takeException();
         const add = 'Mark as used in a game';
-        final dash = find.descendant(
-          of: find.ancestor(
-            of: find.byTooltip(add),
-            matching: find.byType(Wrap),
-          ),
-          matching: find.text('—'),
+        final wrap = find.ancestor(
+          of: find.byTooltip(add),
+          matching: find.byType(Wrap),
         );
-        final (icon, last) = iconAndLast(tester, add, dash);
-        expectNextTo(icon, last);
+        expect(
+          find.descendant(of: wrap, matching: find.byType(Text)),
+          findsNothing,
+        );
+        expect(
+          find.descendant(of: wrap, matching: find.text('—')),
+          findsNothing,
+        );
+        // Only the button's own padding before it.
+        final icon = tester.getRect(find.byIcon(Icons.add));
+        expect(icon.left - tester.getRect(wrap).left, lessThan(12));
       });
 
       testWidgets('many tags: the icon wraps onto the last line', (
@@ -4874,6 +4880,18 @@ void main() {
           expect(find.byType(dialog), findsNothing);
         }
       });
+    });
+
+    testWidgets('the author link is not underlined', (tester) async {
+      await openKnight(tester);
+      tester.takeException();
+      final link = tester.widget<Text>(
+        find.descendant(
+          of: find.byType(InkWell),
+          matching: find.text('HeroMaker'),
+        ),
+      );
+      expect(link.style?.decoration, isNot(TextDecoration.underline));
     });
 
     testWidgets('M36: icons fit at the minimum window size', (tester) async {
@@ -5315,6 +5333,22 @@ void main() {
       );
       final header = find.byKey(const ValueKey('header-star'));
       expect(header, findsOneWidget);
+      // The star comes before the title, with no padding of its own, and
+      // shares a centre line with the author icon below it.
+      final starRect = tester.getRect(
+        find.descendant(of: header, matching: find.byType(Icon)),
+      );
+      final titleRect = tester.getRect(
+        find.byKey(const ValueKey('header-title')),
+      );
+      expect(starRect.right, lessThanOrEqualTo(titleRect.left));
+      expect(tester.getRect(header).left, closeTo(starRect.left, 0.5));
+      final person = tester.getRect(find.byIcon(Icons.person_outline));
+      expect(person.center.dx, closeTo(starRect.center.dx, 0.5));
+      expect(
+        tester.getRect(find.text('HeroMaker').first).left,
+        closeTo(titleRect.left, 0.5),
+      );
       await tester.tap(header);
       await tester.pump();
       expect(sidecar()['favorite'], isTrue);

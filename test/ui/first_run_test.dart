@@ -186,8 +186,12 @@ void main() {
   });
 
   group('M76 itch.io screen', () {
-    Future<void> pumpItch(WidgetTester tester, List<ItchMatch> matches) async {
-      await tester.binding.setSurfaceSize(const Size(1200, 800));
+    Future<void> pumpItch(
+      WidgetTester tester,
+      List<ItchMatch> matches, {
+      Size size = const Size(1200, 800),
+    }) async {
+      await tester.binding.setSurfaceSize(size);
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final keys = [for (final m in matches) m.key];
       await tester.pumpWidget(
@@ -250,6 +254,42 @@ void main() {
       }
       // No bulk button over an empty list.
       expect(find.byType(FilledButton), findsNothing);
+    });
+
+    testWidgets('a narrow window: space between the hint and the bulk button', (
+      tester,
+    ) async {
+      await pumpItch(tester, [
+        ItchMatch(_owned(1, 'Orc Pack'), MatchKind.missing),
+        ItchMatch(
+          _owned(2, 'Slime Pack'),
+          MatchKind.fuzzy,
+          pack: PackRow(
+            id: 'orcmaker/Slime Pack',
+            path: '/lib/orcmaker/Slime Pack',
+            title: 'Slime Pack',
+            author: 'orcmaker',
+            isContainer: false,
+            types: const [],
+            tags: const [],
+            usedIn: const [],
+            favorite: false,
+            favoriteFiles: const [],
+            fileCount: 1,
+            totalBytes: 1,
+          ),
+        ),
+      ], size: const Size(800, 600));
+      for (final (tab, hint) in [
+        ('Missing', 'Not in the library.'),
+        ('To link', 'Packs you added yourself'),
+      ]) {
+        await tester.tap(find.widgetWithText(Tab, tab));
+        await tester.pumpAndSettle();
+        final text = tester.getRect(find.textContaining(hint));
+        final button = tester.getRect(find.byType(FilledButton));
+        expect(button.left - text.right, greaterThanOrEqualTo(12), reason: tab);
+      }
     });
 
     group('M90 striped rows', () {

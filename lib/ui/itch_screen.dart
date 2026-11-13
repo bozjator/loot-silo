@@ -313,8 +313,10 @@ class _Group extends ConsumerWidget {
               Expanded(
                 child: Text(hint, style: Theme.of(context).textTheme.bodySmall),
               ),
-              if (bulkLabel != null && matches.isNotEmpty)
+              if (bulkLabel != null && matches.isNotEmpty) ...[
+                const SizedBox(width: 16),
                 FilledButton(onPressed: onBulk, child: Text(bulkLabel!)),
+              ],
             ],
           ),
         ),

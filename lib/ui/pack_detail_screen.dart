@@ -1381,6 +1381,8 @@ class _Info extends ConsumerWidget {
               Expanded(
                 child: Row(
                   children: [
+                    _PackStar(packId: pack.id),
+                    const SizedBox(width: _headerIconGap),
                     Flexible(
                       child: Text(
                         pack.title,
@@ -1388,8 +1390,6 @@ class _Info extends ConsumerWidget {
                         style: theme.textTheme.headlineSmall,
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    _PackStar(packId: pack.id),
                     IconButton(
                       tooltip: 'Edit title',
                       icon: const Icon(Icons.edit, size: 18),
@@ -1415,8 +1415,14 @@ class _Info extends ConsumerWidget {
           const SizedBox(height: 4),
           Row(
             children: [
-              const Icon(Icons.person_outline, size: 18),
-              const SizedBox(width: 6),
+              // As wide as the star above, so the two icons share a centre
+              // line and the title and author start at the same x.
+              const SizedBox(
+                key: ValueKey('header-author-icon'),
+                width: _headerStarSize,
+                child: Icon(Icons.person_outline, size: 18),
+              ),
+              const SizedBox(width: _headerIconGap),
               if (authorUrl != null)
                 InkWell(
                   mouseCursor: clickCursor,
@@ -1425,7 +1431,6 @@ class _Info extends ConsumerWidget {
                     pack.author ?? authorUrl,
                     style: theme.textTheme.bodyLarge?.copyWith(
                       color: theme.colorScheme.primary,
-                      decoration: TextDecoration.underline,
                     ),
                   ),
                 )
@@ -1587,14 +1592,13 @@ class _ChipRow extends StatelessWidget {
           child: Text(label, style: Theme.of(context).textTheme.labelLarge),
         ),
         Expanded(
-          // The edit / add icon follows the last chip (or the `—`), so it
-          // wraps to the next line with them.
+          // The edit / add icon follows the last chip, so it wraps to the
+          // next line with them.
           child: Wrap(
             spacing: 6,
             runSpacing: 6,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              if (values.isEmpty) const Text('—'),
               for (final v in values)
                 Chip(
                   label: Text(v),
@@ -4895,6 +4899,12 @@ Widget fileStar(
 );
 
 /// The pack's favorites star, beside the title in the header.
+/// The header star's size; the author icon below takes the same width.
+const _headerStarSize = 22.0;
+
+/// Between the header's icons (star, author) and their text.
+const _headerIconGap = 6.0;
+
 class _PackStar extends ConsumerWidget {
   const _PackStar({required this.packId});
 
@@ -4904,7 +4914,8 @@ class _PackStar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => FavoriteStar(
     key: const ValueKey('header-star'),
     starred: ref.watch(favoritesProvider.select((f) => f.isPack(packId))),
-    size: 22,
+    size: _headerStarSize,
+    tight: true,
     onPressed: () => ref.read(favoritesProvider.notifier).togglePack(packId),
   );
 }
