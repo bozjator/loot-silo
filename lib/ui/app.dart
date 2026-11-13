@@ -272,6 +272,18 @@ class HomeScreen extends ConsumerWidget {
     final library = ref.watch(libraryProvider);
     final scanning = library.isLoading;
     void rescan() => rescanLibrary(ref);
+    // A newly chosen library (first run, or switched in Settings) scans
+    // behind a wait screen: Riverpod keeps the previous value while it
+    // loads, which is the empty state on first run and the old library's
+    // packs after a switch. A rescan of the packs on screen keeps them.
+    final waiting = switch (library) {
+      AsyncValue(isLoading: false) => false,
+      // An error stays on screen while Riverpod retries the load.
+      AsyncValue(hasError: true) => false,
+      AsyncValue(:final value?) =>
+        value.packs.isEmpty || value.root != libraryPath,
+      _ => true,
+    };
 
     // Ctrl+I/O/R, F5 and Ctrl+, are bound app-wide (LootSiloApp).
     return Scaffold(
@@ -328,7 +340,9 @@ class HomeScreen extends ConsumerWidget {
       body: DropZone(
         onDrop: (paths) => _onDrop(context, ref, paths),
         child: switch (library) {
-          AsyncValue(:final value?) when value.packs.isNotEmpty =>
+          _ when waiting => _ScanningLibrary(path: libraryPath),
+          AsyncValue(:final value?)
+              when value.packs.isNotEmpty && value.root == libraryPath =>
             const Dashboard(),
           AsyncValue(:final error?) => _Message(
             icon: Icons.error_outline,
@@ -354,7 +368,7 @@ class HomeScreen extends ConsumerWidget {
             body: 'Add your first packs in one of these ways:',
             action: _FirstPacks(),
           ),
-          _ => const Center(child: Text('Scanning library…')),
+          _ => _ScanningLibrary(path: libraryPath),
         },
       ),
     );
@@ -535,18 +549,44 @@ class _DropZoneState extends State<DropZone> {
   }
 }
 
+/// Shown while a newly chosen library scans: the logo, a spinner and the
+/// folder being read.
+class _ScanningLibrary extends StatelessWidget {
+  const _ScanningLibrary({required this.path});
+
+  final String path;
+
+  @override
+  Widget build(BuildContext context) => KeyedSubtree(
+    key: const ValueKey('library-wait'),
+    child: _Message(
+      header: const AppLogo(height: 112),
+      visual: const SizedBox.square(
+        dimension: 48,
+        child: CircularProgressIndicator(),
+      ),
+      title: 'Please wait while we scan your library',
+      body: path,
+    ),
+  );
+}
+
 class _Message extends StatelessWidget {
   const _Message({
-    required this.icon,
+    this.icon,
+    this.visual,
     required this.title,
     required this.body,
     this.action,
     this.header,
-  });
+  }) : assert((icon == null) != (visual == null));
 
   /// Shown above the icon (the first-start screen's name and slogan).
   final Widget? header;
-  final IconData icon;
+  final IconData? icon;
+
+  /// In place of [icon], e.g. a spinner.
+  final Widget? visual;
   final String title;
   final String body;
   final Widget? action;
@@ -568,7 +608,8 @@ class _Message extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (header != null) ...[header!, const SizedBox(height: 32)],
-                  Icon(icon, size: 64, color: theme.colorScheme.primary),
+                  visual ??
+                      Icon(icon, size: 64, color: theme.colorScheme.primary),
                   const SizedBox(height: 16),
                   Text(title, style: theme.textTheme.titleLarge),
                   const SizedBox(height: 8),

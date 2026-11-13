@@ -38,6 +38,12 @@ final libraryIndexProvider = Provider<LibraryIndex>(
   (ref) => throw UnimplementedError('libraryIndexProvider not overridden'),
 );
 
+/// Loads a library folder into the index; swapped out in tests that need
+/// to hold a scan open.
+final libraryServiceProvider = Provider<LibraryService>(
+  (ref) => LibraryService(ref.read(libraryIndexProvider)),
+);
+
 /// Asks the user for a folder; swapped out in tests.
 typedef DirectoryPicker = Future<String?> Function(String title);
 
@@ -221,7 +227,7 @@ class LibraryNotifier extends AsyncNotifier<LibraryState> {
     if (!Directory(root).existsSync()) {
       throw LibraryMissing(root);
     }
-    final service = LibraryService(ref.read(libraryIndexProvider));
+    final service = ref.read(libraryServiceProvider);
     final result = await service.load(root, force: force);
     ref.read(folderFoldsProvider).prune(root, [
       for (final p in result.packs) p.path,

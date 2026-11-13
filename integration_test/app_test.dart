@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:loot_silo/core/audio_duration.dart';
 import 'package:loot_silo/core/library_index.dart';
+import 'package:loot_silo/core/library_service.dart';
 import 'package:loot_silo/itch/itch_api.dart';
 import 'package:loot_silo/itch/itch_key.dart';
 import 'package:loot_silo/state/dashboard.dart';
@@ -42,6 +43,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
@@ -255,9 +257,18 @@ void main() {
 
   /// [restart]: keeps the saved settings (and last session), as when the
   /// app starts again.
-  Widget app(String source, {String? library, bool restart = false}) {
+  Widget app(
+    String source, {
+    String? library,
+    bool restart = false,
+    // No library chosen yet: the first-start screen.
+    bool firstRun = false,
+    List<Override> overrides = const [],
+  }) {
     final store = SettingsStore(File(p.join(tmp.path, 'settings.json')));
-    if (!restart) store.save(AppSettings(libraryPath: library ?? lib));
+    if (!restart) {
+      store.save(AppSettings(libraryPath: firstRun ? null : library ?? lib));
+    }
     return screenshotable(
       ProviderScope(
         overrides: [
@@ -287,6 +298,7 @@ void main() {
           saveLocationProvider.overrideWithValue(
             (name) async => p.join(tmp.path, name),
           ),
+          ...overrides,
         ],
         child: const LootSiloApp(),
       ),
@@ -5042,6 +5054,35 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm88_pack_header', settle: false);
   });
 
+  testWidgets('m89: wait screen while a newly chosen library scans', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final gate = Completer<void>();
+    await tester.pumpWidget(
+      app(
+        lib,
+        firstRun: true,
+        overrides: [
+          libraryServiceProvider.overrideWith(
+            (ref) => _HeldService(ref.read(libraryIndexProvider), gate),
+          ),
+        ],
+      ),
+    );
+    await pumpUntil(tester, find.text('Choose folder'));
+    await tester.tap(find.text('Choose folder'));
+    const title = 'Please wait while we scan your library';
+    await pumpUntil(tester, find.text(title));
+    expect(find.text(lib), findsOneWidget);
+    expect(find.byKey(const ValueKey('first-choices')), findsNothing);
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm89_scanning_library', settle: false);
+    gate.complete();
+    await pumpUntil(tester, find.text('Knight Pack'));
+    expect(find.text(title), findsNothing);
+  });
+
   testWidgets('m61: model viewer — orbit, wireframe, Esc closes', (
     tester,
   ) async {
@@ -5222,4 +5263,18 @@ class _FakeTrackPlayer implements TrackPlayer {
   Stream<void> get onComplete => complete.stream;
   @override
   Future<void> dispose() async {}
+}
+
+/// Holds the library load until [gate] completes, so a screenshot can
+/// catch the wait screen.
+class _HeldService extends LibraryService {
+  _HeldService(super.index, this.gate);
+
+  final Completer<void> gate;
+
+  @override
+  Future<LoadResult> load(String root, {bool force = false}) async {
+    await gate.future;
+    return super.load(root, force: force);
+  }
 }

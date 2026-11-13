@@ -44,7 +44,9 @@ class HelpScreen extends StatelessWidget {
               const _Section('Getting started', [
                 _P(
                   'Loot Silo keeps your game assets in one library folder, '
-                  'sorted as Author / Pack. An empty library shows three '
+                  'sorted as Author / Pack. When you choose a folder that '
+                  'already holds packs (at the first start or in Settings), '
+                  'it is scanned first, then shown. An empty library shows three '
                   'ways to start: Import folder copies packs from a folder '
                   'on your computer, Import archive unpacks zip, tar, 7z or '
                   'rar files, and Connect itch.io downloads the asset packs '
