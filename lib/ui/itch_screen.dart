@@ -323,10 +323,50 @@ class _Group extends ConsumerWidget {
               ? Center(child: Text(empty))
               : ListView.builder(
                   itemCount: matches.length,
-                  itemBuilder: (context, i) => _GameTile(match: matches[i]),
+                  // Striped by the position shown, so they re-flow when
+                  // a download removes a row.
+                  itemBuilder: (context, i) => _StripedRow(
+                    key: ValueKey('itch-row:${matches[i].key.game.id}'),
+                    index: i,
+                    child: _GameTile(match: matches[i]),
+                  ),
                 ),
         ),
       ],
+    );
+  }
+}
+
+/// One itch.io row's background across the full list width: odd rows
+/// `surfaceContainer`, the row under the pointer `surfaceContainerHighest`,
+/// so each Download / Link button reads as part of its row on a wide
+/// window. A [Material], so the buttons' ripples show on top of it.
+class _StripedRow extends StatefulWidget {
+  const _StripedRow({super.key, required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<_StripedRow> createState() => _StripedRowState();
+}
+
+class _StripedRowState extends State<_StripedRow> {
+  var _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final color = _hover
+        ? scheme.surfaceContainerHighest
+        : widget.index.isOdd
+        ? scheme.surfaceContainer
+        : theme.scaffoldBackgroundColor;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Material(color: color, child: widget.child),
     );
   }
 }

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -249,6 +250,98 @@ void main() {
       }
       // No bulk button over an empty list.
       expect(find.byType(FilledButton), findsNothing);
+    });
+
+    group('M90 striped rows', () {
+      Finder row(int id) => find.byKey(ValueKey('itch-row:$id'));
+
+      Color colorOf(WidgetTester tester, int id) => tester
+          .widget<Material>(
+            find.descendant(of: row(id), matching: find.byType(Material)).first,
+          )
+          .color!;
+
+      PackRow pack(String id) => PackRow(
+        id: id,
+        path: '/lib/$id',
+        title: id.split('/').last,
+        author: id.split('/').first,
+        isContainer: false,
+        types: const [],
+        tags: const [],
+        usedIn: const [],
+        favorite: false,
+        favoriteFiles: const [],
+        fileCount: 1,
+        totalBytes: 1,
+      );
+
+      testWidgets('Missing: odd rows tinted, full width, hover highlight', (
+        tester,
+      ) async {
+        await pumpItch(tester, [
+          for (var i = 1; i <= 4; i++)
+            ItchMatch(_owned(i, 'Pack $i'), MatchKind.missing),
+        ]);
+        final context = tester.element(row(1));
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        expect(colorOf(tester, 1), theme.scaffoldBackgroundColor);
+        expect(colorOf(tester, 2), scheme.surfaceContainer);
+        expect(colorOf(tester, 3), theme.scaffoldBackgroundColor);
+        expect(colorOf(tester, 4), scheme.surfaceContainer);
+        expect(scheme.surfaceContainer, isNot(theme.scaffoldBackgroundColor));
+
+        // Row 1's background spans the list, its Download button included.
+        final list = tester.getRect(find.byType(ListView));
+        final band = tester.getRect(row(2));
+        expect(band.left, list.left);
+        expect(band.right, list.right);
+        final download = tester.getRect(
+          find.descendant(
+            of: row(2),
+            matching: find.widgetWithText(OutlinedButton, 'Download'),
+          ),
+        );
+        expect(band.contains(download.topLeft), isTrue);
+        expect(
+          band.contains(download.bottomRight - const Offset(1, 1)),
+          isTrue,
+        );
+
+        final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+        await mouse.addPointer(location: tester.getCenter(row(1)));
+        addTearDown(mouse.removePointer);
+        await tester.pump();
+        expect(colorOf(tester, 1), scheme.surfaceContainerHighest);
+        await mouse.moveTo(const Offset(1, 1));
+        await tester.pump();
+        expect(colorOf(tester, 1), theme.scaffoldBackgroundColor);
+      });
+
+      testWidgets('To link: the same stripes', (tester) async {
+        await pumpItch(tester, [
+          for (var i = 1; i <= 3; i++)
+            ItchMatch(
+              _owned(i, 'Pack $i'),
+              MatchKind.fuzzy,
+              pack: pack('orcmaker/Pack $i'),
+            ),
+        ]);
+        await tester.tap(find.widgetWithText(Tab, 'To link'));
+        await tester.pumpAndSettle();
+        final theme = Theme.of(tester.element(row(1)));
+        expect(colorOf(tester, 1), theme.scaffoldBackgroundColor);
+        expect(colorOf(tester, 2), theme.colorScheme.surfaceContainer);
+        expect(colorOf(tester, 3), theme.scaffoldBackgroundColor);
+        expect(
+          find.descendant(
+            of: row(2),
+            matching: find.widgetWithText(OutlinedButton, 'Link'),
+          ),
+          findsOneWidget,
+        );
+      });
     });
   });
 }

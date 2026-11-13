@@ -4650,6 +4650,80 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(lib).listSync(), isEmpty);
   });
 
+  testWidgets('m90: itch.io Missing tab — striped rows, hover', (tester) async {
+    copyTree('test/fixtures/managed', lib);
+    const titles = [
+      'Orc Pack',
+      'Dungeon Tiles',
+      'Forest Tileset',
+      'UI Icons 16x16',
+      'Sea Creatures',
+      'Desert Ruins',
+      'Spell Effects',
+    ];
+    itchClient = MockClient((r) async {
+      if (r.url.host == 'api.itch.io' &&
+          r.headers['Authorization'] != 'Bearer test-key') {
+        return http.Response('{"errors":["invalid key"]}', 401);
+      }
+      return switch ('${r.url.host}${r.url.path}') {
+        'api.itch.io/profile' => http.Response(
+          '{"user":{"id":1,"username":"tester"}}',
+          200,
+        ),
+        'api.itch.io/profile/owned-keys' => http.Response(
+          jsonEncode(
+            r.url.queryParameters['page'] == '1'
+                ? {
+                    'owned_keys': [
+                      for (var i = 0; i < titles.length; i++)
+                        {
+                          'id': 100 + i,
+                          'game': {
+                            'id': 50 + i,
+                            'title': titles[i],
+                            'url': 'https://maker$i.itch.io/g$i',
+                            'classification': 'assets',
+                            'user': {'id': 50 + i, 'username': 'maker$i'},
+                          },
+                        },
+                    ],
+                    'per_page': 50,
+                  }
+                : {'owned_keys': {}},
+          ),
+          200,
+        ),
+        _ => http.Response('<html></html>', 200),
+      };
+    });
+    addTearDown(() => itchClient = null);
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Slimes'));
+    await tester.tap(find.byTooltip('itch.io'));
+    await pumpUntil(tester, find.text('Connect itch.io'));
+    await tester.enterText(find.byType(TextField).last, 'test-key');
+    await tester.pump();
+    await tester.tap(find.text('Connect'));
+    await pumpUntil(tester, find.text('Spell Effects'));
+    final band = tester.getRect(find.byKey(const ValueKey('itch-row:51')));
+    final list = tester.getRect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('itch-row:51')),
+        matching: find.byType(ListView),
+      ),
+    );
+    expect(band.width, list.width);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(
+      location: tester.getCenter(find.byKey(const ValueKey('itch-row:52'))),
+    );
+    addTearDown(mouse.removePointer);
+    await tester.pump(const Duration(milliseconds: 200));
+    await captureScreenshot(tester, 'm90_itch_missing_stripes', settle: false);
+  });
+
   testWidgets('itch on the real account and library (read-only)', (
     tester,
   ) async {
