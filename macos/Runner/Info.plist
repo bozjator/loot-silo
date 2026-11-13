@@ -28,5 +28,10 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Skia, not Impeller: Impeller hung the Intel UHD 630 GPU (macOS
+	     GPU resets froze the whole system) and drew stray white triangles
+	     and dropped cards on the dashboard, worst in full screen. -->
+	<key>FLTEnableImpeller</key>
+	<false/>
 </dict>
 </plist>
