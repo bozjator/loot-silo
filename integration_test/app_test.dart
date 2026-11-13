@@ -3587,6 +3587,11 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await pumpUntil(tester, find.byType(PreviewGridDialog), gone: true);
     expect(Directory(real).statSync().modified, before);
+    // The header's animated preview schedules its next GIF frame; unmount
+    // and let pending decodes land so none outlives the test.
+    await tester.pumpWidget(const SizedBox());
+    await settleImages(tester);
+    await tester.pump();
   });
 
   testWidgets('m29: header previews and viewer zoom (real, read-only)', (
@@ -4977,6 +4982,64 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm64_slim_header', settle: false);
     await tester.tap(find.byTooltip('Pin header (H)'));
     await tester.pump(const Duration(milliseconds: 300));
+  });
+
+  testWidgets('m88: pack header — icons by the values, info to the edge', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    final sidecar = File(p.join(pack, 'asset_pack.json'));
+    final json = jsonDecode(sidecar.readAsStringSync()) as Map;
+    const title =
+        'Knight Pack — heroes, armour sets, idle, walk, attack and death '
+        'animations for every direction';
+    sidecar.writeAsStringSync(
+      jsonEncode({
+        ...json,
+        'title': title,
+        'tags': [
+          for (final t in [
+            'knight',
+            'pixel-art',
+            'rpg',
+            'medieval',
+            'top-down',
+            'hero',
+            'armour',
+            'sword',
+            'shield',
+            'animated',
+            '16x16',
+            'fantasy',
+            'character',
+            'enemy',
+            'npc',
+            'dungeon',
+            'retro',
+            'side-view',
+          ])
+            t,
+        ],
+        'itch_url': 'https://example.itch.io/knight-pack',
+      }),
+    );
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text(title));
+    await tester.tap(find.text(title));
+    await pumpUntil(tester, find.byType(TabBar));
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    final titleRect = tester.getRect(
+      find.byKey(const ValueKey('header-title')),
+    );
+    final icons = tester.getRect(find.byKey(const ValueKey('header-actions')));
+    final info = tester.getRect(find.byKey(const ValueKey('header-info')));
+    expect(titleRect.right, lessThanOrEqualTo(icons.left));
+    expect(icons.right, closeTo(info.right, 0.5));
+    expect(find.byTooltip('itch.io page'), findsOneWidget);
+    await captureScreenshot(tester, 'm88_pack_header', settle: false);
   });
 
   testWidgets('m61: model viewer — orbit, wireframe, Esc closes', (

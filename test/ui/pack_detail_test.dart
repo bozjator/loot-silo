@@ -26,6 +26,7 @@ import 'package:loot_silo/ui/pack_detail_screen.dart';
 import 'package:loot_silo/ui/reveal.dart';
 import 'package:loot_silo/ui/settings_screen.dart';
 import 'package:loot_silo/ui/tabs.dart';
+import 'package:loot_silo/ui/widgets/meta_dialogs.dart';
 import 'package:loot_silo/ui/dashboard.dart';
 import 'package:loot_silo/ui/folder_groups.dart';
 import 'package:loot_silo/ui/track_player.dart';
@@ -185,6 +186,8 @@ void main() {
     List<Override> overrides = const [],
     // Changes the settings saved before the app starts.
     AppSettings Function(AppSettings)? settings,
+    // The pack's title on the dashboard when the sidecar changes it.
+    String title = 'Knight Pack',
   }) async {
     final lib = p.join(tmp.path, 'library');
     copyTree('test/fixtures/managed', lib);
@@ -234,9 +237,9 @@ void main() {
         child: const LootSiloApp(),
       ),
     );
-    await pumpUntil(tester, find.text('Knight Pack'));
+    await pumpUntil(tester, find.text(title));
     if (!open) return;
-    await tester.tap(find.text('Knight Pack'));
+    await tester.tap(find.text(title));
     await pumpUntil(tester, find.byType(TabBar));
     // Let the page finish sliding in.
     await tester.pump(const Duration(seconds: 1));
@@ -4700,14 +4703,187 @@ void main() {
       expect(store.load().detailHeaderPinned, isTrue);
     });
 
+    group('M88: header', () {
+      Rect rect(WidgetTester tester, Finder f) => tester.getRect(f);
+
+      /// The chip row's edit / add icon, and the last thing before it.
+      (Rect, Rect) iconAndLast(
+        WidgetTester tester,
+        String tooltip,
+        Finder last,
+      ) {
+        final icon = rect(
+          tester,
+          find.ancestor(
+            of: find.byTooltip(tooltip),
+            matching: find.byType(IconButton),
+          ),
+        );
+        return (icon, rect(tester, last));
+      }
+
+      void expectNextTo(Rect icon, Rect last) {
+        expect(icon.left - last.right, inInclusiveRange(0, 12));
+        // Same line: the icon's centre is within the last item's height.
+        expect(icon.center.dy, closeTo(last.center.dy, last.height / 2));
+      }
+
+      testWidgets('edit / add icons follow the last chip', (tester) async {
+        await openKnight(tester);
+        tester.takeException();
+        final (types, character) = iconAndLast(
+          tester,
+          'Edit types',
+          find.widgetWithText(Chip, 'character'),
+        );
+        expectNextTo(types, character);
+        final tags = sortedTags(['knight', 'pixel-art']);
+        final (tagIcon, lastTag) = iconAndLast(
+          tester,
+          'Edit tags',
+          find.widgetWithText(Chip, tags.last),
+        );
+        expectNextTo(tagIcon, lastTag);
+        final (used, game) = iconAndLast(
+          tester,
+          'Mark as used in a game',
+          find.widgetWithText(Chip, 'My Game'),
+        );
+        expectNextTo(used, game);
+      });
+
+      testWidgets('no values: the dash, then the icon', (tester) async {
+        await openKnight(tester, sidecar: const {'used_in': <String>[]});
+        tester.takeException();
+        const add = 'Mark as used in a game';
+        final dash = find.descendant(
+          of: find.ancestor(
+            of: find.byTooltip(add),
+            matching: find.byType(Wrap),
+          ),
+          matching: find.text('—'),
+        );
+        final (icon, last) = iconAndLast(tester, add, dash);
+        expectNextTo(icon, last);
+      });
+
+      testWidgets('many tags: the icon wraps onto the last line', (
+        tester,
+      ) async {
+        final many = [for (var i = 0; i < 40; i++) 'tag number $i'];
+        await openKnight(tester, sidecar: {'tags': many});
+        tester.takeException();
+        final wrap = find.ancestor(
+          of: find.byTooltip('Edit tags'),
+          matching: find.byType(Wrap),
+        );
+        final chips = find.descendant(of: wrap, matching: find.byType(Chip));
+        final rects = [
+          for (var i = 0; i < chips.evaluate().length; i++)
+            tester.getRect(chips.at(i)),
+        ];
+        final firstTop = rects.first.top;
+        final lastTop = rects.map((r) => r.top).reduce((a, b) => a > b ? a : b);
+        expect(lastTop, greaterThan(firstTop), reason: 'chips wrap');
+        final lastLine = rects.where((r) => r.top == lastTop).toList()
+          ..sort((a, b) => a.left.compareTo(b.left));
+        final icon = rect(
+          tester,
+          find.ancestor(
+            of: find.byTooltip('Edit tags'),
+            matching: find.byType(IconButton),
+          ),
+        );
+        final last = lastLine.last;
+        // The icon is after the last chip, on the last line or one below
+        // it when that line is full; never before a chip.
+        expect(icon.center.dy, greaterThan(last.top));
+        if (icon.center.dy < last.bottom) {
+          expectNextTo(icon, last);
+        } else {
+          expect(icon.left, lessThan(last.left), reason: 'a new line');
+        }
+      });
+
+      for (final linked in [false, true]) {
+        testWidgets('a long title wraps before the icons (itch.io: $linked)', (
+          tester,
+        ) async {
+          final long = ('Knight Pack with a very long title ' * 6).trim();
+          await openKnight(
+            tester,
+            sidecar: {
+              'title': long,
+              if (linked) 'itch_url': 'https://example.itch.io/knight',
+            },
+            // The tile shows the long title instead of "Knight Pack".
+            title: long,
+          );
+          tester.takeException();
+          final title = rect(
+            tester,
+            find.byKey(const ValueKey('header-title')),
+          );
+          final icons = rect(
+            tester,
+            find.byKey(const ValueKey('header-actions')),
+          );
+          expect(
+            find.byTooltip('itch.io page'),
+            linked ? findsOneWidget : findsNothing,
+          );
+          expect(title.right, lessThanOrEqualTo(icons.left));
+          expect(title.height, greaterThan(40), reason: 'it wraps');
+        });
+      }
+
+      testWidgets('the path gets the full width of the info', (tester) async {
+        await openKnight(tester);
+        tester.takeException();
+        final info = rect(tester, find.byKey(const ValueKey('header-info')));
+        final icons = rect(
+          tester,
+          find.byKey(const ValueKey('header-actions')),
+        );
+        // The icons sit in the info's top-right corner.
+        expect(icons.right, closeTo(info.right, 0.5));
+        expect(icons.top, closeTo(info.top, 0.5));
+        final path = find.byWidgetPredicate(
+          (w) => w is SelectableText && (w.data ?? '').endsWith('Knight Pack'),
+        );
+        final paragraph = tester.renderObject<RenderBox>(
+          find.descendant(of: path, matching: find.byType(EditableText)),
+        );
+        final max = paragraph.constraints.maxWidth;
+        expect(max, closeTo(info.width, 0.5));
+      });
+
+      testWidgets('each icon still opens its dialog', (tester) async {
+        await openKnight(tester);
+        tester.takeException();
+        for (final (tooltip, dialog) in [
+          ('Edit types', TypesDialog),
+          ('Edit tags', TagsDialog),
+          ('Mark as used in a game', GameNameDialog),
+        ]) {
+          await tester.tap(find.byTooltip(tooltip));
+          await tester.pumpAndSettle();
+          expect(find.byType(dialog), findsOneWidget, reason: tooltip);
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pumpAndSettle();
+          expect(find.byType(dialog), findsNothing);
+        }
+      });
+    });
+
     testWidgets('M36: icons fit at the minimum window size', (tester) async {
       await openKnight(tester, size: const Size(1024, 600));
       tester.takeException();
-      final info = tester.getRect(find.byKey(const ValueKey('header-info')));
+      final title = tester.getRect(find.byKey(const ValueKey('header-title')));
       final icons = tester.getRect(
         find.byKey(const ValueKey('header-actions')),
       );
-      expect(info.right, lessThanOrEqualTo(icons.left));
+      expect(title.right, lessThanOrEqualTo(icons.left));
       expect(icons.right, lessThanOrEqualTo(1024));
       final preview = tester.getRect(
         find.byKey(const ValueKey('header-preview')),

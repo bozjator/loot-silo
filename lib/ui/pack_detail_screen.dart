@@ -771,20 +771,11 @@ class _Header extends StatelessWidget {
             images: contents.carousel(pack.preview),
             sizes: contents.sizes,
           ),
-          // The icons take their own column on the right, so the info
-          // never runs under them.
-          info: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: KeyedSubtree(
-                  key: const ValueKey('header-info'),
-                  child: _Info(pack: pack, contents: contents),
-                ),
-              ),
-              const SizedBox(width: 8),
-              actions,
-            ],
+          // The info takes the full width; the icons sit in its top-right
+          // corner and only the title row leaves room for them.
+          info: KeyedSubtree(
+            key: const ValueKey('header-info'),
+            child: _Info(pack: pack, contents: contents, actions: actions),
           ),
         ),
       ),
@@ -1317,10 +1308,18 @@ class PreviewGridDialog extends ConsumerWidget {
 
 /// Title, author, types, tags and totals, each editable in place.
 class _Info extends ConsumerWidget {
-  const _Info({required this.pack, required this.contents});
+  const _Info({
+    required this.pack,
+    required this.contents,
+    required this.actions,
+  });
 
   final PackRow pack;
   final PackContents contents;
+
+  /// Pin / itch.io / folder: the end of the title row, so a long title
+  /// wraps before them and every line below runs to the right edge.
+  final Widget actions;
 
   /// Takes the notifier rather than [WidgetRef]: the header collapses
   /// once the pointer leaves it for a dialog, unmounting this widget, so
@@ -1377,27 +1376,40 @@ class _Info extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Flexible(
-                child: Text(pack.title, style: theme.textTheme.headlineSmall),
-              ),
-              const SizedBox(width: 4),
-              _PackStar(packId: pack.id),
-              IconButton(
-                tooltip: 'Edit title',
-                icon: const Icon(Icons.edit, size: 18),
-                onPressed: () async {
-                  final library = ref.read(libraryProvider.notifier);
-                  final title = await showDialog<String>(
-                    context: context,
-                    builder: (_) => TitleDialog(
-                      initial: contents.sidecar?.title ?? pack.title,
-                      folderName: p.basename(pack.path),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        pack.title,
+                        key: const ValueKey('header-title'),
+                        style: theme.textTheme.headlineSmall,
+                      ),
                     ),
-                  );
-                  if (title != null) await _save(library, title: title);
-                },
+                    const SizedBox(width: 4),
+                    _PackStar(packId: pack.id),
+                    IconButton(
+                      tooltip: 'Edit title',
+                      icon: const Icon(Icons.edit, size: 18),
+                      onPressed: () async {
+                        final library = ref.read(libraryProvider.notifier);
+                        final title = await showDialog<String>(
+                          context: context,
+                          builder: (_) => TitleDialog(
+                            initial: contents.sidecar?.title ?? pack.title,
+                            folderName: p.basename(pack.path),
+                          ),
+                        );
+                        if (title != null) await _save(library, title: title);
+                      },
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
+              actions,
             ],
           ),
           const SizedBox(height: 4),
@@ -1575,9 +1587,12 @@ class _ChipRow extends StatelessWidget {
           child: Text(label, style: Theme.of(context).textTheme.labelLarge),
         ),
         Expanded(
+          // The edit / add icon follows the last chip (or the `—`), so it
+          // wraps to the next line with them.
           child: Wrap(
             spacing: 6,
             runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               if (values.isEmpty) const Text('—'),
               for (final v in values)
@@ -1588,13 +1603,14 @@ class _ChipRow extends StatelessWidget {
                   onDeleted: onDelete == null ? null : () => onDelete!(v),
                   deleteButtonTooltipMessage: 'Remove $v',
                 ),
+              IconButton(
+                tooltip: editTooltip ?? 'Edit ${label.toLowerCase()}',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(editIcon, size: 18),
+                onPressed: onEdit,
+              ),
             ],
           ),
-        ),
-        IconButton(
-          tooltip: editTooltip ?? 'Edit ${label.toLowerCase()}',
-          icon: Icon(editIcon, size: 18),
-          onPressed: onEdit,
         ),
       ],
     );
