@@ -2607,6 +2607,51 @@ void main() {
       expect(items(tester), [...all, 'useAsCover', 'addPreview']);
     });
 
+    testWidgets('an animation added to the previews plays there', (
+      tester,
+    ) async {
+      final sheet = img.Image(width: 64, height: 16, numChannels: 4);
+      img.fill(sheet, color: img.ColorRgba8(220, 120, 40, 255));
+      await open(
+        tester,
+        // A named preview: the cover, ahead of the animation.
+        files: const ['preview.png'],
+        images: {'fx/Explosion(16x16).png': sheet},
+      );
+      await tab(tester, 'Animations');
+      final card = find.byWidgetPredicate(
+        (w) => w is ItemCard && w.path == 'fx/Explosion(16x16).png',
+      );
+      await rightClick(tester, card.first);
+      await pick(tester, 'addPreview');
+      final header = find.byKey(const ValueKey('header-preview'));
+      await pumpUntil(tester, find.textContaining('1 / 2'));
+      await tester.tap(
+        find.descendant(of: header, matching: find.byTooltip('Next image')),
+      );
+      await tester.pump();
+      expect(find.textContaining('2 / 2 · Explosion(16x16).png'), findsOne);
+      // Its frames play, not the whole sheet as a still.
+      expect(
+        find.descendant(of: header, matching: find.byType(AnimatedSprite)),
+        findsOneWidget,
+      );
+      // The picker plays it too.
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(header));
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('edit-previews')));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('pick:fx/Explosion(16x16).png')),
+          matching: find.byType(AnimatedSprite),
+        ),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('Use as pack cover / Add / Remove save the previews', (
       tester,
     ) async {

@@ -156,6 +156,11 @@ class PackContents {
       applyOverride(a, sidecar?.animations[a.path]),
   ];
 
+  /// [animations] by file, for drawing a preview that is one.
+  Map<String, SpriteAnim> get animationsByPath => {
+    for (final a in animations) a.path: a,
+  };
+
   /// Every file that can be a preview: [images] plus the animations
   /// (which [images] leaves out), sorted.
   List<String> get previewable =>

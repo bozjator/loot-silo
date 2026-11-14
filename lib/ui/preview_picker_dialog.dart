@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
@@ -7,7 +6,8 @@ import 'package:path/path.dart' as p;
 
 import '../core/file_search.dart';
 import 'cursors.dart';
-import 'widgets/pixel_image.dart';
+import '../core/animation_detector.dart';
+import 'widgets/preview_picture.dart';
 
 /// Lets the user choose a pack's previews: click images in the grid to add
 /// or remove them, drag the chosen ones (the strip at the top) to reorder.
@@ -22,12 +22,16 @@ class PreviewPickerDialog extends StatefulWidget {
     super.key,
     required this.packPath,
     required this.files,
+    this.animations = const {},
     required this.initial,
     required this.custom,
   });
 
   final String packPath;
   final List<String> files;
+
+  /// The [files] that are animations, by file: they play.
+  final Map<String, SpriteAnim> animations;
   final List<String> initial;
   final bool custom;
 
@@ -103,7 +107,11 @@ class _PreviewPickerDialogState extends State<PreviewPickerDialog> {
   /// Around the strip's cards; the bottom leaves room for the scrollbar.
   static const _stripPadding = EdgeInsets.fromLTRB(16, 0, 16, 14);
 
-  Widget _thumb(String rel) => PixelImage(File(p.join(widget.packPath, rel)));
+  Widget _thumb(String rel) => PreviewPicture(
+    packPath: widget.packPath,
+    rel: rel,
+    anim: widget.animations[rel],
+  );
 
   @override
   Widget build(BuildContext context) {

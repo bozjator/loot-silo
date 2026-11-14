@@ -51,6 +51,7 @@ import 'widgets/meta_dialogs.dart';
 import 'widgets/overflow_text.dart';
 import 'widgets/pack_tile.dart' show iconForTypes;
 import 'widgets/pixel_image.dart';
+import 'widgets/preview_picture.dart';
 import 'widgets/thumb_size.dart';
 import 'widgets/waveform.dart';
 import 'cursors.dart';
@@ -1048,6 +1049,7 @@ class _CarouselState extends ConsumerState<_Carousel> {
       builder: (_) => PreviewPickerDialog(
         packPath: pack.path,
         files: widget.contents.previewable,
+        animations: widget.contents.animationsByPath,
         initial: widget.images,
         custom: custom,
       ),
@@ -1064,15 +1066,21 @@ class _CarouselState extends ConsumerState<_Carousel> {
     final images = widget.images;
     final pack = widget.pack;
     final i = images.isEmpty ? 0 : _index % images.length;
+    final anims = widget.contents.animationsByPath;
     final Widget view;
     if (images.isEmpty) {
       view = Center(
         child: Icon(iconForTypes(pack.types), size: 72, color: scheme.primary),
       );
-    } else if (i == 0 && pack.previewAnim != null) {
-      view = AnimatedSprite(packPath: pack.path, anim: pack.previewAnim!);
     } else {
-      view = PixelImage(File(p.join(pack.path, images[i])), animate: true);
+      // An animation plays, also when it is not the cover.
+      view = PreviewPicture(
+        packPath: pack.path,
+        rel: images[i],
+        anim:
+            anims[images[i]] ??
+            (i == 0 && images[i] == pack.preview ? pack.previewAnim : null),
+      );
     }
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
@@ -1097,6 +1105,7 @@ class _CarouselState extends ConsumerState<_Carousel> {
                       images: images,
                       index: i,
                       sizes: widget.sizes,
+                      animations: anims,
                     ),
                     child: Tooltip(
                       message: 'Enlarge',
@@ -1175,6 +1184,7 @@ class _CarouselState extends ConsumerState<_Carousel> {
                           packPath: pack.path,
                           images: images,
                           sizes: widget.sizes,
+                          animations: anims,
                         ),
                       ),
                     ),
@@ -1196,7 +1206,11 @@ class PreviewGridDialog extends ConsumerWidget {
     required this.packPath,
     required this.images,
     this.sizes = const {},
+    this.animations = const {},
   });
+
+  /// The previews that are animations, by file: they play.
+  final Map<String, SpriteAnim> animations;
 
   final String packPath;
   final List<String> images;
@@ -1302,6 +1316,7 @@ class PreviewGridDialog extends ConsumerWidget {
                             images: images,
                             index: i,
                             sizes: sizes,
+                            animations: animations,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1309,9 +1324,10 @@ class PreviewGridDialog extends ConsumerWidget {
                               Expanded(
                                 child: Padding(
                                   padding: const EdgeInsets.all(6),
-                                  child: PixelImage(
-                                    File(p.join(packPath, images[i])),
-                                    animate: true,
+                                  child: PreviewPicture(
+                                    packPath: packPath,
+                                    rel: images[i],
+                                    anim: animations[images[i]],
                                   ),
                                 ),
                               ),
