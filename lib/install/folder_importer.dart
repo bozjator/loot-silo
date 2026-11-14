@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../core/library_scanner.dart';
 import '../core/sidecar.dart';
+import 'archive_extractor.dart';
 
 const unknownAuthor = 'Unknown Author';
 
@@ -213,6 +214,53 @@ ImportPlan planFolderImport(
       ),
   ];
   return ImportPlan(sourceRoot, libraryRoot, items);
+}
+
+/// Whether [folder] holds an archive anywhere below it.
+bool hasArchives(String folder) =>
+    Directory(folder)
+        .listSync(recursive: true, followLinks: false)
+        .any((e) => e is File && archiveKindOf(e.path) != null);
+
+/// [planFolderImport] for a folder that may hold archives: when it does,
+/// it is copied into [workParent] (a temporary folder the caller deletes)
+/// with its archives unpacked ([extractNestedArchives]), and the plan is
+/// made from that copy. Sidecars still point at [folder]. The folder
+/// itself is never written to. Synchronous; run it in an isolate.
+ImportPlan planFolderImportUnpacked(
+  String folder,
+  String libraryRoot,
+  String workParent,
+) {
+  checkRoots(folder, libraryRoot);
+  if (!hasArchives(folder)) return planFolderImport(folder, libraryRoot);
+  final copy = p.join(workParent, p.basename(folder));
+  _copyTree(Directory(folder), copy);
+  extractNestedArchives(copy);
+  final original = p.canonicalize(folder);
+  return planFolderImport(
+    copy,
+    libraryRoot,
+    origins: {
+      // The folder itself as one pack has the id '.'.
+      '.': original,
+      for (final e in Directory(copy).listSync())
+        p.basename(e.path): p.join(original, p.basename(e.path)),
+    },
+  );
+}
+
+/// Copies [from] into a new folder [to]; symlinks are left out.
+void _copyTree(Directory from, String to) {
+  Directory(to).createSync(recursive: true);
+  for (final e in from.listSync(followLinks: false)) {
+    final dst = p.join(to, p.basename(e.path));
+    if (e is Directory) {
+      _copyTree(e, dst);
+    } else if (e is File) {
+      e.copySync(dst);
+    }
+  }
 }
 
 /// What happened to one pack.

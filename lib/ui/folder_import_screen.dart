@@ -24,6 +24,13 @@ Future<ImportPlan> _planInBackground(
 ) => Isolate.run(() => planFolderImport(source, library, origins: origins));
 
 /// Top-level so the isolate closure captures nothing but its arguments.
+Future<ImportPlan> _planUnpackedInBackground(
+  String folder,
+  String library,
+  String work,
+) => Isolate.run(() => planFolderImportUnpacked(folder, library, work));
+
+/// Top-level so the isolate closure captures nothing but its arguments.
 Future<ExtractedArchive> _extractInBackground(String archive, String dest) =>
     Isolate.run(() => extractArchive(archive, dest));
 
@@ -65,9 +72,9 @@ Future<void> importPaths(
 
 /// Review table for importing folders and archives into the library.
 ///
-/// [paths] are folders and archives (zip, rar, 7z, tar). Archives are
-/// extracted into a temporary folder, removed when the screen closes; the
-/// archives themselves are never touched. More can be added while the
+/// [paths] are folders and archives (zip, rar, 7z, tar). Archives, and
+/// folders holding archives, are unpacked into a temporary folder, removed
+/// when the screen closes; the sources themselves are never touched. More can be added while the
 /// screen is open ([addToOpen]): dropped files join this review instead of
 /// opening another one.
 ///
@@ -193,14 +200,14 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
       );
       try {
         final ImportPlan plan;
+        final temp = Directory(
+          p.join(
+            ref.read(extractRootProvider),
+            'import-${DateTime.now().microsecondsSinceEpoch}',
+          ),
+        )..createSync(recursive: true);
+        _temps.add(temp);
         if (isArchive) {
-          final temp = Directory(
-            p.join(
-              ref.read(extractRootProvider),
-              'import-${DateTime.now().microsecondsSinceEpoch}',
-            ),
-          )..createSync(recursive: true);
-          _temps.add(temp);
           final extracted = await _extractInBackground(path, temp.path);
           if (!mounted) return;
           setState(() => _status = 'Looking for packs in ${p.basename(path)}…');
@@ -208,7 +215,8 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
             p.basename(extracted.folder): extracted.archivePath,
           });
         } else {
-          plan = await _planInBackground(path, library, const {});
+          // Archives inside are unpacked into a copy in [temp] first.
+          plan = await _planUnpackedInBackground(path, library, temp.path);
         }
         if (!mounted) return;
         setState(() {

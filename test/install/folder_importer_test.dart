@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:archive/archive_io.dart';
+
 import 'package:loot_silo/core/library_scanner.dart';
 import 'package:loot_silo/core/sidecar.dart';
 import 'package:loot_silo/install/folder_importer.dart';
@@ -244,6 +246,76 @@ void main() {
       expect(o.verified, isFalse);
       expect(o.error, contains('already exists'));
       expect(Directory(p.join(lib, '.staging')).existsSync(), isFalse);
+    });
+  });
+
+  group('archives in a folder', () {
+    /// Writes a zip of `name → file to add` at [path].
+    void zipAt(String path, Map<String, String> entries) {
+      final a = Archive();
+      for (final MapEntry(:key, :value) in entries.entries) {
+        a.add(ArchiveFile.bytes(key, File(value).readAsBytesSync()));
+      }
+      File(path).writeAsBytesSync(ZipEncoder().encodeBytes(a));
+    }
+
+    late String work;
+    setUp(() {
+      work = p.join(tmp.path, 'work');
+      Directory(work).createSync();
+    });
+
+    test('are unpacked in a copy; sidecars point at the folder', () async {
+      final sounds = p.join(src, 'sfx', 'Loose Sounds');
+      final zip = p.join(sounds, 'more', 'extra.zip');
+      Directory(p.dirname(zip)).createSync();
+      zipAt(zip, {'pew.wav': p.join(sounds, 'zap.wav')});
+
+      final plan = planFolderImportUnpacked(src, lib, work);
+      final loose = item(plan, 'sfx/Loose Sounds');
+      expect(loose.fileCount, 4);
+      expect(loose.origin, p.canonicalize(sounds));
+      expect(File(zip).existsSync(), isTrue, reason: 'source untouched');
+
+      await runImport(plan).drain<void>();
+      final pack = p.join(lib, 'noisy', 'Loose Sounds');
+      expect(File(p.join(pack, 'more', 'pew.wav')).existsSync(), isTrue);
+      expect(File(p.join(pack, 'more', 'extra.zip')).existsSync(), isFalse);
+      expect(PackSidecar.read(pack)!.sourcePath, p.canonicalize(sounds));
+
+      final again = planFolderImportUnpacked(src, lib, p.join(tmp.path, 'w2'));
+      expect(item(again, 'sfx/Loose Sounds').importedAs, 'noisy/Loose Sounds');
+    });
+
+    test('a folder of zipped sprite sheets is one pack of them', () {
+      final bundle = p.join(tmp.path, 'Enemy Bundle');
+      Directory(bundle).createSync();
+      zipAt(p.join(bundle, 'Hero.zip'), {
+        'hero.png': 'test/fixtures/images/hero.png',
+      });
+      zipAt(p.join(bundle, 'Walk.zip'), {
+        'hero_walk.png': 'test/fixtures/images/hero_walk.png',
+      });
+      final plan = planFolderImportUnpacked(bundle, lib, work);
+      final only = plan.items.single;
+      expect(only.title, 'Enemy Bundle');
+      expect(only.fileCount, 2);
+      expect(only.origin, p.canonicalize(bundle));
+      expect(only.types, isNot(contains('misc')));
+    });
+
+    test('a folder without archives is planned in place', () {
+      final plan = planFolderImportUnpacked(src, lib, work);
+      expect(plan.sourceRoot, src);
+      expect(Directory(work).listSync(), isEmpty);
+    });
+
+    test('overlapping folders are refused before anything is copied', () {
+      expect(
+        () => planFolderImportUnpacked(src, p.join(src, 'lib'), work),
+        throwsA(isA<OverlappingFoldersError>()),
+      );
+      expect(Directory(work).listSync(), isEmpty);
     });
   });
 }
