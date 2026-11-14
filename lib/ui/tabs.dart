@@ -11,6 +11,7 @@ import 'cursors.dart';
 import '../state/settings.dart';
 import 'pack_detail_screen.dart';
 import 'session.dart';
+import 'shortcuts.dart';
 import 'widgets/dialog_close.dart';
 
 /// Tracks a navigator's top route, so app-wide shortcuts can skip dialogs
@@ -653,7 +654,7 @@ class _StripTab extends StatelessWidget {
     final close = onClose == null
         ? null
         : IconButton(
-            tooltip: 'Close tab (Ctrl+W)',
+            tooltip: 'Close tab (${AppKeys.closeTab.keys})',
             iconSize: 16,
             visualDensity: VisualDensity.compact,
             constraints: const BoxConstraints.tightFor(width: 24, height: 24),

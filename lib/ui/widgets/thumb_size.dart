@@ -3,9 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 
 import '../cursors.dart';
+import '../shortcuts.dart';
 
 /// Allowed thumbnail sizes, in logical pixels of tile width.
 ///
@@ -359,7 +359,8 @@ class ThumbRows extends StatelessWidget {
 }
 
 /// Scrolls like its parent, except the mouse wheel is left alone while Ctrl
-/// is held, so [CtrlWheelResize] can use it.
+/// (Cmd on macOS, [primaryPressed]) is held, so [CtrlWheelResize] can use
+/// it.
 class CtrlWheelPhysics extends ScrollPhysics {
   const CtrlWheelPhysics({super.parent});
 
@@ -369,11 +370,10 @@ class CtrlWheelPhysics extends ScrollPhysics {
 
   @override
   bool shouldAcceptUserOffset(ScrollMetrics position) =>
-      !HardwareKeyboard.instance.isControlPressed &&
-      super.shouldAcceptUserOffset(position);
+      !primaryPressed && super.shouldAcceptUserOffset(position);
 }
 
-/// Ctrl + mouse wheel over [child] calls [onSteps] with +1 (wheel up,
+/// Ctrl (Cmd on macOS) + mouse wheel over [child] calls [onSteps] with +1 (wheel up,
 /// bigger) or -1. Pair the grid inside with [CtrlWheelPhysics].
 class CtrlWheelResize extends StatelessWidget {
   const CtrlWheelResize({
@@ -389,7 +389,7 @@ class CtrlWheelResize extends StatelessWidget {
   Widget build(BuildContext context) => Listener(
     onPointerSignal: (event) {
       if (event is! PointerScrollEvent ||
-          !HardwareKeyboard.instance.isControlPressed ||
+          !primaryPressed ||
           event.scrollDelta.dy == 0) {
         return;
       }
@@ -507,7 +507,7 @@ class ThumbSizeSlider extends StatelessWidget {
       context,
       smaller: i > 0 ? () => onChanged(stops[i - 1].tile) : null,
       larger: i < stops.length - 1 ? () => onChanged(stops[i + 1].tile) : null,
-      tooltip: '${stops[i].columns} per row (Ctrl + mouse wheel)',
+      tooltip: '${stops[i].columns} per row ($primaryKey + mouse wheel)',
       slider: Slider(
         key: const ValueKey('thumb-slider'),
         mouseCursor: WidgetStateMouseCursor.clickable,
@@ -534,7 +534,7 @@ class ThumbSizeSlider extends StatelessWidget {
       context,
       smaller: v > range.min ? () => onChanged(range.nudge(v, -1)) : null,
       larger: v < range.max ? () => onChanged(range.nudge(v, 1)) : null,
-      tooltip: 'Thumbnail size (Ctrl + mouse wheel)',
+      tooltip: 'Thumbnail size ($primaryKey + mouse wheel)',
       slider: Slider(
         key: const ValueKey('thumb-slider'),
         mouseCursor: WidgetStateMouseCursor.clickable,

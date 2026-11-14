@@ -91,7 +91,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final typing =
         FocusManager.instance.primaryFocus?.context?.widget is EditableText;
     final ctrlF = AppKeys.dashboardSearch.activators
-        .whereType<SingleActivator>()
+        .whereType<PrimaryActivator>()
         .any((a) => a.accepts(event, HardwareKeyboard.instance));
     if (ctrlF || (AppKeys.dashboardSearch.pressed(event) && !typing)) {
       _searchFocus.requestFocus();
