@@ -9,6 +9,7 @@
 
 #include "clipboard_plugin.h"
 #include "flutter/generated_plugin_registrant.h"
+#include "window_state.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -101,7 +102,9 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "Loot Silo");
   }
 
-  gtk_window_set_default_size(window, 1280, 720);
+  // Last run's size, position and maximized state, fitted to the monitors
+  // present now; 1280x720 the first time.
+  window_state_attach(window, 1280, 720);
 
   // The window / taskbar icon, installed next to the binary
   // (bundle/data/app_icon.png). Used by X11 window managers other than GNOME.

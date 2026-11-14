@@ -4,6 +4,7 @@
 #include <flutter_windows.h>
 
 #include "resource.h"
+#include "window_state.h"
 
 namespace {
 
@@ -123,22 +124,38 @@ Win32Window::~Win32Window() {
 bool Win32Window::Create(const std::wstring& title,
                          const Point& origin,
                          const Size& size) {
-  Destroy();
-
-  const wchar_t* window_class =
-      WindowClassRegistrar::GetInstance()->GetWindowClass();
-
   const POINT target_point = {static_cast<LONG>(origin.x),
                               static_cast<LONG>(origin.y)};
   HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
+  const int left = Scale(origin.x, scale_factor);
+  const int top = Scale(origin.y, scale_factor);
+  return CreateWindowAt(
+      title, RECT{left, top, left + Scale(size.width, scale_factor),
+                  top + Scale(size.height, scale_factor)});
+}
+
+bool Win32Window::CreateAt(const std::wstring& title,
+                           const RECT& frame,
+                           bool maximized) {
+  show_command_ = maximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL;
+  return CreateWindowAt(title, frame);
+}
+
+bool Win32Window::CreateWindowAt(const std::wstring& title, const RECT& frame) {
+  Destroy();
+
+  const wchar_t* window_class =
+      WindowClassRegistrar::GetInstance()->GetWindowClass();
+
+  // Created straight on its monitor, so it starts at that monitor's DPI and
+  // no WM_DPICHANGED resizes it.
   HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
-      Scale(size.width, scale_factor), Scale(size.height, scale_factor),
-      nullptr, nullptr, GetModuleHandle(nullptr), this);
+      window_class, title.c_str(), WS_OVERLAPPEDWINDOW, frame.left, frame.top,
+      frame.right - frame.left, frame.bottom - frame.top, nullptr, nullptr,
+      GetModuleHandle(nullptr), this);
 
   if (!window) {
     return false;
@@ -150,7 +167,9 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  const int command = show_command_;
+  show_command_ = SW_SHOWNORMAL;
+  return ShowWindow(window_handle_, command);
 }
 
 // static
@@ -180,6 +199,7 @@ Win32Window::MessageHandler(HWND hwnd,
                             LPARAM const lparam) noexcept {
   switch (message) {
     case WM_DESTROY:
+      SaveWindowState(hwnd);
       window_handle_ = nullptr;
       Destroy();
       if (quit_on_close_) {
