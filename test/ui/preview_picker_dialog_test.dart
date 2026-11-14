@@ -103,4 +103,46 @@ void main() {
     expect(added.right, lessThanOrEqualTo(view.right));
     expect(added.left, greaterThanOrEqualTo(view.left));
   });
+
+  testWidgets('the filter field: hint and icon centred in it; filters', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final files = [for (var i = 0; i < 20; i++) 'hero_$i.png', 'fx/boom.png'];
+    for (final f in files) {
+      File(p.join(tmp.path, f))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(img.encodePng(img.Image(width: 4, height: 4)));
+    }
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PreviewPickerDialog(
+            packPath: tmp.path,
+            files: files,
+            initial: const [],
+            custom: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final field = find.byKey(const ValueKey('previews-filter'));
+    final box = tester.getRect(field);
+    double centre(Finder f) =>
+        tester.getRect(find.descendant(of: field, matching: f)).center.dy;
+    expect(centre(find.text('Filter images')), closeTo(box.center.dy, 2));
+    expect(centre(find.byIcon(Icons.search)), closeTo(box.center.dy, 1));
+
+    await tester.enterText(field, 'boom');
+    await tester.pump();
+    expect(find.byKey(const ValueKey('pick:fx/boom.png')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pick:hero_0.png')), findsNothing);
+    await tester.tap(find.byTooltip('Clear filter'));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('pick:hero_0.png')), findsOneWidget);
+    expect(find.text('boom'), findsNothing);
+  });
 }

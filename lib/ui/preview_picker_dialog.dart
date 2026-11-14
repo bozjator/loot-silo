@@ -8,6 +8,8 @@ import '../core/file_search.dart';
 import 'cursors.dart';
 import '../core/animation_detector.dart';
 import 'widgets/preview_picture.dart';
+import 'widgets/thumb_size.dart'
+    show detailControlHeight, detailControlRadius, detailControlWidth;
 
 /// Lets the user choose a pack's previews: click images in the grid to add
 /// or remove them, drag the chosen ones (the strip at the top) to reorder.
@@ -46,10 +48,12 @@ class _PreviewPickerDialogState extends State<PreviewPickerDialog> {
   /// The chosen strip: a scrollbar under it, and the mouse wheel scrolls
   /// it sideways.
   final _strip = ScrollController();
+  final _filterText = TextEditingController();
 
   @override
   void dispose() {
     _strip.dispose();
+    _filterText.dispose();
     super.dispose();
   }
 
@@ -261,13 +265,45 @@ class _PreviewPickerDialogState extends State<PreviewPickerDialog> {
                   ),
                   const Spacer(),
                   if (widget.files.length > 12)
+                    // As the pack page's search field: the icon's box
+                    // as tall as the field, so hint, icon and border line
+                    // up.
                     SizedBox(
-                      width: 240,
+                      width: detailControlWidth,
+                      height: detailControlHeight,
                       child: TextField(
-                        decoration: const InputDecoration(
+                        key: const ValueKey('previews-filter'),
+                        controller: _filterText,
+                        textAlignVertical: TextAlignVertical.center,
+                        decoration: InputDecoration(
                           isDense: true,
-                          prefixIcon: Icon(Icons.search, size: 18),
-                          hintText: 'Filter',
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                          ),
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          prefixIconConstraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: detailControlHeight,
+                          ),
+                          suffixIconConstraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: detailControlHeight,
+                          ),
+                          hintText: 'Filter images',
+                          border: const OutlineInputBorder(
+                            borderRadius: detailControlRadius,
+                          ),
+                          suffixIcon: _filter.isEmpty
+                              ? null
+                              : IconButton(
+                                  tooltip: 'Clear filter',
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: () => setState(() {
+                                    _filterText.clear();
+                                    _filter = '';
+                                  }),
+                                ),
                         ),
                         onChanged: (v) => setState(() => _filter = v),
                       ),
