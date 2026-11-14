@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -50,6 +51,28 @@ void main() {
     final v = viewport(tester);
     return r.left >= v.left - 0.5 && r.right <= v.right + 0.5;
   }
+
+  testWidgets(
+    'tab close button: before the label on macOS, after it elsewhere',
+    (tester) async {
+      await pumpStrip(tester, width: 1400);
+      tabs().open('a');
+      await tester.pumpAndSettle();
+      final close = find.byIcon(Icons.close);
+      expect(close, findsOneWidget);
+      expect(
+        tester.getCenter(close).dx < tester.getCenter(find.text('a')).dx,
+        defaultTargetPlatform == TargetPlatform.macOS,
+      );
+      await tester.tap(close);
+      await tester.pumpAndSettle();
+      expect(find.text('a'), findsNothing);
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.macOS,
+    }),
+  );
 
   testWidgets('few tabs: no arrows or list', (tester) async {
     await pumpStrip(tester, width: 1400);

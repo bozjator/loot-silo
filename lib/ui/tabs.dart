@@ -11,6 +11,7 @@ import 'cursors.dart';
 import '../state/settings.dart';
 import 'pack_detail_screen.dart';
 import 'session.dart';
+import 'widgets/dialog_close.dart';
 
 /// Tracks a navigator's top route, so app-wide shortcuts can skip dialogs
 /// and menus, and how many pages ([PageRoute]s, not menus) it holds.
@@ -647,6 +648,19 @@ class _StripTab extends StatelessWidget {
     final text = Theme.of(context).textTheme.labelLarge?.copyWith(
       color: selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
     );
+    // On the left on macOS, as in Safari and Finder.
+    final left = closeOnLeft(context);
+    final close = onClose == null
+        ? null
+        : IconButton(
+            tooltip: 'Close tab (Ctrl+W)',
+            iconSize: 16,
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 24, height: 24),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.close),
+            onPressed: onClose,
+          );
     return Padding(
       padding: const EdgeInsets.only(right: 4),
       child: Listener(
@@ -668,14 +682,18 @@ class _StripTab extends StatelessWidget {
               onTap: onTap,
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
-                  12,
+                  close != null && left ? 4 : 12,
                   6,
-                  onClose == null ? 12 : 4,
+                  close != null && !left ? 4 : 12,
                   6,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (close != null && left) ...[
+                      close,
+                      const SizedBox(width: 2),
+                    ],
                     if (icon != null) ...[
                       Icon(icon, size: 18, color: text?.color),
                       const SizedBox(width: 6),
@@ -689,20 +707,9 @@ class _StripTab extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (onClose != null) ...[
+                    if (close != null && !left) ...[
                       const SizedBox(width: 2),
-                      IconButton(
-                        tooltip: 'Close tab (Ctrl+W)',
-                        iconSize: 16,
-                        visualDensity: VisualDensity.compact,
-                        constraints: const BoxConstraints.tightFor(
-                          width: 24,
-                          height: 24,
-                        ),
-                        padding: EdgeInsets.zero,
-                        icon: const Icon(Icons.close),
-                        onPressed: onClose,
-                      ),
+                      close,
                     ],
                   ],
                 ),

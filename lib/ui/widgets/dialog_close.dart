@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-/// Whether a dialog's close button goes on the left, as on macOS, where
-/// window close buttons sit top left. Read from the theme rather than
-/// `Platform`, so tests (and a debug run on Linux) can show the macOS layout
-/// by setting `ThemeData.platform` or `debugDefaultTargetPlatformOverride`.
+/// Whether close buttons (a dialog's, a tab's) go on the left, as on macOS,
+/// where window close buttons sit top left and Safari's tabs close on the
+/// left. Read from the theme rather than `Platform`, so tests (and a debug
+/// run on Linux) can show the macOS layout by setting `ThemeData.platform` or
+/// `debugDefaultTargetPlatformOverride`.
 bool closeOnLeft(BuildContext context) =>
     Theme.of(context).platform == TargetPlatform.macOS;
 
