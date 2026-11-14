@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
+import 'sub_folders_test.dart' show writeFiles;
+
 void main() {
   group('fixture source tree', () {
     final result = scanLibrary('test/fixtures/library_src');
@@ -18,9 +20,6 @@ void main() {
         'art/characters/HeroMaker/Free Slime Pack',
         'art/environments/Forest Tiles 16x16',
         'bundles/Mega Bundle v3',
-        'bundles/Mega Bundle v3/2D assets/Tanks Pack',
-        'bundles/Mega Bundle v3/2D assets/Planes Pack',
-        'bundles/Mega Bundle v3/Audio/Clicks (3 sounds)',
         'sfx/Loose Sounds',
         'music/SoloArtist',
         'misc',
@@ -39,46 +38,36 @@ void main() {
       final forest = byId['art/environments/Forest Tiles 16x16']!;
       expect(forest.author!.user, 'Leafy Studio');
       expect(forest.author!.license, 'CC-BY 4.0');
-      expect(
-        forest.isContainer,
-        isFalse,
-        reason: 'readme notes are not sub-packs',
-      );
       expect(forest.types, ['environment']);
     });
 
-    test('bundles hold sub-packs and keep only their own loose files', () {
-      final bundle = byId['bundles/Mega Bundle v3']!;
-      expect(bundle.isContainer, isTrue);
-      expect(bundle.files, unorderedEquals(['Bundle.txt', 'Fonts/BigCo.ttf']));
-      expect(bundle.types, unorderedEquals(['misc', 'sfx']));
-      final tanks = byId['bundles/Mega Bundle v3/2D assets/Tanks Pack']!;
-      expect(tanks.parentId, 'bundles/Mega Bundle v3');
-      expect(tanks.author!.user, 'BigCo');
-      expect(tanks.files, hasLength(3));
-      expect(byId['bundles/Mega Bundle v3/Audio/Clicks (3 sounds)']!.types, [
-        'sfx',
-      ]);
+    test('a former bundle is one pack holding every folder', () {
+      final mega = byId['bundles/Mega Bundle v3']!;
+      expect(mega.author!.user, 'BigCo');
+      expect(
+        mega.files,
+        containsAll([
+          'Bundle.txt',
+          'Fonts/BigCo.ttf',
+          '2D assets/Planes Pack/plane.png',
+          '2D assets/Tanks Pack/PNG/tank.png',
+          'Audio/Clicks (3 sounds)/click1.ogg',
+        ]),
+      );
+      expect(mega.files, hasLength(10));
     });
 
-    test(
-      'previews: named file, bundle falls back to a sub-pack, audio none',
-      () {
-        expect(
-          byId['bundles/Mega Bundle v3/2D assets/Tanks Pack']!.preview,
-          'Preview.png',
-        );
-        expect(
-          byId['bundles/Mega Bundle v3']!.preview,
-          startsWith('2D assets/'),
-        );
-        expect(
-          byId['art/environments/Forest Tiles 16x16']!.preview,
-          'Mockups/mockup.png',
-        );
-        expect(byId['sfx/Loose Sounds']!.preview, isNull);
-      },
-    );
+    test('previews: named file anywhere in the pack, audio none', () {
+      expect(
+        byId['bundles/Mega Bundle v3']!.preview,
+        '2D assets/Tanks Pack/Preview.png',
+      );
+      expect(
+        byId['art/environments/Forest Tiles 16x16']!.preview,
+        'Mockups/mockup.png',
+      );
+      expect(byId['sfx/Loose Sounds']!.preview, isNull);
+    });
 
     test('author guessed from an itch url in a readme', () {
       final loose = byId['sfx/Loose Sounds']!;
@@ -137,7 +126,7 @@ void main() {
     });
   });
 
-  test("sub-packs take the bundle's source unless they have their own", () {
+  test('a sidecar in a pack folder makes no pack of its own', () {
     final tmp = Directory.systemTemp.createTempSync('scan_source');
     addTearDown(() => tmp.deleteSync(recursive: true));
     final src = Directory('test/fixtures/library_src/bundles/Mega Bundle v3');
@@ -148,16 +137,15 @@ void main() {
       f.copySync(to.path);
     }
     File(p.join(bundle, 'asset_pack.json'))
-        .writeAsStringSync('{"source": "imported", "is_container": true}');
+        .writeAsStringSync('{"source": "imported"}');
     File(p.join(bundle, '2D assets', 'Planes Pack', 'asset_pack.json'))
         .writeAsStringSync('{"source": "itch"}');
 
     final byId = {for (final pk in scanLibrary(tmp.path).packs) pk.id: pk};
     const id = 'BigCo/Mega Bundle v3';
+    expect(byId.keys, [id]);
     expect(byId[id]!.source, PackSource.imported);
-    expect(byId['$id/2D assets/Tanks Pack']!.source, PackSource.imported);
-    expect(byId['$id/Audio/Clicks (3 sounds)']!.source, PackSource.imported);
-    expect(byId['$id/2D assets/Planes Pack']!.source, PackSource.itch);
+    expect(byId[id]!.files, contains('2D assets/Planes Pack/plane.png'));
   });
 
   test('a file marked "not an animation" gets no animated preview', () {
@@ -211,4 +199,116 @@ void main() {
       expect(stones.previewAnim, isNull);
     },
   );
+
+  group('one pack per detected pack (M91)', () {
+    late Directory tmp;
+    setUp(() => tmp = Directory.systemTemp.createTempSync('scan_flat'));
+    tearDown(() => tmp.deleteSync(recursive: true));
+
+    /// The "Cozy Tunes + Cozy FX" layout from itch.io, inside an author
+    /// folder.
+    const cozy = 'Pizza Doggy/Cozy Tunes + Cozy FX';
+    const cozyFiles = [
+      '$cozy/License.txt',
+      '$cozy/_itch/cover.png',
+      '$cozy/_itch/screenshot_01.png',
+      '$cozy/Cozy FX/License Agreement.pdf',
+      '$cozy/Cozy FX/pop.ogg',
+      '$cozy/Cozy FX/click.ogg',
+      '$cozy/Cozy Tunes/Read Me.txt',
+      '$cozy/Cozy Tunes/Audio/ogg/morning.ogg',
+      '$cozy/Cozy Tunes/Audio/ogg/evening.ogg',
+      '$cozy/Cozy Tunes - The Classics/waltz.ogg',
+    ];
+    void author(String dir, String name) =>
+        AuthorInfo(user: name).write(p.join(tmp.path, dir));
+
+    test('the Cozy layout is one pack with the itch cover', () {
+      writeFiles(tmp.path, cozyFiles);
+      author('Pizza Doggy', 'Pizza Doggy');
+      final packs = scanLibrary(tmp.path).packs;
+      expect(packs.map((x) => x.id), [cozy]);
+      final pack = packs.single;
+      expect(
+        pack.files,
+        containsAll([
+          'Cozy FX/pop.ogg',
+          'Cozy Tunes/Audio/ogg/morning.ogg',
+          'Cozy Tunes - The Classics/waltz.ogg',
+        ]),
+      );
+      expect(pack.files.where((f) => f.endsWith('.ogg')), hasLength(5));
+      expect(pack.preview, '_itch/cover.png');
+    });
+
+    test("the user's previews still win over the itch cover", () {
+      writeFiles(tmp.path, [...cozyFiles, '$cozy/Cozy FX/x.png']);
+      author('Pizza Doggy', 'Pizza Doggy');
+      File(p.join(tmp.path, cozy, packFileName)).writeAsStringSync(
+        jsonEncode({
+          'previews': ['Cozy FX/x.png'],
+        }),
+      );
+      expect(scanLibrary(tmp.path).packs.single.preview, 'Cozy FX/x.png');
+    });
+
+    test('a Kenney-like all-in-one in an author folder is one pack', () {
+      writeFiles(tmp.path, [
+        for (final theme in ['Tanks', 'Planes', 'Ships']) ...[
+          'Kenney/Game Assets All in One/$theme (12 assets)/License.txt',
+          'Kenney/Game Assets All in One/$theme (12 assets)/PNG/a.png',
+        ],
+      ]);
+      author('Kenney', 'Kenney');
+      final packs = scanLibrary(tmp.path).packs;
+      expect(packs.map((x) => x.id), ['Kenney/Game Assets All in One']);
+      expect(packs.single.files, hasLength(6));
+      expect(packs.single.author!.user, 'Kenney');
+      // Its folders become Expanded tiles like any pack's.
+      expect(packs.single.subFolders.map((s) => s.folder), [
+        'Planes (12 assets)',
+        'Ships (12 assets)',
+        'Tanks (12 assets)',
+      ]);
+    });
+
+    test('a folder with its own assets is one pack, signals below or not', () {
+      writeFiles(tmp.path, [
+        'loose/My Pack/a.png',
+        'loose/My Pack/b.png',
+        'loose/My Pack/Characters/preview.png',
+        'loose/My Pack/Characters/hero.png',
+        // Docs alone don't make a folder a pack.
+        'gifts/A small gift.txt',
+        'gifts/Trees/License.txt',
+        'gifts/Trees/tree.png',
+      ]);
+      final byId = {for (final x in scanLibrary(tmp.path).packs) x.id: x};
+      expect(byId.keys, unorderedEquals(['loose/My Pack', 'gifts/Trees']));
+      expect(
+        byId['loose/My Pack']!.files,
+        unorderedEquals([
+          'a.png',
+          'b.png',
+          'Characters/preview.png',
+          'Characters/hero.png',
+        ]),
+      );
+    });
+
+    test('unchanged: author children with licenses, loose folders', () {
+      writeFiles(tmp.path, [
+        'Leafy/Forest/License.txt',
+        'Leafy/Forest/tree.png',
+        'Leafy/Desert/License.txt',
+        'Leafy/Desert/cactus.png',
+        'misc/random/stuff/thing.png',
+      ]);
+      author('Leafy', 'Leafy');
+      expect(
+        scanLibrary(tmp.path).packs.map((x) => x.id),
+        unorderedEquals(['Leafy/Forest', 'Leafy/Desert', 'misc']),
+      );
+    });
+  });
 }

@@ -362,12 +362,7 @@ class _PackPickerDialogState extends State<_PackPickerDialog> {
                     dense: true,
                     value: _selected.contains(pk.id),
                     title: Text(pk.title),
-                    subtitle: Text(
-                      [
-                        pk.author ?? 'Unknown author',
-                        if (pk.parentId != null) 'in ${pk.parentId}',
-                      ].join(' · '),
-                    ),
+                    subtitle: Text(pk.author ?? 'Unknown author'),
                     onChanged: (on) => setState(
                       () =>
                           on! ? _selected.add(pk.id) : _selected.remove(pk.id),

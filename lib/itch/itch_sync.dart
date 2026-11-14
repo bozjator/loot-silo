@@ -203,8 +203,6 @@ Future<ItchInstallResult> installItchGame(
       author: authorFor(game.user, libraryRoot),
       types: [for (final t in classifyPack(game.title, files)) t.id],
       tags: suggestTags(game.title),
-      isContainer: false,
-      subPackCount: 0,
       fileCount: files.length,
       totalBytes: files.fold(0, (n, f) => n + f.$2.size),
       origin: game.url,

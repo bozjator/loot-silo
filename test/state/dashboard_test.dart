@@ -16,8 +16,6 @@ PackRow pack(
   String id, {
   String? title,
   String? author,
-  String? parent,
-  bool container = false,
   List<String> types = const ['misc'],
   List<String> tags = const [],
   String? source,
@@ -28,8 +26,6 @@ PackRow pack(
   path: '/lib/$id',
   title: title ?? id.split('/').last,
   author: author,
-  parentId: parent,
-  isContainer: container,
   types: types,
   tags: tags,
   source: source,
@@ -51,22 +47,10 @@ void main() {
       files: 5,
       bytes: 50,
     ),
-    pack(
-      'B/Bundle',
-      author: 'B',
-      container: true,
-      types: ['3d', 'ui'],
-      bytes: 900,
-      files: 2,
-    ),
-    pack('B/Bundle/Tanks', author: 'B', parent: 'B/Bundle', types: ['3d']),
-    pack(
-      'B/Bundle/Buttons',
-      author: 'B',
-      parent: 'B/Bundle',
-      types: ['ui'],
-      tags: ['pixel-art'],
-    ),
+    // A big pack (a former bundle) is one pack like any other.
+    pack('B/Mega', author: 'B', types: ['3d', 'ui'], bytes: 900, files: 2),
+    pack('B/Tanks', author: 'B', types: ['3d']),
+    pack('B/Buttons', author: 'B', types: ['ui'], tags: ['pixel-art']),
     pack(
       'c/zap',
       author: null,
@@ -80,50 +64,40 @@ void main() {
     for (final p in applyQuery(packs, q, hits)) p.id,
   ];
 
-  test('root view shows top-level packs by name', () {
-    expect(ids(const DashboardQuery()), ['B/Bundle', 'A/Knights', 'c/zap']);
-  });
-
-  test('bundle view shows its sub-packs', () {
-    expect(ids(const DashboardQuery(bundleId: 'B/Bundle')), [
-      'B/Bundle/Buttons',
-      'B/Bundle/Tanks',
+  test('the grid lists every pack by name', () {
+    expect(ids(const DashboardQuery()), [
+      'B/Buttons',
+      'A/Knights',
+      'B/Mega',
+      'B/Tanks',
+      'c/zap',
     ]);
   });
 
-  test('filters are flat (sub-packs included), OR within, AND across', () {
-    expect(ids(const DashboardQuery(types: {'3d'})), [
-      'B/Bundle',
-      'B/Bundle/Tanks',
-    ]);
+  test('filters: OR within, AND across', () {
+    expect(ids(const DashboardQuery(types: {'3d'})), ['B/Mega', 'B/Tanks']);
     expect(ids(const DashboardQuery(types: {'3d', 'sfx'})), [
-      'B/Bundle',
-      'B/Bundle/Tanks',
+      'B/Mega',
+      'B/Tanks',
       'c/zap',
     ]);
     expect(ids(const DashboardQuery(types: {'ui'}, tags: {'pixel-art'})), [
-      'B/Bundle/Buttons',
+      'B/Buttons',
     ]);
     expect(ids(const DashboardQuery(authors: {'A'})), ['A/Knights']);
     expect(ids(const DashboardQuery(sources: {noSource})), [
-      'B/Bundle',
-      'B/Bundle/Buttons',
-      'B/Bundle/Tanks',
+      'B/Buttons',
+      'B/Mega',
+      'B/Tanks',
     ]);
     expect(ids(const DashboardQuery(sources: {'manual'})), ['c/zap']);
   });
 
-  test('filters inside a bundle stay inside it', () {
-    expect(ids(const DashboardQuery(bundleId: 'B/Bundle', types: {'ui'})), [
-      'B/Bundle/Buttons',
-    ]);
-  });
-
   test('search hits keep FTS order under best match', () {
     const q = DashboardQuery(text: 'x');
-    expect(ids(q, ['c/zap', 'B/Bundle/Tanks']), ['c/zap', 'B/Bundle/Tanks']);
-    expect(ids(q.copyWith(sort: PackSort.title), ['c/zap', 'B/Bundle/Tanks']), [
-      'B/Bundle/Tanks',
+    expect(ids(q, ['c/zap', 'B/Tanks']), ['c/zap', 'B/Tanks']);
+    expect(ids(q.copyWith(sort: PackSort.title), ['c/zap', 'B/Tanks']), [
+      'B/Tanks',
       'c/zap',
     ]);
   });
@@ -131,18 +105,25 @@ void main() {
   test('sorts by author (unknown last), size and file count', () {
     expect(ids(const DashboardQuery(sort: PackSort.author)), [
       'A/Knights',
-      'B/Bundle',
+      'B/Buttons',
+      'B/Mega',
+      'B/Tanks',
       'c/zap',
     ]);
     expect(ids(const DashboardQuery(sort: PackSort.size)), [
-      'B/Bundle',
+      'B/Mega',
       'A/Knights',
       'c/zap',
+      // Ties keep the list's order.
+      'B/Tanks',
+      'B/Buttons',
     ]);
     expect(ids(const DashboardQuery(sort: PackSort.files)), [
       'c/zap',
       'A/Knights',
-      'B/Bundle',
+      'B/Mega',
+      'B/Tanks',
+      'B/Buttons',
     ]);
   });
 
@@ -164,10 +145,10 @@ void main() {
         source: 'itch',
       ),
       pack('k/c', author: 'Kenney', tags: ['pixel', '3d'], types: ['ui']),
-      pack('k/d', author: 'Kenney', tags: ['pixel'], parent: 'k/b'),
+      pack('k/d', author: 'Kenney', tags: ['pixel']),
     ];
 
-    test('no filters: every pack counts, sub-packs too', () {
+    test('no filters: every pack counts', () {
       final f = Facets.forQuery(lib, const DashboardQuery(), null);
       expect(f.tags, [('pixel', 3), ('3d', 1), ('ui', 1)]);
       expect(f.authors, [('Kenney', 2), ('Rafael', 2)]);
@@ -187,15 +168,9 @@ void main() {
       expect(f.authors, [('Kenney', 2), ('Rafael', 2)]);
     });
 
-    test('search hits and an open bundle limit the counts', () {
+    test('search hits limit the counts', () {
       final f = Facets.forQuery(lib, const DashboardQuery(), ['r/a', 'k/c']);
       expect(f.tags, [('pixel', 2), ('3d', 1)]);
-      final b = Facets.forQuery(
-        lib,
-        const DashboardQuery(bundleId: 'k/b'),
-        null,
-      );
-      expect(b.authors, [('Kenney', 1)]);
     });
 
     test('a selected value nothing matches stays, at 0', () {
@@ -273,7 +248,6 @@ void main() {
       ..toggleType('ui')
       ..toggleAuthor('Kenney')
       ..toggleTag('pixel')
-      ..openBundle('b')
       ..setText('pending');
     n.showAuthor('Rafael');
     // The pending search never lands.
@@ -283,14 +257,7 @@ void main() {
     expect(q.text, isEmpty);
     expect(q.types, isEmpty);
     expect(q.tags, isEmpty);
-    expect(q.bundleId, isNull);
     expect(q.sort, PackSort.title);
-  });
-
-  test('copyWith can clear the bundle', () {
-    const q = DashboardQuery(bundleId: 'x');
-    expect(q.copyWith(bundleId: () => null).bundleId, isNull);
-    expect(q.copyWith(text: 'a').bundleId, 'x');
   });
 
   group('tag sort', () {
@@ -578,11 +545,11 @@ void main() {
   });
 
   group('favorites (M38)', () {
-    // Knights starred; a Buttons file (in the bundle) and a zap file starred.
+    // Knights starred; a Buttons file and a zap file starred.
     const fav = Favorites(
       packs: {'A/Knights'},
       files: {
-        'B/Bundle/Buttons': {'ui/ok.png'},
+        'B/Buttons': {'ui/ok.png'},
         'c/zap': {'zap.wav', 'b.wav'},
       },
     );
@@ -592,11 +559,11 @@ void main() {
 
     test('Packs view: starred packs or packs with starred files', () {
       expect(favIds(const DashboardQuery(favorites: true)), [
-        'B/Bundle/Buttons',
+        'B/Buttons',
         'A/Knights',
         'c/zap',
       ]);
-      expect(const DashboardQuery(favorites: true).isFlat, isTrue);
+      expect(const DashboardQuery(favorites: true).isNarrowed, isTrue);
       // Other filters still apply.
       expect(favIds(const DashboardQuery(favorites: true, types: {'sfx'})), [
         'c/zap',
@@ -643,7 +610,7 @@ void main() {
       ];
       expect(files(const DashboardQuery(favorites: true), null), [
         'c/zap:b.wav',
-        'B/Bundle/Buttons:ui/ok.png',
+        'B/Buttons:ui/ok.png',
         'c/zap:zap.wav',
       ]);
       const hits = [
@@ -658,7 +625,7 @@ void main() {
       ]);
       expect(
         files(const DashboardQuery(types: {'ui'}, favorites: true), null),
-        ['B/Bundle/Buttons:ui/ok.png'],
+        ['B/Buttons:ui/ok.png'],
       );
       // Off: no search lists nothing, as before.
       expect(files(const DashboardQuery(), null), isEmpty);

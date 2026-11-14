@@ -17,7 +17,6 @@ void main() {
     path: p.join(tmp.path, id),
     title: id.split('/').last,
     author: author ?? id.split('/').first,
-    isContainer: false,
     types: const [],
     tags: const [],
     usedIn: usedIn,

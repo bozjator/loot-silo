@@ -320,7 +320,6 @@ PackSidecar updatePackSidecar(
     previews: old.previews,
     notes: old.notes,
     usedIn: old.usedIn,
-    isContainer: old.isContainer,
     animations: old.animations,
     favorite: old.favorite,
     favoriteFiles: old.favoriteFiles,

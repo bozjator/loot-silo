@@ -32,8 +32,6 @@ class ImportItem {
     required this.author,
     required this.types,
     required this.tags,
-    required this.isContainer,
-    required this.subPackCount,
     required this.fileCount,
     required this.totalBytes,
     this.importedAs,
@@ -46,8 +44,6 @@ class ImportItem {
   /// Path relative to the import root, used for display and tag hints.
   final String sourceRel;
   final String title;
-  final bool isContainer;
-  final int subPackCount;
   final int fileCount;
   final int totalBytes;
 
@@ -165,8 +161,8 @@ Map<String, String> importedSources(String libraryRoot) {
 
 /// Builds the default import plan; synchronous, run it in an isolate.
 ///
-/// The source is only read. Every top-level pack becomes one item (bundles
-/// carry their sub-packs along), with detected author, types and tags.
+/// The source is only read. Every pack becomes one item, with detected
+/// author, types and tags.
 /// Packs imported before (same source path) start unselected.
 ///
 /// [origins] maps a top-level folder name in [sourceRoot] to the archive it
@@ -179,12 +175,6 @@ ImportPlan planFolderImport(
   checkRoots(sourceRoot, libraryRoot);
   final scan = scanLibrary(sourceRoot);
   final imported = importedSources(libraryRoot);
-  final children = <String, List<ScannedPack>>{};
-  for (final pk in scan.packs) {
-    if (pk.parentId != null) {
-      children.putIfAbsent(pk.parentId!, () => []).add(pk);
-    }
-  }
   String? originOf(String id) {
     final parts = id.split('/');
     final archive = origins[parts.first];
@@ -193,7 +183,7 @@ ImportPlan planFolderImport(
   }
 
   final items = [
-    for (final pk in scan.packs.where((x) => x.parentId == null))
+    for (final pk in scan.packs)
       ImportItem(
         sourcePath: pk.path,
         sourceRel: pk.id,
@@ -201,14 +191,8 @@ ImportPlan planFolderImport(
         author: pk.author,
         types: pk.types,
         tags: pk.tags,
-        isContainer: pk.isContainer,
-        subPackCount: children[pk.id]?.length ?? 0,
-        fileCount:
-            pk.files.length +
-            (children[pk.id] ?? const []).fold(0, (n, c) => n + c.files.length),
-        totalBytes:
-            pk.totalBytes +
-            (children[pk.id] ?? const []).fold(0, (n, c) => n + c.totalBytes),
+        fileCount: pk.files.length,
+        totalBytes: pk.totalBytes,
         origin: originOf(pk.id),
         importedAs: imported[p.canonicalize(originOf(pk.id) ?? pk.path)],
       ),
@@ -368,7 +352,6 @@ ImportOutcome importItem(
           tags: item.tags,
           source: PackSource.imported,
           sourcePath: item.origin ?? p.canonicalize(item.sourcePath),
-          isContainer: item.isContainer,
         )
         .write(staging.path);
 

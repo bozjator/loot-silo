@@ -245,7 +245,7 @@ class FilterBar extends StatelessWidget {
                 '$resultCount ${resultCount == 1 ? resultUnit : '${resultUnit}s'}',
                 style: theme.textTheme.labelLarge,
               ),
-              if (query.isFlat)
+              if (query.isNarrowed)
                 TextButton(onPressed: onClear, child: const Text('Clear')),
             ],
           ),

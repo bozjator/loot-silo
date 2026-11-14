@@ -40,29 +40,22 @@ Map<String, Object?> gameJson(
 OwnedKey key(int id, String title, {String user = 'orcmaker'}) =>
     OwnedKey.fromJson({'id': id * 10, 'game': gameJson(id, title, user: user)});
 
-PackRow pack(
-  String id, {
-  String? author,
-  String? url,
-  int? itchGameId,
-  String? parent,
-}) => PackRow(
-  id: id,
-  path: '/lib/$id',
-  title: id.split('/').last,
-  author: author ?? id.split('/').first,
-  authorUrl: url,
-  parentId: parent,
-  isContainer: false,
-  types: const [],
-  tags: const [],
-  usedIn: const [],
-  favorite: false,
-  favoriteFiles: const [],
-  itchGameId: itchGameId,
-  fileCount: 1,
-  totalBytes: 1,
-);
+PackRow pack(String id, {String? author, String? url, int? itchGameId}) =>
+    PackRow(
+      id: id,
+      path: '/lib/$id',
+      title: id.split('/').last,
+      author: author ?? id.split('/').first,
+      authorUrl: url,
+      types: const [],
+      tags: const [],
+      usedIn: const [],
+      favorite: false,
+      favoriteFiles: const [],
+      itchGameId: itchGameId,
+      fileCount: 1,
+      totalBytes: 1,
+    );
 
 void main() {
   group('ItchApi', () {
@@ -208,7 +201,7 @@ void main() {
         pack('E/Magic & Spells SFX 7', url: url),
         pack('E/Magic and Spells 1 - Universal Sound Effects', url: url),
         pack('R/ERW - Grass Land 2.0 v2.1', url: 'https://rafaelmatos.itch.io'),
-        pack('K/Bundle/Space Shooter Pack', author: 'Kenney', parent: 'K/B'),
+        pack('K/Bundle/Space Shooter Pack', author: 'Kenney'),
         pack('P/Pixel-Banner', url: 'https://pixel-banner.itch.io'),
         pack('Z/Done', url: 'https://zerie.itch.io', itchGameId: 99),
       ];

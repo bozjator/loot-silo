@@ -44,7 +44,6 @@ class PackTile extends StatefulWidget {
   const PackTile({
     super.key,
     required this.pack,
-    this.subPackCount = 0,
     this.onTap,
     this.alwaysAnimate = false,
     this.showTags = false,
@@ -56,7 +55,6 @@ class PackTile extends StatefulWidget {
   });
 
   final PackRow pack;
-  final int subPackCount;
   final VoidCallback? onTap;
   final bool alwaysAnimate;
 
@@ -87,7 +85,6 @@ class _PackTileState extends State<PackTile> {
   @override
   Widget build(BuildContext context) {
     final pack = widget.pack;
-    final subPackCount = widget.subPackCount;
     final animate = _hover || widget.alwaysAnimate;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -127,15 +124,6 @@ class _PackTileState extends State<PackTile> {
                                   ),
                           ),
                   ),
-                  if (pack.isContainer)
-                    Positioned(
-                      left: 6,
-                      top: 6,
-                      child: _Pill(
-                        icon: Icons.folder_copy_outlined,
-                        text: 'Bundle · $subPackCount',
-                      ),
-                    ),
                   if (widget.onToggleStar case final toggle?
                       when _hover || widget.starred)
                     Positioned(
@@ -305,37 +293,6 @@ class _TypeChip extends StatelessWidget {
         text,
         style: Theme.of(context).textTheme.labelSmall
             ?.copyWith(color: scheme.onSecondaryContainer),
-      ),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: scheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: scheme.onTertiaryContainer),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: scheme.onTertiaryContainer),
-          ),
-        ],
       ),
     );
   }

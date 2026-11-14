@@ -25,10 +25,10 @@ enum PackSort {
 }
 
 /// Source facet value for packs with no recorded source (folders put into
-/// the library by hand); sub-packs take their bundle's.
+/// the library by hand).
 const noSource = 'unknown';
 
-/// Search text, facet filters, sort and the bundle being browsed.
+/// Search text, facet filters and sort.
 class DashboardQuery {
   const DashboardQuery({
     this.text = '',
@@ -37,7 +37,6 @@ class DashboardQuery {
     this.tags = const {},
     this.sources = const {},
     this.sort = PackSort.relevance,
-    this.bundleId,
     this.favorites = false,
   });
 
@@ -47,9 +46,6 @@ class DashboardQuery {
   final Set<String> tags;
   final Set<String> sources;
   final PackSort sort;
-
-  /// When set, the grid shows this bundle's sub-packs.
-  final String? bundleId;
 
   /// Only starred packs, packs with starred files, or (Files view) starred
   /// files.
@@ -62,8 +58,8 @@ class DashboardQuery {
       tags.isNotEmpty ||
       sources.isNotEmpty;
 
-  /// Searching or filtering shows every matching pack, sub-packs included.
-  bool get isFlat => text.trim().isNotEmpty || hasFilters;
+  /// Searching or filtering: the grid lists only the matching packs.
+  bool get isNarrowed => text.trim().isNotEmpty || hasFilters;
 
   DashboardQuery copyWith({
     String? text,
@@ -72,7 +68,6 @@ class DashboardQuery {
     Set<String>? tags,
     Set<String>? sources,
     PackSort? sort,
-    String? Function()? bundleId,
     bool? favorites,
   }) => DashboardQuery(
     text: text ?? this.text,
@@ -81,7 +76,6 @@ class DashboardQuery {
     tags: tags ?? this.tags,
     sources: sources ?? this.sources,
     sort: sort ?? this.sort,
-    bundleId: bundleId != null ? bundleId() : this.bundleId,
     favorites: favorites ?? this.favorites,
   );
 }
@@ -118,7 +112,6 @@ class DashboardQueryNotifier extends Notifier<DashboardQuery> {
   }
 
   void setSort(PackSort sort) => state = state.copyWith(sort: sort);
-  void openBundle(String? id) => state = state.copyWith(bundleId: () => id);
 
   static Set<String> _toggle(Set<String> s, String v) =>
       s.contains(v) ? ({...s}..remove(v)) : {...s, v};
@@ -133,8 +126,7 @@ class DashboardQueryNotifier extends Notifier<DashboardQuery> {
       state = state.copyWith(sources: _toggle(state.sources, v));
   void toggleFavorites() => state = state.copyWith(favorites: !state.favorites);
 
-  /// Only [author]'s packs: the search, the other filters and an open
-  /// bundle are cleared, so the grid lists all of them (the sort stays).
+  /// Only [author]'s packs: the search and the other filters are cleared, so the grid lists all of them (the sort stays).
   void showAuthor(String author) {
     _debounce?.cancel();
     state = DashboardQuery(sort: state.sort, authors: {author});
@@ -205,8 +197,7 @@ List<FileTile> filterFileHits(
   return out;
 }
 
-/// The Files view's tiles: file hits within the packs the filters (and an
-/// open bundle) allow, in the chosen order.
+/// The Files view's tiles: file hits within the packs the filters allow, in the chosen order.
 final visibleFilesProvider = Provider<AsyncValue<List<FileTile>>>((ref) {
   final library = ref.watch(libraryProvider);
   final files = ref.watch(fileSearchProvider);
@@ -286,17 +277,7 @@ List<PackRow> applyQuery(
   List<String>? hits, {
   Favorites favorites = Favorites.none,
 }) {
-  Iterable<PackRow> out;
-  if (q.bundleId != null && !q.isFlat) {
-    out = packs.where((p) => p.parentId == q.bundleId);
-  } else if (q.isFlat) {
-    out = packs;
-    if (q.bundleId != null) {
-      out = out.where((p) => p.parentId == q.bundleId);
-    }
-  } else {
-    out = packs.where((p) => p.parentId == null);
-  }
+  Iterable<PackRow> out = packs;
   if (hits != null) {
     final hitSet = hits.toSet();
     out = out.where((p) => hitSet.contains(p.id));
@@ -541,9 +522,8 @@ class Facets {
     sources: _count(_sources(packs)),
   );
 
-  /// Faceted counts: each facet counts the packs (in the open bundle, and
-  /// among the search [hits] when searching) that pass the *other* active
-  /// filters. Sub-packs count, since any filter lists them.
+  /// Faceted counts: each facet counts the packs (among the search [hits]
+  /// when searching) that pass the *other* active filters.
   factory Facets.forQuery(
     List<PackRow> packs,
     DashboardQuery q,
@@ -551,9 +531,6 @@ class Facets {
     Favorites favorites = Favorites.none,
   }) {
     Iterable<PackRow> base = packs;
-    if (q.bundleId != null) {
-      base = base.where((p) => p.parentId == q.bundleId);
-    }
     if (hits != null) {
       final hitSet = hits.toSet();
       base = base.where((p) => hitSet.contains(p.id));
@@ -586,7 +563,7 @@ List<String> knownTags(WidgetRef ref) => [
 List<(String, int)> knownAuthors(List<PackRow> packs) {
   final m = <String, int>{};
   for (final p in packs) {
-    if (p.parentId == null && p.author != null) {
+    if (p.author != null) {
       m[p.author!] = (m[p.author!] ?? 0) + 1;
     }
   }

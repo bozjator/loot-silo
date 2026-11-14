@@ -197,8 +197,6 @@ class LibraryState {
   final String? root;
   final List<PackRow> packs;
   final LoadResult? result;
-
-  Iterable<PackRow> get topLevel => packs.where((p) => p.parentId == null);
 }
 
 final libraryProvider = AsyncNotifierProvider<LibraryNotifier, LibraryState>(

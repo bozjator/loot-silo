@@ -89,7 +89,6 @@ class SessionKeeper {
       sources: q.sources.toList()..sort(),
       favorites: q.favorites,
       sort: q.sort == PackSort.relevance ? null : q.sort.name,
-      bundleId: q.bundleId,
     );
   }
 
@@ -105,16 +104,12 @@ final sessionKeeperProvider = Provider<SessionKeeper>((ref) {
 });
 
 /// [session]'s dashboard query, without values no pack in [packs] has: an
-/// unknown tag isn't selected, a removed bundle isn't opened.
+/// unknown tag isn't selected.
 DashboardQuery restoredQuery(LastSession session, List<PackRow> packs) {
   final types = {for (final p in packs) ...p.types};
   final authors = {for (final p in packs) p.author ?? ''};
   final tags = {for (final p in packs) ...p.tags};
   final sources = {noSource, for (final p in packs) ?p.source};
-  final bundles = {
-    for (final p in packs)
-      if (p.isContainer) p.id,
-  };
   return DashboardQuery(
     text: session.search,
     types: {...session.types.where(types.contains)},
@@ -123,7 +118,6 @@ DashboardQuery restoredQuery(LastSession session, List<PackRow> packs) {
     sources: {...session.sources.where(sources.contains)},
     favorites: session.favorites,
     sort: PackSort.values.asNameMap()[session.sort] ?? PackSort.relevance,
-    bundleId: bundles.contains(session.bundleId) ? session.bundleId : null,
   );
 }
 

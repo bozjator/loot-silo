@@ -2,7 +2,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../state/dashboard.dart';
 import '../state/itch.dart' show itchKeyProvider;
 import '../state/providers.dart';
 import '../state/settings.dart';
@@ -84,21 +83,14 @@ class _AppState extends ConsumerState<LootSiloApp> {
         if (_top.top?.isFirst ?? false) action(ref.read(tabsProvider.notifier));
       });
 
-  /// Closes the top page or dialog, else goes back within the shown tab; on
-  /// the dashboard, leaves an open bundle.
+  /// Closes the top page or dialog, else goes back within the shown tab.
   Future<void> _back() async {
     final root = _navigator.currentState;
     if (root != null && root.canPop()) {
       await root.maybePop();
       return;
     }
-    final tabs = ref.read(tabsProvider.notifier);
-    if (await tabs.currentNavigator?.maybePop() ?? false) return;
-    if (ref.read(tabsProvider).active != 0) return;
-    final query = ref.read(dashboardQueryProvider.notifier);
-    if (ref.read(dashboardQueryProvider).bundleId != null) {
-      query.openBundle(null);
-    }
+    await ref.read(tabsProvider.notifier).currentNavigator?.maybePop();
   }
 
   @override

@@ -62,10 +62,10 @@ class HelpScreen extends StatelessWidget {
                   'the ones you don\'t want.',
                 ),
                 const _P(
-                  'A bundle is a pack that holds other packs, such as a big '
-                  'collection with one folder per theme. Its tile opens the '
-                  'list of its packs; "Bundle details" shows the bundle '
-                  'itself.',
+                  'A big pack, such as a collection with one folder per '
+                  'theme, stays one pack: browse its folders in the By folder '
+                  'view, or show them as their own tiles in the dashboard\'s '
+                  'Expanded view.',
                 ),
                 const _P(
                   'What you set on a pack (tags, notes, stars, animation '

@@ -14,7 +14,7 @@ void main() {
 
   test('M73: headers of the biggest audio pack (real, read-only)', () async {
     // Packs are the folders holding asset_pack.json; their audio files
-    // are those below them (sub-packs counted on their own).
+    // are those below them.
     final packs = <String, List<String>>{};
     for (final e in lib.listSync(recursive: true, followLinks: false)) {
       if (e is! File) continue;

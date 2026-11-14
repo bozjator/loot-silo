@@ -67,7 +67,6 @@ void main() {
       sources: ['manual'],
       favorites: true,
       sort: 'title',
-      bundleId: 'Some/Bundle',
     );
     store.save(const AppSettings(libraryPath: '/lib', lastSession: session));
     final back = store.load();
@@ -77,7 +76,7 @@ void main() {
     expect(text, contains('"last_session"'));
     expect(text, contains('"dashboard_page"'));
     expect(text, contains('"pack_id": "HeroMaker/Knight Pack"'));
-    expect(text, contains('"bundle_id": "Some/Bundle"'));
+    expect(text, isNot(contains('bundle_id')));
     store.save(const AppSettings(resumeSession: false));
     expect(store.load().resumeSession, isFalse);
     expect(file.readAsStringSync(), contains('"resume_session": false'));
@@ -229,7 +228,6 @@ void main() {
           tags: ['knight', 'no-such-tag'],
           authors: ['Nobody'],
           sort: 'bogus',
-          bundleId: 'HeroMaker/Gone',
           dashboardPage: PageSession(packId: 'HeroMaker/Gone'),
         ),
       ),
@@ -243,7 +241,6 @@ void main() {
     expect(q.tags, {'knight'});
     expect(q.authors, isEmpty);
     expect(q.sort, PackSort.relevance);
-    expect(q.bundleId, isNull);
     // The dashboard search field shows the restored text.
     c.read(tabsProvider.notifier).select(0);
     await pumpUntil(

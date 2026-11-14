@@ -33,7 +33,7 @@ class AppBarActionsWidth extends Notifier<double?> {
 /// search box keeps room at the 1024 px minimum.
 const viewLabelsMinWidth = 1200.0;
 
-/// The pack grid with search, filters, sorting and bundle browsing.
+/// The pack grid with search, filters and sorting.
 class Dashboard extends ConsumerStatefulWidget {
   const Dashboard({super.key});
 
@@ -175,17 +175,6 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final query = ref.watch(dashboardQueryProvider);
     final notifier = ref.read(dashboardQueryProvider.notifier);
     final visible = ref.watch(visibleTilesProvider);
-    final library = ref.watch(libraryProvider).value;
-    final allPacks = library?.packs ?? const [];
-    final subCounts = <String, int>{};
-    for (final pk in allPacks) {
-      if (pk.parentId != null) {
-        subCounts[pk.parentId!] = (subCounts[pk.parentId!] ?? 0) + 1;
-      }
-    }
-    final bundle = query.bundleId == null
-        ? null
-        : allPacks.where((p) => p.id == query.bundleId).firstOrNull;
     final tiles = visible.value ?? const [];
     final view = ref.watch(settingsProvider.select((s) => s.dashboardView));
     final searching = query.text.trim().isNotEmpty;
@@ -283,37 +272,6 @@ class _DashboardState extends ConsumerState<Dashboard> {
                   ],
                 ),
               ),
-              if (bundle != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Row(
-                    children: [
-                      TextButton.icon(
-                        onPressed: () => notifier.openBundle(null),
-                        icon: const Icon(Icons.arrow_back),
-                        label: const Text('All packs'),
-                      ),
-                      const Icon(Icons.chevron_right, size: 18),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          '${bundle.title} · ${bundle.author ?? ''}',
-                          style: theme.textTheme.titleSmall,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => openPackDetail(
-                          context,
-                          bundle.id,
-                          returnFocus: _gridFocus,
-                        ),
-                        icon: const Icon(Icons.info_outline, size: 18),
-                        label: const Text('Bundle details'),
-                      ),
-                    ],
-                  ),
-                ),
               if (filesView && (fileSearch?.capped ?? false))
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
@@ -357,10 +315,8 @@ class _DashboardState extends ConsumerState<Dashboard> {
                           _packScale.step(tileSize, n),
                         ),
                         child: ThumbRows(
-                          // Root and each bundle keep their own scroll position.
-                          key: PageStorageKey(
-                            'grid:${query.bundleId}:${view.name}',
-                          ),
+                          // Each view keeps its own scroll position.
+                          key: PageStorageKey('grid:${view.name}'),
                           physics: const CtrlWheelPhysics(),
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                           maxTileWidth: tileSize,
@@ -372,17 +328,10 @@ class _DashboardState extends ConsumerState<Dashboard> {
                                 tiles[i];
                             return OpenInNewTab(
                               key: ValueKey(tiles[i].key),
-                              // Bundles open in place; their details have a
-                              // button.
-                              onOpenInNewTab: pack.isContainer
-                                  ? null
-                                  : () => tabsNotifier.open(
-                                      pack.id,
-                                      folder: folder,
-                                    ),
+                              onOpenInNewTab: () =>
+                                  tabsNotifier.open(pack.id, folder: folder),
                               child: PackTile(
                                 pack: tile,
-                                subPackCount: subCounts[pack.id] ?? 0,
                                 alwaysAnimate: animateAll,
                                 starred:
                                     folder == null && favorites.isPack(pack.id),
@@ -408,14 +357,12 @@ class _DashboardState extends ConsumerState<Dashboard> {
                                   search: search,
                                   returnFocus: _gridFocus,
                                 ),
-                                onTap: pack.isContainer
-                                    ? () => notifier.openBundle(pack.id)
-                                    : () => openPackDetail(
-                                        context,
-                                        pack.id,
-                                        folder: folder,
-                                        returnFocus: _gridFocus,
-                                      ),
+                                onTap: () => openPackDetail(
+                                  context,
+                                  pack.id,
+                                  folder: folder,
+                                  returnFocus: _gridFocus,
+                                ),
                               ),
                             );
                           },

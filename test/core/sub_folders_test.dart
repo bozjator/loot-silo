@@ -64,35 +64,32 @@ void main() {
     }
   });
 
-  test(
-    'the scanner splits non-container packs and the index stores it',
-    () async {
-      final root = p.join(tmp.path, 'lib');
-      writeFiles(root, [
-        'Heroes/Knight/idle.png',
-        'Heroes/Mage/idle.png',
-        'Heroes/Mage/cast.png',
-        'Single/a.png',
-        'Single/b.png',
-      ]);
-      final scan = scanLibrary(root);
-      final heroes = scan.packs.firstWhere((x) => x.id == 'Heroes');
-      expect([for (final s in heroes.subFolders) s.folder], ['Knight', 'Mage']);
-      expect(
-        scan.packs.firstWhere((x) => x.id.startsWith('Single')).subFolders,
-        isEmpty,
-      );
+  test('the scanner splits packs and the index stores it', () async {
+    final root = p.join(tmp.path, 'lib');
+    writeFiles(root, [
+      'Heroes/Knight/idle.png',
+      'Heroes/Mage/idle.png',
+      'Heroes/Mage/cast.png',
+      'Single/a.png',
+      'Single/b.png',
+    ]);
+    final scan = scanLibrary(root);
+    final heroes = scan.packs.firstWhere((x) => x.id == 'Heroes');
+    expect([for (final s in heroes.subFolders) s.folder], ['Knight', 'Mage']);
+    expect(
+      scan.packs.firstWhere((x) => x.id.startsWith('Single')).subFolders,
+      isEmpty,
+    );
 
-      final index = LibraryIndex(NativeDatabase.memory());
-      addTearDown(index.close);
-      expect(index.schemaVersion, 5);
-      await index.replaceScan(scan);
-      await index.replaceScan(scan);
-      final stored = await index.allSubFolders();
-      expect(stored.keys, ['Heroes']);
-      expect([for (final r in stored['Heroes']!) r.folder], ['Knight', 'Mage']);
-      expect(stored['Heroes']![1].fileCount, 2);
-      expect(stored['Heroes']![0].preview, 'idle.png');
-    },
-  );
+    final index = LibraryIndex(NativeDatabase.memory());
+    addTearDown(index.close);
+    expect(index.schemaVersion, 6);
+    await index.replaceScan(scan);
+    await index.replaceScan(scan);
+    final stored = await index.allSubFolders();
+    expect(stored.keys, ['Heroes']);
+    expect([for (final r in stored['Heroes']!) r.folder], ['Knight', 'Mage']);
+    expect(stored['Heroes']![1].fileCount, 2);
+    expect(stored['Heroes']![0].preview, 'idle.png');
+  });
 }

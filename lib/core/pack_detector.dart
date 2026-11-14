@@ -12,7 +12,6 @@ class DetectedPack {
     required this.author,
     this.authorFile,
     this.sidecar,
-    this.subPacks = const [],
   });
 
   final DirNode dir;
@@ -22,11 +21,7 @@ class DetectedPack {
   final String? authorFile;
   final PackSidecar? sidecar;
 
-  /// Sub-packs inside a bundle such as Kenney's; empty for normal packs.
-  final List<DetectedPack> subPacks;
-
   String get title => sidecar?.title ?? dir.name;
-  bool get isContainer => subPacks.isNotEmpty;
 }
 
 final _previewStem = RegExp(
@@ -70,17 +65,6 @@ bool _hasWeakPackSignal(DirNode d) =>
     _versioned.hasMatch(d.name) ||
     pathWords(d.name).any(_packWords.contains);
 
-final _licenseStem = RegExp(r'^licen[cs]e(?![a-z])', caseSensitive: false);
-
-/// Sub-packs need a preview, sample or license of their own; readme notes
-/// are common inside ordinary pack subfolders and don't count.
-bool _hasSubPackSignal(DirNode d) =>
-    d.hasFile(packFileName) ||
-    _countedName.hasMatch(d.name) ||
-    d.files.any(
-      (f) => _previewStem.hasMatch(f.stem) || _licenseStem.hasMatch(f.stem),
-    );
-
 bool _hasAssets(DirNode d) =>
     d.walk().any((n) => n.files.any((f) => assetExts.contains(f.ext)));
 
@@ -97,11 +81,13 @@ bool _hasDirectAssets(DirNode d) =>
 /// 2. A folder with a strong pack signal ([hasStrongPackSignal]) is a pack.
 /// 3. A folder with assets but no signal anywhere below it is a pack, so
 ///    loose collections still show up.
-/// 4. Otherwise recurse. Authors are inherited from author files above.
+/// 4. A folder with asset files directly in it is a pack, even when child
+///    folders have signals of their own (those files would otherwise belong
+///    to no pack). Docs alone don't count.
+/// 5. Otherwise recurse. Authors are inherited from author files above.
 ///
-/// Inside each pack, sub-packs (folders with their own preview, sample or
-/// license, up to three levels down, ignoring preview folders) make it a container when there
-/// are at least two.
+/// A pack is always flat: every folder below it, signalled or not, is an
+/// ordinary folder of that pack.
 class PackDetector {
   final _signalBelow = <String, bool>{};
 
@@ -161,40 +147,20 @@ class PackDetector {
       }
       return;
     }
+    if (!isRoot && _hasDirectAssets(d)) {
+      out.add(_pack(d, author ?? guessAuthor(d), authorFile));
+      return;
+    }
     for (final c in d.dirs) {
       _visit(c, author, authorFile, out);
     }
   }
 
-  DetectedPack _pack(DirNode d, AuthorInfo? author, String? authorFile) {
-    final subs = <DetectedPack>[];
-    void find(DirNode n, int depth) {
-      for (final c in n.dirs) {
-        if (_previewDirName.hasMatch(c.name)) continue;
-        if (_hasSubPackSignal(c) && _hasAssets(c)) {
-          subs.add(
-            DetectedPack(
-              dir: c,
-              author: author,
-              authorFile: authorFile,
-              sidecar: c.hasFile(packFileName)
-                  ? PackSidecar.read(c.path)
-                  : null,
-            ),
-          );
-        } else if (depth < 3) {
-          find(c, depth + 1);
-        }
-      }
-    }
-
-    find(d, 1);
-    return DetectedPack(
-      dir: d,
-      author: author,
-      authorFile: authorFile,
-      sidecar: d.hasFile(packFileName) ? PackSidecar.read(d.path) : null,
-      subPacks: subs.length >= 2 ? subs : const [],
-    );
-  }
+  DetectedPack _pack(DirNode d, AuthorInfo? author, String? authorFile) =>
+      DetectedPack(
+        dir: d,
+        author: author,
+        authorFile: authorFile,
+        sidecar: d.hasFile(packFileName) ? PackSidecar.read(d.path) : null,
+      );
 }

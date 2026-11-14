@@ -70,7 +70,6 @@ void main() {
         previews: ['_itch/cover.png', 'a.png'],
         notes: 'n',
         usedIn: ['G'],
-        isContainer: true,
         animations: {
           'walk.png': {'fps': 8},
         },

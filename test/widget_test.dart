@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:loot_silo/core/library_index.dart';
 import 'package:loot_silo/state/itch.dart';
-import 'package:loot_silo/state/dashboard.dart';
 import 'package:loot_silo/state/providers.dart';
 import 'package:loot_silo/state/settings.dart';
 import 'package:loot_silo/ui/app.dart';
@@ -213,9 +212,7 @@ void main() {
     expect(find.byType(SettingsScreen), findsOneWidget);
   });
 
-  testWidgets('mouse back button closes a page, then an open bundle', (
-    tester,
-  ) async {
+  testWidgets('mouse back button closes a page', (tester) async {
     final store = SettingsStore(File(p.join(tmp.path, 'settings.json')))
       ..save(AppSettings(libraryPath: tmp.path));
     final index = LibraryIndex(NativeDatabase.memory());
@@ -250,13 +247,8 @@ void main() {
     expect(find.byType(SettingsScreen), findsOneWidget);
     await mouseBack();
     expect(find.byType(SettingsScreen), findsNothing);
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(HomeScreen)),
-    );
-    container.read(dashboardQueryProvider.notifier).openBundle('Some/Bundle');
+    // Nothing left to close: the dashboard stays.
     await mouseBack();
-    expect(container.read(dashboardQueryProvider).bundleId, isNull);
     expect(find.byType(HomeScreen), findsOneWidget);
   });
 

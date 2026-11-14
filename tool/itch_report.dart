@@ -31,8 +31,6 @@ Future<void> main(List<String> args) async {
           title: pk.title,
           author: pk.author?.user,
           authorUrl: pk.author?.url,
-          parentId: pk.parentId,
-          isContainer: pk.isContainer,
           types: pk.types,
           tags: pk.tags,
           usedIn: const [],

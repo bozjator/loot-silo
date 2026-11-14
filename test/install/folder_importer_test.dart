@@ -48,10 +48,8 @@ void main() {
           'misc',
         ]),
       );
-      final bundle = item(plan, 'bundles/Mega Bundle v3');
-      expect(bundle.isContainer, isTrue);
-      expect(bundle.subPackCount, 3);
-      expect(bundle.fileCount, 10);
+      // A former bundle is one item holding all its folders' files.
+      expect(item(plan, 'bundles/Mega Bundle v3').fileCount, 10);
       expect(plan.items.every((i) => i.selected), isTrue);
     });
 
@@ -164,8 +162,10 @@ void main() {
       );
       expect(sc.types, ['environment']);
       expect(
-        PackSidecar.read(p.join(lib, 'BigCo', 'Mega Bundle v3'))!.isContainer,
-        isTrue,
+        PackSidecar.read(p.join(lib, 'BigCo', 'Mega Bundle v3'))!
+            .toJson()
+            .containsKey('is_container'),
+        isFalse,
       );
       expect(Directory(p.join(lib, 'Unknown Author')).existsSync(), isTrue);
       expect(
@@ -177,7 +177,7 @@ void main() {
     test('the imported library scans to the same packs', () async {
       await runImport(planFolderImport(src, lib)).drain<void>();
       final scan = scanLibrary(lib);
-      final top = scan.packs.where((x) => x.parentId == null).toList();
+      final top = scan.packs;
       expect(
         top.map((x) => x.title),
         unorderedEquals(
@@ -187,8 +187,10 @@ void main() {
           ).items.map((i) => i.title),
         ),
       );
-      final bundle = top.singleWhere((x) => x.title == 'Mega Bundle v3');
-      expect(scan.packs.where((x) => x.parentId == bundle.id), hasLength(3));
+      expect(
+        top.singleWhere((x) => x.title == 'Mega Bundle v3').files,
+        hasLength(10),
+      );
       expect(
         top.singleWhere((x) => x.title == 'Knight Pack v1.0').author!.user,
         'HeroMaker',

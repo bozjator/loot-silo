@@ -198,13 +198,12 @@ List<ItchMatch> matchOwnedKeys(
     for (final pk in packs) {
       if (pk.itchGameId != null) continue;
       final author = sameAuthor(pk, key.game.user);
-      var score = matcher.score(pk.title, key.game.title);
+      final score = matcher.score(pk.title, key.game.title);
       // Without the same author only near-identical, specific titles count.
       if (!author && (score < 0.95 || titleWords(pk.title).length < 3)) {
         continue;
       }
       if (author && score < 0.75) continue;
-      if (pk.parentId == null) score += 0.005;
       candidates.add((key, pk, score));
     }
   }

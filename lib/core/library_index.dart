@@ -39,8 +39,6 @@ class Packs extends Table {
   TextColumn get title => text()();
   TextColumn get author => text().nullable()();
   TextColumn get authorUrl => text().nullable()();
-  TextColumn get parentId => text().nullable()();
-  BoolColumn get isContainer => boolean()();
   TextColumn get types => text().map(const StringListConverter())();
   TextColumn get tags => text().map(const StringListConverter())();
   TextColumn get source => text().nullable()();
@@ -117,7 +115,7 @@ class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("
@@ -182,8 +180,6 @@ class LibraryIndex extends _$LibraryIndex {
             title: pk.title,
             author: Value(pk.author?.user),
             authorUrl: Value(pk.author?.url),
-            parentId: Value(pk.parentId),
-            isContainer: pk.isContainer,
             types: pk.types,
             tags: pk.tags,
             source: Value(pk.source?.name),

@@ -56,7 +56,7 @@ class SettingsScreen extends ConsumerWidget {
         ? null
         : ref.watch(itchAccountProvider).value?.user;
     final library = ref.watch(libraryProvider).value;
-    final packCount = library?.topLevel.length;
+    final packCount = library?.packs.length;
 
     Widget section(String title) => Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
@@ -83,8 +83,7 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: Text(
                   packCount == null
                       ? 'The folder Loot Silo manages (Author/Pack)'
-                      : '$packCount packs, ${library!.packs.length} '
-                            'including bundle contents',
+                      : '$packCount packs',
                 ),
                 trailing: OutlinedButton(
                   onPressed: () => _changeLibrary(context, ref),

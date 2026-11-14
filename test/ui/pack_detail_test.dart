@@ -181,6 +181,8 @@ void main() {
     Map<String, List<int>> raw = const {},
     // Files written into the Slimes pack.
     Map<String, List<int>> slimes = const {},
+    // Files written anywhere in the library, relative to its root.
+    Map<String, List<int>> library = const {},
     List<String>? types,
     Map<String, Object?> sidecar = const {},
     List<Override> overrides = const [],
@@ -199,6 +201,11 @@ void main() {
     }
     for (final MapEntry(key: rel, value: bytes) in slimes.entries) {
       File(p.join(lib, 'HeroMaker', 'Slimes', rel))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(bytes);
+    }
+    for (final MapEntry(key: rel, value: bytes) in library.entries) {
+      File(p.join(lib, rel))
         ..parent.createSync(recursive: true)
         ..writeAsBytesSync(bytes);
     }
@@ -4625,6 +4632,42 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       expect(find.byType(PackDetailScreen), findsNothing);
       expect(tile('Slimes'), findsOneWidget);
+    });
+
+    testWidgets('M91: a former bundle opens like any pack, also in a tab', (
+      tester,
+    ) async {
+      const cozy = 'HeroMaker/Cozy Tunes + Cozy FX';
+      final png = img.encodePng(img.Image(width: 8, height: 8));
+      await openKnight(
+        tester,
+        open: false,
+        library: {
+          '$cozy/License.txt': [1],
+          '$cozy/_itch/cover.png': png,
+          '$cozy/Cozy FX/License Agreement.pdf': [1],
+          '$cozy/Cozy FX/pop.ogg': [1],
+          '$cozy/Cozy Tunes/Read Me.txt': [1],
+          '$cozy/Cozy Tunes/Audio/ogg/morning.ogg': [1],
+          '$cozy/Cozy Tunes - The Classics/waltz.ogg': [1],
+        },
+      );
+      // One tile, no sub-pack tiles.
+      expect(tile('Cozy Tunes + Cozy FX'), findsOneWidget);
+      expect(tile('Cozy FX'), findsNothing);
+      await tester.tap(tile('Cozy Tunes + Cozy FX'));
+      await pumpUntil(tester, find.byType(PackDetailScreen));
+      await tester.pump(const Duration(seconds: 1));
+      // All three folders' sounds are the pack's.
+      await pumpUntil(tester, find.textContaining('Audio ('));
+      expect(find.textContaining('Audio (3)'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settle(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(PackDetailScreen), findsNothing);
+      await middleClick(tester, tile('Cozy Tunes + Cozy FX'));
+      expect(strip('Cozy Tunes + Cozy FX'), findsOneWidget);
+      expect(tabs(tester).tabs.map((t) => t.packId), [cozy]);
     });
 
     testWidgets('each tab keeps its state; Ctrl+Tab and Ctrl+W', (

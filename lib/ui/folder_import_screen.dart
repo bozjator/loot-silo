@@ -686,10 +686,6 @@ class _ItemRow extends StatelessWidget {
                           style: theme.textTheme.bodyMedium,
                         ),
                       ),
-                      if (item.isContainer) ...[
-                        const SizedBox(width: 6),
-                        _Badge('bundle · ${item.subPackCount} sub-packs'),
-                      ],
                     ],
                   ),
                   // The source path, when it says more than the title.

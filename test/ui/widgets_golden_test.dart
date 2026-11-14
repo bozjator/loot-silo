@@ -27,7 +27,6 @@ Widget frame(Widget child, {Size size = const Size(240, 300)}) => MaterialApp(
 
 PackRow row({
   String? preview,
-  bool container = false,
   List<String> types = const ['character'],
   SpriteAnim? anim,
 }) => PackRow(
@@ -35,7 +34,6 @@ PackRow row({
   path: File('test/fixtures/images').absolute.path,
   title: 'Tiny Hero Pack v1.2',
   author: 'HeroMaker',
-  isContainer: container,
   types: types,
   tags: const [],
   usedIn: const [],
@@ -96,7 +94,7 @@ void main() {
     );
   });
 
-  testWidgets('bundle tile and generated audio tile', (tester) async {
+  testWidgets('multi-type tile and generated audio tile', (tester) async {
     await precacheHero(tester);
     await tester.pumpWidget(
       frame(
@@ -106,10 +104,8 @@ void main() {
               child: PackTile(
                 pack: row(
                   preview: 'hero.png',
-                  container: true,
                   types: const ['3d', 'ui', 'sfx', 'font'],
                 ),
-                subPackCount: 63,
               ),
             ),
             const SizedBox(width: 8),
@@ -122,12 +118,12 @@ void main() {
       ),
     );
     await decode(tester);
-    expect(find.text('Bundle · 63'), findsOneWidget);
+    expect(find.text('Bundle · 63'), findsNothing);
     expect(find.text('+1'), findsOneWidget);
     expect(find.byIcon(Icons.graphic_eq), findsOneWidget);
     await expectLater(
       find.byType(Row).first,
-      matchesGoldenFile('goldens/tile_bundle_audio.png'),
+      matchesGoldenFile('goldens/tile_types_audio.png'),
     );
   });
 

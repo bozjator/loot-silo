@@ -58,17 +58,14 @@ void main() {
     expect(await index.search('forest'), [
       'art/environments/Forest Tiles 16x16',
     ]);
-    expect(await index.search('bigco'), hasLength(4));
+    expect(await index.search('bigco'), ['bundles/Mega Bundle v3']);
     expect(await index.search('pixel-art'), isEmpty);
     expect(
       await index.search('sfx'),
-      containsAll([
-        'sfx/Loose Sounds',
-        'bundles/Mega Bundle v3/Audio/Clicks (3 sounds)',
-      ]),
+      containsAll(['sfx/Loose Sounds', 'bundles/Mega Bundle v3']),
     );
     expect(await index.search('barrel'), [
-      'bundles/Mega Bundle v3/2D assets/Tanks Pack',
+      'bundles/Mega Bundle v3',
     ], reason: 'camelCase file names are split');
   });
 
@@ -100,12 +97,12 @@ void main() {
       final r = await index.searchFiles('barr');
       expect(r.hits, [
         (
-          packId: 'bundles/Mega Bundle v3/2D assets/Tanks Pack',
-          relPath: 'PNG/tankBarrel.png',
+          packId: 'bundles/Mega Bundle v3',
+          relPath: '2D assets/Tanks Pack/PNG/tankBarrel.png',
         ),
       ]);
       expect(r.infix, isFalse);
-      expect(r.counts, {'bundles/Mega Bundle v3/2D assets/Tanks Pack': 1});
+      expect(r.counts, {'bundles/Mega Bundle v3': 1});
       expect(paths(await index.searchFiles('idle')), [
         'Knight/idle_0.png',
         'Knight/idle_1.png',
@@ -129,7 +126,7 @@ void main() {
 
     test('falls back to substrings for 3+ letter words', () async {
       final r = await index.searchFiles('arrel');
-      expect(paths(r), ['PNG/tankBarrel.png']);
+      expect(paths(r), ['2D assets/Tanks Pack/PNG/tankBarrel.png']);
       expect(r.infix, isTrue);
       // Too short for trigrams, and no prefix match: nothing.
       expect((await index.searchFiles('rr')).hits, isEmpty);

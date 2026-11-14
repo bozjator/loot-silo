@@ -86,7 +86,7 @@ class PageSession {
 
 /// What "Resume where I left off" brings back: the open pack tabs (in
 /// order) and the shown one (0 = dashboard, `i + 1` = [tabs]`[i]`), the
-/// dashboard's search, filters, sort and open bundle, and a pack page open
+/// dashboard's search, filters and sort, and a pack page open
 /// in the Dashboard tab. The dashboard view is its own setting
 /// ([AppSettings.dashboardView]). Settings key `last_session`.
 class LastSession {
@@ -101,7 +101,6 @@ class LastSession {
     this.sources = const [],
     this.favorites = false,
     this.sort,
-    this.bundleId,
   });
 
   final List<PageSession> tabs;
@@ -116,7 +115,6 @@ class LastSession {
 
   /// A `PackSort` name.
   final String? sort;
-  final String? bundleId;
 
   static List<String> _strings(Object? v) => [
     if (v is List)
@@ -144,7 +142,6 @@ class LastSession {
       sources: _strings(json['sources']),
       favorites: json['favorites'] == true,
       sort: json['sort'] as String?,
-      bundleId: json['bundle_id'] as String?,
     );
   }
 
@@ -159,7 +156,6 @@ class LastSession {
     'sources': sources,
     'favorites': favorites,
     'sort': ?sort,
-    'bundle_id': ?bundleId,
   };
 
   @override

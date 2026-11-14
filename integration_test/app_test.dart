@@ -420,11 +420,15 @@ void main() {
     await captureScreenshot(tester, 'm4_dashboard');
 
     await tester.enterText(find.byType(TextField), 'slime');
+
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.textContaining('Tiny RPG'));
     await settleImages(tester);
     await captureScreenshot(tester, 'm4_search_slime');
 
     await tester.enterText(find.byType(TextField), '');
+
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     // Type chips follow the search (M23): 3d shows again once it's cleared.
     await pumpUntil(tester, find.widgetWithText(FilterChip, '3d'));
     await tester.tap(find.widgetWithText(FilterChip, '3d'));
@@ -445,10 +449,12 @@ void main() {
     );
     await settleImages(tester);
     await captureScreenshot(tester, 'm4_dashboard_scrolled');
+    // Since M91 the all-in-one is one pack: its page opens.
     await tester.tap(kenney);
-    await pumpUntil(tester, find.text('All packs'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.pump(const Duration(seconds: 1));
     await settleImages(tester);
-    await captureScreenshot(tester, 'm4_bundle_kenney1');
+    await captureScreenshot(tester, 'm4_kenney1_pack', settle: false);
   });
 
   testWidgets('sprite animations on tiles (real library)', (tester) async {
@@ -463,6 +469,7 @@ void main() {
       ('ashishlko11', 'm5_special_effects'),
     ]) {
       await tester.enterText(find.byType(TextField), query);
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
       await tester.pump(const Duration(milliseconds: 500));
       await settleImages(tester);
       await captureScreenshot(tester, '${name}_frame0');
@@ -516,6 +523,7 @@ void main() {
     await tester.tap(find.byType(TextField));
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'zerie');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.textContaining('Tiny RPG').first);
     await pumpUntil(tester, find.textContaining('Animations ('));
@@ -582,6 +590,8 @@ void main() {
     await pumpUntil(tester, realPacks());
 
     await tester.enterText(find.byType(TextField), 'monster sound effects 3');
+
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.text('Monster Sound Effects 3'));
     await pumpUntil(tester, find.textContaining('Audio ('));
@@ -596,6 +606,7 @@ void main() {
     // M34: Special Effects Vol.03 holds only animations now (no Images
     // tab); Village(interiors) has plain images.
     await tester.enterText(find.byType(TextField), 'Village(interiors)');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text(villageInteriors));
     await tester.tap(find.text(villageInteriors).first);
     await pumpUntil(tester, find.textContaining('Images ('));
@@ -828,6 +839,7 @@ void main() {
     // M34: Special Effects Vol.03 holds only animations now (no Images
     // tab); Village(interiors) has plain images.
     await tester.enterText(find.byType(TextField), 'Village(interiors)');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text(villageInteriors));
     await tester.tap(find.text(villageInteriors).first);
     await pumpUntil(tester, find.textContaining('Images ('));
@@ -960,6 +972,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'craftpix');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('Free-Basic-Pixel-Art-UI-for-RPG'));
     await tester.tap(find.text('Free-Basic-Pixel-Art-UI-for-RPG'));
     await pumpUntil(tester, find.textContaining('Other files ('));
@@ -997,12 +1010,22 @@ A **16×16** knight with *walk* and *idle* animations.
       await tester.pump(const Duration(milliseconds: 300));
       final size = saved('dashboard_tile_size');
       expect(size, closeTo(card(find.byType(PackTile)), 1e-6));
-      expect(
-        size,
-        dx < 0
-            ? inInclusiveRange(140, 140 + 40)
-            : inInclusiveRange(480 - 120, 480),
-      );
+      if (dx < 0) {
+        expect(size, inInclusiveRange(140, 140 + 40));
+      } else {
+        // M80: over 480 px only when a whole card fits the grid's height
+        // (since M91 fewer type chips leave the grid taller at 900 px).
+        final tile = find.byType(PackTile).first;
+        final viewport = tester
+            .getSize(
+              find.ancestor(of: tile, matching: find.byType(Scrollable)).first,
+            )
+            .height;
+        expect(size, inInclusiveRange(480 - 120, maxCardWidth));
+        if (size > 480) {
+          expect(tester.getSize(tile).height, lessThanOrEqualTo(viewport));
+        }
+      }
       await settleImages(tester);
       await captureScreenshot(tester, shot, settle: false);
     }
@@ -1010,6 +1033,7 @@ A **16×16** knight with *walk* and *idle* animations.
     // M34: Special Effects Vol.03 holds only animations now (no Images
     // tab); Village(interiors) has plain images.
     await tester.enterText(find.byType(TextField), 'Village(interiors)');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text(villageInteriors));
     await tester.tap(find.text(villageInteriors).first);
     await pumpUntil(tester, find.textContaining('Images ('));
@@ -1175,6 +1199,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'oboropixel');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('CharactersAnimationsAssetPack'));
     await tester.tap(find.text('CharactersAnimationsAssetPack'));
     await pumpUntil(tester, find.textContaining('Animations ('));
@@ -1196,6 +1221,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'pixel banner');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('Pixel-Banner'));
     await tester.tap(find.text('Pixel-Banner'));
     await pumpUntil(tester, find.textContaining('Images ('));
@@ -1274,6 +1300,7 @@ A **16×16** knight with *walk* and *idle* animations.
       contains('"dashboard_view": "expanded"'),
     );
     await tester.enterText(find.byType(TextField), 'pixel banner');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('ArcherSkeleton'));
     // One tile per character folder, the pack title underneath.
     expect(find.text('Pixel-Banner', skipOffstage: false), findsNWidgets(12));
@@ -1285,6 +1312,7 @@ A **16×16** knight with *walk* and *idle* animations.
 
     // Folder names are searchable; switching views keeps the search.
     await tester.enterText(find.byType(TextField), 'skeleton');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     // The old results go once the search has run.
     await pumpUntil(tester, find.text('Wolf'), gone: true);
     expect(find.text('SkeletonWarrior'), findsOneWidget);
@@ -1314,6 +1342,7 @@ A **16×16** knight with *walk* and *idle* animations.
 
     // Tag sort: tiles show their tags, sorted.
     await tester.enterText(find.byType(TextField), '');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await tester.tap(find.text('Packs'));
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.byType(DropdownButton<PackSort>));
@@ -1411,6 +1440,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'special effects vol');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('Special Effects Vol.03'));
     await tester.tap(find.text('Special Effects Vol.03'));
     await pumpUntil(tester, find.textContaining('Animations ('));
@@ -1431,6 +1461,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'oboropixel');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('CharactersAnimationsAssetPack'));
     await tester.tap(find.text('CharactersAnimationsAssetPack'));
     await pumpUntil(tester, find.textContaining('Animations ('));
@@ -1506,6 +1537,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'chiptune');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
     await tester.tap(find.text('music-loop-bundle-chiptune'));
     // Opens straight on Audio: the Loop chip shows without a tab tap.
@@ -1546,6 +1578,7 @@ A **16×16** knight with *walk* and *idle* animations.
       find.byType(TextField),
       'Achievements Sound Effects 1',
     );
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text(title));
     await tester.tap(find.text(title));
     await pumpUntil(tester, find.byKey(const ValueKey('loop')));
@@ -1610,6 +1643,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'chiptune');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
     await tester.tap(find.text('music-loop-bundle-chiptune'));
     await pumpUntil(tester, find.byKey(const ValueKey('loop')));
@@ -1688,6 +1722,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'chiptune');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
     await tester.tap(find.text('music-loop-bundle-chiptune'));
     await pumpUntil(tester, find.byKey(const ValueKey('loop')));
@@ -1756,6 +1791,7 @@ A **16×16** knight with *walk* and *idle* animations.
     );
     expect(dash, findsOneWidget);
     await tester.enterText(find.byType(TextField), 'chiptune');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
     await tester.tap(find.text('music-loop-bundle-chiptune'));
     await pumpUntil(tester, find.byKey(const ValueKey('loop')));
@@ -1802,6 +1838,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'chiptune');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
     await tester.tap(find.text('music-loop-bundle-chiptune'));
     await pumpUntil(tester, find.byKey(const ValueKey('loop')));
@@ -1962,6 +1999,7 @@ A **16×16** knight with *walk* and *idle* animations.
     container.read(settingsProvider.notifier).setDashboardTileSize(savedTile);
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'Village(interiors)');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text(villageInteriors));
     await tester.tap(find.text(villageInteriors).first);
     await pumpUntil(tester, find.textContaining('Images ('));
@@ -1987,6 +2025,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), 'chiptune');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('music-loop-bundle-chiptune'));
     await tester.tap(find.text('music-loop-bundle-chiptune'));
     await pumpUntil(tester, find.byKey(const ValueKey('loop')));
@@ -2072,9 +2111,13 @@ A **16×16** knight with *walk* and *idle* animations.
     Finder strip(String t) =>
         find.descendant(of: find.byType(PackTabStrip), matching: find.text(t));
     await tester.enterText(find.byType(TextField).first, 'Sound Effects 3');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, tile(music));
     await pumpUntil(tester, tile(sfx));
     for (final title in [music, sfx]) {
+      // Built is not on screen: the grid builds a little ahead.
+      await tester.ensureVisible(tile(title));
+      await tester.pump(const Duration(milliseconds: 300));
       final g = await tester.startGesture(
         tester.getCenter(tile(title)),
         kind: PointerDeviceKind.mouse,
@@ -2126,6 +2169,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField).first, 'Epic RPG World');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     const village = 'Epic RPG World - The Village V2.2';
     final tile = find.descendant(
       of: find.byType(PackTile),
@@ -2193,6 +2237,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField).first, 'Epic RPG World');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     const village = 'Epic RPG World - The Village V2.2';
     final tile = find.descendant(
       of: find.byType(PackTile),
@@ -2235,6 +2280,9 @@ A **16×16** knight with *walk* and *idle* animations.
       'Copy path',
       'Open',
       'Open with…',
+      // The pack's own previews (cover picker commits, 2026-11-14).
+      'Use as pack cover',
+      'Add to pack previews',
     ]);
     await captureScreenshot(tester, 'm70_copy_as_gif', settle: false);
     await captureScreenshot(tester, 'm75_card_menu', settle: false);
@@ -2359,6 +2407,7 @@ A **16×16** knight with *walk* and *idle* animations.
       find.byType(TextField),
       'Achievements Sound Effects 1',
     );
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text(title));
     await tester.tap(find.text(title));
     await pumpUntil(tester, find.byKey(const ValueKey('loop')));
@@ -2408,6 +2457,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), '16-BIT Achievements');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('16-BIT Achievements SFX Pack 1'));
     await tester.tap(find.text('16-BIT Achievements SFX Pack 1'));
     await pumpUntil(tester, find.byKey(const ValueKey('loop')));
@@ -2444,6 +2494,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField), '16-BIT Achievements');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('16-BIT Achievements SFX Pack 1'));
     await tester.tap(find.text('16-BIT Achievements SFX Pack 1'));
     await pumpUntil(tester, find.widgetWithText(FilledButton, 'Play all'));
@@ -3020,6 +3071,7 @@ A **16×16** knight with *walk* and *idle* animations.
 
     // Audio toolbar: Play all and Loop, one shape.
     await tester.enterText(find.byType(TextField).first, '16-BIT Achievements');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('16-BIT Achievements SFX Pack 1'));
     await tester.tap(find.text('16-BIT Achievements SFX Pack 1'));
     final loop = find.byKey(const ValueKey('loop'));
@@ -3097,6 +3149,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField).first, 'Epic RPG World');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     const village = 'Epic RPG World - The Village V2.2';
     final tile = find.descendant(
       of: find.byType(PackTile),
@@ -3232,6 +3285,7 @@ A **16×16** knight with *walk* and *idle* animations.
     /// name matches [card].
     Future<void> openEditor(String search, String title, Pattern card) async {
       await tester.enterText(find.byType(TextField).first, search);
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
       await pumpUntil(tester, find.text(title));
       await tester.tap(find.text(title));
       final tab = find.descendant(
@@ -3320,6 +3374,7 @@ A **16×16** knight with *walk* and *idle* animations.
       await tester.tap(find.byType(TextField).first);
       await tester.pump();
       await tester.enterText(find.byType(TextField).first, search);
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
       await tester.pump(const Duration(milliseconds: 300));
       // The search box can hold the same text; tap the tile.
       final tile = find.descendant(
@@ -3562,6 +3617,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField).first, 'Village(interiors)');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     final tile = find.descendant(
       of: find.byType(PackTile),
       matching: find.text(title),
@@ -3619,6 +3675,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.byType(TextField));
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'Village(interiors)');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     final tile = find.descendant(
       of: find.byType(PackTile),
       matching: find.text(title),
@@ -3676,6 +3733,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.byType(TextField));
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'Village(interiors)');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     final tile = find.descendant(
       of: find.byType(PackTile),
       matching: find.text(title),
@@ -3740,6 +3798,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField).first, 'Epic RPG World');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     const village = 'Epic RPG World - The Village V2.2';
     const volcano = 'Epic RPG World - Volcano V1.6.1';
     Finder tile(String t) =>
@@ -3792,6 +3851,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.pumpWidget(app(real, library: real));
     await pumpUntil(tester, realPacks());
     await tester.enterText(find.byType(TextField).first, 'Epic RPG World');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     const village = 'Epic RPG World - The Village V2.2';
     const volcano = 'Epic RPG World - Volcano V1.6.1';
     Finder tile(String t) =>
@@ -3998,6 +4058,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.byType(TextField));
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'Sea Adventures');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     final tile = find.descendant(
       of: find.byType(PackTile),
       matching: find.text(title),
@@ -4045,6 +4106,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.byType(TextField));
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'Sea Adventures');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     final tile = find.descendant(
       of: find.byType(PackTile),
       matching: find.text(title),
@@ -4087,6 +4149,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.byType(TextField));
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'The Village V2.2');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     final tile = find.descendant(
       of: find.byType(PackTile),
       matching: find.text(title),
@@ -4200,6 +4263,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.text('Files'));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.enterText(find.byType(TextField), 'gems');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     final result = find.textContaining('$title · ');
     await pumpUntil(tester, result);
     await tester.ensureVisible(result.first);
@@ -4250,6 +4314,8 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm22_files_hint', settle: false);
 
     await tester.enterText(find.byType(TextField), 'barrels');
+
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     // The first result on screen (the grid builds lazily).
     final village = find.textContaining('Village(interiors) V1.3 · ');
     await pumpUntil(tester, village);
@@ -4508,11 +4574,13 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, find.text('Connect itch.io'));
     await captureScreenshot(tester, 'm9_connect');
     await tester.enterText(find.byType(TextField), 'wrong');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await tester.tap(find.text('Connect'));
     await pumpUntil(tester, find.textContaining('rejected the API key'));
     await tester.tap(find.byType(TextField));
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'test-key');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await tester.pump();
     await tester.tap(find.text('Connect'));
     await pumpUntil(tester, find.textContaining('Signed in as tester'));
@@ -4608,6 +4676,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(find.byKey(const ValueKey('first-itch')));
     await pumpUntil(tester, find.text('Create a key on itch.io'));
     await tester.enterText(find.byType(TextField), 'test-key');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await tester.pump();
     await tester.tap(find.text('Connect'));
     await pumpUntil(
@@ -4785,6 +4854,7 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'knight');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.textContaining('packs'));
     await settleImages(tester);
     await tester.pump(const Duration(milliseconds: 400));
@@ -4914,9 +4984,11 @@ A **16×16** knight with *walk* and *idle* animations.
 
     // Search by map role.
     await tester.enterText(find.byType(TextField).first, 'displacement');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Materials (${real ? 1 : 0})'), findsOneWidget);
     await tester.enterText(find.byType(TextField).first, '');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
     await tester.pump(const Duration(seconds: 1));
     await tester.tap(find.text('By folder'));
     await tester.pump(const Duration(milliseconds: 500));
@@ -5126,6 +5198,65 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(icons.right, closeTo(info.right, 0.5));
     expect(find.byTooltip('itch.io page'), findsOneWidget);
     await captureScreenshot(tester, 'm88_pack_header', settle: false);
+  });
+
+  testWidgets('m91: a former bundle is one flat pack (By folder, Expanded)', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    const cozy = 'HeroMaker/Cozy Tunes + Cozy FX';
+    final hero = File('test/fixtures/images/hero.png').readAsBytesSync();
+    final walk = File('test/fixtures/images/hero_walk.png').readAsBytesSync();
+    final tone = File('test/fixtures/audio/tone.wav').readAsBytesSync();
+    for (final (rel, bytes) in [
+      ('License.txt', utf8.encode('CC0')),
+      ('_itch/cover.png', walk),
+      ('_itch/screenshot_01.png', hero),
+      ('Cozy FX/License Agreement.pdf', utf8.encode('%PDF')),
+      ('Cozy FX/pop.wav', tone),
+      ('Cozy FX/icons/pop.png', hero),
+      ('Cozy Tunes/Read Me.txt', utf8.encode('Thanks!')),
+      ('Cozy Tunes/Audio/ogg/morning.wav', tone),
+      ('Cozy Tunes/art/morning.png', hero),
+      ('Cozy Tunes - The Classics/waltz.wav', tone),
+      ('Cozy Tunes - The Classics/waltz.png', hero),
+    ]) {
+      File(p.join(lib, cozy, rel))
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(bytes);
+    }
+
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Cozy Tunes + Cozy FX'));
+    // One tile, no "Bundle" badge, no sub-pack tiles.
+    expect(find.textContaining('Bundle ·'), findsNothing);
+    expect(find.text('Cozy FX'), findsNothing);
+    await tester.tap(find.text('Cozy Tunes + Cozy FX'));
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.textContaining('Audio (3)'), findsOneWidget);
+    await tester.tap(find.textContaining('Images ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('By folder').first);
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm91_flat_pack', settle: false);
+    for (final folder in ['Cozy FX', 'Cozy Tunes', 'Cozy Tunes The Classics']) {
+      expect(
+        find.textContaining(folder, skipOffstage: false),
+        findsWidgets,
+        reason: folder,
+      );
+    }
+
+    // Back on the dashboard, Expanded shows its folders as tiles.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.text('Expanded'));
+    await pumpUntil(tester, find.text('Cozy FX'));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm91_expanded', settle: false);
+    expect(find.text('Cozy Tunes'), findsOneWidget);
   });
 
   testWidgets('m89: wait screen while a newly chosen library scans', (

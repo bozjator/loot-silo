@@ -55,31 +55,6 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _parentIdMeta = const VerificationMeta(
-    'parentId',
-  );
-  @override
-  late final GeneratedColumn<String> parentId = GeneratedColumn<String>(
-    'parent_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _isContainerMeta = const VerificationMeta(
-    'isContainer',
-  );
-  @override
-  late final GeneratedColumn<bool> isContainer = GeneratedColumn<bool>(
-    'is_container',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_container" IN (0, 1))',
-    ),
-  );
   @override
   late final GeneratedColumnWithTypeConverter<List<String>, String> types =
       GeneratedColumn<String>(
@@ -212,8 +187,6 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     title,
     author,
     authorUrl,
-    parentId,
-    isContainer,
     types,
     tags,
     source,
@@ -271,23 +244,6 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
         _authorUrlMeta,
         authorUrl.isAcceptableOrUnknown(data['author_url']!, _authorUrlMeta),
       );
-    }
-    if (data.containsKey('parent_id')) {
-      context.handle(
-        _parentIdMeta,
-        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
-      );
-    }
-    if (data.containsKey('is_container')) {
-      context.handle(
-        _isContainerMeta,
-        isContainer.isAcceptableOrUnknown(
-          data['is_container']!,
-          _isContainerMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_isContainerMeta);
     }
     if (data.containsKey('source')) {
       context.handle(
@@ -367,14 +323,6 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
         DriftSqlType.string,
         data['${effectivePrefix}author_url'],
       ),
-      parentId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}parent_id'],
-      ),
-      isContainer: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_container'],
-      )!,
       types: $PacksTable.$convertertypes.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.string,
@@ -461,8 +409,6 @@ class PackRow extends DataClass implements Insertable<PackRow> {
   final String title;
   final String? author;
   final String? authorUrl;
-  final String? parentId;
-  final bool isContainer;
   final List<String> types;
   final List<String> tags;
   final String? source;
@@ -493,8 +439,6 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     required this.title,
     this.author,
     this.authorUrl,
-    this.parentId,
-    required this.isContainer,
     required this.types,
     required this.tags,
     this.source,
@@ -520,10 +464,6 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     if (!nullToAbsent || authorUrl != null) {
       map['author_url'] = Variable<String>(authorUrl);
     }
-    if (!nullToAbsent || parentId != null) {
-      map['parent_id'] = Variable<String>(parentId);
-    }
-    map['is_container'] = Variable<bool>(isContainer);
     {
       map['types'] = Variable<String>($PacksTable.$convertertypes.toSql(types));
     }
@@ -574,10 +514,6 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       authorUrl: authorUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(authorUrl),
-      parentId: parentId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(parentId),
-      isContainer: Value(isContainer),
       types: Value(types),
       tags: Value(tags),
       source: source == null && nullToAbsent
@@ -614,8 +550,6 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       title: serializer.fromJson<String>(json['title']),
       author: serializer.fromJson<String?>(json['author']),
       authorUrl: serializer.fromJson<String?>(json['authorUrl']),
-      parentId: serializer.fromJson<String?>(json['parentId']),
-      isContainer: serializer.fromJson<bool>(json['isContainer']),
       types: serializer.fromJson<List<String>>(json['types']),
       tags: serializer.fromJson<List<String>>(json['tags']),
       source: serializer.fromJson<String?>(json['source']),
@@ -639,8 +573,6 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       'title': serializer.toJson<String>(title),
       'author': serializer.toJson<String?>(author),
       'authorUrl': serializer.toJson<String?>(authorUrl),
-      'parentId': serializer.toJson<String?>(parentId),
-      'isContainer': serializer.toJson<bool>(isContainer),
       'types': serializer.toJson<List<String>>(types),
       'tags': serializer.toJson<List<String>>(tags),
       'source': serializer.toJson<String?>(source),
@@ -662,8 +594,6 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     String? title,
     Value<String?> author = const Value.absent(),
     Value<String?> authorUrl = const Value.absent(),
-    Value<String?> parentId = const Value.absent(),
-    bool? isContainer,
     List<String>? types,
     List<String>? tags,
     Value<String?> source = const Value.absent(),
@@ -682,8 +612,6 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     title: title ?? this.title,
     author: author.present ? author.value : this.author,
     authorUrl: authorUrl.present ? authorUrl.value : this.authorUrl,
-    parentId: parentId.present ? parentId.value : this.parentId,
-    isContainer: isContainer ?? this.isContainer,
     types: types ?? this.types,
     tags: tags ?? this.tags,
     source: source.present ? source.value : this.source,
@@ -704,10 +632,6 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       title: data.title.present ? data.title.value : this.title,
       author: data.author.present ? data.author.value : this.author,
       authorUrl: data.authorUrl.present ? data.authorUrl.value : this.authorUrl,
-      parentId: data.parentId.present ? data.parentId.value : this.parentId,
-      isContainer: data.isContainer.present
-          ? data.isContainer.value
-          : this.isContainer,
       types: data.types.present ? data.types.value : this.types,
       tags: data.tags.present ? data.tags.value : this.tags,
       source: data.source.present ? data.source.value : this.source,
@@ -739,8 +663,6 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           ..write('title: $title, ')
           ..write('author: $author, ')
           ..write('authorUrl: $authorUrl, ')
-          ..write('parentId: $parentId, ')
-          ..write('isContainer: $isContainer, ')
           ..write('types: $types, ')
           ..write('tags: $tags, ')
           ..write('source: $source, ')
@@ -764,8 +686,6 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     title,
     author,
     authorUrl,
-    parentId,
-    isContainer,
     types,
     tags,
     source,
@@ -788,8 +708,6 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           other.title == this.title &&
           other.author == this.author &&
           other.authorUrl == this.authorUrl &&
-          other.parentId == this.parentId &&
-          other.isContainer == this.isContainer &&
           other.types == this.types &&
           other.tags == this.tags &&
           other.source == this.source &&
@@ -810,8 +728,6 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
   final Value<String> title;
   final Value<String?> author;
   final Value<String?> authorUrl;
-  final Value<String?> parentId;
-  final Value<bool> isContainer;
   final Value<List<String>> types;
   final Value<List<String>> tags;
   final Value<String?> source;
@@ -831,8 +747,6 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     this.title = const Value.absent(),
     this.author = const Value.absent(),
     this.authorUrl = const Value.absent(),
-    this.parentId = const Value.absent(),
-    this.isContainer = const Value.absent(),
     this.types = const Value.absent(),
     this.tags = const Value.absent(),
     this.source = const Value.absent(),
@@ -853,8 +767,6 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     required String title,
     this.author = const Value.absent(),
     this.authorUrl = const Value.absent(),
-    this.parentId = const Value.absent(),
-    required bool isContainer,
     required List<String> types,
     required List<String> tags,
     this.source = const Value.absent(),
@@ -871,7 +783,6 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
   }) : id = Value(id),
        path = Value(path),
        title = Value(title),
-       isContainer = Value(isContainer),
        types = Value(types),
        tags = Value(tags),
        usedIn = Value(usedIn),
@@ -883,8 +794,6 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Expression<String>? title,
     Expression<String>? author,
     Expression<String>? authorUrl,
-    Expression<String>? parentId,
-    Expression<bool>? isContainer,
     Expression<String>? types,
     Expression<String>? tags,
     Expression<String>? source,
@@ -905,8 +814,6 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       if (title != null) 'title': title,
       if (author != null) 'author': author,
       if (authorUrl != null) 'author_url': authorUrl,
-      if (parentId != null) 'parent_id': parentId,
-      if (isContainer != null) 'is_container': isContainer,
       if (types != null) 'types': types,
       if (tags != null) 'tags': tags,
       if (source != null) 'source': source,
@@ -929,8 +836,6 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Value<String>? title,
     Value<String?>? author,
     Value<String?>? authorUrl,
-    Value<String?>? parentId,
-    Value<bool>? isContainer,
     Value<List<String>>? types,
     Value<List<String>>? tags,
     Value<String?>? source,
@@ -951,8 +856,6 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       title: title ?? this.title,
       author: author ?? this.author,
       authorUrl: authorUrl ?? this.authorUrl,
-      parentId: parentId ?? this.parentId,
-      isContainer: isContainer ?? this.isContainer,
       types: types ?? this.types,
       tags: tags ?? this.tags,
       source: source ?? this.source,
@@ -986,12 +889,6 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     }
     if (authorUrl.present) {
       map['author_url'] = Variable<String>(authorUrl.value);
-    }
-    if (parentId.present) {
-      map['parent_id'] = Variable<String>(parentId.value);
-    }
-    if (isContainer.present) {
-      map['is_container'] = Variable<bool>(isContainer.value);
     }
     if (types.present) {
       map['types'] = Variable<String>(
@@ -1053,8 +950,6 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
           ..write('title: $title, ')
           ..write('author: $author, ')
           ..write('authorUrl: $authorUrl, ')
-          ..write('parentId: $parentId, ')
-          ..write('isContainer: $isContainer, ')
           ..write('types: $types, ')
           ..write('tags: $tags, ')
           ..write('source: $source, ')
@@ -2053,8 +1948,6 @@ typedef $$PacksTableCreateCompanionBuilder = PacksCompanion Function({
   required String title,
   Value<String?> author,
   Value<String?> authorUrl,
-  Value<String?> parentId,
-  required bool isContainer,
   required List<String> types,
   required List<String> tags,
   Value<String?> source,
@@ -2075,8 +1968,6 @@ typedef $$PacksTableUpdateCompanionBuilder = PacksCompanion Function({
   Value<String> title,
   Value<String?> author,
   Value<String?> authorUrl,
-  Value<String?> parentId,
-  Value<bool> isContainer,
   Value<List<String>> types,
   Value<List<String>> tags,
   Value<String?> source,
@@ -2122,16 +2013,6 @@ class $$PacksTableFilterComposer extends Composer<_$LibraryIndex, $PacksTable> {
 
   ColumnFilters<String> get authorUrl => $composableBuilder(
     column: $table.authorUrl,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get parentId => $composableBuilder(
-    column: $table.parentId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get isContainer => $composableBuilder(
-    column: $table.isContainer,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2235,16 +2116,6 @@ class $$PacksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get parentId => $composableBuilder(
-    column: $table.parentId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get isContainer => $composableBuilder(
-    column: $table.isContainer,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<String> get types => $composableBuilder(
     column: $table.types,
     builder: (column) => ColumnOrderings(column),
@@ -2330,14 +2201,6 @@ class $$PacksTableAnnotationComposer
   GeneratedColumn<String> get authorUrl =>
       $composableBuilder(column: $table.authorUrl, builder: (column) => column);
 
-  GeneratedColumn<String> get parentId =>
-      $composableBuilder(column: $table.parentId, builder: (column) => column);
-
-  GeneratedColumn<bool> get isContainer => $composableBuilder(
-    column: $table.isContainer,
-    builder: (column) => column,
-  );
-
   GeneratedColumnWithTypeConverter<List<String>, String> get types =>
       $composableBuilder(column: $table.types, builder: (column) => column);
 
@@ -2418,8 +2281,6 @@ class $$PacksTableTableManager
                 Value<String> title = const Value.absent(),
                 Value<String?> author = const Value.absent(),
                 Value<String?> authorUrl = const Value.absent(),
-                Value<String?> parentId = const Value.absent(),
-                Value<bool> isContainer = const Value.absent(),
                 Value<List<String>> types = const Value.absent(),
                 Value<List<String>> tags = const Value.absent(),
                 Value<String?> source = const Value.absent(),
@@ -2439,8 +2300,6 @@ class $$PacksTableTableManager
                 title: title,
                 author: author,
                 authorUrl: authorUrl,
-                parentId: parentId,
-                isContainer: isContainer,
                 types: types,
                 tags: tags,
                 source: source,
@@ -2462,8 +2321,6 @@ class $$PacksTableTableManager
                 required String title,
                 Value<String?> author = const Value.absent(),
                 Value<String?> authorUrl = const Value.absent(),
-                Value<String?> parentId = const Value.absent(),
-                required bool isContainer,
                 required List<String> types,
                 required List<String> tags,
                 Value<String?> source = const Value.absent(),
@@ -2483,8 +2340,6 @@ class $$PacksTableTableManager
                 title: title,
                 author: author,
                 authorUrl: authorUrl,
-                parentId: parentId,
-                isContainer: isContainer,
                 types: types,
                 tags: tags,
                 source: source,

@@ -10,6 +10,7 @@ import 'package:loot_silo/core/pack_editor.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 const oldLibrary = '../assets_library_OLD';
 
@@ -33,16 +34,20 @@ void main() {
       expect(result.packs.where((p) => p.author == null), isEmpty);
     });
 
-    test('Kenney bundles are containers with many sub-packs', () {
+    test('Kenney all-in-ones are one pack each, with all their folders', () {
       for (final name in [
         'Kenney Game Assets 1 version 42',
         'Kenney Game Assets 2 version 22',
       ]) {
-        final bundle = result.packs.singleWhere((p) => p.title == name);
-        expect(bundle.isContainer, isTrue);
-        final subs = result.packs.where((p) => p.parentId == bundle.id);
-        expect(subs.length, greaterThan(40), reason: name);
-        expect(subs.every((s) => s.author?.user == 'Kenney'), isTrue);
+        final pack = result.packs.singleWhere((p) => p.title == name);
+        expect(pack.author?.user, 'Kenney');
+        expect(
+          result.packs.where((p) => p.id.startsWith('${pack.id}/')),
+          isEmpty,
+          reason: name,
+        );
+        // One Expanded tile per theme folder, like any big pack.
+        expect(pack.files.length, greaterThan(1000), reason: name);
       }
     });
 
@@ -51,10 +56,6 @@ void main() {
         'Tiny RPG Character Asset Pack 01 v2.0 -Full 22 Characters',
       ]);
       expect(under('art/environments/RafaelMatos/'), hasLength(5));
-      expect(
-        under('art/environments/RafaelMatos/').every((p) => !p.isContainer),
-        isTrue,
-      );
       expect(under('art/characters/OboroPixel/'), hasLength(2));
     });
 
@@ -159,16 +160,38 @@ void main() {
         (96, 128, 12, 1),
       );
 
-      // Generic Items: the 52×13 strip doesn't cut 130×130 items.
+      // Generic Items: the 52×13 strip (item 061) is a 4-frame strip, and
+      // it doesn't cut the 130×130 items (since M91 the folder is part of
+      // the all-in-one pack, so it is checked here at last).
       final items = contentsOf('Kenney/Kenney Game Assets 2 version 22')
           .shownDetected
           .map((a) => a.path);
-      expect(items.where((a) => a.contains('genericItem_')), isEmpty);
+      expect(
+        items.where((a) => a.contains('genericItem_')).map(p.basename),
+        unorderedEquals([
+          'genericItem_color_061.png',
+          'genericItem_white_061.png',
+        ]),
+      );
       // Kenney's trimmed explosion frames are plain images.
       final kenney1 = contentsOf('Kenney/Kenney Game Assets 1 version 42');
       expect(
-        kenney1.shownDetected.where((a) => a.path.contains('Explosion Pack')),
+        kenney1.shownDetected.where(
+          (a) => a.path.startsWith('2D assets/Explosion Pack/PNG/'),
+        ),
         isEmpty,
+      );
+      // Its two-frame-looking texture atlases (Spritesheets/*.png + .xml)
+      // were detected before M91 too, out of this test's sight while the
+      // pack was a sub-pack; recorded as an open question.
+      expect(
+        kenney1.shownDetected
+            .where((a) => a.path.contains('Explosion Pack/'))
+            .map((a) => p.basename(a.path)),
+        unorderedEquals([
+          'spritesheet_groundExplosion.png',
+          'spritesheet_sonicExplosion.png',
+        ]),
       );
     },
   );

@@ -140,7 +140,6 @@ class PackSidecar {
     this.previews = const [],
     this.notes,
     this.usedIn = const [],
-    this.isContainer = false,
     this.animations = const {},
     this.favorite = false,
     this.favoriteFiles = const [],
@@ -160,7 +159,6 @@ class PackSidecar {
   final List<String> previews;
   final String? notes;
   final List<String> usedIn;
-  final bool isContainer;
 
   /// Per-file animation overrides keyed by path relative to the pack.
   final Map<String, Object?> animations;
@@ -176,7 +174,7 @@ class PackSidecar {
 
   static const _known = {
     'title', 'types', 'tags', 'source', 'source_path', 'itch_game_id', //
-    'itch_url', 'previews', 'notes', 'used_in', 'is_container', 'animations',
+    'itch_url', 'previews', 'notes', 'used_in', 'animations',
     'favorite', 'favorite_files',
   };
 
@@ -195,7 +193,6 @@ class PackSidecar {
       previews: strings(json['previews']),
       notes: json['notes'] as String?,
       usedIn: strings(json['used_in']),
-      isContainer: json['is_container'] == true,
       animations:
           (json['animations'] as Map?)?.cast<String, Object?>() ?? const {},
       favorite: json['favorite'] == true,
@@ -218,7 +215,6 @@ class PackSidecar {
     if (previews.isNotEmpty) 'previews': previews,
     'notes': ?notes,
     if (usedIn.isNotEmpty) 'used_in': usedIn,
-    if (isContainer) 'is_container': true,
     if (animations.isNotEmpty) 'animations': animations,
     if (favorite) 'favorite': true,
     if (favoriteFiles.isNotEmpty) 'favorite_files': favoriteFiles,
@@ -247,7 +243,6 @@ class PackSidecar {
     List<String>? tags,
     PackSource? source,
     String? sourcePath,
-    bool? isContainer,
     List<String>? usedIn,
     Map<String, Object?>? animations,
     int? itchGameId,
@@ -266,7 +261,6 @@ class PackSidecar {
     previews: previews ?? this.previews,
     notes: notes,
     usedIn: usedIn ?? this.usedIn,
-    isContainer: isContainer ?? this.isContainer,
     animations: animations ?? this.animations,
     favorite: favorite ?? this.favorite,
     favoriteFiles: favoriteFiles ?? this.favoriteFiles,

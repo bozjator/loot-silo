@@ -31,7 +31,6 @@ PackRow longPack(int i, {String? title}) => PackRow(
   title:
       title ?? 'The Extremely Long Pack Title Of Many Words Volume $i Deluxe',
   author: 'An Author With A Rather Long Name Indeed',
-  isContainer: false,
   types: const ['character', 'environment', 'tileset', 'ui', 'vfx'],
   tags: const ['zebra', 'Animals', 'a very long tag name indeed', 'cozy'],
   usedIn: const [],

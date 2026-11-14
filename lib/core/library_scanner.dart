@@ -17,8 +17,6 @@ class ScannedPack {
     required this.title,
     required this.author,
     required this.authorFile,
-    required this.parentId,
-    required this.isContainer,
     required this.types,
     required this.tags,
     required this.source,
@@ -38,21 +36,17 @@ class ScannedPack {
   final AuthorInfo? author;
   final String? authorFile;
 
-  /// Id of the bundle this sub-pack belongs to.
-  final String? parentId;
-  final bool isContainer;
   final List<String> types;
   final List<String> tags;
   final PackSource? source;
 
-  /// Files relative to [path]; a container leaves out its sub-packs' files.
+  /// Files relative to [path].
   final List<String> files;
 
   /// Byte sizes, parallel to [files].
   final List<int> sizes;
 
-  /// Representative image relative to [path]; for a bundle without one of
-  /// its own, a sub-pack's preview.
+  /// Representative image relative to [path].
   final String? preview;
 
   /// Frame data when [preview] is a sprite sheet.
@@ -95,43 +89,16 @@ ScanResult scanLibrary(String root) {
 
   String idOf(DirNode d) => p.split(p.relative(d.path, from: root)).join('/');
 
-  // A sub-pack without a source of its own takes its bundle's: imports and
-  // itch downloads write one sidecar, at the bundle.
-  List<String> add(DetectedPack dp, String? parentId, PackSource? inherited) {
-    final source = dp.sidecar?.source ?? inherited;
+  for (final dp in PackDetector().detect(tree)) {
     final id = idOf(dp.dir);
-    final slot = packs.length;
-    // Sub-packs go first so a bundle's types can be the union of theirs;
-    // the bundle is then inserted ahead of them.
-    final subTypes = <String, int>{};
-    for (final s in dp.subPacks) {
-      for (final t in add(s, id, source)) {
-        subTypes[t] = (subTypes[t] ?? 0) + 1;
-      }
-    }
-    final subDirs = {
-      for (final s in dp.subPacks)
-        '${p.relative(s.dir.path, from: dp.dir.path)}/',
-    };
     final files = <(String, FileEntry)>[
       for (final entry in dp.dir.allFiles())
-        if (!_sidecarNames.contains(entry.$2.name) &&
-            !subDirs.any((s) => entry.$1.startsWith(s)))
-          entry,
+        if (!_sidecarNames.contains(entry.$2.name)) entry,
     ];
     final sc = dp.sidecar;
-    final List<String> types;
-    if (sc != null && sc.types.isNotEmpty) {
-      types = sc.types;
-    } else if (subTypes.isNotEmpty) {
-      // Types shared by at least 10 % of the sub-packs; the sub-packs
-      // themselves stay searchable for the rare ones.
-      final min = dp.subPacks.length * 0.1;
-      types = subTypes.keys.where((t) => subTypes[t]! >= min).toList()
-        ..sort((a, b) => subTypes[b]!.compareTo(subTypes[a]!));
-    } else {
-      types = [for (final t in classifyPack(id, files)) t.id];
-    }
+    final types = sc != null && sc.types.isNotEmpty
+        ? sc.types
+        : [for (final t in classifyPack(id, files)) t.id];
     // Material maps are no pictures of the pack (and no animations): the
     // material's shipped preview, else its Color map, stands in for them.
     final (materials, _) = groupMaterials([for (final (rel, _) in files) rel]);
@@ -152,51 +119,33 @@ ScanResult scanLibrary(String root) {
       rank: pick?.rank ?? 6,
       overrides: sc?.animations ?? const {},
     );
-    var preview =
+    final preview =
         chosen.preview ??
         materials.firstOrNull?.preview ??
         materials.firstOrNull?.color;
-    if (preview == null) {
-      for (final sub in packs.skip(slot).where((x) => x.parentId == id)) {
-        if (sub.preview != null) {
-          preview = '${sub.id.substring(id.length + 1)}/${sub.preview}';
-          break;
-        }
-      }
-    }
-    packs.insert(
-      slot,
+    packs.add(
       ScannedPack(
         id: id,
         path: dp.dir.path,
         title: dp.title,
         author: dp.author,
         authorFile: dp.authorFile,
-        parentId: parentId,
-        isContainer: dp.isContainer,
         types: types,
         tags: sc != null && sc.tags.isNotEmpty ? sc.tags : suggestTags(id),
-        source: source,
+        source: sc?.source,
         files: [for (final (rel, _) in files) rel],
         sizes: [for (final (_, f) in files) f.size],
         preview: preview,
         previewAnim: preview == chosen.preview ? chosen.anim : null,
         totalBytes: files.fold(0, (sum, e) => sum + e.$2.size),
         sidecar: sc,
-        subFolders: dp.isContainer
-            ? const []
-            : splitSubFolders(
-                dp.dir.path,
-                files,
-                overrides: sc?.animations ?? const {},
-              ),
+        subFolders: splitSubFolders(
+          dp.dir.path,
+          files,
+          overrides: sc?.animations ?? const {},
+        ),
       ),
     );
-    return types;
-  }
-
-  for (final dp in PackDetector().detect(tree)) {
-    add(dp, null, null);
   }
   return ScanResult(
     root: root,
