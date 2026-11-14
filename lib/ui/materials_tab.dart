@@ -15,6 +15,7 @@ import '../state/folder_folds.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
 import 'cursors.dart';
+import 'card_focus.dart';
 import 'double_click.dart';
 import 'folder_groups.dart';
 import 'widgets/pixel_image.dart';
@@ -55,7 +56,8 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
       .set(widget.pack.path, FoldTab.materials, _collapsed);
 
   /// Focus mode: the clicked card (by material key); the others dim.
-  String? _focused;
+  final _focusedCard = CardFocus<String>();
+  String? get _focused => _focusedCard.value;
   final _keys = FocusNode(debugLabel: 'materials');
 
   /// The map a hovered card shows, by material key; dropped on leave.
@@ -67,6 +69,7 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
   void dispose() {
     _keys.dispose();
     _scale.dispose();
+    _focusedCard.dispose();
     super.dispose();
   }
 
@@ -76,11 +79,11 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
   @override
   void didUpdateWidget(MaterialsTab old) {
     super.didUpdateWidget(old);
-    if (!_materials.any((m) => m.key == _focused)) _focused = null;
+    if (!_materials.any((m) => m.key == _focused)) _focusedCard.value = null;
   }
 
   void _focus(String? key) {
-    setState(() => _focused = key);
+    _focusedCard.value = key;
     _keys.requestFocus();
   }
 
@@ -126,7 +129,7 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
   /// recognizer).
   void _tapped(MaterialSet m) {
     if (_clicks.second(m.key)) {
-      setState(() => _focused = m.key);
+      _focusedCard.value = m.key;
       _openViewer(m);
       return;
     }
@@ -148,7 +151,9 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
   }
 
   void _dropHiddenFocus() {
-    if (_focused case final key? when !_shown().contains(key)) _focused = null;
+    if (_focused case final key? when !_shown().contains(key)) {
+      _focusedCard.value = null;
+    }
   }
 
   @override
@@ -224,8 +229,8 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
         ),
       ],
     );
-    return BackHandler(
-      enabled: _focused != null,
+    return FocusBackHandler(
+      focus: _focusedCard,
       onBack: () => _focus(null),
       child: Focus(focusNode: _keys, onKeyEvent: _onKey, child: column),
     );
@@ -242,69 +247,73 @@ class _MaterialsTabState extends ConsumerState<MaterialsTab> {
       target: () => FileMenuTarget(
         files: [for (final map in m.maps) p.join(pack.path, map.path)],
       ),
-      child: ItemCard(
-        key: ValueKey('material:${m.key}'),
-        path: m.key,
-        title: materialTitle(m.name),
-        details: details,
-        stagePadding: 0,
-        stage: (hover) {
-          // The picked map shows only while hovered.
-          if (!hover) _picked.remove(m.key);
-          final picked = hover ? _picked[m.key] : null;
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              MaterialPicture(packPath: pack.path, material: m, map: picked),
-              if (hover && m.toolFiles.isNotEmpty)
-                Positioned(
-                  top: 6,
-                  left: 6,
-                  child: FormatChips(
-                    files: m.toolFiles,
-                    shown: '',
-                    vertical: true,
-                    pickSingle: true,
-                    label: (f) =>
-                        materialToolFormats[formatOf(f)] ??
-                        formatOf(f).toUpperCase(),
-                    tooltip: (f) => '${p.basename(f)}: show in file manager',
-                    onPick: (f) =>
-                        ref.read(revealProvider)(p.join(pack.path, f)),
-                  ),
-                ),
-              if (hover)
-                Positioned(
-                  left: 6,
-                  right: 6,
-                  bottom: 6,
-                  child: _MapChips(
-                    material: m,
-                    picked: picked,
-                    onPick: (f) => setState(
-                      () => f == picked
-                          ? _picked.remove(m.key)
-                          : _picked[m.key] = f,
+      child: FocusedCard<String>(
+        focus: _focusedCard,
+        id: m.key,
+        builder: (context, focused, dimmed) => ItemCard(
+          key: ValueKey('material:${m.key}'),
+          path: m.key,
+          title: materialTitle(m.name),
+          details: details,
+          stagePadding: 0,
+          stage: (hover) {
+            // The picked map shows only while hovered.
+            if (!hover) _picked.remove(m.key);
+            final picked = hover ? _picked[m.key] : null;
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                MaterialPicture(packPath: pack.path, material: m, map: picked),
+                if (hover && m.toolFiles.isNotEmpty)
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    child: FormatChips(
+                      files: m.toolFiles,
+                      shown: '',
+                      vertical: true,
+                      pickSingle: true,
+                      label: (f) =>
+                          materialToolFormats[formatOf(f)] ??
+                          formatOf(f).toUpperCase(),
+                      tooltip: (f) => '${p.basename(f)}: show in file manager',
+                      onPick: (f) =>
+                          ref.read(revealProvider)(p.join(pack.path, f)),
                     ),
                   ),
-                ),
-            ],
-          );
-        },
-        focused: _focused == m.key,
-        dimmed: _focused != null && _focused != m.key,
-        starred: favorites.contains(m.key),
-        onToggleStar: () =>
-            ref.read(favoritesProvider.notifier).toggleFile(pack.id, m.key),
-        onTap: () => _tapped(m),
-        actions: [
-          CardIconButton(
-            tooltip: 'Open in viewer',
-            icon: Icons.open_in_full,
-            onPressed: () => _openViewer(m),
-          ),
-          RevealButton(p.join(pack.path, m.preview ?? m.maps.first.path)),
-        ],
+                if (hover)
+                  Positioned(
+                    left: 6,
+                    right: 6,
+                    bottom: 6,
+                    child: _MapChips(
+                      material: m,
+                      picked: picked,
+                      onPick: (f) => setState(
+                        () => f == picked
+                            ? _picked.remove(m.key)
+                            : _picked[m.key] = f,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+          focused: focused,
+          dimmed: dimmed,
+          starred: favorites.contains(m.key),
+          onToggleStar: () =>
+              ref.read(favoritesProvider.notifier).toggleFile(pack.id, m.key),
+          onTap: () => _tapped(m),
+          actions: [
+            CardIconButton(
+              tooltip: 'Open in viewer',
+              icon: Icons.open_in_full,
+              onPressed: () => _openViewer(m),
+            ),
+            RevealButton(p.join(pack.path, m.preview ?? m.maps.first.path)),
+          ],
+        ),
       ),
     );
   }

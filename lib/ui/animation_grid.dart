@@ -11,6 +11,7 @@ import '../core/animation_detector.dart';
 import '../state/folder_folds.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
+import 'card_focus.dart';
 import 'double_click.dart';
 import 'folder_groups.dart';
 import 'format.dart';
@@ -70,7 +71,23 @@ class AnimationGrid extends ConsumerStatefulWidget {
 
 class _AnimationGridState extends ConsumerState<AnimationGrid> {
   final _keys = FocusNode(debugLabel: 'animations');
-  int? _focused;
+  final _focusedCard = CardFocus<int>();
+  int? get _focused => _focusedCard.value;
+
+  /// The on-screen order, kept between clicks and key presses (M93).
+  final _order = ShownOrder();
+
+  List<SpriteAnim>? _pathsFrom;
+  var _paths = const <String>[];
+
+  /// The animations' paths, the same list until the animations change.
+  List<String> get _pathList {
+    if (!identical(widget.animations, _pathsFrom)) {
+      _pathsFrom = widget.animations;
+      _paths = [for (final a in widget.animations) a.path];
+    }
+    return _paths;
+  }
 
   /// Folders folded away in the "By folder" view; remembered per pack.
   late final _collapsed = ref
@@ -85,6 +102,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
   void dispose() {
     _keys.dispose();
     _scale.dispose();
+    _focusedCard.dispose();
     super.dispose();
   }
 
@@ -92,7 +110,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
   final _scale = ThumbScale(animationThumbRange);
 
   void _focus(int? i) {
-    setState(() => _focused = i);
+    _focusedCard.value = i;
     _keys.requestFocus();
   }
 
@@ -105,12 +123,12 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
     final focused = _focused;
     if (event is KeyUpEvent || focused == null) return KeyEventResult.ignored;
     // Arrows step through the cards in on-screen order.
-    final order = visibleOrder(
-      [for (final a in widget.animations) a.path],
+    final order = _order.of(
+      _pathList,
       ref.read(settingsProvider).animationsView,
       _collapsed,
     );
-    final at = order.indexOf(focused);
+    final at = _order.indexOf(focused);
     if (AppKeys.leaveFocus.accepts(event)) {
       _focus(null);
     } else if (AppKeys.focusPrevious.accepts(event) && at >= 0) {
@@ -132,20 +150,20 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
     final view = ref.watch(settingsProvider.select((s) => s.animationsView));
     final mode = ref.watch(settingsProvider.select((s) => s.detailAnimateMode));
     final settings = ref.read(settingsProvider.notifier);
-    final paths = [for (final a in anims) a.path];
+    final paths = _pathList;
     // The viewer steps through the animations in on-screen order.
-    final order = visibleOrder(paths, view, _collapsed);
+    _order.of(paths, view, _collapsed);
     // The image viewer on card [i], stepping in on-screen order.
     void open(int i) => showImageViewer(
       context,
       packPath: widget.packPath,
-      images: [for (final j in order) paths[j]],
-      index: math.max(0, order.indexOf(i)),
+      images: _order.shown,
+      index: math.max(0, _order.indexOf(i)),
       sizes: widget.sizes,
       animations: {for (final a in anims) a.path: a},
     );
-    return BackHandler(
-      enabled: _focused != null,
+    return FocusBackHandler(
+      focus: _focusedCard,
       onBack: () => _focus(null),
       child: Focus(
         focusNode: _keys,
@@ -164,9 +182,9 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                       _saveFolds();
                       // A card folded out of sight can't stay focused.
                       final i = _focused;
-                      if (i != null &&
-                          !visibleOrder(paths, view, _collapsed).contains(i)) {
-                        _focused = null;
+                      if (i != null) {
+                        _order.of(paths, view, _collapsed);
+                        if (_order.indexOf(i) < 0) _focusedCard.value = null;
                       }
                     }),
                   ),
@@ -201,7 +219,8 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                   onTap: () => _focus(null),
                   child: GroupedGrid(
                     key: PageStorageKey('animations:${widget.gridId}'),
-                    rels: [for (final a in anims) a.path],
+                    rels: paths,
+                    groups: _order.groups(paths),
                     view: view,
                     collapsed: _collapsed,
                     onToggleFolder: (f) => setState(() {
@@ -209,9 +228,9 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                       _saveFolds();
                       // A card folded out of sight can't stay focused.
                       final i = _focused;
-                      if (i != null &&
-                          !visibleOrder(paths, view, _collapsed).contains(i)) {
-                        _focused = null;
+                      if (i != null) {
+                        _order.of(paths, view, _collapsed);
+                        if (_order.indexOf(i) < 0) _focusedCard.value = null;
                       }
                     }),
                     physics: const CtrlWheelPhysics(),
@@ -225,35 +244,39 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                       mainAxisPadding: 24,
                     ),
                     // Only built (so only playing) while on screen.
-                    itemBuilder: (context, i) => _AnimationTile(
-                      key: ValueKey(anims[i].path),
-                      packPath: widget.packPath,
-                      anim: anims[i],
-                      preview: widget.previewFor?.call(anims[i].path),
-                      edited: anims[i] != widget.detected[i],
-                      focused: _focused == i,
-                      dimmed: _focused != null && _focused != i,
-                      playAll: mode == AnimateMode.all,
-                      onTap: () {
-                        if (primaryPressed ||
-                            HardwareKeyboard.instance.isShiftPressed) {
-                          _clicks.reset();
-                          _focus(_focused == i ? null : i);
-                        } else if (_clicks.second(i)) {
-                          // Focused, without taking the keyboard from
-                          // the viewer.
-                          setState(() => _focused = i);
-                          open(i);
-                        } else {
-                          _focus(_focused == i ? null : i);
-                        }
-                      },
-                      onEdit: () => widget.onEdit(anims[i]),
-                      starred: widget.favoriteFiles.contains(anims[i].path),
-                      onToggleStar: widget.onToggleFavorite == null
-                          ? null
-                          : () => widget.onToggleFavorite!(anims[i].path),
-                      onOpen: () => open(i),
+                    itemBuilder: (context, i) => FocusedCard<int>(
+                      focus: _focusedCard,
+                      id: i,
+                      builder: (context, focused, dimmed) => _AnimationTile(
+                        key: ValueKey(anims[i].path),
+                        packPath: widget.packPath,
+                        anim: anims[i],
+                        preview: widget.previewFor?.call(anims[i].path),
+                        edited: anims[i] != widget.detected[i],
+                        focused: focused,
+                        dimmed: dimmed,
+                        playAll: mode == AnimateMode.all,
+                        onTap: () {
+                          if (primaryPressed ||
+                              HardwareKeyboard.instance.isShiftPressed) {
+                            _clicks.reset();
+                            _focus(_focused == i ? null : i);
+                          } else if (_clicks.second(i)) {
+                            // Focused, without taking the keyboard from
+                            // the viewer.
+                            _focusedCard.value = i;
+                            open(i);
+                          } else {
+                            _focus(_focused == i ? null : i);
+                          }
+                        },
+                        onEdit: () => widget.onEdit(anims[i]),
+                        starred: widget.favoriteFiles.contains(anims[i].path),
+                        onToggleStar: widget.onToggleFavorite == null
+                            ? null
+                            : () => widget.onToggleFavorite!(anims[i].path),
+                        onOpen: () => open(i),
+                      ),
                     ),
                   ),
                 ),

@@ -29,6 +29,7 @@ import '../state/providers.dart';
 import '../state/settings.dart';
 import 'format.dart';
 import 'animation_grid.dart';
+import 'card_focus.dart';
 import 'folder_groups.dart';
 import 'image_viewer.dart';
 import 'materials_tab.dart';
@@ -1782,8 +1783,12 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
   var _busy = false;
 
   /// Focus mode: the clicked card (by path); the others dim.
-  String? _focused;
+  final _focusedCard = CardFocus<String>();
+  String? get _focused => _focusedCard.value;
   final _keys = FocusNode(debugLabel: 'images');
+
+  /// The on-screen order, kept between clicks and key presses (M93).
+  final _order = ShownOrder();
 
   /// A second click on a card opens the image viewer.
   final _clicks = DoubleClick<String>();
@@ -1798,23 +1803,30 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
   void dispose() {
     _keys.dispose();
     _scale.dispose();
+    _focusedCard.dispose();
     super.dispose();
   }
 
   void _focus(String? rel) {
-    setState(() => _focused = rel);
+    _focusedCard.value = rel;
     _keys.requestFocus();
   }
 
   /// The images in on-screen order.
-  List<String> _shown() => [
-    for (final i in visibleOrder(
+  List<String> _shown() {
+    _order.of(
       contents.images,
       ref.read(settingsProvider).imagesView,
       _collapsed,
-    ))
-      contents.images[i],
-  ];
+    );
+    return _order.shown;
+  }
+
+  /// Whether [rel] is on screen (not folded away).
+  bool _isShown(String rel) {
+    _shown();
+    return _order.indexOfRel(rel) >= 0;
+  }
 
   /// Esc and arrows act only while a card is focused; otherwise Esc goes on
   /// to the app and closes the page.
@@ -1822,7 +1834,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
     final focused = _focused;
     if (event is KeyUpEvent || focused == null) return KeyEventResult.ignored;
     final order = _shown();
-    final at = order.indexOf(focused);
+    final at = _order.indexOfRel(focused);
     if (AppKeys.leaveFocus.accepts(event)) {
       _focus(null);
     } else if (AppKeys.focusPrevious.accepts(event) && at >= 0) {
@@ -1851,7 +1863,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
     if (!identical(old.contents, contents)) {
       _animated = _animatedFiles();
       _selected.retainAll(contents.images);
-      if (!contents.images.contains(_focused)) _focused = null;
+      if (!contents.images.contains(_focused)) _focusedCard.value = null;
     }
   }
 
@@ -1969,8 +1981,8 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
                   toggleAllFolders(images, _collapsed);
                   _saveFolds();
                   // A card folded out of sight can't stay focused.
-                  if (_focused case final rel? when !_shown().contains(rel)) {
-                    _focused = null;
+                  if (_focused case final rel? when !_isShown(rel)) {
+                    _focusedCard.value = null;
                   }
                 }),
               ),
@@ -2043,8 +2055,8 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
         ),
       ],
     );
-    return BackHandler(
-      enabled: _focused != null,
+    return FocusBackHandler(
+      focus: _focusedCard,
       onBack: () => _focus(null),
       child: Focus(focusNode: _keys, onKeyEvent: _onKey, child: column),
     );
@@ -2058,18 +2070,19 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
     Set<String> favorites,
   ) {
     // The viewer steps through images in the order they're shown.
-    final order = visibleOrder(images, view, _collapsed);
+    _order.of(images, view, _collapsed);
     return GroupedGrid(
       key: PageStorageKey('images:${pack.id}'),
       rels: images,
+      groups: _order.groups(images),
       view: view,
       collapsed: _collapsed,
       onToggleFolder: (f) => setState(() {
         if (!_collapsed.remove(f)) _collapsed.add(f);
         _saveFolds();
         // A card folded out of sight can't stay focused.
-        if (_focused case final rel? when !_shown().contains(rel)) {
-          _focused = null;
+        if (_focused case final rel? when !_isShown(rel)) {
+          _focusedCard.value = null;
         }
       }),
       physics: const CtrlWheelPhysics(),
@@ -2100,12 +2113,12 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
         final canAnimate =
             !_animated.contains(rel) &&
             p.extension(rel).toLowerCase() == '.png';
-        final shown = [for (final j in order) images[j]];
+        final shown = _order.shown;
         void open() => showImageViewer(
           context,
           packPath: pack.path,
           images: shown,
-          index: math.max(0, order.indexOf(i)),
+          index: math.max(0, _order.indexOf(i)),
           sizes: contents.sizes,
         );
         final dims = _dims.putIfAbsent(rel, () => readImageSize(file.path));
@@ -2130,60 +2143,64 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
                     file: rel,
                   ),
                 ),
-          child: ItemCard(
-            key: ValueKey('image:$rel'),
-            path: rel,
-            title: prettyName(p.basename(rel)),
-            details: switch (dims) {
-              (final w, final h) => '$w×$h',
-              null => p.extension(rel).replaceFirst('.', '').toUpperCase(),
-            },
-            stagePadding: 6,
-            stage: (_) => PixelImage(file),
-            focused: _focused == rel,
-            dimmed: _focused != null && _focused != rel,
-            selected: selected,
-            starred: favorites.contains(rel),
-            onToggleStar: () =>
-                ref.read(favoritesProvider.notifier).toggleFile(pack.id, rel),
-            showLeading: selected,
-            // An icon toggle, the size of the other card icons.
-            leading: IconButton(
-              key: ValueKey('select:$rel'),
-              tooltip: selected ? 'Deselect' : 'Select ($primaryKey-click)',
-              iconSize: 18,
-              visualDensity: VisualDensity.compact,
-              isSelected: selected,
-              icon: const Icon(Icons.check_box_outline_blank),
-              selectedIcon: const Icon(Icons.check_box),
-              onPressed: () => _toggle(rel),
+          child: FocusedCard<String>(
+            focus: _focusedCard,
+            id: rel,
+            builder: (context, focused, dimmed) => ItemCard(
+              key: ValueKey('image:$rel'),
+              path: rel,
+              title: prettyName(p.basename(rel)),
+              details: switch (dims) {
+                (final w, final h) => '$w×$h',
+                null => p.extension(rel).replaceFirst('.', '').toUpperCase(),
+              },
+              stagePadding: 6,
+              stage: (_) => PixelImage(file),
+              focused: focused,
+              dimmed: dimmed,
+              selected: selected,
+              starred: favorites.contains(rel),
+              onToggleStar: () =>
+                  ref.read(favoritesProvider.notifier).toggleFile(pack.id, rel),
+              showLeading: selected,
+              // An icon toggle, the size of the other card icons.
+              leading: IconButton(
+                key: ValueKey('select:$rel'),
+                tooltip: selected ? 'Deselect' : 'Select ($primaryKey-click)',
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                isSelected: selected,
+                icon: const Icon(Icons.check_box_outline_blank),
+                selectedIcon: const Icon(Icons.check_box),
+                onPressed: () => _toggle(rel),
+              ),
+              onTap: () {
+                final keys = HardwareKeyboard.instance;
+                if (keys.isShiftPressed) {
+                  _clicks.reset();
+                  _selectRange(shown, rel);
+                } else if (primaryPressed) {
+                  _clicks.reset();
+                  _toggle(rel);
+                } else if (_clicks.second(rel)) {
+                  // Focused, without taking the keyboard from the viewer.
+                  _focusedCard.value = rel;
+                  open();
+                } else {
+                  _focus(_focused == rel ? null : rel);
+                }
+              },
+              actions: [
+                if (canAnimate)
+                  CardIconButton(
+                    tooltip: 'Make animation…',
+                    icon: Icons.animation,
+                    onPressed: () => _makeAnimation(rel),
+                  ),
+                OpenImageButton(onPressed: open),
+                RevealButton(file.path),
+              ],
             ),
-            onTap: () {
-              final keys = HardwareKeyboard.instance;
-              if (keys.isShiftPressed) {
-                _clicks.reset();
-                _selectRange(shown, rel);
-              } else if (primaryPressed) {
-                _clicks.reset();
-                _toggle(rel);
-              } else if (_clicks.second(rel)) {
-                // Focused, without taking the keyboard from the viewer.
-                setState(() => _focused = rel);
-                open();
-              } else {
-                _focus(_focused == rel ? null : rel);
-              }
-            },
-            actions: [
-              if (canAnimate)
-                CardIconButton(
-                  tooltip: 'Make animation…',
-                  icon: Icons.animation,
-                  onPressed: () => _makeAnimation(rel),
-                ),
-              OpenImageButton(onPressed: open),
-              RevealButton(file.path),
-            ],
           ),
         );
       },

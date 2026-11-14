@@ -5274,6 +5274,64 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(find.text('Cozy Tunes'), findsOneWidget);
   });
 
+  testWidgets(
+    'm93: focus mode on Kenney 1 (12,000+ images) (real, read-only)',
+    (tester) async {
+      final real = p.canonicalize('../assets_library');
+      if (!Directory(real).existsSync()) return;
+      await tester.pumpWidget(app(real, library: real));
+      await pumpUntil(tester, realPacks());
+      await tester.enterText(find.byType(TextField), 'Kenney Game Assets 1');
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
+      final kenney = find.text('Kenney Game Assets 1 version 42');
+      await pumpUntil(tester, kenney);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(kenney);
+      await pumpUntil(tester, find.textContaining('Images ('));
+      await tester.tap(find.textContaining('Images ('));
+      await tester.pump(const Duration(milliseconds: 500));
+      await pumpUntil(tester, find.byType(ItemCard));
+      await settleImages(tester);
+
+      List<ItemCard> cards() => [
+        for (final e in find.byType(ItemCard).evaluate()) e.widget as ItemCard,
+      ];
+      String? focused() => cards().where((c) => c.focused).singleOrNull?.path;
+      final first = cards().first.path;
+      final second = cards()[1].path;
+      await tester.tap(find.byKey(ValueKey('image:$first')));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(focused(), first);
+      expect(cards().where((c) => c.dimmed), hasLength(cards().length - 1));
+
+      // A focus move on a 12,000-image tab takes one frame's work, not a
+      // regroup of the whole pack.
+      final times = <int>[];
+      for (var k = 0; k < 7; k++) {
+        final sw = Stopwatch()..start();
+        await tester.sendKeyEvent(
+          k.isEven
+              ? LogicalKeyboardKey.arrowRight
+              : LogicalKeyboardKey.arrowLeft,
+        );
+        await tester.pump();
+        times.add(sw.elapsedMilliseconds);
+      }
+      expect(focused(), second);
+      debugPrint('m93: focus moves on Kenney 1 took $times ms');
+      times.sort();
+      // Debug build: 93 ms before M93, about 35 ms after.
+      expect(times[times.length ~/ 2], lessThan(60));
+      await settleImages(tester);
+      await captureScreenshot(tester, 'm93_focus_kenney', settle: false);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(focused(), isNull);
+      expect(find.byType(PackDetailScreen), findsOneWidget);
+    },
+  );
+
   testWidgets('m89: wait screen while a newly chosen library scans', (
     tester,
   ) async {

@@ -14,6 +14,7 @@ import 'package:loot_silo/state/folder_folds.dart';
 import 'package:loot_silo/state/providers.dart';
 import 'package:loot_silo/state/settings.dart';
 import 'package:loot_silo/ui/app.dart';
+import 'package:loot_silo/ui/card_focus.dart';
 import 'package:loot_silo/core/audio_duration.dart';
 import 'package:loot_silo/core/audio_formats.dart' show AudioSort;
 import 'package:loot_silo/ui/clipboard.dart';
@@ -6758,6 +6759,125 @@ void main() {
         p.join(tmp.path, 'library', 'HeroMaker', 'Knight Pack'),
       );
       expect(sidecar?.favoriteFiles, ['Wood']);
+    });
+  });
+
+  group('Focus mode on a huge pack (M93)', () {
+    // 12,000 images in 60 folders, like Kenney's 2D packs.
+    const folders = 60, perFolder = 200;
+    String rel(int f, int i) =>
+        'f${'$f'.padLeft(2, '0')}/img_${'${f * perFolder + i}'.padLeft(5, '0')}.png';
+    Finder card(String rel) => find.byKey(ValueKey('image:$rel'));
+    String? focused(WidgetTester tester) => [
+      for (final e in find.byType(ItemCard, skipOffstage: false).evaluate())
+        if ((e.widget as ItemCard).focused) (e.widget as ItemCard).path,
+    ].singleOrNull;
+
+    final grid = find
+        .descendant(
+          of: find.byType(GroupedGrid),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+
+    Future<void> openHuge(WidgetTester tester, {ItemsView? view}) async {
+      final png = img.encodePng(img.Image(width: 8, height: 8));
+      await openKnight(
+        tester,
+        size: const Size(1600, 1400),
+        files: const [],
+        raw: {
+          for (var f = 0; f < folders; f++)
+            for (var i = 0; i < perFolder; i++) rel(f, i): png,
+        },
+        settings: view == null ? null : (s) => s.copyWith(imagesView: view),
+      );
+      await tester.tap(find.textContaining('Images ('));
+      await tester.pumpAndSettle();
+      expect(
+        // The fixture's own knight.png too.
+        find.text('Images (${formatCount(folders * perFolder + 1)})'),
+        findsOneWidget,
+      );
+    }
+
+    for (final view in ItemsView.values) {
+      testWidgets('a focus change rebuilds the two cards only (${view.name})', (
+        tester,
+      ) async {
+        await openHuge(tester, view: view);
+        final a = rel(0, 0), b = rel(0, 1);
+        // The first focus dims the cards on screen: no more than those.
+        FocusedCard.builds = 0;
+        await tester.tap(card(a));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(focused(tester), a);
+        // Built cards, the cache extent's too.
+        final onScreen = find
+            .byType(ItemCard, skipOffstage: false)
+            .evaluate()
+            .length;
+        expect(onScreen, lessThan(400));
+        expect(FocusedCard.builds, lessThanOrEqualTo(onScreen));
+
+        // Moving the focus repaints the old and the new card.
+        FocusedCard.builds = 0;
+        await tester.tap(card(b));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(focused(tester), b);
+        expect(FocusedCard.builds, 2);
+
+        // Arrows step in on-screen order, two cards each.
+        FocusedCard.builds = 0;
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+        expect(focused(tester), rel(0, 2));
+        expect(FocusedCard.builds, 2);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await tester.pump();
+        expect(focused(tester), a);
+
+        // Esc leaves focus mode: every dimmed card on screen comes back.
+        FocusedCard.builds = 0;
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        expect(focused(tester), isNull);
+        expect(FocusedCard.builds, lessThanOrEqualTo(onScreen));
+        expect(find.byType(PackDetailScreen), findsOneWidget);
+      });
+    }
+
+    testWidgets('arrows cross folders; folding the focused card clears it', (
+      tester,
+    ) async {
+      await openHuge(tester, view: ItemsView.folders);
+      final last = rel(0, perFolder - 1);
+      await tester.scrollUntilVisible(card(last), 300, scrollable: grid);
+      await tester.ensureVisible(card(last));
+      await tester.pumpAndSettle();
+      await tester.tap(card(last));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(focused(tester), last);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      // The next folder's first image.
+      await tester.scrollUntilVisible(card(rel(1, 0)), 300, scrollable: grid);
+      expect(focused(tester), rel(1, 0));
+      // Back to the last card of f00, then fold its folder (Collapse all:
+      // the toolbar, which the floating header never covers).
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(focused(tester), last);
+      await tester.tap(find.byTooltip('Collapse all folders'));
+      await tester.pumpAndSettle();
+      expect(card(last), findsNothing);
+      expect(focused(tester), isNull);
+      // Unfolded again: the card is back, not focused.
+      await tester.tap(find.byTooltip('Expand all folders'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ItemCard), findsWidgets);
+      expect(focused(tester), isNull);
     });
   });
 }

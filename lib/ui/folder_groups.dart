@@ -164,6 +164,7 @@ class GroupedGrid extends StatelessWidget {
     this.physics,
     this.padding = defaultPadding,
     this.folderAction,
+    this.groups,
   });
 
   /// The padding around the grid unless given.
@@ -182,6 +183,10 @@ class GroupedGrid extends StatelessWidget {
   /// the folder and its item indices; null for none.
   final Widget? Function(String folder, List<int> items)? folderAction;
 
+  /// [groupByFolder] of [rels], when the caller keeps it ([ShownOrder]);
+  /// computed here otherwise.
+  final List<FolderGroup>? groups;
+
   SliverGrid _grid(List<int> items) => SliverGrid(
     gridDelegate: gridDelegate,
     delegate: SliverChildBuilderDelegate(
@@ -197,7 +202,7 @@ class GroupedGrid extends StatelessWidget {
     if (view == ItemsView.flat) {
       slivers.add(_grid([for (var i = 0; i < rels.length; i++) i]));
     } else {
-      for (final g in groupByFolder(rels)) {
+      for (final g in groups ?? groupByFolder(rels)) {
         final open = !collapsed.contains(g.folder);
         slivers.add(
           SliverToBoxAdapter(

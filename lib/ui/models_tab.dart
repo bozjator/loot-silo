@@ -14,6 +14,7 @@ import '../state/favorites.dart';
 import '../state/folder_folds.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
+import 'card_focus.dart';
 import 'double_click.dart';
 import 'folder_groups.dart';
 import 'format.dart';
@@ -55,7 +56,8 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
       .set(widget.pack.path, FoldTab.models, _collapsed);
 
   /// Focus mode: the clicked card (by model key); the others dim.
-  String? _focused;
+  final _focusedCard = CardFocus<String>();
+  String? get _focused => _focusedCard.value;
   final _keys = FocusNode(debugLabel: 'models');
 
   /// The format picked on a card, by model key.
@@ -84,6 +86,7 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
   void dispose() {
     _keys.dispose();
     _scale.dispose();
+    _focusedCard.dispose();
     super.dispose();
   }
 
@@ -93,11 +96,11 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
   @override
   void didUpdateWidget(ModelsTab old) {
     super.didUpdateWidget(old);
-    if (!_models.any((m) => m.key == _focused)) _focused = null;
+    if (!_models.any((m) => m.key == _focused)) _focusedCard.value = null;
   }
 
   void _focus(String? key) {
-    setState(() => _focused = key);
+    _focusedCard.value = key;
     _keys.requestFocus();
   }
 
@@ -165,7 +168,7 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
   void _tapped(ModelItem m) {
     if (_clicks.second(m.key)) {
       // Focused, without taking the keyboard back from the viewer.
-      setState(() => _focused = m.key);
+      _focusedCard.value = m.key;
       _openViewer(m);
       return;
     }
@@ -187,7 +190,9 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
   }
 
   void _dropHiddenFocus() {
-    if (_focused case final key? when !_shown().contains(key)) _focused = null;
+    if (_focused case final key? when !_shown().contains(key)) {
+      _focusedCard.value = null;
+    }
   }
 
   @override
@@ -264,8 +269,8 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
         ),
       ],
     );
-    return BackHandler(
-      enabled: _focused != null,
+    return FocusBackHandler(
+      focus: _focusedCard,
       onBack: () => _focus(null),
       child: Focus(focusNode: _keys, onKeyEvent: _onKey, child: column),
     );
@@ -294,55 +299,59 @@ class _ModelsTabState extends ConsumerState<ModelsTab> {
     ];
     return FileMenuArea(
       target: () => FileMenuTarget(files: [path], open: path),
-      child: ItemCard(
-        key: ValueKey('model:${m.key}'),
-        path: rel,
-        title: prettyName(p.basename(rel)),
-        details: details,
-        stagePadding: 0,
-        // Only the drawn format's chip until hovered, so a stack of five
-        // doesn't cover small cards.
-        stage: (hover) => Stack(
-          fit: StackFit.expand,
-          children: [
-            ModelStage(path: path, turning: hover),
-            if (m.files.length > 1)
-              Positioned(
-                top: 6,
-                left: 6,
-                child: FormatChips(
-                  files: hover ? m.files : [rel],
-                  shown: rel,
-                  vertical: true,
-                  onPick: (f) => _pick(m, f),
-                  tooltip: (f) => f == rel
-                      ? p.basename(f)
-                      : readableModelExts.contains(formatOf(f))
-                      ? 'Draw ${p.basename(f)}'
-                      : '${p.basename(f)}: not drawn; show in file manager',
+      child: FocusedCard<String>(
+        focus: _focusedCard,
+        id: m.key,
+        builder: (context, focused, dimmed) => ItemCard(
+          key: ValueKey('model:${m.key}'),
+          path: rel,
+          title: prettyName(p.basename(rel)),
+          details: details,
+          stagePadding: 0,
+          // Only the drawn format's chip until hovered, so a stack of five
+          // doesn't cover small cards.
+          stage: (hover) => Stack(
+            fit: StackFit.expand,
+            children: [
+              ModelStage(path: path, turning: hover),
+              if (m.files.length > 1)
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: FormatChips(
+                    files: hover ? m.files : [rel],
+                    shown: rel,
+                    vertical: true,
+                    onPick: (f) => _pick(m, f),
+                    tooltip: (f) => f == rel
+                        ? p.basename(f)
+                        : readableModelExts.contains(formatOf(f))
+                        ? 'Draw ${p.basename(f)}'
+                        : '${p.basename(f)}: not drawn; show in file manager',
+                  ),
                 ),
-              ),
+            ],
+          ),
+          focused: focused,
+          dimmed: dimmed,
+          starred: starred.isNotEmpty,
+          // Starring stars the shown file; unstarring unstars every format.
+          onToggleStar: () {
+            final favs = ref.read(favoritesProvider.notifier);
+            for (final f in starred.isEmpty ? [rel] : starred) {
+              favs.toggleFile(pack.id, f);
+            }
+          },
+          onTap: () => _tapped(m),
+          actions: [
+            CardIconButton(
+              tooltip: 'Open in viewer',
+              icon: Icons.open_in_full,
+              onPressed: () => _openViewer(m),
+            ),
+            RevealButton(path),
           ],
         ),
-        focused: _focused == m.key,
-        dimmed: _focused != null && _focused != m.key,
-        starred: starred.isNotEmpty,
-        // Starring stars the shown file; unstarring unstars every format.
-        onToggleStar: () {
-          final favs = ref.read(favoritesProvider.notifier);
-          for (final f in starred.isEmpty ? [rel] : starred) {
-            favs.toggleFile(pack.id, f);
-          }
-        },
-        onTap: () => _tapped(m),
-        actions: [
-          CardIconButton(
-            tooltip: 'Open in viewer',
-            icon: Icons.open_in_full,
-            onPressed: () => _openViewer(m),
-          ),
-          RevealButton(path),
-        ],
       ),
     );
   }
