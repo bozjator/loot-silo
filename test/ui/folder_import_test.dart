@@ -124,6 +124,34 @@ void main() {
     expect(FolderImportScreen.addToOpen([sounds]), isFalse);
   });
 
+  testWidgets('the library is rescanned when an import finishes', (
+    tester,
+  ) async {
+    final src = p.join(tmp.path, 'Loose Sounds');
+    copyTree('test/fixtures/library_src/sfx/Loose Sounds', src);
+    await openReview(tester, src);
+    await pumpUntil(tester, find.text('Import 1 packs'));
+    await waitForLibrary(tester);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(FolderImportScreen)),
+    );
+    final before = container.read(libraryProvider).value!.packs.length;
+
+    await tester.tap(find.text('Import 1 packs'));
+    await pumpUntil(tester, find.text('Done'));
+    // Not waiting for Done: back or Esc leave the review as well.
+    for (var i = 0; i < 200; i++) {
+      if ((container.read(libraryProvider).value?.packs.length ?? 0) > before) {
+        break;
+      }
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(container.read(libraryProvider).value!.packs.length, before + 1);
+  });
+
   testWidgets('the source path shows when it adds something', (tester) async {
     final src = p.join(tmp.path, 'src');
     copyTree('test/fixtures/library_src', src);

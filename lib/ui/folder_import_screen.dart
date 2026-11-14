@@ -30,7 +30,7 @@ Future<ExtractedArchive> _extractInBackground(String archive, String dest) =>
 enum _Phase { review, importing, done }
 
 /// Imports folders and archives: adds them to the open import review, or
-/// opens one; rescans after an import. Anything else is reported.
+/// opens one. Anything else is reported.
 Future<void> importPaths(
   BuildContext context,
   WidgetRef ref,
@@ -55,13 +55,12 @@ Future<void> importPaths(
     );
   }
   if (usable.isEmpty || FolderImportScreen.addToOpen(usable)) return;
-  final imported = await Navigator.of(context, rootNavigator: true).push<bool>(
+  await Navigator.of(context, rootNavigator: true).push<void>(
     MaterialPageRoute(
       settings: const RouteSettings(name: FolderImportScreen.routeName),
       builder: (_) => FolderImportScreen(paths: usable),
     ),
   );
-  if (imported == true) await ref.read(libraryProvider.notifier).rescan();
 }
 
 /// Review table for importing folders and archives into the library.
@@ -72,7 +71,7 @@ Future<void> importPaths(
 /// screen is open ([addToOpen]): dropped files join this review instead of
 /// opening another one.
 ///
-/// Pops with `true` when anything was imported.
+/// Rescans the library when an import finishes.
 class FolderImportScreen extends ConsumerStatefulWidget {
   /// Its route's name, so app-wide shortcuts can tell it is open.
   static const routeName = 'folder-import';
@@ -158,7 +157,6 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
       return;
     }
     if (_phase == _Phase.done) {
-      if (_outcomes.isNotEmpty) ref.read(libraryProvider.notifier).rescan();
       setState(() {
         _phase = _Phase.review;
         _plan = null;
@@ -255,7 +253,13 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
       if (!mounted) return;
       setState(() => _outcomes.add(o));
     }
-    if (mounted) setState(() => _phase = _Phase.done);
+    if (!mounted) return;
+    setState(() => _phase = _Phase.done);
+    // Here, not on Done: the review may be left by back or Esc as well.
+    // The dashboard keeps its packs shown until the scan is through.
+    if (_outcomes.any((o) => o.verified)) {
+      ref.read(libraryProvider.notifier).reload();
+    }
   }
 
   /// Author picker entries: the authors on this import's rows first (a
@@ -560,8 +564,7 @@ class _FolderImportScreenState extends ConsumerState<FolderImportScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton(
-                onPressed: () =>
-                    Navigator.of(context).pop(_outcomes.isNotEmpty),
+                onPressed: () => Navigator.of(context).pop(),
                 child: const Text('Done'),
               ),
             ),
