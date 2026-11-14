@@ -320,4 +320,73 @@ void main() {
       expect(Directory(work).listSync(), isEmpty);
     });
   });
+
+  group('a bundle (M95)', () {
+    late String src2;
+    setUp(() {
+      src2 = p.join(tmp.path, 'src2');
+      const b = 'Kenney/All in One';
+      for (final rel in [
+        for (final pk in ['Tanks', 'Ships', 'Planes']) ...[
+          '$b/2D assets/$pk/License.txt',
+          '$b/2D assets/$pk/a.png',
+        ],
+        for (final pk in ['RPG sounds (5 sounds)', 'UI sounds (5 sounds)'])
+          '$b/Audio/$pk/a.ogg',
+      ]) {
+        File(p.join(src2, rel))
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync('x');
+      }
+      AuthorInfo(user: 'Kenney').write(p.join(src2, 'Kenney'));
+    });
+
+    test('is one item, with its packs and sections', () {
+      final plan = planFolderImport(src2, lib);
+      final it = plan.items.single;
+      expect(it.sourceRel, 'Kenney/All in One');
+      expect(it.bundlePacks, 5);
+      expect(it.sections, ['2D assets', 'Audio']);
+      expect(it.fileCount, 8);
+      expect(it.layout, PackLayout.bundle);
+      it.keepAsOnePack = true;
+      expect(it.layout, PackLayout.pack);
+    });
+
+    for (final keep in [false, true]) {
+      test('imports with the layout chosen (keep as one pack: $keep)', () {
+        final plan = planFolderImport(src2, lib);
+        plan.items.single.keepAsOnePack = keep;
+        final rel = plan.targets().values.single;
+        importItem(plan.items.single, lib, rel);
+        final saved = PackSidecar.read(p.join(lib, rel));
+        expect(saved?.layout, keep ? PackLayout.pack : PackLayout.bundle);
+        final packs = scanLibrary(lib).packs;
+        expect(packs.where((x) => x.isBundle), hasLength(keep ? 0 : 1));
+        expect(packs, hasLength(keep ? 1 : 6));
+      });
+    }
+
+    test('the picked folder itself, with a license at its top', () {
+      final root = p.join(src2, 'Kenney', 'All in One');
+      File(p.join(root, 'License.txt')).writeAsStringSync('CC0');
+      final it = planFolderImport(root, lib).items.single;
+      expect(it.bundlePacks, 5);
+      expect(it.title, 'All in One');
+      expect(it.layout, PackLayout.bundle);
+    });
+
+    test('a picked folder of packs with nothing of its own is no bundle', () {
+      final root = p.join(src2, 'Kenney', 'All in One', '2D assets');
+      final items = planFolderImport(root, lib).items;
+      expect(items.map((i) => i.sourceRel), ['Planes', 'Ships', 'Tanks']);
+      expect(items.every((i) => i.bundlePacks == 0), isTrue);
+    });
+
+    test('a pack is no bundle: no layout saved', () {
+      final it = item(planFolderImport(src, lib), 'sfx/Loose Sounds');
+      expect(it.bundlePacks, 0);
+      expect(it.layout, isNull);
+    });
+  });
 }

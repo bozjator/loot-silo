@@ -28,6 +28,10 @@ class ScannedPack {
     required this.totalBytes,
     required this.sidecar,
     this.subFolders = const [],
+    this.isBundle = false,
+    this.bundleId,
+    this.section,
+    this.fileTotal,
   });
 
   /// Path relative to the scanned root, `/`-separated. Stable across scans.
@@ -65,6 +69,16 @@ class ScannedPack {
   /// Tiles for the dashboard's Expanded view; empty when the pack stays
   /// one tile.
   final List<SubFolder> subFolders;
+
+  /// A bundle of packs (M95); [files] are its own (license, cover).
+  final bool isBundle;
+
+  /// The bundle this pack is in, and its heading there.
+  final String? bundleId;
+  final String? section;
+
+  /// A bundle's file count: its packs' and its own content files.
+  final int? fileTotal;
 }
 
 class ScanResult {
@@ -89,7 +103,10 @@ class ScanResult {
 const _sidecarNames = {packFileName, authorFileName};
 
 /// Scans [root] synchronously; call it through `Isolate.run`.
-ScanResult scanLibrary(String root) {
+///
+/// [importSource]: [root] is a folder picked for import, which may itself
+/// be a bundle (a downloaded all-in-one); a library root never is.
+ScanResult scanLibrary(String root, {bool importSource = false}) {
   final sw = Stopwatch()..start();
   final fingerprint = treeFingerprint(root);
   final tree = readTree(root);
@@ -97,10 +114,17 @@ ScanResult scanLibrary(String root) {
 
   String idOf(DirNode d) => p.split(p.relative(d.path, from: root)).join('/');
 
-  for (final dp in PackDetector().detect(tree)) {
+  /// One pack (or a bundle's own files when [own] is given).
+  ScannedPack scan(
+    DetectedPack dp, {
+    List<(String, FileEntry)>? own,
+    String? bundleId,
+    PackSource? inheritedSource,
+    List<ScannedPack> children = const [],
+  }) {
     final id = idOf(dp.dir);
     final files = <(String, FileEntry)>[
-      for (final entry in dp.dir.allFiles())
+      for (final entry in own ?? dp.dir.allFiles())
         if (!_sidecarNames.contains(entry.$2.name)) entry,
     ];
     final sc = dp.sidecar;
@@ -108,9 +132,24 @@ ScanResult scanLibrary(String root) {
       for (final e in files)
         if (!isItchMedia(e.$1)) e,
     ];
-    final types = sc != null && sc.types.isNotEmpty
-        ? sc.types
-        : [for (final t in classifyPack(id, content)) t.id];
+    final List<String> types;
+    if (sc != null && sc.types.isNotEmpty) {
+      types = sc.types;
+    } else if (dp.isBundle) {
+      // Types shared by at least 10 % of its packs; the packs themselves
+      // are what searches and filters list.
+      final counts = <String, int>{};
+      for (final c in children) {
+        for (final t in c.types) {
+          counts[t] = (counts[t] ?? 0) + 1;
+        }
+      }
+      types =
+          counts.keys.where((t) => counts[t]! >= children.length * 0.1).toList()
+            ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
+    } else {
+      types = [for (final t in classifyPack(id, content)) t.id];
+    }
     // Material maps are no pictures of the pack (and no animations): the
     // material's shipped preview, else its Color map, stands in for them.
     final (materials, _) = groupMaterials([for (final (rel, _) in files) rel]);
@@ -131,35 +170,92 @@ ScanResult scanLibrary(String root) {
       rank: pick?.rank ?? 6,
       overrides: sc?.animations ?? const {},
     );
-    final preview =
+    var preview =
         chosen.preview ??
         materials.firstOrNull?.preview ??
         materials.firstOrNull?.color;
-    packs.add(
-      ScannedPack(
-        id: id,
-        path: dp.dir.path,
-        title: dp.title,
-        author: dp.author,
-        authorFile: dp.authorFile,
-        types: types,
-        tags: sc != null && sc.tags.isNotEmpty
-            ? sc.tags
-            : suggestTags(id, types: types),
-        source: sc?.source,
-        files: [for (final (rel, _) in files) rel],
-        sizes: [for (final (_, f) in files) f.size],
-        preview: preview,
-        previewAnim: preview == chosen.preview ? chosen.anim : null,
-        totalBytes: content.fold(0, (sum, e) => sum + e.$2.size),
-        sidecar: sc,
-        subFolders: splitSubFolders(
-          dp.dir.path,
-          files,
-          overrides: sc?.animations ?? const {},
-        ),
-      ),
+    SpriteAnim? previewAnim = preview == chosen.preview ? chosen.anim : null;
+    if (preview == null && dp.isBundle) {
+      // A bundle without a cover of its own shows its first pack's.
+      for (final c in children) {
+        if (c.preview != null) {
+          preview = p.posix.join(
+            p.posix.joinAll(p.split(p.relative(c.path, from: dp.dir.path))),
+            c.preview,
+          );
+          // The frames are read from the bundle's folder.
+          previewAnim = c.previewAnim == null
+              ? null
+              : SpriteAnim.fromJson({
+                  ...c.previewAnim!.toJson(),
+                  'path': preview,
+                });
+          break;
+        }
+      }
+    }
+    final bytes = content.fold(0, (sum, e) => sum + e.$2.size);
+    return ScannedPack(
+      id: id,
+      path: dp.dir.path,
+      title: dp.title,
+      author: dp.author,
+      authorFile: dp.authorFile,
+      types: types,
+      tags: sc != null && sc.tags.isNotEmpty
+          ? sc.tags
+          : suggestTags(id, types: types),
+      source: sc?.source ?? inheritedSource,
+      files: [for (final (rel, _) in files) rel],
+      sizes: [for (final (_, f) in files) f.size],
+      preview: preview,
+      previewAnim: previewAnim,
+      totalBytes: bytes + children.fold(0, (n, c) => n + c.totalBytes),
+      sidecar: sc,
+      // A bundle's packs show whole in the Expanded view; their own pages
+      // have By folder.
+      subFolders: dp.isBundle || bundleId != null
+          ? const []
+          : splitSubFolders(
+              dp.dir.path,
+              files,
+              overrides: sc?.animations ?? const {},
+            ),
+      isBundle: dp.isBundle,
+      bundleId: bundleId,
+      section: dp.section,
+      fileTotal: dp.isBundle
+          ? content.length +
+                children.fold(0, (n, c) => n + c.contentFiles.length)
+          : null,
     );
+  }
+
+  final detected = PackDetector().detect(tree, rootMayBeBundle: importSource);
+  for (final dp in detected) {
+    if (dp.bundle != null) continue;
+    if (!dp.isBundle) {
+      packs.add(scan(dp));
+      continue;
+    }
+    final bundleId = idOf(dp.dir);
+    final kids = [
+      for (final c in detected)
+        if (identical(c.bundle, dp))
+          scan(c, bundleId: bundleId, inheritedSource: dp.sidecar?.source),
+    ];
+    // The bundle's own files: the ones none of its packs holds.
+    final inKids = [
+      for (final k in kids)
+        '${p.posix.joinAll(p.split(p.relative(k.path, from: dp.dir.path)))}/',
+    ];
+    final own = [
+      for (final e in dp.dir.allFiles())
+        if (!inKids.any(e.$1.startsWith)) e,
+    ];
+    packs
+      ..add(scan(dp, own: own, children: kids))
+      ..addAll(kids);
   }
   return ScanResult(
     root: root,

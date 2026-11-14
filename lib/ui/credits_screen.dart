@@ -83,7 +83,11 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
   @override
   Widget build(BuildContext context) {
     final library = ref.watch(libraryProvider).value;
-    final packs = library?.packs ?? const <PackRow>[];
+    // A bundle's packs are credited one by one, not the bundle (M95).
+    final packs = [
+      for (final pk in library?.packs ?? const <PackRow>[])
+        if (!pk.isBundle) pk,
+    ];
     final games = {...knownGames(packs), ..._newGames}.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     final game = games.contains(_game) ? _game : games.firstOrNull;

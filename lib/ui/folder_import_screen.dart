@@ -691,6 +691,47 @@ class _ItemRow extends StatelessWidget {
                   // The source path, when it says more than the title.
                   if (item.sourceRel != '.' && item.sourceRel != item.title)
                     OverflowText(item.sourceRel, style: muted),
+                  // A detected bundle (M95): its packs, and the choice to
+                  // keep it as one pack (saved as `layout`).
+                  if (item.bundlePacks > 0)
+                    Column(
+                      key: ValueKey('bundle-row:${item.sourceRel}'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        OverflowText(
+                          item.keepAsOnePack
+                              ? 'One pack (a bundle of ${item.bundlePacks} '
+                                    'packs if split)'
+                              : 'Bundle of ${item.bundlePacks} packs'
+                                    '${item.sections.isEmpty ? '' : ' (sections: ${item.sections.join(', ')})'}',
+                          style: muted,
+                        ),
+                        Row(
+                          children: [
+                            SizedBox(
+                              height: 28,
+                              child: FittedBox(
+                                child: Switch(
+                                  value: item.keepAsOnePack,
+                                  onChanged: (v) {
+                                    item.keepAsOnePack = v;
+                                    onChanged();
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'Keep as one pack',
+                                style: small,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),

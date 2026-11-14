@@ -180,6 +180,43 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _isBundleMeta = const VerificationMeta(
+    'isBundle',
+  );
+  @override
+  late final GeneratedColumn<bool> isBundle = GeneratedColumn<bool>(
+    'is_bundle',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_bundle" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _bundleIdMeta = const VerificationMeta(
+    'bundleId',
+  );
+  @override
+  late final GeneratedColumn<String> bundleId = GeneratedColumn<String>(
+    'bundle_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sectionMeta = const VerificationMeta(
+    'section',
+  );
+  @override
+  late final GeneratedColumn<String> section = GeneratedColumn<String>(
+    'section',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -199,6 +236,9 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     previewAnim,
     fileCount,
     totalBytes,
+    isBundle,
+    bundleId,
+    section,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -294,6 +334,24 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
     } else if (isInserting) {
       context.missing(_totalBytesMeta);
     }
+    if (data.containsKey('is_bundle')) {
+      context.handle(
+        _isBundleMeta,
+        isBundle.isAcceptableOrUnknown(data['is_bundle']!, _isBundleMeta),
+      );
+    }
+    if (data.containsKey('bundle_id')) {
+      context.handle(
+        _bundleIdMeta,
+        bundleId.isAcceptableOrUnknown(data['bundle_id']!, _bundleIdMeta),
+      );
+    }
+    if (data.containsKey('section')) {
+      context.handle(
+        _sectionMeta,
+        section.isAcceptableOrUnknown(data['section']!, _sectionMeta),
+      );
+    }
     return context;
   }
 
@@ -381,6 +439,18 @@ class $PacksTable extends Packs with TableInfo<$PacksTable, PackRow> {
         DriftSqlType.int,
         data['${effectivePrefix}total_bytes'],
       )!,
+      isBundle: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_bundle'],
+      )!,
+      bundleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}bundle_id'],
+      ),
+      section: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}section'],
+      ),
     );
   }
 
@@ -433,6 +503,16 @@ class PackRow extends DataClass implements Insertable<PackRow> {
   final SpriteAnim? previewAnim;
   final int fileCount;
   final int totalBytes;
+
+  /// A bundle of packs (M95): its packs have [bundleId] set to its id. Its
+  /// own files are the ones no pack of it holds (license, cover).
+  final bool isBundle;
+
+  /// The bundle this pack belongs to.
+  final String? bundleId;
+
+  /// The pack's heading inside its bundle (`2D assets`).
+  final String? section;
   const PackRow({
     required this.id,
     required this.path,
@@ -451,6 +531,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     this.previewAnim,
     required this.fileCount,
     required this.totalBytes,
+    required this.isBundle,
+    this.bundleId,
+    this.section,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -500,6 +583,13 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     }
     map['file_count'] = Variable<int>(fileCount);
     map['total_bytes'] = Variable<int>(totalBytes);
+    map['is_bundle'] = Variable<bool>(isBundle);
+    if (!nullToAbsent || bundleId != null) {
+      map['bundle_id'] = Variable<String>(bundleId);
+    }
+    if (!nullToAbsent || section != null) {
+      map['section'] = Variable<String>(section);
+    }
     return map;
   }
 
@@ -536,6 +626,13 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           : Value(previewAnim),
       fileCount: Value(fileCount),
       totalBytes: Value(totalBytes),
+      isBundle: Value(isBundle),
+      bundleId: bundleId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bundleId),
+      section: section == null && nullToAbsent
+          ? const Value.absent()
+          : Value(section),
     );
   }
 
@@ -562,6 +659,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       previewAnim: serializer.fromJson<SpriteAnim?>(json['previewAnim']),
       fileCount: serializer.fromJson<int>(json['fileCount']),
       totalBytes: serializer.fromJson<int>(json['totalBytes']),
+      isBundle: serializer.fromJson<bool>(json['isBundle']),
+      bundleId: serializer.fromJson<String?>(json['bundleId']),
+      section: serializer.fromJson<String?>(json['section']),
     );
   }
   @override
@@ -585,6 +685,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       'previewAnim': serializer.toJson<SpriteAnim?>(previewAnim),
       'fileCount': serializer.toJson<int>(fileCount),
       'totalBytes': serializer.toJson<int>(totalBytes),
+      'isBundle': serializer.toJson<bool>(isBundle),
+      'bundleId': serializer.toJson<String?>(bundleId),
+      'section': serializer.toJson<String?>(section),
     };
   }
 
@@ -606,6 +709,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     Value<SpriteAnim?> previewAnim = const Value.absent(),
     int? fileCount,
     int? totalBytes,
+    bool? isBundle,
+    Value<String?> bundleId = const Value.absent(),
+    Value<String?> section = const Value.absent(),
   }) => PackRow(
     id: id ?? this.id,
     path: path ?? this.path,
@@ -624,6 +730,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     previewAnim: previewAnim.present ? previewAnim.value : this.previewAnim,
     fileCount: fileCount ?? this.fileCount,
     totalBytes: totalBytes ?? this.totalBytes,
+    isBundle: isBundle ?? this.isBundle,
+    bundleId: bundleId.present ? bundleId.value : this.bundleId,
+    section: section.present ? section.value : this.section,
   );
   PackRow copyWithCompanion(PacksCompanion data) {
     return PackRow(
@@ -652,6 +761,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
       totalBytes: data.totalBytes.present
           ? data.totalBytes.value
           : this.totalBytes,
+      isBundle: data.isBundle.present ? data.isBundle.value : this.isBundle,
+      bundleId: data.bundleId.present ? data.bundleId.value : this.bundleId,
+      section: data.section.present ? data.section.value : this.section,
     );
   }
 
@@ -674,7 +786,10 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           ..write('preview: $preview, ')
           ..write('previewAnim: $previewAnim, ')
           ..write('fileCount: $fileCount, ')
-          ..write('totalBytes: $totalBytes')
+          ..write('totalBytes: $totalBytes, ')
+          ..write('isBundle: $isBundle, ')
+          ..write('bundleId: $bundleId, ')
+          ..write('section: $section')
           ..write(')'))
         .toString();
   }
@@ -698,6 +813,9 @@ class PackRow extends DataClass implements Insertable<PackRow> {
     previewAnim,
     fileCount,
     totalBytes,
+    isBundle,
+    bundleId,
+    section,
   );
   @override
   bool operator ==(Object other) =>
@@ -719,7 +837,10 @@ class PackRow extends DataClass implements Insertable<PackRow> {
           other.preview == this.preview &&
           other.previewAnim == this.previewAnim &&
           other.fileCount == this.fileCount &&
-          other.totalBytes == this.totalBytes);
+          other.totalBytes == this.totalBytes &&
+          other.isBundle == this.isBundle &&
+          other.bundleId == this.bundleId &&
+          other.section == this.section);
 }
 
 class PacksCompanion extends UpdateCompanion<PackRow> {
@@ -740,6 +861,9 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
   final Value<SpriteAnim?> previewAnim;
   final Value<int> fileCount;
   final Value<int> totalBytes;
+  final Value<bool> isBundle;
+  final Value<String?> bundleId;
+  final Value<String?> section;
   final Value<int> rowid;
   const PacksCompanion({
     this.id = const Value.absent(),
@@ -759,6 +883,9 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     this.previewAnim = const Value.absent(),
     this.fileCount = const Value.absent(),
     this.totalBytes = const Value.absent(),
+    this.isBundle = const Value.absent(),
+    this.bundleId = const Value.absent(),
+    this.section = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   PacksCompanion.insert({
@@ -779,6 +906,9 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     this.previewAnim = const Value.absent(),
     required int fileCount,
     required int totalBytes,
+    this.isBundle = const Value.absent(),
+    this.bundleId = const Value.absent(),
+    this.section = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        path = Value(path),
@@ -806,6 +936,9 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Expression<String>? previewAnim,
     Expression<int>? fileCount,
     Expression<int>? totalBytes,
+    Expression<bool>? isBundle,
+    Expression<String>? bundleId,
+    Expression<String>? section,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -826,6 +959,9 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       if (previewAnim != null) 'preview_anim': previewAnim,
       if (fileCount != null) 'file_count': fileCount,
       if (totalBytes != null) 'total_bytes': totalBytes,
+      if (isBundle != null) 'is_bundle': isBundle,
+      if (bundleId != null) 'bundle_id': bundleId,
+      if (section != null) 'section': section,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -848,6 +984,9 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     Value<SpriteAnim?>? previewAnim,
     Value<int>? fileCount,
     Value<int>? totalBytes,
+    Value<bool>? isBundle,
+    Value<String?>? bundleId,
+    Value<String?>? section,
     Value<int>? rowid,
   }) {
     return PacksCompanion(
@@ -868,6 +1007,9 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
       previewAnim: previewAnim ?? this.previewAnim,
       fileCount: fileCount ?? this.fileCount,
       totalBytes: totalBytes ?? this.totalBytes,
+      isBundle: isBundle ?? this.isBundle,
+      bundleId: bundleId ?? this.bundleId,
+      section: section ?? this.section,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -936,6 +1078,15 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
     if (totalBytes.present) {
       map['total_bytes'] = Variable<int>(totalBytes.value);
     }
+    if (isBundle.present) {
+      map['is_bundle'] = Variable<bool>(isBundle.value);
+    }
+    if (bundleId.present) {
+      map['bundle_id'] = Variable<String>(bundleId.value);
+    }
+    if (section.present) {
+      map['section'] = Variable<String>(section.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -962,6 +1113,9 @@ class PacksCompanion extends UpdateCompanion<PackRow> {
           ..write('previewAnim: $previewAnim, ')
           ..write('fileCount: $fileCount, ')
           ..write('totalBytes: $totalBytes, ')
+          ..write('isBundle: $isBundle, ')
+          ..write('bundleId: $bundleId, ')
+          ..write('section: $section, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2226,6 +2380,9 @@ typedef $$PacksTableCreateCompanionBuilder = PacksCompanion Function({
   Value<SpriteAnim?> previewAnim,
   required int fileCount,
   required int totalBytes,
+  Value<bool> isBundle,
+  Value<String?> bundleId,
+  Value<String?> section,
   Value<int> rowid,
 });
 typedef $$PacksTableUpdateCompanionBuilder = PacksCompanion Function({
@@ -2246,6 +2403,9 @@ typedef $$PacksTableUpdateCompanionBuilder = PacksCompanion Function({
   Value<SpriteAnim?> previewAnim,
   Value<int> fileCount,
   Value<int> totalBytes,
+  Value<bool> isBundle,
+  Value<String?> bundleId,
+  Value<String?> section,
   Value<int> rowid,
 });
 
@@ -2346,6 +2506,21 @@ class $$PacksTableFilterComposer extends Composer<_$LibraryIndex, $PacksTable> {
     column: $table.totalBytes,
     builder: (column) => ColumnFilters(column),
   );
+
+  ColumnFilters<bool> get isBundle => $composableBuilder(
+    column: $table.isBundle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bundleId => $composableBuilder(
+    column: $table.bundleId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get section => $composableBuilder(
+    column: $table.section,
+    builder: (column) => ColumnFilters(column),
+  );
 }
 
 class $$PacksTableOrderingComposer
@@ -2441,6 +2616,21 @@ class $$PacksTableOrderingComposer
     column: $table.totalBytes,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get isBundle => $composableBuilder(
+    column: $table.isBundle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bundleId => $composableBuilder(
+    column: $table.bundleId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get section => $composableBuilder(
+    column: $table.section,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$PacksTableAnnotationComposer
@@ -2512,6 +2702,15 @@ class $$PacksTableAnnotationComposer
     column: $table.totalBytes,
     builder: (column) => column,
   );
+
+  GeneratedColumn<bool> get isBundle =>
+      $composableBuilder(column: $table.isBundle, builder: (column) => column);
+
+  GeneratedColumn<String> get bundleId =>
+      $composableBuilder(column: $table.bundleId, builder: (column) => column);
+
+  GeneratedColumn<String> get section =>
+      $composableBuilder(column: $table.section, builder: (column) => column);
 }
 
 class $$PacksTableTableManager
@@ -2559,6 +2758,9 @@ class $$PacksTableTableManager
                 Value<SpriteAnim?> previewAnim = const Value.absent(),
                 Value<int> fileCount = const Value.absent(),
                 Value<int> totalBytes = const Value.absent(),
+                Value<bool> isBundle = const Value.absent(),
+                Value<String?> bundleId = const Value.absent(),
+                Value<String?> section = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PacksCompanion(
                 id: id,
@@ -2578,6 +2780,9 @@ class $$PacksTableTableManager
                 previewAnim: previewAnim,
                 fileCount: fileCount,
                 totalBytes: totalBytes,
+                isBundle: isBundle,
+                bundleId: bundleId,
+                section: section,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -2599,6 +2804,9 @@ class $$PacksTableTableManager
                 Value<SpriteAnim?> previewAnim = const Value.absent(),
                 required int fileCount,
                 required int totalBytes,
+                Value<bool> isBundle = const Value.absent(),
+                Value<String?> bundleId = const Value.absent(),
+                Value<String?> section = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PacksCompanion.insert(
                 id: id,
@@ -2618,6 +2826,9 @@ class $$PacksTableTableManager
                 previewAnim: previewAnim,
                 fileCount: fileCount,
                 totalBytes: totalBytes,
+                isBundle: isBundle,
+                bundleId: bundleId,
+                section: section,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

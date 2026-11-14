@@ -30,6 +30,7 @@ PackRow row({
   List<String> types = const ['character'],
   SpriteAnim? anim,
 }) => PackRow(
+  isBundle: false,
   id: 'Hero/Pack',
   path: File('test/fixtures/images').absolute.path,
   title: 'Tiny Hero Pack v1.2',

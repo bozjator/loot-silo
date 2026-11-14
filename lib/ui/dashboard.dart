@@ -201,6 +201,8 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final settings = ref.read(settingsProvider.notifier);
     final tabsNotifier = ref.read(tabsProvider.notifier);
     final favorites = ref.watch(favoritesProvider);
+    // Bundles (M95): their pack counts, and titles for their packs' tiles.
+    final bundles = bundleInfo(ref.watch(libraryProvider).value?.packs);
     final sliderWidth = ref.watch(appBarActionsWidthProvider);
     // Larger text needs a wider window for the labels.
     final labelsMinWidth = MediaQuery.textScalerOf(context)
@@ -333,9 +335,13 @@ class _DashboardState extends ConsumerState<Dashboard> {
                               child: PackTile(
                                 pack: tile,
                                 alwaysAnimate: animateAll,
+                                bundlePacks: bundles.counts[pack.id] ?? 0,
+                                subtitle: folder == null
+                                    ? bundles.subtitle(pack)
+                                    : null,
                                 starred:
                                     folder == null && favorites.isPack(pack.id),
-                                onToggleStar: folder == null
+                                onToggleStar: folder == null && !pack.isBundle
                                     ? () => ref
                                           .read(favoritesProvider.notifier)
                                           .togglePack(pack.id)

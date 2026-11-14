@@ -228,7 +228,11 @@ List<FileTile> favoriteFileTiles(
 ) {
   if (!q.favorites) {
     if (hits == null) return const [];
-    return filterFileHits(hits, applyQuery(packs, q, null), q.sort);
+    return filterFileHits(
+      hits,
+      applyQuery(packs, q, null, openBundles: true),
+      q.sort,
+    );
   }
   final starred = [
     for (final h in hits ?? favorites.allFiles)
@@ -240,6 +244,7 @@ List<FileTile> favoriteFileTiles(
     q,
     null,
     favorites: Favorites(packs: {for (final p in packs) p.id}),
+    openBundles: true,
   );
   // Best match means nothing without a search: list them by name.
   final sort = hits == null && q.sort == PackSort.relevance
@@ -271,13 +276,20 @@ bool passesFacets(
         q.sources.contains(p.source ?? noSource));
 
 /// Applies [q] to [packs]; pure so it can be unit tested.
+///
+/// Bundles (M95) show as one tile each, their packs hidden, until a search
+/// or a filter narrows the list or [openBundles] (the Expanded and Files
+/// views) is set: then the bundles' packs show and the bundles don't.
 List<PackRow> applyQuery(
   List<PackRow> packs,
   DashboardQuery q,
   List<String>? hits, {
   Favorites favorites = Favorites.none,
+  bool openBundles = false,
 }) {
-  Iterable<PackRow> out = packs;
+  Iterable<PackRow> out = q.isNarrowed || openBundles
+      ? packs.where((p) => !p.isBundle)
+      : packs.where((p) => p.bundleId == null);
   if (hits != null) {
     final hitSet = hits.toSet();
     out = out.where((p) => hitSet.contains(p.id));
@@ -454,6 +466,7 @@ final visibleTilesProvider = Provider<AsyncValue<List<DashboardTile>>>((ref) {
 
 final visiblePacksProvider = Provider<AsyncValue<List<PackRow>>>((ref) {
   final library = ref.watch(libraryProvider);
+  final view = ref.watch(settingsProvider.select((s) => s.dashboardView));
   final hits = ref.watch(searchHitsProvider);
   final q = ref.watch(dashboardQueryProvider);
   final favorites = ref.watch(favoritesProvider);
@@ -464,7 +477,15 @@ final visiblePacksProvider = Provider<AsyncValue<List<PackRow>>>((ref) {
       AsyncValue(:final error?, :final stackTrace),
     ) => AsyncError(error, stackTrace ?? StackTrace.current),
     (AsyncValue(value: final lib?), AsyncValue(hasValue: true, :final value)) =>
-      AsyncData(applyQuery(lib.packs, q, value, favorites: favorites)),
+      AsyncData(
+        applyQuery(
+          lib.packs,
+          q,
+          value,
+          favorites: favorites,
+          openBundles: view == DashboardView.expanded,
+        ),
+      ),
     _ => const AsyncLoading(),
   };
 });
@@ -515,12 +536,16 @@ class Facets {
     for (final p in l) p.source ?? noSource,
   ];
 
-  factory Facets.of(List<PackRow> packs) => Facets(
-    types: _count(packs.expand((p) => p.types)),
-    authors: _count(_authors(packs)),
-    tags: _count(packs.expand((p) => p.tags)),
-    sources: _count(_sources(packs)),
-  );
+  /// Counts packs, never bundles (M95): filters list a bundle's packs.
+  factory Facets.of(List<PackRow> all) {
+    final packs = all.where((p) => !p.isBundle);
+    return Facets(
+      types: _count(packs.expand((p) => p.types)),
+      authors: _count(_authors(packs)),
+      tags: _count(packs.expand((p) => p.tags)),
+      sources: _count(_sources(packs)),
+    );
+  }
 
   /// Faceted counts: each facet counts the packs (among the search [hits]
   /// when searching) that pass the *other* active filters.
@@ -530,7 +555,7 @@ class Facets {
     List<String>? hits, {
     Favorites favorites = Favorites.none,
   }) {
-    Iterable<PackRow> base = packs;
+    Iterable<PackRow> base = packs.where((p) => !p.isBundle);
     if (hits != null) {
       final hitSet = hits.toSet();
       base = base.where((p) => hitSet.contains(p.id));
@@ -563,7 +588,7 @@ List<String> knownTags(WidgetRef ref) => [
 List<(String, int)> knownAuthors(List<PackRow> packs) {
   final m = <String, int>{};
   for (final p in packs) {
-    if (p.author != null) {
+    if (p.author != null && !p.isBundle) {
       m[p.author!] = (m[p.author!] ?? 0) + 1;
     }
   }
@@ -585,3 +610,33 @@ final facetsProvider = Provider<Facets>((ref) {
     favorites: ref.watch(favoritesProvider),
   );
 });
+
+/// Bundles of a library (M95): how many packs each holds, and the line a
+/// bundle's pack shows under its title.
+class BundleInfo {
+  const BundleInfo(this.counts, this.titles);
+
+  final Map<String, int> counts;
+  final Map<String, String> titles;
+
+  /// `Kenney · Kenney Game Assets 1 › 2D assets` for a bundle's pack; null
+  /// for any other (its author shows).
+  String? subtitle(PackRow pack) {
+    final bundle = titles[pack.bundleId];
+    if (bundle == null) return null;
+    return [
+      pack.author ?? 'Unknown author',
+      [bundle, ?pack.section].join(' › '),
+    ].join(' · ');
+  }
+}
+
+BundleInfo bundleInfo(List<PackRow>? packs) {
+  final counts = <String, int>{};
+  final titles = <String, String>{};
+  for (final p in packs ?? const <PackRow>[]) {
+    if (p.isBundle) titles[p.id] = p.title;
+    if (p.bundleId case final b?) counts[b] = (counts[b] ?? 0) + 1;
+  }
+  return BundleInfo(counts, titles);
+}

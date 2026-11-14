@@ -423,6 +423,7 @@ PackSidecar updatePackSidecar(
     animations: old.animations,
     favorite: old.favorite,
     favoriteFiles: old.favoriteFiles,
+    layout: old.layout,
     extra: old.extra,
   );
   next.write(packPath);
@@ -432,6 +433,18 @@ PackSidecar updatePackSidecar(
 /// Saves the previews the user chose, in order (the first is the tile
 /// cover); an empty list goes back to picking them automatically. Keeps
 /// every other key; returns the new sidecar.
+/// One pack or a bundle of packs (M95): "Merge into one pack" and "Split
+/// into packs" save it; a rescan then shows the folder that way. Files
+/// never move, and each pack keeps its own `asset_pack.json`, so either can
+/// be undone.
+PackSidecar setPackLayout(String packPath, PackLayout layout) {
+  final next = (PackSidecar.read(packPath) ?? const PackSidecar()).copyWith(
+    layout: layout,
+  );
+  next.write(packPath);
+  return next;
+}
+
 PackSidecar savePreviews(String packPath, List<String> previews) {
   final old = PackSidecar.read(packPath) ?? const PackSidecar();
   final next = PackSidecar.fromJson({

@@ -265,6 +265,7 @@ void main() {
           _owned(2, 'Slime Pack'),
           MatchKind.fuzzy,
           pack: PackRow(
+            isBundle: false,
             id: 'orcmaker/Slime Pack',
             path: '/lib/orcmaker/Slime Pack',
             title: 'Slime Pack',
@@ -301,6 +302,7 @@ void main() {
           .color!;
 
       PackRow pack(String id) => PackRow(
+        isBundle: false,
         id: id,
         path: '/lib/$id',
         title: id.split('/').last,

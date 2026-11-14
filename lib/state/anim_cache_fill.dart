@@ -39,8 +39,10 @@ class AnimCacheFiller {
   /// A pack opened meanwhile has stored its own entry, so it is skipped.
   Future<List<String>> fill(List<PackRow> packs) async {
     final done = <String>[];
-    final order = [...packs]
-      ..sort((a, b) => b.fileCount.compareTo(a.fileCount));
+    final order = [
+      for (final pk in packs)
+        if (!pk.isBundle) pk,
+    ]..sort((a, b) => b.fileCount.compareTo(a.fileCount));
     for (final pk in order) {
       if (_cancelled) break;
       try {

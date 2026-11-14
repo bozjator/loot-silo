@@ -7,6 +7,7 @@ import 'package:archive/archive_io.dart';
 import 'package:loot_silo/core/audio_duration.dart';
 import 'package:loot_silo/core/library_index.dart';
 import 'package:loot_silo/core/library_service.dart';
+import 'package:loot_silo/core/sidecar.dart';
 import 'package:loot_silo/itch/itch_api.dart';
 import 'package:loot_silo/itch/itch_key.dart';
 import 'package:loot_silo/state/anim_cache_fill.dart';
@@ -15,6 +16,7 @@ import 'package:loot_silo/state/itch.dart';
 import 'package:loot_silo/state/providers.dart';
 import 'package:loot_silo/state/settings.dart';
 import 'package:loot_silo/ui/app.dart';
+import 'package:loot_silo/ui/bundle_screen.dart';
 import 'package:loot_silo/ui/dashboard.dart';
 import 'package:loot_silo/ui/help_screen.dart';
 import 'package:loot_silo/ui/image_viewer.dart';
@@ -453,12 +455,12 @@ void main() {
     );
     await settleImages(tester);
     await captureScreenshot(tester, 'm4_dashboard_scrolled');
-    // Since M91 the all-in-one is one pack: its page opens.
+    // Since M95 the all-in-one is a bundle: its page lists its packs.
     await tester.tap(kenney);
-    await pumpUntil(tester, find.textContaining('Images ('));
+    await pumpUntil(tester, find.text('Merge into one pack'));
     await tester.pump(const Duration(seconds: 1));
     await settleImages(tester);
-    await captureScreenshot(tester, 'm4_kenney1_pack', settle: false);
+    await captureScreenshot(tester, 'm4_kenney1_bundle', settle: false);
   });
 
   testWidgets('sprite animations on tiles (real library)', (tester) async {
@@ -5279,18 +5281,19 @@ A **16×16** knight with *walk* and *idle* animations.
   });
 
   testWidgets(
-    'm93: focus mode on Kenney 1 (12,000+ images) (real, read-only)',
+    'm93: focus mode on Grass Land (5,800 images) (real, read-only)',
     (tester) async {
       final real = p.canonicalize('../assets_library');
       if (!Directory(real).existsSync()) return;
       await tester.pumpWidget(app(real, library: real));
       await pumpUntil(tester, realPacks());
-      await tester.enterText(find.byType(TextField), 'Kenney Game Assets 1');
+      // Since M95 Kenney 1 is a bundle; Grass Land is the biggest pack.
+      await tester.enterText(find.byType(TextField), 'Grass Land 2.0');
       await tester.pump(DashboardQueryNotifier.searchDebounce);
-      final kenney = find.text('Kenney Game Assets 1 version 42');
-      await pumpUntil(tester, kenney);
+      final pack = find.text('ERW - Grass Land 2.0 v2.1');
+      await pumpUntil(tester, pack);
       await tester.pump(const Duration(milliseconds: 500));
-      await tester.tap(kenney);
+      await tester.tap(pack);
       await pumpUntil(tester, find.textContaining('Images ('));
       await tester.tap(find.textContaining('Images ('));
       await tester.pump(const Duration(milliseconds: 500));
@@ -5308,7 +5311,7 @@ A **16×16** knight with *walk* and *idle* animations.
       expect(focused(), first);
       expect(cards().where((c) => c.dimmed), hasLength(cards().length - 1));
 
-      // A focus move on a 12,000-image tab takes one frame's work, not a
+      // A focus move on a 5,800-image tab takes one frame's work, not a
       // regroup of the whole pack.
       final times = <int>[];
       for (var k = 0; k < 7; k++) {
@@ -5322,12 +5325,13 @@ A **16×16** knight with *walk* and *idle* animations.
         times.add(sw.elapsedMilliseconds);
       }
       expect(focused(), second);
-      debugPrint('m93: focus moves on Kenney 1 took $times ms');
+      debugPrint('m93: focus moves on Grass Land took $times ms');
       times.sort();
-      // Debug build: 93 ms before M93, about 35 ms after.
+      // Debug build, Kenney 1 (12,000 images): 93 ms before M93, about 35
+      // ms after.
       expect(times[times.length ~/ 2], lessThan(60));
       await settleImages(tester);
-      await captureScreenshot(tester, 'm93_focus_kenney', settle: false);
+      await captureScreenshot(tester, 'm93_focus_grass_land', settle: false);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pump();
@@ -5406,6 +5410,118 @@ A **16×16** knight with *walk* and *idle* animations.
       await captureScreenshot(tester, 'm94_village_animations', settle: false);
     },
   );
+
+  testWidgets('m95: Kenney bundles — page, Expanded (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(real).existsSync()) return;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField), '');
+    // Compact: one tile per bundle, with its pack count.
+    final kenney = find.text('Kenney Game Assets 1 version 42');
+    await tester.scrollUntilVisible(
+      kenney,
+      300,
+      scrollable: find.descendant(
+        of: find.byType(ThumbRows),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(find.textContaining('Bundle · 90 packs'), findsOneWidget);
+    expect(find.text('Explosion Pack'), findsNothing);
+    await tester.tap(kenney);
+    await pumpUntil(tester, find.text('Merge into one pack'));
+    await tester.pump(const Duration(seconds: 1));
+    // The first section; the others are built as they scroll in.
+    expect(find.text('2D assets'), findsOneWidget);
+    expect(find.textContaining('Bundle of 90 packs'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm95_bundle_page', settle: false);
+
+    // A pack of the bundle opens like any pack.
+    final explosion = find.text('Explosion Pack');
+    await tester.scrollUntilVisible(
+      explosion,
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(explosion);
+    await pumpUntil(tester, find.textContaining('Images ('));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byTooltip('Split into packs…'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.textContaining('Images ('), gone: true);
+    expect(find.byType(BundleScreen), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await pumpUntil(tester, find.byType(BundleScreen), gone: true);
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Expanded: the bundles' packs, each saying where it lives.
+    await tester.tap(find.text('Expanded'));
+    await pumpUntil(tester, find.textContaining('› 2D assets'));
+    expect(find.textContaining('Bundle · '), findsNothing);
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm95_expanded_bundles', settle: false);
+    await tester.tap(find.text('Packs'));
+    await tester.pump(const Duration(milliseconds: 500));
+  });
+
+  testWidgets('m95: import review asks about a bundle', (tester) async {
+    copyTree('test/fixtures/managed', lib);
+    final src = p.join(tmp.path, 'Game Assets All in One');
+    File(p.join(src, 'License.txt'))
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync('CC0');
+    final tile = img.encodePng(img.Image(width: 16, height: 16));
+    for (final pk in ['Tanks', 'Ships', 'Planes', 'Space Shooter']) {
+      File(p.join(src, '2D assets', pk, 'License.txt'))
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('CC0');
+      File(p.join(src, '2D assets', pk, 'PNG', 'a.png'))
+        ..parent.createSync(recursive: true)
+        ..writeAsBytesSync(tile);
+    }
+    for (final pk in ['RPG sounds (5 sounds)', 'UI sounds (5 sounds)']) {
+      File('test/fixtures/audio/tone.wav').copySync(
+        p.join(
+          (Directory(
+            p.join(src, 'Audio', pk),
+          )..createSync(recursive: true)).path,
+          'click.wav',
+        ),
+      );
+    }
+    pickedFolder = src;
+    addTearDown(() => pickedFolder = null);
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await importFrom(tester, 'Import folder');
+    await pumpUntil(tester, find.text('Import 1 packs'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(
+      find.text('Bundle of 6 packs (sections: 2D assets, Audio)'),
+      findsOneWidget,
+    );
+    await captureScreenshot(tester, 'm95_import_bundle', settle: false);
+
+    // Imported as a bundle: one tile, its packs inside.
+    await tester.tap(find.text('Import 1 packs'));
+    await pumpUntil(tester, find.text('Done'));
+    await tester.tap(find.text('Done'));
+    await pumpUntil(tester, find.textContaining('Bundle · 6 packs'));
+    await tester.pump(const Duration(milliseconds: 500));
+    final imported = Directory(lib)
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => p.basename(f.path) == 'asset_pack.json')
+        .map((f) => PackSidecar.read(f.parent.path))
+        .where((s) => s?.layout == PackLayout.bundle);
+    expect(imported, hasLength(1));
+  });
 
   testWidgets('m61: model viewer — orbit, wireframe, Esc closes', (
     tester,

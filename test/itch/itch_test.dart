@@ -42,6 +42,7 @@ OwnedKey key(int id, String title, {String user = 'orcmaker'}) =>
 
 PackRow pack(String id, {String? author, String? url, int? itchGameId}) =>
     PackRow(
+      isBundle: false,
       id: id,
       path: '/lib/$id',
       title: id.split('/').last,

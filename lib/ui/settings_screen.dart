@@ -56,7 +56,7 @@ class SettingsScreen extends ConsumerWidget {
         ? null
         : ref.watch(itchAccountProvider).value?.user;
     final library = ref.watch(libraryProvider).value;
-    final packCount = library?.packs.length;
+    final packCount = library?.packs.where((p) => !p.isBundle).length;
 
     Widget section(String title) => Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),

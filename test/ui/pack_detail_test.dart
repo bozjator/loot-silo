@@ -6880,6 +6880,86 @@ void main() {
       expect(focused(tester), isNull);
     });
   });
+  group('Bundles (M95)', () {
+    final png = img.encodePng(img.Image(width: 8, height: 8));
+    const all = 'Kenney/All in One';
+    Map<String, List<int>> kenney() => {
+      'Kenney/ASSET_AUTHOR.txt': utf8.encode('user: Kenney\n'),
+      for (final pk in ['Tanks', 'Ships', 'Planes']) ...{
+        '$all/2D assets/$pk/License.txt': utf8.encode('CC0'),
+        '$all/2D assets/$pk/${pk.toLowerCase()}.png': png,
+      },
+    };
+
+    testWidgets('a bundle tile opens its packs; merge, then split back', (
+      tester,
+    ) async {
+      await openKnight(tester, open: false, library: kenney());
+      expect(find.textContaining('Bundle · 3 packs'), findsOneWidget);
+      // Its packs aren't on the compact grid.
+      expect(find.text('Tanks'), findsNothing);
+
+      await tester.tap(find.text('All in One'));
+      await pumpUntil(tester, find.text('Merge into one pack'));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('2D assets'), findsOneWidget);
+      for (final pk in ['Tanks', 'Ships', 'Planes']) {
+        expect(find.text(pk), findsOneWidget);
+      }
+      expect(find.textContaining('Bundle of 3 packs'), findsOneWidget);
+
+      await tester.tap(find.text('Merge into one pack'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Merge'));
+      // The same tab now shows one pack, which can be split again.
+      await pumpUntil(tester, find.byTooltip('Split into packs…'));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Images (3)'), findsOneWidget);
+      final dir = p.join(tmp.path, 'library', all);
+      expect(PackSidecar.read(dir)?.layout, PackLayout.pack);
+      expect(find.text('Merge into one pack'), findsNothing);
+
+      await tester.tap(find.byTooltip('Split into packs…'));
+      await tester.pumpAndSettle();
+      expect(find.text('Split "All in One" into 3 packs?'), findsOneWidget);
+      expect(find.text('Sections: 2D assets'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Split'));
+      await pumpUntil(tester, find.text('Merge into one pack'));
+      expect(PackSidecar.read(dir)?.layout, PackLayout.bundle);
+    });
+
+    testWidgets('a folded section stays folded when the bundle reopens', (
+      tester,
+    ) async {
+      await openKnight(tester, open: false, library: kenney());
+      await tester.tap(find.text('All in One'));
+      await pumpUntil(tester, find.text('Tanks'));
+      await tester.tap(find.text('2D assets'));
+      await tester.pump();
+      expect(find.text('Tanks'), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await pumpUntil(tester, find.text('Knight Pack'));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(find.text('All in One'));
+      await pumpUntil(tester, find.text('2D assets'));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Tanks'), findsNothing);
+      await tester.tap(find.text('2D assets'));
+      await tester.pump();
+      expect(find.text('Tanks'), findsOneWidget);
+    });
+
+    testWidgets("a search lists the bundle's packs, with the bundle named", (
+      tester,
+    ) async {
+      await openKnight(tester, open: false, library: kenney());
+      await tester.enterText(find.byType(TextField).first, 'tanks');
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
+      await pumpUntil(tester, find.text('Tanks'));
+      expect(find.text('Kenney · All in One › 2D assets'), findsOneWidget);
+      expect(find.textContaining('Bundle · 3 packs'), findsNothing);
+    });
+  });
 }
 
 const previewBoxWidthForTest = 440.0;

@@ -132,7 +132,11 @@ final itchMatchesProvider = FutureProvider<List<ItchMatch>>((ref) async {
   if (account == null) return const [];
   final library = await ref.watch(libraryProvider.future);
   final folders = await ref.read(libraryIndexProvider).folderNames();
-  return matchOwnedKeys(account.keys, library.packs, folders: folders);
+  // A bundle's packs are matched, not the bundle (M95).
+  return matchOwnedKeys(account.keys, [
+    for (final pk in library.packs)
+      if (!pk.isBundle) pk,
+  ], folders: folders);
 });
 
 /// Progress of one game's download or link.

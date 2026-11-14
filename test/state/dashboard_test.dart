@@ -22,6 +22,7 @@ PackRow pack(
   int files = 1,
   int bytes = 1,
 }) => PackRow(
+  isBundle: false,
   id: id,
   path: '/lib/$id',
   title: title ?? id.split('/').last,
@@ -656,6 +657,92 @@ void main() {
         [for (final t in favoriteFolders(expandPacks(list, subs), f)) t.key],
         ['A/Knights/x', 'A/Knights/y', 'P/Banner/Wolf', 'Q/Root/m', 'Q/Root/n'],
       );
+    });
+  });
+
+  group('bundles (M95)', () {
+    PackRow row(
+      String id, {
+      bool isBundle = false,
+      String? bundleId,
+      String? section,
+      List<String> types = const ['2d'],
+      int files = 1,
+    }) => PackRow(
+      isBundle: isBundle,
+      bundleId: bundleId,
+      section: section,
+      id: id,
+      path: '/lib/$id',
+      title: id.split('/').last,
+      author: 'K',
+      types: types,
+      tags: const [],
+      usedIn: const [],
+      favorite: false,
+      favoriteFiles: const [],
+      fileCount: files,
+      totalBytes: 1,
+    );
+    final lib = [
+      row('K/All', isBundle: true, types: ['2d', 'audio'], files: 7),
+      row('K/All/2D/Tanks', bundleId: 'K/All', section: '2D', files: 3),
+      row('K/All/2D/Ships', bundleId: 'K/All', section: '2D', files: 3),
+      row(
+        'K/All/Audio/Clicks',
+        bundleId: 'K/All',
+        section: 'Audio',
+        types: ['audio'],
+      ),
+      row('K/Solo', types: ['audio']),
+    ];
+    List<String> ids(
+      DashboardQuery q, {
+      List<String>? hits,
+      bool openBundles = false,
+    }) => [
+      for (final p in applyQuery(lib, q, hits, openBundles: openBundles)) p.id,
+    ];
+
+    test('the compact grid shows the bundle, not its packs', () {
+      expect(ids(const DashboardQuery()), ['K/All', 'K/Solo']);
+    });
+
+    test('a filter or a search lists the packs inside', () {
+      expect(ids(const DashboardQuery(types: {'audio'})), [
+        'K/All/Audio/Clicks',
+        'K/Solo',
+      ]);
+      expect(
+        ids(
+          const DashboardQuery(text: 'tanks'),
+          hits: ['K/All/2D/Tanks', 'K/All'],
+        ),
+        ['K/All/2D/Tanks'],
+      );
+    });
+
+    test('Expanded opens every bundle', () {
+      expect(
+        ids(const DashboardQuery(), openBundles: true),
+        ['K/All/2D/Ships', 'K/All/Audio/Clicks', 'K/Solo', 'K/All/2D/Tanks']
+          ..sort((a, b) => a.split('/').last.compareTo(b.split('/').last)),
+      );
+    });
+
+    test('facets count packs, never bundles', () {
+      final f = Facets.of(lib);
+      expect(f.types, [('2d', 2), ('audio', 2)]);
+      expect(f.authors, [('K', 4)]);
+      final q = Facets.forQuery(lib, const DashboardQuery(), null);
+      expect(q.types, [('2d', 2), ('audio', 2)]);
+    });
+
+    test('pack counts and subtitles', () {
+      final info = bundleInfo(lib);
+      expect(info.counts, {'K/All': 3});
+      expect(info.subtitle(lib[1]), 'K · All › 2D');
+      expect(info.subtitle(lib[4]), isNull);
     });
   });
 }

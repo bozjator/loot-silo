@@ -13,6 +13,7 @@ void main() {
   tearDown(() => tmp.deleteSync(recursive: true));
 
   PackRow pack(String id, List<String> usedIn, {String? author}) => PackRow(
+    isBundle: false,
     id: id,
     path: p.join(tmp.path, id),
     title: id.split('/').last,

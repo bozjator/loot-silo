@@ -26,6 +26,7 @@ ThumbGridDelegate dashboardGrid(double size) => ThumbGridDelegate(
 );
 
 PackRow longPack(int i, {String? title}) => PackRow(
+  isBundle: false,
   id: 'p$i',
   path: '/nowhere',
   title:

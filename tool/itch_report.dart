@@ -26,6 +26,7 @@ Future<void> main(List<String> args) async {
     final packs = [
       for (final pk in scan.packs)
         PackRow(
+          isBundle: false,
           id: pk.id,
           path: pk.path,
           title: pk.title,

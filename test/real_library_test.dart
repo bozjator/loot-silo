@@ -34,21 +34,40 @@ void main() {
       expect(result.packs.where((p) => p.author == null), isEmpty);
     });
 
-    test('Kenney all-in-ones are one pack each, with all their folders', () {
-      for (final name in [
-        'Kenney Game Assets 1 version 42',
-        'Kenney Game Assets 2 version 22',
+    test('Kenney all-in-ones are bundles of their packs (M95)', () {
+      for (final (name, sections) in [
+        (
+          'Kenney Game Assets 1 version 42',
+          {'2D assets', '3D assets', 'Audio'},
+        ),
+        ('Kenney Game Assets 2 version 22', {'2D assets', '3D assets'}),
       ]) {
-        final pack = result.packs.singleWhere((p) => p.title == name);
-        expect(pack.author?.user, 'Kenney');
+        final bundle = result.packs.singleWhere((p) => p.title == name);
+        expect(bundle.isBundle, isTrue, reason: name);
+        expect(bundle.author?.user, 'Kenney');
+        final children = [
+          for (final p in result.packs)
+            if (p.bundleId == bundle.id) p,
+        ];
+        expect(children.length, greaterThan(30), reason: name);
         expect(
-          result.packs.where((p) => p.id.startsWith('${pack.id}/')),
-          isEmpty,
+          {for (final c in children) ?c.section},
+          containsAll(sections),
           reason: name,
         );
-        // One Expanded tile per theme folder, like any big pack.
-        expect(pack.files.length, greaterThan(1000), reason: name);
+        for (final c in children) {
+          expect(c.id, startsWith('${bundle.id}/'));
+          expect(c.author?.user, 'Kenney');
+          expect(c.subFolders, isEmpty);
+        }
+        // Every file of the folder is in the bundle or one of its packs.
+        expect(bundle.fileTotal, greaterThan(1000), reason: name);
       }
+      // No other folder of the library is a bundle.
+      expect([
+        for (final p in result.packs)
+          if (p.isBundle) p.title,
+      ], hasLength(2));
     });
 
     test('Zerie, RafaelMatos and OboroPixel packs are detected', () {
@@ -163,9 +182,10 @@ void main() {
       // Generic Items: the 52×13 strip (item 061) is a 4-frame strip, and
       // it doesn't cut the 130×130 items (since M91 the folder is part of
       // the all-in-one pack, so it is checked here at last).
-      final items = contentsOf('Kenney/Kenney Game Assets 2 version 22')
-          .shownDetected
-          .map((a) => a.path);
+      final items = contentsOf(
+        'Kenney/Kenney Game Assets 2 version 22/2D assets/'
+        'Generic Items (160 assets)',
+      ).shownDetected.map((a) => a.path);
       expect(
         items.where((a) => a.contains('genericItem_')).map(p.basename),
         unorderedEquals([
@@ -174,20 +194,18 @@ void main() {
         ]),
       );
       // Kenney's trimmed explosion frames are plain images.
-      final kenney1 = contentsOf('Kenney/Kenney Game Assets 1 version 42');
+      final kenney1 = contentsOf(
+        'Kenney/Kenney Game Assets 1 version 42/2D assets/Explosion Pack',
+      );
       expect(
-        kenney1.shownDetected.where(
-          (a) => a.path.startsWith('2D assets/Explosion Pack/PNG/'),
-        ),
+        kenney1.shownDetected.where((a) => a.path.startsWith('PNG/')),
         isEmpty,
       );
       // Its two-frame-looking texture atlases (Spritesheets/*.png + .xml)
       // were detected before M91 too, out of this test's sight while the
       // pack was a sub-pack; recorded as an open question.
       expect(
-        kenney1.shownDetected
-            .where((a) => a.path.contains('Explosion Pack/'))
-            .map((a) => p.basename(a.path)),
+        kenney1.shownDetected.map((a) => p.basename(a.path)),
         unorderedEquals([
           'spritesheet_groundExplosion.png',
           'spritesheet_sonicExplosion.png',

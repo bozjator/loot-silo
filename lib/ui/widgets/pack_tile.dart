@@ -52,9 +52,18 @@ class PackTile extends StatefulWidget {
     this.onFileMatchesTap,
     this.starred = false,
     this.onToggleStar,
+    this.subtitle,
+    this.bundlePacks = 0,
   });
 
   final PackRow pack;
+
+  /// The line under the title instead of the author: where a bundle's pack
+  /// sits (`Kenney · Game Assets 1 › 2D assets`).
+  final String? subtitle;
+
+  /// A bundle's pack count, shown as a "Bundle · N packs" pill (M95).
+  final int bundlePacks;
   final VoidCallback? onTap;
   final bool alwaysAnimate;
 
@@ -124,6 +133,17 @@ class _PackTileState extends State<PackTile> {
                                   ),
                           ),
                   ),
+                  if (pack.isBundle)
+                    Positioned(
+                      left: 6,
+                      top: 6,
+                      child: _Pill(
+                        icon: Icons.folder_copy_outlined,
+                        text:
+                            'Bundle · ${widget.bundlePacks} '
+                            'pack${widget.bundlePacks == 1 ? '' : 's'}',
+                      ),
+                    ),
                   if (widget.onToggleStar case final toggle?
                       when _hover || widget.starred)
                     Positioned(
@@ -155,7 +175,7 @@ class _PackTileState extends State<PackTile> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    pack.author ?? 'Unknown author',
+                    widget.subtitle ?? pack.author ?? 'Unknown author',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -293,6 +313,38 @@ class _TypeChip extends StatelessWidget {
         text,
         style: Theme.of(context).textTheme.labelSmall
             ?.copyWith(color: scheme.onSecondaryContainer),
+      ),
+    );
+  }
+}
+
+/// A label over a tile's preview.
+class _Pill extends StatelessWidget {
+  const _Pill({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: scheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: scheme.onTertiaryContainer),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: scheme.onTertiaryContainer),
+          ),
+        ],
       ),
     );
   }

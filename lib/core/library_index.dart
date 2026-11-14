@@ -66,6 +66,16 @@ class Packs extends Table {
   IntColumn get fileCount => integer()();
   IntColumn get totalBytes => integer()();
 
+  /// A bundle of packs (M95): its packs have [bundleId] set to its id. Its
+  /// own files are the ones no pack of it holds (license, cover).
+  BoolColumn get isBundle => boolean().withDefault(const Constant(false))();
+
+  /// The bundle this pack belongs to.
+  TextColumn get bundleId => text().nullable()();
+
+  /// The pack's heading inside its bundle (`2D assets`).
+  TextColumn get section => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -132,7 +142,7 @@ class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("
@@ -212,8 +222,11 @@ class LibraryIndex extends _$LibraryIndex {
             itchUrl: Value(pk.sidecar?.itchUrl),
             preview: Value(pk.preview),
             previewAnim: Value(pk.previewAnim),
-            fileCount: pk.contentFiles.length,
+            fileCount: pk.fileTotal ?? pk.contentFiles.length,
             totalBytes: pk.totalBytes,
+            isBundle: Value(pk.isBundle),
+            bundleId: Value(pk.bundleId),
+            section: Value(pk.section),
           ),
         );
         b.insertAll(packFiles, [
@@ -224,7 +237,9 @@ class LibraryIndex extends _$LibraryIndex {
               size: pk.sizes[i],
             ),
         ]);
-        for (final rel in pk.contentFiles) {
+        // A bundle's own files (license, cover) aren't searched: its packs
+        // are.
+        for (final rel in pk.isBundle ? const <String>[] : pk.contentFiles) {
           b.customStatement(
             'INSERT INTO file_fts (pack_id, rel_path, words) VALUES (?, ?, ?)',
             [pk.id, rel, fileSearchText(rel)],
@@ -243,13 +258,19 @@ class LibraryIndex extends _$LibraryIndex {
         ]);
       }
     });
+    final bundleTitles = {
+      for (final pk in result.packs)
+        if (pk.isBundle) pk.id: pk.title,
+    };
     for (final pk in result.packs) {
+      if (pk.isBundle) continue;
       await customStatement(
         'INSERT INTO pack_fts (id, title, author, tags, types, files) '
         'VALUES (?, ?, ?, ?, ?, ?)',
         [
           pk.id,
-          pk.title,
+          // A bundle's packs are found by its name and their section too.
+          [pk.title, bundleTitles[pk.bundleId], pk.section].nonNulls.join(' '),
           pk.author?.user ?? '',
           pk.tags.join(' '),
           pk.types.join(' '),

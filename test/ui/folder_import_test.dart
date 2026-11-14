@@ -84,6 +84,49 @@ void main() {
     expect(find.text('.'), findsNothing);
   });
 
+  testWidgets('a bundle is one row that asks to keep it whole (M95)', (
+    tester,
+  ) async {
+    final src = p.join(tmp.path, 'Game Assets All in One');
+    File(p.join(src, 'License.txt'))
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync('CC0');
+    for (final pk in ['Tanks', 'Ships', 'Planes']) {
+      for (final f in ['License.txt', 'a.png']) {
+        File(p.join(src, '2D assets', pk, f))
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync('x');
+      }
+    }
+    for (final pk in ['RPG sounds (5 sounds)', 'UI sounds (5 sounds)']) {
+      File(p.join(src, 'Audio', pk, 'a.ogg'))
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('x');
+    }
+    await openReview(tester, src);
+    await pumpUntil(tester, find.text('Import 1 packs'));
+    // The picked folder itself is the bundle.
+    const key = ValueKey('bundle-row:.');
+    final row = find.byKey(key);
+    expect(row, findsOneWidget);
+    expect(
+      find.descendant(
+        of: row,
+        matching: find.text('Bundle of 5 packs (sections: 2D assets, Audio)'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.descendant(of: row, matching: find.byType(Switch)));
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: row,
+        matching: find.text('One pack (a bundle of 5 packs if split)'),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('dropped folders join the open review, once each', (
     tester,
   ) async {

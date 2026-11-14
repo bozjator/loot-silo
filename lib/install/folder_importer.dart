@@ -36,6 +36,8 @@ class ImportItem {
     required this.totalBytes,
     this.importedAs,
     this.origin,
+    this.bundlePacks = 0,
+    this.sections = const [],
   }) : folderName = safeFolderName(p.basename(sourcePath)),
        selected = importedAs == null;
 
@@ -54,11 +56,27 @@ class ImportItem {
   /// extraction: the archive (plus the sub-folder for multi-pack archives).
   final String? origin;
 
+  /// A detected bundle (M95): how many packs it holds, and their section
+  /// headings; 0 for a pack.
+  final int bundlePacks;
+  final List<String> sections;
+
   AuthorInfo? author;
   List<String> types;
   List<String> tags;
   String folderName;
   bool selected;
+
+  /// The review's "Keep as one pack" for a bundle; saved as `layout`.
+  bool keepAsOnePack = false;
+
+  /// The `layout` to save: the review's choice for a bundle, none for a
+  /// pack (the detector decides).
+  PackLayout? get layout => bundlePacks == 0
+      ? null
+      : keepAsOnePack
+      ? PackLayout.pack
+      : PackLayout.bundle;
 }
 
 /// A reviewed list of packs to copy from [sourceRoot] into [libraryRoot].
@@ -173,7 +191,7 @@ ImportPlan planFolderImport(
   Map<String, String> origins = const {},
 }) {
   checkRoots(sourceRoot, libraryRoot);
-  final scan = scanLibrary(sourceRoot);
+  final scan = scanLibrary(sourceRoot, importSource: true);
   final imported = importedSources(libraryRoot);
   String? originOf(String id) {
     final parts = id.split('/');
@@ -182,20 +200,30 @@ ImportPlan planFolderImport(
     return parts.length == 1 ? archive : p.joinAll([archive, ...parts.skip(1)]);
   }
 
+  // A bundle is one item (its packs come along); its packs aren't items.
+  final kids = <String, List<ScannedPack>>{};
+  for (final pk in scan.packs) {
+    if (pk.bundleId case final b?) (kids[b] ??= []).add(pk);
+  }
   final items = [
     for (final pk in scan.packs)
-      ImportItem(
-        sourcePath: pk.path,
-        sourceRel: pk.id,
-        title: pk.title,
-        author: pk.author,
-        types: pk.types,
-        tags: pk.tags,
-        fileCount: pk.files.length,
-        totalBytes: pk.totalBytes,
-        origin: originOf(pk.id),
-        importedAs: imported[p.canonicalize(originOf(pk.id) ?? pk.path)],
-      ),
+      if (pk.bundleId == null)
+        ImportItem(
+          sourcePath: pk.path,
+          sourceRel: pk.id,
+          title: pk.title,
+          author: pk.author,
+          types: pk.types,
+          tags: pk.tags,
+          fileCount: pk.fileTotal ?? pk.files.length,
+          totalBytes: pk.totalBytes,
+          bundlePacks: kids[pk.id]?.length ?? 0,
+          sections: {
+            for (final k in kids[pk.id] ?? const <ScannedPack>[]) ?k.section,
+          }.toList(),
+          origin: originOf(pk.id),
+          importedAs: imported[p.canonicalize(originOf(pk.id) ?? pk.path)],
+        ),
   ];
   return ImportPlan(sourceRoot, libraryRoot, items);
 }
@@ -352,6 +380,7 @@ ImportOutcome importItem(
           tags: item.tags,
           source: PackSource.imported,
           sourcePath: item.origin ?? p.canonicalize(item.sourcePath),
+          layout: item.layout,
         )
         .write(staging.path);
 

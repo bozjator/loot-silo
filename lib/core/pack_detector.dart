@@ -1,6 +1,7 @@
 import 'package:path/path.dart' as p;
 
 import 'author_resolver.dart';
+import 'bundle_detector.dart';
 import 'fs_tree.dart';
 import 'sidecar.dart';
 import 'type_classifier.dart';
@@ -12,6 +13,9 @@ class DetectedPack {
     required this.author,
     this.authorFile,
     this.sidecar,
+    this.isBundle = false,
+    this.bundle,
+    this.section,
   });
 
   final DirNode dir;
@@ -20,6 +24,15 @@ class DetectedPack {
   /// The `ASSET_AUTHOR.txt` the author came from, if any.
   final String? authorFile;
   final PackSidecar? sidecar;
+
+  /// A bundle of packs (M95); its packs follow it in the detector's list.
+  final bool isBundle;
+
+  /// The bundle this pack belongs to.
+  final DetectedPack? bundle;
+
+  /// The pack's heading inside its bundle (`2D assets`), if any.
+  final String? section;
 
   String get title => sidecar?.title ?? dir.name;
 }
@@ -49,6 +62,19 @@ const assetExts = {...imageExts, ...audioExts, ...modelExts, ...fontExts};
 
 bool _isPreviewOrDoc(FileEntry f) =>
     _previewStem.hasMatch(f.stem) || _docStem.hasMatch(f.stem);
+
+/// A preview / mockup / cover picture or doc named so.
+bool isPreviewFile(FileEntry f) => _isPreviewOrDoc(f);
+
+/// `Previews`, `_mockups`, `_itch`…: pictures of the pack, never a pack.
+bool isPreviewDirName(String name) => _previewDirName.hasMatch(name);
+
+/// A name with a version (`v1.2`, `Version 3`).
+bool isVersionedName(String name) => _versioned.hasMatch(name);
+
+/// A Kenney-style `(N assets)` / `(N sounds)` name: a pack, whatever words
+/// come before it.
+bool isCountedName(String name) => _countedName.hasMatch(name);
 
 /// Strong evidence that a folder is a pack root: a sidecar, a license /
 /// readme / preview file at its top, or a Kenney-style `(N assets)` name.
@@ -86,13 +112,25 @@ bool _hasDirectAssets(DirNode d) =>
 ///    to no pack). Docs alone don't count.
 /// 5. Otherwise recurse. Authors are inherited from author files above.
 ///
-/// A pack is always flat: every folder below it, signalled or not, is an
-/// ordinary folder of that pack.
+/// A pack is flat: every folder below it, signalled or not, is an ordinary
+/// folder of that pack. A folder that would be a pack may be a *bundle* of
+/// packs instead ([BundleDetector]; `layout` in `asset_pack.json` decides
+/// when set).
 class PackDetector {
   final _signalBelow = <String, bool>{};
+  final _bundles = BundleDetector();
 
-  List<DetectedPack> detect(DirNode root) {
+  /// [rootMayBeBundle]: [root] is an import source; with a pack sign of its
+  /// own (Kenney's License.txt, Readme) it may be a bundle (M95).
+  List<DetectedPack> detect(DirNode root, {bool rootMayBeBundle = false}) {
     final out = <DetectedPack>[];
+    if (rootMayBeBundle &&
+        !root.hasFile(authorFileName) &&
+        hasStrongPackSignal(root) &&
+        _isBundle(root)) {
+      _add(root, guessAuthor(root), null, out);
+      return out;
+    }
     _visit(root, null, null, out, isRoot: true);
     if (out.isEmpty && _hasAssets(root)) {
       out.add(_pack(root, guessAuthor(root), null));
@@ -121,40 +159,92 @@ class PackDetector {
         author = info;
         authorFile = file;
         if (!isAuthorFolderName(d.name, info)) {
-          out.add(_pack(d, author, authorFile));
+          _add(d, author, authorFile, out);
           return;
         }
         final children = d.dirs
             .where((c) => !_previewDirName.hasMatch(c.name))
             .toList();
-        if (_hasDirectAssets(d) || !children.any(_hasWeakPackSignal)) {
-          out.add(_pack(d, author, authorFile));
+        // A child that is a bundle (M95) is its own entry even with no pack
+        // sign of its own (an author folder holding one all-in-one).
+        if (_hasDirectAssets(d) ||
+            !children.any((c) => _hasWeakPackSignal(c) || _isBundle(c))) {
+          _add(d, author, authorFile, out);
         } else {
           for (final c in children) {
-            if (_hasAssets(c)) out.add(_pack(c, author, authorFile));
+            if (_hasAssets(c)) _add(c, author, authorFile, out);
           }
         }
         return;
       }
     }
     if (!isRoot && hasStrongPackSignal(d)) {
-      out.add(_pack(d, author ?? guessAuthor(d), authorFile));
+      _add(d, author ?? guessAuthor(d), authorFile, out);
       return;
     }
     if (!isRoot && !_anySignalBelow(d)) {
       if (_hasAssets(d)) {
-        out.add(_pack(d, author ?? guessAuthor(d), authorFile));
+        _add(d, author ?? guessAuthor(d), authorFile, out);
       }
       return;
     }
     if (!isRoot && _hasDirectAssets(d)) {
-      out.add(_pack(d, author ?? guessAuthor(d), authorFile));
+      _add(d, author ?? guessAuthor(d), authorFile, out);
       return;
     }
     for (final c in d.dirs) {
       _visit(c, author, authorFile, out);
     }
   }
+
+  /// [d] as one pack, or as a bundle followed by its packs.
+  void _add(
+    DirNode d,
+    AuthorInfo? author,
+    String? authorFile,
+    List<DetectedPack> out,
+  ) {
+    final pack = _pack(d, author, authorFile);
+    final plan = _planOf(d, pack.sidecar);
+    if (plan == null) {
+      out.add(pack);
+      return;
+    }
+    final bundle = DetectedPack(
+      dir: d,
+      author: author,
+      authorFile: authorFile,
+      sidecar: pack.sidecar,
+      isBundle: true,
+    );
+    out.add(bundle);
+    for (final c in plan.packs) {
+      out.add(
+        DetectedPack(
+          dir: c.dir,
+          author: author,
+          authorFile: authorFile,
+          sidecar: c.dir.hasFile(packFileName)
+              ? PackSidecar.read(c.dir.path)
+              : null,
+          bundle: bundle,
+          section: c.section,
+        ),
+      );
+    }
+  }
+
+  /// The bundle plan of [d]: its `layout`, else the detector's guess.
+  BundlePlan? _planOf(DirNode d, PackSidecar? sidecar) =>
+      switch (sidecar?.layout) {
+        PackLayout.pack => null,
+        PackLayout.bundle => _bundles.force(d),
+        null => _bundles.guess(d),
+      };
+
+  bool _isBundle(DirNode d) =>
+      _planOf(d, d.hasFile(packFileName) ? PackSidecar.read(d.path) : null) !=
+      null;
 
   DetectedPack _pack(DirNode d, AuthorInfo? author, String? authorFile) =>
       DetectedPack(

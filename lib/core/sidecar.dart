@@ -127,6 +127,10 @@ class AuthorInfo {
 /// Where a pack came from.
 enum PackSource { manual, imported, itch }
 
+/// How a folder of packs is shown (M95): one [pack], or a [bundle] of its
+/// packs. Absent: the detector's guess.
+enum PackLayout { pack, bundle }
+
 /// Contents of an `asset_pack.json` file. Every field is optional.
 class PackSidecar {
   const PackSidecar({
@@ -143,6 +147,7 @@ class PackSidecar {
     this.animations = const {},
     this.favorite = false,
     this.favoriteFiles = const [],
+    this.layout,
     this.extra = const {},
   });
 
@@ -169,19 +174,23 @@ class PackSidecar {
   /// Starred files, relative to the pack (`favorite_files`).
   final List<String> favoriteFiles;
 
+  /// One pack or a bundle, chosen by the user (`layout`); null: guessed.
+  final PackLayout? layout;
+
   /// Unknown keys, preserved on write.
   final Map<String, Object?> extra;
 
   static const _known = {
     'title', 'types', 'tags', 'source', 'source_path', 'itch_game_id', //
     'itch_url', 'previews', 'notes', 'used_in', 'animations',
-    'favorite', 'favorite_files',
+    'favorite', 'favorite_files', 'layout',
   };
 
   factory PackSidecar.fromJson(Map<String, Object?> json) {
     List<String> strings(Object? v) =>
         v is List ? v.whereType<String>().toList() : const [];
     final source = json['source'];
+    final layout = json['layout'];
     return PackSidecar(
       title: json['title'] as String?,
       types: strings(json['types']),
@@ -197,6 +206,7 @@ class PackSidecar {
           (json['animations'] as Map?)?.cast<String, Object?>() ?? const {},
       favorite: json['favorite'] == true,
       favoriteFiles: strings(json['favorite_files']),
+      layout: PackLayout.values.where((l) => l.name == layout).firstOrNull,
       extra: {
         for (final e in json.entries)
           if (!_known.contains(e.key)) e.key: e.value,
@@ -218,6 +228,7 @@ class PackSidecar {
     if (animations.isNotEmpty) 'animations': animations,
     if (favorite) 'favorite': true,
     if (favoriteFiles.isNotEmpty) 'favorite_files': favoriteFiles,
+    'layout': ?layout?.name,
     ...extra,
   };
 
@@ -250,6 +261,7 @@ class PackSidecar {
     List<String>? previews,
     bool? favorite,
     List<String>? favoriteFiles,
+    PackLayout? layout,
   }) => PackSidecar(
     title: title ?? this.title,
     types: types ?? this.types,
@@ -264,6 +276,7 @@ class PackSidecar {
     animations: animations ?? this.animations,
     favorite: favorite ?? this.favorite,
     favoriteFiles: favoriteFiles ?? this.favoriteFiles,
+    layout: layout ?? this.layout,
     extra: extra,
   );
 }

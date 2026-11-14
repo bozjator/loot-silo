@@ -252,7 +252,7 @@ void main() {
       expect(scanLibrary(tmp.path).packs.single.preview, 'Cozy FX/x.png');
     });
 
-    test('a Kenney-like all-in-one in an author folder is one pack', () {
+    test('a Kenney-like all-in-one in an author folder is a bundle (M95)', () {
       writeFiles(tmp.path, [
         for (final theme in ['Tanks', 'Planes', 'Ships']) ...[
           'Kenney/Game Assets All in One/$theme (12 assets)/License.txt',
@@ -261,15 +261,21 @@ void main() {
       ]);
       author('Kenney', 'Kenney');
       final packs = scanLibrary(tmp.path).packs;
-      expect(packs.map((x) => x.id), ['Kenney/Game Assets All in One']);
-      expect(packs.single.files, hasLength(6));
-      expect(packs.single.author!.user, 'Kenney');
-      // Its folders become Expanded tiles like any pack's.
-      expect(packs.single.subFolders.map((s) => s.folder), [
-        'Planes (12 assets)',
-        'Ships (12 assets)',
-        'Tanks (12 assets)',
+      const bundle = 'Kenney/Game Assets All in One';
+      expect(packs.map((x) => x.id), [
+        bundle,
+        '$bundle/Planes (12 assets)',
+        '$bundle/Ships (12 assets)',
+        '$bundle/Tanks (12 assets)',
       ]);
+      expect(packs.first.isBundle, isTrue);
+      expect(packs.first.files, isEmpty);
+      expect(packs.first.fileTotal, 6);
+      for (final c in packs.skip(1)) {
+        expect(c.bundleId, bundle);
+        expect(c.files, hasLength(2));
+        expect(c.author!.user, 'Kenney');
+      }
     });
 
     test('a folder with its own assets is one pack, signals below or not', () {

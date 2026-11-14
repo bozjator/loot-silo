@@ -62,10 +62,20 @@ class HelpScreen extends StatelessWidget {
                   'the ones you don\'t want.',
                 ),
                 const _P(
-                  'A big pack, such as a collection with one folder per '
-                  'theme, stays one pack: browse its folders in the By folder '
-                  'view, or show them as their own tiles in the dashboard\'s '
-                  'Expanded view.',
+                  'A folder that holds several packs, such as an all-in-one '
+                  'collection, becomes a bundle: one tile that opens on its '
+                  'packs, grouped under its sections (2D assets, Audio…). '
+                  'Searches and filters, and the dashboard\'s Expanded view, '
+                  'list the packs inside bundles directly. The review asks '
+                  'before importing one ("Keep as one pack").',
+                ),
+                const _P(
+                  'Change your mind any time: "Merge into one pack" on a '
+                  'bundle\'s page, or "Split into packs…" on a pack with '
+                  'folders. Nothing moves on disk; the choice is saved in '
+                  'the folder\'s $packFileName, and each pack keeps its own '
+                  'details. A pack that stays one pack shows its folders in '
+                  'the By folder view and, in the Expanded view, as tiles.',
                 ),
                 const _P(
                   'What you set on a pack (tags, notes, stars, animation '

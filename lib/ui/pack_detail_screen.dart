@@ -29,6 +29,7 @@ import '../state/providers.dart';
 import '../state/settings.dart';
 import 'format.dart';
 import 'animation_grid.dart';
+import 'bundle_screen.dart';
 import 'card_focus.dart';
 import 'folder_groups.dart';
 import 'image_viewer.dart';
@@ -102,6 +103,8 @@ class PackDetailScreen extends ConsumerWidget {
         ),
       );
     }
+    // A bundle (M95) has a page of its own: its packs.
+    if (pack.isBundle) return BundleScreen(bundle: pack);
     final contents = ref.watch(packContentsProvider(packId));
     final favoriteFiles = ref.watch(
       favoritesProvider.select((f) => f.filesOf(packId)),
@@ -914,6 +917,9 @@ class _HeaderActions extends StatelessWidget {
           icon: const Icon(Icons.storefront_outlined),
           onPressed: () => launchUrl(Uri.parse(url)),
         ),
+      // A pack of folders can be split into a bundle (M95).
+      if (pack.bundleId == null && canSplitIntoPacks(pack.path))
+        SplitPackButton(pack: pack),
       IconButton(
         tooltip: 'Open folder',
         visualDensity: VisualDensity.compact,
