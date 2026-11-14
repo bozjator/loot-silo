@@ -3,6 +3,7 @@ import 'dart:isolate';
 
 import 'package:path/path.dart' as p;
 
+import '../core/itch_media.dart';
 import '../core/sidecar.dart';
 import '../core/type_classifier.dart';
 import '../core/fs_tree.dart';
@@ -11,9 +12,6 @@ import '../install/folder_importer.dart';
 import 'itch_api.dart';
 import 'itch_matcher.dart';
 import 'itch_page_scraper.dart';
-
-/// Folder for itch covers and screenshots inside a pack.
-const itchMediaDir = '_itch';
 
 /// Uploads worth installing: no platform builds (exe/apk/app); the rest
 /// (asset archives, license PDFs, loose files) all go in.
@@ -196,13 +194,21 @@ Future<ItchInstallResult> installItchGame(
       for (final (rel, entry) in readTree(packDir.path).allFiles())
         (rel, entry),
     ];
+    // Covers and screenshots never decide the types (M92).
+    final types = [
+      for (final t in classifyPack(game.title, [
+        for (final f in files)
+          if (!isItchMedia(f.$1)) f,
+      ]))
+        t.id,
+    ];
     final item = ImportItem(
       sourcePath: packDir.path,
       sourceRel: game.title,
       title: game.title,
       author: authorFor(game.user, libraryRoot),
-      types: [for (final t in classifyPack(game.title, files)) t.id],
-      tags: suggestTags(game.title),
+      types: types,
+      tags: suggestTags(game.title, types: types),
       fileCount: files.length,
       totalBytes: files.fold(0, (n, f) => n + f.$2.size),
       origin: game.url,

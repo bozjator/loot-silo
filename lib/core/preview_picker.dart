@@ -1,6 +1,7 @@
 import 'package:path/path.dart' as p;
 
 import 'fs_tree.dart';
+import 'itch_media.dart';
 import 'material_sets.dart';
 import 'natural_order.dart';
 import 'sidecar.dart';
@@ -100,7 +101,7 @@ PreviewPick? pickPreviewRanked(
     return list.first;
   }
 
-  final itch = best(images.where((f) => f.$1.startsWith('_itch/')));
+  final itch = best(images.where((f) => isItchMedia(f.$1)));
   if (itch != null) {
     final covers = images.where((f) => f.$1.startsWith('_itch/cover'));
     return (path: covers.isNotEmpty ? covers.first.$1 : itch.$1, rank: 2);
@@ -142,7 +143,7 @@ List<String> previewCandidates(Iterable<String> images) {
     final stem = p.basenameWithoutExtension(rel);
     if (_promo.hasMatch(stem)) return false;
     final dirs = p.dirname(rel);
-    return rel.startsWith('_itch/') ||
+    return isItchMedia(rel) ||
         _previewWord.hasMatch(stem) ||
         _allStem.hasMatch(stem) ||
         (dirs != '.' && _previewWord.hasMatch(dirs));
@@ -151,8 +152,8 @@ List<String> previewCandidates(Iterable<String> images) {
   int depth(String rel) => '/'.allMatches(rel).length;
   final out = images.where(candidate).toList()
     ..sort((a, b) {
-      final ia = a.startsWith('_itch/') ? 0 : 1;
-      final ib = b.startsWith('_itch/') ? 0 : 1;
+      final ia = isItchMedia(a) ? 0 : 1;
+      final ib = isItchMedia(b) ? 0 : 1;
       if (ia != ib) return ia.compareTo(ib);
       final r = _rank(a).compareTo(_rank(b));
       if (r != 0) return r;

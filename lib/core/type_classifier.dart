@@ -215,8 +215,12 @@ const tagKeywords = <String, String>{
   'animation': 'animated', 'animated': 'animated', 'spritesheet': 'spritesheet',
 };
 
-/// Suggests tags from the folder names above a pack and its title.
-List<String> suggestTags(String relativePath) {
+/// Pack types that are sound only.
+const _audioTypes = {'sfx', 'music'};
+
+/// Suggests tags from the folder names above a pack and its title; with the
+/// pack's [types], an audio-only pack gets no `vfx`.
+List<String> suggestTags(String relativePath, {List<String> types = const []}) {
   final lower = relativePath.toLowerCase();
   final words = pathWords(relativePath);
   final tags = <String>{
@@ -234,7 +238,12 @@ List<String> suggestTags(String relativePath) {
   if (lower.contains('pixel art') || lower.contains('pixelart')) {
     tags.add('pixel-art');
   }
-  // "Sound Effects" / "Cozy FX" are audio, not visual effects.
-  if (tags.contains('sfx') || tags.contains('music')) tags.remove('vfx');
+  // "Sound Effects" / "Cozy FX" are audio, not visual effects; so is any
+  // "fx" in an audio-only pack.
+  if (tags.contains('sfx') ||
+      tags.contains('music') ||
+      (types.isNotEmpty && types.every(_audioTypes.contains))) {
+    tags.remove('vfx');
+  }
   return tags.toList()..sort();
 }

@@ -112,7 +112,9 @@ class HelpScreen extends StatelessWidget {
                   'screenshot or similar, else an animation or its largest '
                   'image (texture maps last). The header of a pack page '
                   'steps through all its previews; "All previews" shows them '
-                  'together.',
+                  'together. The itch.io cover and screenshots (in the '
+                  'pack\'s _itch folder) show there only: they aren\'t '
+                  'listed with the pack\'s files, counted or searched.',
                 ),
                 _P(
                   'To choose your own, use the pencil on the header\'s '

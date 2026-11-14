@@ -5235,6 +5235,8 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, find.textContaining('Images ('));
     await tester.pump(const Duration(seconds: 1));
     expect(find.textContaining('Audio (3)'), findsOneWidget);
+    // M92: the cover and screenshot aren't the pack's images.
+    expect(find.textContaining('Images (3)'), findsOneWidget);
     await tester.tap(find.textContaining('Images ('));
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.text('By folder').first);
@@ -5248,6 +5250,19 @@ A **16×16** knight with *walk* and *idle* animations.
         reason: folder,
       );
     }
+    expect(find.text('Itch', skipOffstage: false), findsNothing);
+
+    // M92: the Files tab lists no `_itch` entry; the header counts 9 files
+    // (11 on disk) and its carousel starts at the itch cover.
+    await tester.tap(find.textContaining('Other files ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.textContaining('_itch', skipOffstage: false), findsNothing);
+    expect(find.text('Cozy Tunes/Read Me.txt'), findsOneWidget);
+    expect(find.textContaining('9 files'), findsWidgets);
+    expect(find.textContaining('· cover.png'), findsOneWidget);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm92_itch_hidden', settle: false);
 
     // Back on the dashboard, Expanded shows its folders as tiles.
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);

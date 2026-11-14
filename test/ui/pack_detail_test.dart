@@ -4661,6 +4661,15 @@ void main() {
       // All three folders' sounds are the pack's.
       await pumpUntil(tester, find.textContaining('Audio ('));
       expect(find.textContaining('Audio (3)'), findsOneWidget);
+      // M92: `_itch` is metadata: no Images tab for the cover, not in the
+      // other files, not counted.
+      expect(find.textContaining('Images ('), findsNothing);
+      expect(find.textContaining('Other files (3)'), findsOneWidget);
+      expect(find.textContaining('6 files'), findsWidgets);
+      await tester.tap(find.textContaining('Other files ('));
+      await settle(tester);
+      expect(find.textContaining('_itch', skipOffstage: false), findsNothing);
+      expect(find.text('Cozy FX/License Agreement.pdf'), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await settle(tester);
       await tester.pump(const Duration(seconds: 1));

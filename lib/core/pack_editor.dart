@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 
 import 'animation_detector.dart';
 import 'file_search.dart';
+import 'itch_media.dart';
 import 'material_sets.dart';
 import 'model_formats.dart';
 import 'natural_order.dart';
@@ -29,6 +30,7 @@ class PackContents {
     required this.detected,
     required this.sizes,
     required this.sidecar,
+    this.itchMedia = const [],
   });
 
   /// Paths relative to the pack, sorted. [images] leaves out the files
@@ -50,6 +52,12 @@ class PackContents {
   final List<SpriteAnim> detected;
   final Map<String, int> sizes;
   final PackSidecar? sidecar;
+
+  /// The pack's `_itch` images (cover, screenshots), sorted: metadata, in no
+  /// tab and no folder group; only the header carousel and the preview
+  /// choice ([previewable]) see them. They pass through [within],
+  /// [matching] and [only] unchanged.
+  final List<String> itchMedia;
 
   /// Only what lies under [folder] (pack-relative, no trailing slash).
   PackContents within(String folder) {
@@ -73,6 +81,7 @@ class PackContents {
       ],
       sizes: sizes,
       sidecar: sidecar,
+      itchMedia: itchMedia,
     );
   }
 
@@ -107,6 +116,7 @@ class PackContents {
       ],
       sizes: sizes,
       sidecar: sidecar,
+      itchMedia: itchMedia,
     );
   }
 
@@ -131,6 +141,7 @@ class PackContents {
       ],
       sizes: sizes,
       sidecar: sidecar,
+      itchMedia: itchMedia,
     );
   }
 
@@ -161,10 +172,11 @@ class PackContents {
     for (final a in animations) a.path: a,
   };
 
-  /// Every file that can be a preview: [images] plus the animations
-  /// (which [images] leaves out), sorted.
+  /// Every file that can be a preview: [images], the `_itch` images and
+  /// the animations (which [images] leaves out), sorted.
   List<String> get previewable =>
-      [...images, for (final a in shownDetected) a.path]..sort(naturalCompare);
+      [...images, ...itchMedia, for (final a in shownDetected) a.path]
+        ..sort(naturalCompare);
 
   /// The previews the user chose (sidecar `previews`) that still exist, in
   /// their order; empty when none were chosen.
@@ -201,9 +213,23 @@ PackContents loadPackContents(String packPath, List<(String, int)> files) {
   final sidecar = PackSidecar.read(packPath);
   final images = <String>[], audio = <String>[], other = <String>[];
   final models = <String>[];
+  // `_itch` is metadata: its pictures feed the carousel only, the rest of
+  // it nothing.
+  final itchMedia = <String>[
+    for (final (rel, _) in files)
+      if (isItchMedia(rel) &&
+          previewExts.contains(
+            p.extension(rel).toLowerCase().replaceFirst('.', ''),
+          ))
+        rel,
+  ]..sort(naturalCompare);
+  final content = [
+    for (final f in files)
+      if (!isItchMedia(f.$1)) f,
+  ];
   final (materials, rest) = groupMaterials([
-    for (final (rel, _) in files) rel,
-  ], mtlx: readMtlxFiles(packPath, files));
+    for (final (rel, _) in content) rel,
+  ], mtlx: readMtlxFiles(packPath, content));
   for (final rel in rest) {
     final ext = p.extension(rel).toLowerCase().replaceFirst('.', '');
     // Only formats the engine decodes count as images; PSD/Aseprite
@@ -233,7 +259,7 @@ PackContents loadPackContents(String packPath, List<(String, int)> files) {
     manual: manualAnimations(sidecar?.animations ?? const {}),
     maxPixelScans: worthPixelScan(packPath) ? 24 : 0,
     maxWordScans: detailWordScans,
-    atlases: atlasImages([for (final (rel, _) in files) rel]),
+    atlases: atlasImages([for (final (rel, _) in content) rel]),
   );
   // An animation is listed in the Animations tab only; "Not an animation"
   // brings it back here.
@@ -258,6 +284,7 @@ PackContents loadPackContents(String packPath, List<(String, int)> files) {
     detected: detected,
     sizes: {for (final (rel, size) in files) rel: size},
     sidecar: sidecar,
+    itchMedia: itchMedia,
   );
 }
 

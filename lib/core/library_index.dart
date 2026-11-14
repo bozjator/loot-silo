@@ -115,7 +115,7 @@ class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("
@@ -190,7 +190,7 @@ class LibraryIndex extends _$LibraryIndex {
             itchUrl: Value(pk.sidecar?.itchUrl),
             preview: Value(pk.preview),
             previewAnim: Value(pk.previewAnim),
-            fileCount: pk.files.length,
+            fileCount: pk.contentFiles.length,
             totalBytes: pk.totalBytes,
           ),
         );
@@ -202,7 +202,7 @@ class LibraryIndex extends _$LibraryIndex {
               size: pk.sizes[i],
             ),
         ]);
-        for (final rel in pk.files) {
+        for (final rel in pk.contentFiles) {
           b.customStatement(
             'INSERT INTO file_fts (pack_id, rel_path, words) VALUES (?, ?, ?)',
             [pk.id, rel, fileSearchText(rel)],
@@ -231,7 +231,7 @@ class LibraryIndex extends _$LibraryIndex {
           pk.author?.user ?? '',
           pk.tags.join(' '),
           pk.types.join(' '),
-          _fileText(pk.files),
+          _fileText(pk.contentFiles),
         ],
       );
     }
@@ -250,7 +250,7 @@ class LibraryIndex extends _$LibraryIndex {
 
   /// File paths plus their camelCase-split words, so `HumanSoldier.png`
   /// matches "soldier".
-  static String _fileText(List<String> files) {
+  static String _fileText(Iterable<String> files) {
     final words = <String>{};
     for (final f in files) {
       words.add(f);

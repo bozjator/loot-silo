@@ -38,7 +38,9 @@ void main() {
     ];
     final c = loadPackContents(tmp.path, files);
     // Hero/Idle.png is an animation, listed in that tab only.
-    expect(c.images, ['_itch/cover.png', 'preview.png', 'tiles.png']);
+    // `_itch` is metadata (M92): carousel only, in no tab.
+    expect(c.images, ['preview.png', 'tiles.png']);
+    expect(c.itchMedia, ['_itch/cover.png']);
     expect(c.audio, ['sfx/hit.wav']);
     expect(c.other, [
       'license.txt',

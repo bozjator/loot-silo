@@ -37,7 +37,7 @@ final _countedName = RegExp(
   caseSensitive: false,
 );
 final _previewDirName = RegExp(
-  r'^_?(mockups?|previews?|screenshots?|examples?|samples?|showcase)$',
+  r'^_?(mockups?|previews?|screenshots?|examples?|samples?|showcase|itch)$',
   caseSensitive: false,
 );
 final _versioned = RegExp(r'(^|[^a-z])v(ersion)?\s?\d', caseSensitive: false);
