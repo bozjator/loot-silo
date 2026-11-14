@@ -52,7 +52,7 @@ void main() {
           builder: (context, ref, _) {
             // Load the library, for its authors and tags.
             ref.watch(libraryProvider);
-            return MaterialApp(home: FolderImportScreen(sourcePath: source));
+            return MaterialApp(home: FolderImportScreen(paths: [source]));
           },
         ),
       ),
@@ -82,6 +82,46 @@ void main() {
     expect(find.text('Loose Sounds'), findsOneWidget);
     // No "." line under the title.
     expect(find.text('.'), findsNothing);
+  });
+
+  testWidgets('dropped folders join the open review, once each', (
+    tester,
+  ) async {
+    final sounds = p.join(tmp.path, 'Loose Sounds');
+    copyTree('test/fixtures/library_src/sfx/Loose Sounds', sounds);
+    final bundle = p.join(tmp.path, 'Mega Bundle v3');
+    copyTree('test/fixtures/library_src/bundles/Mega Bundle v3', bundle);
+    await openReview(tester, sounds);
+    await pumpUntil(tester, find.text('Import 1 packs'));
+    expect(find.text('Import folder'), findsOneWidget);
+
+    expect(FolderImportScreen.isOpen, isTrue);
+    expect(FolderImportScreen.addToOpen([bundle, sounds]), isTrue);
+    await pumpUntil(tester, find.text('Import 2 packs'));
+    // Planning done: the button is back.
+    for (var i = 0; i < 200; i++) {
+      final button = tester.widget<ButtonStyleButton>(
+        find.ancestor(
+          of: find.text('Import 2 packs'),
+          matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+        ),
+      );
+      if (button.onPressed != null) break;
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    expect(
+      find.textContaining('2 packs found in 2 folders', findRichText: true),
+      findsOneWidget,
+    );
+    expect(find.text('Import folders'), findsOneWidget);
+    expect(find.text('Loose Sounds'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    expect(FolderImportScreen.isOpen, isFalse);
+    expect(FolderImportScreen.addToOpen([sounds]), isFalse);
   });
 
   testWidgets('the source path shows when it adds something', (tester) async {

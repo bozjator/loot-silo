@@ -1,16 +1,11 @@
-import 'dart:io';
-
-import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../install/archive_extractor.dart';
 import '../state/dashboard.dart';
 import '../state/itch.dart' show itchKeyProvider;
 import '../state/providers.dart';
 import '../state/settings.dart';
-import 'archive_import.dart';
 import 'credits_screen.dart';
 import 'dashboard.dart';
 import 'folder_import_screen.dart';
@@ -23,6 +18,7 @@ import 'session.dart';
 import '../version.dart';
 import 'shortcuts.dart';
 import 'widgets/branding.dart';
+import 'widgets/drop_zone.dart';
 import 'widgets/measure_size.dart';
 
 /// Root widget of Loot Silo.
@@ -61,18 +57,8 @@ class _AppState extends ConsumerState<LootSiloApp> {
   Map<ShortcutActivator, VoidCallback> get _appShortcuts {
     final rescan = _shortcut((_) => rescanLibrary(ref));
     return {
-      ...AppKeys.importFolder.bind(
-        _shortcut(
-          (c) => importFolder(c, ref),
-          notOn: FolderImportScreen.routeName,
-        ),
-      ),
-      ...AppKeys.importArchive.bind(
-        _shortcut(
-          (c) => importArchive(c, ref),
-          notOn: FolderImportScreen.routeName,
-        ),
-      ),
+      ...AppKeys.importFolder.bind(_shortcut((c) => importFolder(c, ref))),
+      ...AppKeys.importArchive.bind(_shortcut((c) => importArchive(c, ref))),
       ...AppKeys.rescan.bind(rescan),
       // Pack tabs: only while the tabs are shown (no page over them).
       ...AppKeys.nextTab.bind(_onTabs((t) => t.cycle(1))),
@@ -147,26 +133,18 @@ class _AppState extends ConsumerState<LootSiloApp> {
   }
 }
 
-/// Picks a folder and opens the import review; rescans after an import.
+/// Picks a folder and imports it; rescans after an import.
 Future<void> importFolder(BuildContext context, WidgetRef ref) async {
   final source = await ref.read(directoryPickerProvider)('Import folder');
   if (source == null || !context.mounted) return;
-  final imported = await Navigator.of(context, rootNavigator: true).push<bool>(
-    MaterialPageRoute(
-      settings: const RouteSettings(name: FolderImportScreen.routeName),
-      builder: (_) => FolderImportScreen(sourcePath: source),
-    ),
-  );
-  if (imported == true) await ref.read(libraryProvider.notifier).rescan();
+  await importPaths(context, ref, [source]);
 }
 
 /// Picks archives and imports them; rescans after an import.
 Future<void> importArchive(BuildContext context, WidgetRef ref) async {
   final paths = await ref.read(archivePickerProvider)();
   if (paths.isEmpty || !context.mounted) return;
-  if (await importArchives(context, ref, paths)) {
-    await ref.read(libraryProvider.notifier).rescan();
-  }
+  await importPaths(context, ref, paths);
 }
 
 /// Rescans the library unless a scan is already running.
@@ -198,51 +176,6 @@ class HomeScreen extends ConsumerWidget {
   Future<void> _chooseLibrary(BuildContext context, WidgetRef ref) async {
     final path = await ref.read(directoryPickerProvider)('Use as library');
     if (path != null) ref.read(settingsProvider.notifier).setLibraryPath(path);
-  }
-
-  /// Dropped folders go through the folder import, archives through the
-  /// archive import; anything else is reported.
-  Future<void> _onDrop(
-    BuildContext context,
-    WidgetRef ref,
-    List<String> paths,
-  ) async {
-    final folders = [
-      for (final path in paths)
-        if (FileSystemEntity.isDirectorySync(path)) path,
-    ];
-    final archives = [
-      for (final path in paths)
-        if (archiveKindOf(path) != null && File(path).existsSync()) path,
-    ];
-    final skipped = paths.length - folders.length - archives.length;
-    if (skipped > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Skipped $skipped dropped '
-            '${skipped == 1 ? 'item' : 'items'}: only folders and '
-            'zip / rar / 7z / tar archives can be imported',
-          ),
-        ),
-      );
-    }
-    var imported = false;
-    if (archives.isNotEmpty) {
-      imported = await importArchives(context, ref, archives);
-    }
-    for (final folder in folders) {
-      if (!context.mounted) break;
-      imported |=
-          await Navigator.of(context, rootNavigator: true).push<bool>(
-            MaterialPageRoute(
-              settings: const RouteSettings(name: FolderImportScreen.routeName),
-              builder: (_) => FolderImportScreen(sourcePath: folder),
-            ),
-          ) ??
-          false;
-    }
-    if (imported) await ref.read(libraryProvider.notifier).rescan();
   }
 
   @override
@@ -338,7 +271,9 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       body: DropZone(
-        onDrop: (paths) => _onDrop(context, ref, paths),
+        // Under an open import review, which takes the drops itself.
+        enabled: () => !FolderImportScreen.isOpen,
+        onDrop: (paths) => importPaths(context, ref, paths),
         child: switch (library) {
           _ when waiting => _ScanningLibrary(path: libraryPath),
           AsyncValue(:final value?)
@@ -482,69 +417,6 @@ class _ImportMenu extends ConsumerWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Accepts files dragged in from the desktop and shows a hint while
-/// something hovers.
-class DropZone extends StatefulWidget {
-  const DropZone({super.key, required this.onDrop, required this.child});
-
-  final ValueChanged<List<String>> onDrop;
-  final Widget child;
-
-  @override
-  State<DropZone> createState() => _DropZoneState();
-}
-
-class _DropZoneState extends State<DropZone> {
-  var _hovering = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return DropTarget(
-      onDragEntered: (_) => setState(() => _hovering = true),
-      onDragExited: (_) => setState(() => _hovering = false),
-      onDragDone: (details) {
-        setState(() => _hovering = false);
-        widget.onDrop([for (final f in details.files) f.path]);
-      },
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          widget.child,
-          if (_hovering)
-            IgnorePointer(
-              child: Container(
-                margin: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: scheme.primaryContainer.withValues(alpha: 0.85),
-                  border: Border.all(color: scheme.primary, width: 3),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.file_download,
-                        size: 64,
-                        color: scheme.primary,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Drop archives or folders to import',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
     );
   }
 }
