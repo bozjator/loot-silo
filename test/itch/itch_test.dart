@@ -366,7 +366,8 @@ void main() {
     expect(sc.source, PackSource.itch);
     expect(sc.itchGameId, 1);
     expect(sc.itchUrl, 'https://orcmaker.itch.io/orc-pack');
-    expect(sc.cover, '_itch/cover.png');
+    // The picker puts the itch cover first; nothing is chosen for it.
+    expect(sc.previews, isEmpty);
     expect(sc.sourcePath, 'https://orcmaker.itch.io/orc-pack');
     final author = AuthorInfo.read(
       p.join(library.path, 'Orcs Inc', authorFileName),

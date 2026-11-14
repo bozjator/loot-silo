@@ -33,6 +33,7 @@ import 'folder_groups.dart';
 import 'image_viewer.dart';
 import 'materials_tab.dart';
 import 'models_tab.dart';
+import 'preview_picker_dialog.dart';
 import 'double_click.dart';
 import 'reveal.dart';
 import 'session.dart';
@@ -768,6 +769,7 @@ class _Header extends StatelessWidget {
           box: _Carousel(
             key: const ValueKey('header-preview'),
             pack: pack,
+            contents: contents,
             images: contents.carousel(pack.preview),
             sizes: contents.sizes,
           ),
@@ -1013,25 +1015,48 @@ class _SlimHeader extends StatelessWidget {
 
 /// The tile preview (animated when it's a sheet) plus covers and named
 /// previews, one at a time.
-class _Carousel extends StatefulWidget {
+class _Carousel extends ConsumerStatefulWidget {
   const _Carousel({
     super.key,
     required this.pack,
+    required this.contents,
     required this.images,
     this.sizes = const {},
   });
 
   final PackRow pack;
+  final PackContents contents;
   final List<String> images;
   final Map<String, int> sizes;
 
   @override
-  State<_Carousel> createState() => _CarouselState();
+  ConsumerState<_Carousel> createState() => _CarouselState();
 }
 
-class _CarouselState extends State<_Carousel> {
+class _CarouselState extends ConsumerState<_Carousel> {
   var _index = 0;
   var _hover = false;
+
+  Future<void> _choose() async {
+    // Read before the dialog: the header may collapse (and this widget
+    // unmount) once the pointer leaves it.
+    final library = ref.read(libraryProvider.notifier);
+    final pack = widget.pack;
+    final custom = widget.contents.chosenPreviews.isNotEmpty;
+    final next = await showDialog<List<String>>(
+      context: context,
+      builder: (_) => PreviewPickerDialog(
+        packPath: pack.path,
+        files: widget.contents.previewable,
+        initial: widget.images,
+        custom: custom,
+      ),
+    );
+    if (next == null || !packExists(pack.path)) return;
+    savePreviews(pack.path, next);
+    if (mounted) setState(() => _index = 0);
+    await library.reload();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1081,6 +1106,18 @@ class _CarouselState extends State<_Carousel> {
                         child: view,
                       ),
                     ),
+                  ),
+                ),
+              if (_hover && widget.contents.previewable.isNotEmpty)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: IconButton.filledTonal(
+                    key: const ValueKey('edit-previews'),
+                    tooltip: 'Choose previews',
+                    mouseCursor: clickCursor,
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: _choose,
                   ),
                 ),
               if (images.length > 1) ...[
@@ -2066,6 +2103,12 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
                   files: [file.path],
                   image: file.path,
                   open: file.path,
+                  preview: PreviewTarget(
+                    packId: pack.id,
+                    packPath: pack.path,
+                    preview: pack.preview,
+                    file: rel,
+                  ),
                 ),
           child: ItemCard(
             key: ValueKey('image:$rel'),
@@ -2146,6 +2189,12 @@ class _AnimationsTab extends ConsumerWidget {
     animations: contents.animations,
     detected: contents.shownDetected,
     sizes: contents.sizes,
+    previewFor: (rel) => PreviewTarget(
+      packId: pack.id,
+      packPath: pack.path,
+      preview: pack.preview,
+      file: rel,
+    ),
     onEdit: (anim) => showDialog<void>(
       context: context,
       builder: (_) => _AnimationEditorDialog(pack: pack, path: anim.path),

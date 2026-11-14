@@ -40,6 +40,7 @@ class AnimationGrid extends ConsumerStatefulWidget {
     this.sizes = const {},
     this.favoriteFiles = const {},
     this.onToggleFavorite,
+    this.previewFor,
   });
 
   /// Keys the scroll position; the pack id.
@@ -58,6 +59,10 @@ class AnimationGrid extends ConsumerStatefulWidget {
   /// is set.
   final Set<String> favoriteFiles;
   final ValueChanged<String>? onToggleFavorite;
+
+  /// The right-click menu's cover / previews target for an animation's
+  /// file; none without it.
+  final PreviewTarget Function(String rel)? previewFor;
 
   @override
   ConsumerState<AnimationGrid> createState() => _AnimationGridState();
@@ -224,6 +229,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                       key: ValueKey(anims[i].path),
                       packPath: widget.packPath,
                       anim: anims[i],
+                      preview: widget.previewFor?.call(anims[i].path),
                       edited: anims[i] != widget.detected[i],
                       focused: _focused == i,
                       dimmed: _focused != null && _focused != i,
@@ -303,6 +309,7 @@ class _AnimationTile extends StatelessWidget {
     super.key,
     required this.packPath,
     required this.anim,
+    this.preview,
     required this.edited,
     required this.focused,
     required this.dimmed,
@@ -316,6 +323,7 @@ class _AnimationTile extends StatelessWidget {
 
   final String packPath;
   final SpriteAnim anim;
+  final PreviewTarget? preview;
 
   /// The favorites star in the stage's top-right corner: shown on hover,
   /// always when [starred]; none without [onToggleStar].
@@ -343,6 +351,7 @@ class _AnimationTile extends StatelessWidget {
         image: file,
         open: file,
         gif: (name: a.label, make: () => makeAnimationGif(packPath, a)),
+        preview: preview,
       ),
       child: ItemCard(
         path: a.path,

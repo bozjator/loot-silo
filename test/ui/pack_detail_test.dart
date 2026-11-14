@@ -2531,7 +2531,8 @@ void main() {
       await tab(tester, 'Images');
       final card = find.byKey(const ValueKey('image:heroes/a.png'));
       await rightClick(tester, card);
-      expect(items(tester), all);
+      // a.png is the cover already: only Remove from previews.
+      expect(items(tester), [...all, 'removePreview']);
       // Nothing the card's icons already do, and no Play.
       for (final text in [
         'Show in file manager',
@@ -2555,6 +2556,7 @@ void main() {
         'Copy path',
         'Open',
         'Open with…',
+        'Remove from pack previews',
       ]);
       await pick(tester, 'copyImage');
       expect(clip.calls.last, 'image:${abs('heroes/a.png')}');
@@ -2602,7 +2604,35 @@ void main() {
         tester,
         find.byKey(const ValueKey('image:heroes/c.png')),
       );
-      expect(items(tester), all);
+      expect(items(tester), [...all, 'useAsCover', 'addPreview']);
+    });
+
+    testWidgets('Use as pack cover / Add / Remove save the previews', (
+      tester,
+    ) async {
+      await open(tester);
+      await tab(tester, 'Images');
+      final pack = p.dirname(abs('x'));
+      List<Object?>? saved() => PackSidecar.read(pack)?.previews;
+      final c = find.byKey(const ValueKey('image:heroes/c.png'));
+      await rightClick(tester, c);
+      await pick(tester, 'useAsCover');
+      await tester.pumpAndSettle();
+      // The automatic previews follow it (a.png was the tile preview).
+      expect(saved(), ['heroes/c.png', 'heroes/a.png']);
+      expect(find.text('Cover set'), findsOneWidget);
+      await rightClick(
+        tester,
+        find.byKey(const ValueKey('image:heroes/b.png')),
+      );
+      await pick(tester, 'addPreview');
+      await tester.pumpAndSettle();
+      expect(saved(), ['heroes/c.png', 'heroes/a.png', 'heroes/b.png']);
+      await rightClick(tester, c);
+      expect(items(tester), [...all, 'removePreview']);
+      await pick(tester, 'removePreview');
+      await tester.pumpAndSettle();
+      expect(saved(), ['heroes/a.png', 'heroes/b.png']);
     });
 
     testWidgets('animation card: copies its one image file', (tester) async {
@@ -2619,7 +2649,12 @@ void main() {
       );
       await rightClick(tester, card.first);
       // The two GIF items first, then the image card's (M75).
-      expect(items(tester), ['copyGif', 'copyGifFile', ...all]);
+      expect(items(tester), [
+        'copyGif',
+        'copyGifFile',
+        ...all,
+        'removePreview',
+      ]);
       expect(labels(tester), [
         'Copy as GIF to clipboard',
         'Copy as GIF file',
@@ -2628,6 +2663,7 @@ void main() {
         'Copy path',
         'Open',
         'Open with…',
+        'Remove from pack previews',
       ]);
       await pick(tester, 'copyFiles');
       expect(clip.calls.last, 'files:${abs('fx/Explosion(16x16).png')}');
@@ -2772,7 +2808,7 @@ void main() {
         tester,
         find.byKey(const ValueKey('image:heroes/a.png')),
       );
-      expect(items(tester), ['copyPath', 'open']);
+      expect(items(tester), ['copyPath', 'open', 'removePreview']);
     });
   });
 
@@ -5088,6 +5124,66 @@ void main() {
       }
       expect(find.text('10 / 10'), findsOneWidget);
       expect(find.textContaining('mockups/mockup10.png'), findsOneWidget);
+    });
+
+    testWidgets('the edit icon chooses previews; reset goes back', (
+      tester,
+    ) async {
+      await openKnight(tester, files: const [], images: mockups(3));
+      final pack = p.join(tmp.path, 'library', 'HeroMaker', 'Knight Pack');
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(
+        location: tester.getCenter(
+          find.byKey(const ValueKey('header-preview')),
+        ),
+      );
+      addTearDown(mouse.removePointer);
+      await tester.pump();
+      Future<void> edit() async {
+        await mouse.moveTo(
+          tester.getCenter(find.byKey(const ValueKey('header-preview'))),
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('edit-previews')));
+        await tester.pumpAndSettle();
+      }
+
+      await edit();
+      expect(find.text('Choose previews'), findsOneWidget);
+      // The automatic three start chosen; reset is off, Save waits for a
+      // change.
+      Finder pick(String n) =>
+          find.byKey(ValueKey('pick:mockups/mockup$n.png'));
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const ValueKey('previews-reset')))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const ValueKey('previews-save')))
+            .onPressed,
+        isNull,
+      );
+      // Unpick 1 and 2, pick 1 again: 3, 1.
+      await tester.tap(pick('1'));
+      await tester.tap(pick('2'));
+      await tester.tap(pick('1'));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('previews-save')));
+      await tester.pumpAndSettle();
+      expect(PackSidecar.read(pack)!.previews, [
+        'mockups/mockup3.png',
+        'mockups/mockup1.png',
+      ]);
+      await pumpUntil(tester, find.textContaining('1 / 2 · mockup3.png'));
+
+      await edit();
+      await tester.tap(find.byKey(const ValueKey('previews-reset')));
+      await tester.pumpAndSettle();
+      expect(PackSidecar.read(pack)!.previews, isEmpty);
+      await pumpUntil(tester, find.textContaining('1 / 3 · mockup1.png'));
     });
 
     testWidgets('the previews grid opens one in the viewer', (tester) async {

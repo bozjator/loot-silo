@@ -156,18 +156,38 @@ class PackContents {
       applyOverride(a, sidecar?.animations[a.path]),
   ];
 
+  /// Every file that can be a preview: [images] plus the animations
+  /// (which [images] leaves out), sorted.
+  List<String> get previewable =>
+      [...images, for (final a in shownDetected) a.path]..sort(naturalCompare);
+
+  /// The previews the user chose (sidecar `previews`) that still exist, in
+  /// their order; empty when none were chosen.
+  List<String> get chosenPreviews {
+    final chosen = sidecar?.previews ?? const <String>[];
+    if (chosen.isEmpty) return const [];
+    final present = previewable.toSet();
+    return [
+      for (final f in chosen)
+        if (present.contains(f)) f,
+    ];
+  }
+
   /// Images worth flipping through at the top of the page and in the
-  /// viewer opened from it: the tile preview first, then the pack's preview
-  /// candidates ([previewCandidates]), at most [limit].
+  /// viewer opened from it: the previews the user chose, else the tile
+  /// preview first, then the pack's preview candidates
+  /// ([previewCandidates]), at most [limit].
   ///
   /// Animations count too (animated GIF mockups), although [images] leaves
   /// them out.
-  List<String> carousel(String? preview, {int limit = 100}) => [
-    ?preview,
-    ...previewCandidates(
-      [...images, for (final a in shownDetected) a.path]..sort(),
-    ).where((f) => f != preview),
-  ].take(limit).toList();
+  List<String> carousel(String? preview, {int limit = 100}) {
+    final chosen = chosenPreviews;
+    if (chosen.isNotEmpty) return chosen.take(limit).toList();
+    return [
+      ?preview,
+      ...previewCandidates(previewable).where((f) => f != preview),
+    ].take(limit).toList();
+  }
 }
 
 /// Splits [files] into images / audio / models / other and detects animations,
@@ -292,7 +312,7 @@ PackSidecar updatePackSidecar(
     sourcePath: old.sourcePath,
     itchGameId: old.itchGameId,
     itchUrl: old.itchUrl,
-    cover: old.cover,
+    previews: old.previews,
     notes: old.notes,
     usedIn: old.usedIn,
     isContainer: old.isContainer,
@@ -301,6 +321,22 @@ PackSidecar updatePackSidecar(
     favoriteFiles: old.favoriteFiles,
     extra: old.extra,
   );
+  next.write(packPath);
+  return next;
+}
+
+/// Saves the previews the user chose, in order (the first is the tile
+/// cover); an empty list goes back to picking them automatically. Keeps
+/// every other key; returns the new sidecar.
+PackSidecar savePreviews(String packPath, List<String> previews) {
+  final old = PackSidecar.read(packPath) ?? const PackSidecar();
+  final next = PackSidecar.fromJson({
+    ...old.toJson()..remove('previews'),
+    if (previews.isNotEmpty)
+      'previews': [
+        ...{...previews},
+      ],
+  });
   next.write(packPath);
   return next;
 }

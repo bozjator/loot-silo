@@ -137,7 +137,7 @@ class PackSidecar {
     this.sourcePath,
     this.itchGameId,
     this.itchUrl,
-    this.cover,
+    this.previews = const [],
     this.notes,
     this.usedIn = const [],
     this.isContainer = false,
@@ -155,8 +155,9 @@ class PackSidecar {
   final int? itchGameId;
   final String? itchUrl;
 
-  /// Cover image path, relative to the pack folder.
-  final String? cover;
+  /// Previews the user chose, relative to the pack folder, in order:
+  /// the first is the tile cover. Empty: picked automatically.
+  final List<String> previews;
   final String? notes;
   final List<String> usedIn;
   final bool isContainer;
@@ -175,7 +176,7 @@ class PackSidecar {
 
   static const _known = {
     'title', 'types', 'tags', 'source', 'source_path', 'itch_game_id', //
-    'itch_url', 'cover', 'notes', 'used_in', 'is_container', 'animations',
+    'itch_url', 'previews', 'notes', 'used_in', 'is_container', 'animations',
     'favorite', 'favorite_files',
   };
 
@@ -191,7 +192,7 @@ class PackSidecar {
       sourcePath: json['source_path'] as String?,
       itchGameId: (json['itch_game_id'] as num?)?.toInt(),
       itchUrl: json['itch_url'] as String?,
-      cover: json['cover'] as String?,
+      previews: strings(json['previews']),
       notes: json['notes'] as String?,
       usedIn: strings(json['used_in']),
       isContainer: json['is_container'] == true,
@@ -214,7 +215,7 @@ class PackSidecar {
     'source_path': ?sourcePath,
     'itch_game_id': ?itchGameId,
     'itch_url': ?itchUrl,
-    'cover': ?cover,
+    if (previews.isNotEmpty) 'previews': previews,
     'notes': ?notes,
     if (usedIn.isNotEmpty) 'used_in': usedIn,
     if (isContainer) 'is_container': true,
@@ -251,7 +252,7 @@ class PackSidecar {
     Map<String, Object?>? animations,
     int? itchGameId,
     String? itchUrl,
-    String? cover,
+    List<String>? previews,
     bool? favorite,
     List<String>? favoriteFiles,
   }) => PackSidecar(
@@ -262,7 +263,7 @@ class PackSidecar {
     sourcePath: sourcePath ?? this.sourcePath,
     itchGameId: itchGameId ?? this.itchGameId,
     itchUrl: itchUrl ?? this.itchUrl,
-    cover: cover ?? this.cover,
+    previews: previews ?? this.previews,
     notes: notes,
     usedIn: usedIn ?? this.usedIn,
     isContainer: isContainer ?? this.isContainer,

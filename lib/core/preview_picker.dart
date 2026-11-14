@@ -1,6 +1,7 @@
 import 'package:path/path.dart' as p;
 
 import 'fs_tree.dart';
+import 'material_sets.dart';
 import 'natural_order.dart';
 import 'sidecar.dart';
 
@@ -44,14 +45,16 @@ int _rank(String rel) {
 /// Picks the image that best represents a pack, as a path relative to it.
 ///
 /// Priority, as in the plan:
-/// 1. the sidecar `cover`;
+/// 1. the first of the sidecar `previews` that exists;
 /// 2. itch cover/screenshots in `_itch/`;
 /// 3. files named, or inside folders named, preview / mockup / cover /
 ///    sample / showcase / screenshot / example, or an `all*` sheet;
 /// 4. a GIF / animated WebP;
 /// 5. a detected animation (chosen by the scanner, see
 ///    `choosePreviewAnimation`);
-/// 6. the largest image near the root (depth ≤ 2), else anywhere.
+/// 6. the largest image near the root (depth ≤ 2), else anywhere;
+///    texture maps (`_gloss`, `_norm`, `_mask01` …) only when nothing
+///    else is left.
 ///
 /// Promo images (coupon, logo, patreon …) are never picked. Named previews
 /// are ordered by word (preview > mockup > cover > … > sample > example),
@@ -75,9 +78,11 @@ PreviewPick? pickPreviewRanked(
           !_promo.hasMatch(p.basenameWithoutExtension(f.$1)))
         f,
   ];
-  final cover = sidecar?.cover;
-  if (cover != null && files.any((f) => f.$1 == cover)) {
-    return (path: cover, rank: 1);
+  final chosen = sidecar?.previews ?? const <String>[];
+  if (chosen.isNotEmpty) {
+    final present = {for (final f in files) f.$1};
+    final cover = chosen.where(present.contains).firstOrNull;
+    if (cover != null) return (path: cover, rank: 1);
   }
   if (images.isEmpty) return null;
 
@@ -119,10 +124,12 @@ PreviewPick? pickPreviewRanked(
 
   int largestFirst((String, FileEntry) a, (String, FileEntry) b) =>
       b.$2.size.compareTo(a.$2.size);
-  final shallow = images.where((f) => depth(f.$1) <= 2).toList()
+  final pictures = images.where((f) => !looksLikeMap(f.$1)).toList();
+  final pool = pictures.isEmpty ? images : pictures;
+  final shallow = pool.where((f) => depth(f.$1) <= 2).toList()
     ..sort(largestFirst);
   if (shallow.isNotEmpty) return (path: shallow.first.$1, rank: 6);
-  return (path: (images..sort(largestFirst)).first.$1, rank: 6);
+  return (path: (pool..sort(largestFirst)).first.$1, rank: 6);
 }
 
 /// The images that can stand for a pack, best first: itch files, then

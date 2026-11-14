@@ -8,15 +8,42 @@ List<(String, FileEntry)> files(Map<String, int> m) => [
 ];
 
 void main() {
-  test('sidecar cover wins when the file exists', () {
-    final f = files({'Preview.png': 9, 'art/hero.png': 1});
+  test('the first chosen preview that exists wins', () {
+    final f = files({'Preview.png': 9, 'art/hero.png': 1, 'b.png': 1});
     expect(
-      pickPreview(f, sidecar: const PackSidecar(cover: 'art/hero.png')),
+      pickPreview(
+        f,
+        sidecar: const PackSidecar(previews: ['art/hero.png', 'b.png']),
+      ),
       'art/hero.png',
     );
     expect(
-      pickPreview(f, sidecar: const PackSidecar(cover: 'gone.png')),
+      pickPreview(
+        f,
+        sidecar: const PackSidecar(previews: ['gone.png', 'b.png']),
+      ),
+      'b.png',
+    );
+    expect(
+      pickPreview(f, sidecar: const PackSidecar(previews: ['gone.png'])),
       'Preview.png',
+    );
+  });
+
+  test('the largest-image fallback skips texture maps', () {
+    // A Renderpeople pack: the render beside its (much bigger) maps.
+    final f = files({
+      'rp_nathan_walking_A.jpg': 118,
+      'tex/rp_nathan_dif.jpg': 5293,
+      'tex/rp_nathan_gloss.jpg': 13314,
+      'tex/rp_nathan_mask01.jpg': 2205,
+      'tex/rp_nathan_norm.jpg': 11737,
+    });
+    expect(pickPreview(f), 'rp_nathan_walking_A.jpg');
+    // Only maps: the largest still stands in.
+    expect(
+      pickPreview(files({'a_gloss.png': 9, 'a_norm.png': 3})),
+      'a_gloss.png',
     );
   });
 

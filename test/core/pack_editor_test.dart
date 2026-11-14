@@ -50,6 +50,37 @@ void main() {
     expect(c.carousel(null), ['_itch/cover.png', 'preview.png']);
   });
 
+  test('chosen previews replace the automatic carousel, in their order', () {
+    png('preview.png', 20, 20);
+    png('a.png', 20, 20);
+    png('b.png', 20, 20);
+    final files = [('a.png', 1), ('b.png', 1), ('preview.png', 1)];
+    var c = loadPackContents(tmp.path, files);
+    expect(c.chosenPreviews, isEmpty);
+    expect(c.carousel('preview.png'), ['preview.png']);
+    File(p.join(tmp.path, packFileName)).writeAsStringSync(
+      jsonEncode({
+        'tags': ['x'],
+        'future_field': 1,
+      }),
+    );
+    // Missing files are skipped; duplicates are stored once.
+    savePreviews(tmp.path, ['b.png', 'gone.png', 'a.png', 'b.png']);
+    expect(sidecarJson(), {
+      'tags': ['x'],
+      'future_field': 1,
+      'previews': ['b.png', 'gone.png', 'a.png'],
+    });
+    c = loadPackContents(tmp.path, files);
+    expect(c.chosenPreviews, ['b.png', 'a.png']);
+    expect(c.carousel('b.png'), ['b.png', 'a.png']);
+    expect(c.previewable, ['a.png', 'b.png', 'preview.png']);
+    // Empty: back to automatic, the key gone.
+    savePreviews(tmp.path, []);
+    expect(sidecarJson().containsKey('previews'), isFalse);
+    expect(sidecarJson()['future_field'], 1);
+  });
+
   test('updatePackSidecar keeps other keys and can clear the title', () {
     File(p.join(tmp.path, packFileName)).writeAsStringSync(
       jsonEncode({

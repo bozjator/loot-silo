@@ -154,10 +154,12 @@ const _aliases = <(String, MapRole)>[
   ('gloss', MapRole.specular),
   ('bump', MapRole.height),
   ('diff', MapRole.color),
+  ('norm', MapRole.normalGL),
   ('disp', MapRole.height),
   ('mask', MapRole.opacity),
   ('spec', MapRole.specular),
   ('col', MapRole.color),
+  ('dif', MapRole.color),
   ('nor', MapRole.normalGL),
   ('nrm', MapRole.normalGL),
   ('rgh', MapRole.roughness),
@@ -217,6 +219,18 @@ String _trimSeparators(String s) => s.replaceAll(RegExp(r'[_\- ]+$'), '');
     return (trimmed, role, res ?? res2);
   }
   return null;
+}
+
+final _trailingNumber = RegExp(r'[_\- ]?\d+$');
+
+/// [rel]'s name ends in a texture-map suffix (`_gloss`, `_Normal`,
+/// `_mask01`, `_rough_2K`): a map rather than a picture of the pack,
+/// whether or not it forms a material.
+bool looksLikeMap(String rel) {
+  final stem = p.posix.basenameWithoutExtension(rel);
+  if (_parseMap(stem) != null) return true;
+  final bare = stem.replaceFirst(_trailingNumber, '');
+  return bare != stem && bare.isNotEmpty && _parseMap(bare) != null;
 }
 
 String _ext(String rel) =>

@@ -60,7 +60,7 @@ void linkPack(String packPath, ItchGame game, {bool downloaded = false}) {
 }
 
 /// Saves the cover and up to [maxScreenshots] page screenshots into
-/// `<pack>/_itch/` and points the sidecar `cover` at the cover. Missing
+/// `<pack>/_itch/`; the preview picker puts the cover first. Missing
 /// images are skipped; returns how many files were saved.
 Future<int> fetchItchMedia(
   ItchApi api,
@@ -87,7 +87,6 @@ Future<int> fetchItchMedia(
     // The page is optional; the cover alone is fine.
   }
   var saved = 0;
-  String? coverRel;
   for (final (name, uri) in urls) {
     try {
       final r = await api.fetchPublic(uri);
@@ -95,15 +94,10 @@ Future<int> fetchItchMedia(
       final ext = imageExtension(uri, contentType: r.headers['content-type']);
       dir.createSync(recursive: true);
       File(p.join(dir.path, '$name.$ext')).writeAsBytesSync(r.bodyBytes);
-      if (name == 'cover') coverRel = '$itchMediaDir/$name.$ext';
       saved++;
     } on Object {
       continue;
     }
-  }
-  if (coverRel != null) {
-    final old = PackSidecar.read(packPath) ?? const PackSidecar();
-    old.copyWith(cover: coverRel).write(packPath);
   }
   return saved;
 }

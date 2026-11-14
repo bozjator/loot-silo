@@ -62,10 +62,14 @@ void main() {
       open: '/a.png',
     );
     const many = FileMenuTarget(files: ['/a.png', '/b.png']);
-    expect(fileMenuActions(one, _Caps(true)), [
-      for (final a in FileMenuAction.values)
-        if (a != FileMenuAction.copyGif && a != FileMenuAction.copyGifFile) a,
-    ]);
+    const fileItems = [
+      FileMenuAction.copyImage,
+      FileMenuAction.copyFiles,
+      FileMenuAction.copyPath,
+      FileMenuAction.open,
+      FileMenuAction.openWith,
+    ];
+    expect(fileMenuActions(one, _Caps(true)), fileItems);
     // An animation puts the two GIF items first (M75).
     final anim = FileMenuTarget(
       files: const ['/a.png'],
@@ -73,7 +77,36 @@ void main() {
       open: '/a.png',
       gif: (name: 'a', make: () async => null),
     );
-    expect(fileMenuActions(anim, _Caps(true)), FileMenuAction.values);
+    expect(fileMenuActions(anim, _Caps(true)), [
+      FileMenuAction.copyGif,
+      FileMenuAction.copyGifFile,
+      ...fileItems,
+    ]);
+    // A pack's image: the cover / previews items last, as they apply.
+    const asPreview = FileMenuTarget(
+      files: ['/a.png'],
+      open: '/a.png',
+      preview: PreviewTarget(
+        packId: 'x',
+        packPath: '/',
+        preview: 'b.png',
+        file: 'a.png',
+      ),
+    );
+    List<FileMenuAction> previewItems(List<String>? previews) => [
+      ...fileMenuActions(asPreview, _Caps(false), previews: previews).skip(2),
+    ];
+    expect(previewItems(['b.png']), [
+      FileMenuAction.useAsCover,
+      FileMenuAction.addPreview,
+    ]);
+    expect(previewItems(['b.png', 'a.png']), [
+      FileMenuAction.useAsCover,
+      FileMenuAction.removePreview,
+    ]);
+    expect(previewItems(['a.png', 'b.png']), [FileMenuAction.removePreview]);
+    // Still loading: none.
+    expect(previewItems(null), isEmpty);
     expect(FileMenuAction.values.take(3), [
       FileMenuAction.copyGif,
       FileMenuAction.copyGifFile,
@@ -89,6 +122,9 @@ void main() {
         'Copy path',
         'Open',
         'Open with…',
+        'Use as pack cover',
+        'Add to pack previews',
+        'Remove from pack previews',
       ],
     );
     expect(fileMenuLabel(FileMenuAction.copyFiles, 3), 'Copy 3 files');

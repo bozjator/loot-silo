@@ -225,6 +225,40 @@ void main() {
     expect(rest, ['Ground/other.png']);
   });
 
+  test('looksLikeMap: map suffixes, numbered too; not pictures', () {
+    for (final f in [
+      'tex/rp_nathan_gloss.jpg',
+      'tex/rp_nathan_norm.jpg',
+      'tex/rp_nathan_dif.jpg',
+      'tex/rp_nathan_mask01.jpg',
+      'Wood_Roughness_2K.png',
+      'rockNormal.png',
+    ]) {
+      expect(looksLikeMap(f), isTrue, reason: f);
+    }
+    for (final f in [
+      'rp_nathan_walking_A.jpg',
+      'Preview.png',
+      'hero_idle_01.png',
+      'Protocol.png',
+      'normal.png',
+      '2.png',
+    ]) {
+      expect(looksLikeMap(f), isFalse, reason: f);
+    }
+  });
+
+  test('`_dif` and `_norm` maps form a material', () {
+    final (sets, rest) = groupMaterials([
+      'tex/rp_dif.jpg',
+      'tex/rp_norm.jpg',
+      'tex/rp_gloss.jpg',
+      'walk.jpg',
+    ]);
+    expect(sets.single.maps.length, 3);
+    expect(rest, ['walk.jpg']);
+  });
+
   test('materialTitle splits camelCase and numbers', () {
     expect(materialTitle('rock_wall'), 'Rock wall');
     expect(materialTitle('WoodFloor041'), 'Wood Floor 041');

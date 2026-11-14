@@ -67,7 +67,7 @@ void main() {
         sourcePath: '/x',
         itchGameId: 12,
         itchUrl: 'https://a.itch.io/t',
-        cover: '_itch/cover.png',
+        previews: ['_itch/cover.png', 'a.png'],
         notes: 'n',
         usedIn: ['G'],
         isContainer: true,

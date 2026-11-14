@@ -110,10 +110,17 @@ class HelpScreen extends StatelessWidget {
                   'A pack\'s tile shows its cover: one you chose, the '
                   'itch.io cover, an image named preview, cover, mockup, '
                   'screenshot or similar, else an animation or its largest '
-                  'image. To choose your own, name an image preview.png, or '
-                  'set "cover" in the pack file. The header of a pack page '
+                  'image (texture maps last). The header of a pack page '
                   'steps through all its previews; "All previews" shows them '
                   'together.',
+                ),
+                _P(
+                  'To choose your own, use the pencil on the header\'s '
+                  'preview: click images to add or remove them and drag the '
+                  'chosen ones into order; the first is the cover. "Reset to '
+                  'automatic" undoes it. Right-click an image or animation '
+                  'for "Use as pack cover" and "Add to" or "Remove from pack '
+                  'previews".',
                 ),
               ]),
               const _Section('Pack page & tabs', [
