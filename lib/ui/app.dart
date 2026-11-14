@@ -258,7 +258,7 @@ class HomeScreen extends ConsumerWidget {
                   icon: const Icon(Icons.help_outline),
                 ),
                 IconButton(
-                  tooltip: 'Settings (Ctrl+,)',
+                  tooltip: 'Settings (${AppKeys.settings.keys})',
                   onPressed: () => openSettings(context),
                   icon: const Icon(Icons.settings_outlined),
                 ),

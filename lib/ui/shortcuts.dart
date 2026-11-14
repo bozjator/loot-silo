@@ -1,5 +1,45 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+
+/// Whether the primary shortcut modifier is Cmd (macOS) rather than Ctrl.
+///
+/// Read from [defaultTargetPlatform] rather than `Platform`, so tests (with
+/// `TargetPlatformVariant`) and a debug run on Linux (with
+/// `debugDefaultTargetPlatformOverride`, which the theme follows too) get
+/// the macOS keys. Not from the theme: activators and scroll physics have
+/// no `BuildContext`, and the labels must name the keys that work.
+bool get primaryIsCmd => defaultTargetPlatform == TargetPlatform.macOS;
+
+/// The primary modifier's name in labels and tooltips: "Cmd" or "Ctrl".
+String get primaryKey => primaryIsCmd ? 'Cmd' : 'Ctrl';
+
+/// Whether the primary modifier (Cmd on macOS, else Ctrl) is held.
+bool get primaryPressed => primaryIsCmd
+    ? HardwareKeyboard.instance.isMetaPressed
+    : HardwareKeyboard.instance.isControlPressed;
+
+/// [trigger] with the primary modifier (see [primaryIsCmd]): Ctrl, or Cmd
+/// on macOS.
+class PrimaryActivator with Diagnosticable implements ShortcutActivator {
+  const PrimaryActivator(this.trigger);
+
+  final LogicalKeyboardKey trigger;
+
+  /// The concrete activator for the current platform.
+  SingleActivator get resolved =>
+      SingleActivator(trigger, control: !primaryIsCmd, meta: primaryIsCmd);
+
+  @override
+  Iterable<LogicalKeyboardKey> get triggers => [trigger];
+
+  @override
+  bool accepts(KeyEvent event, HardwareKeyboard state) =>
+      resolved.accepts(event, state);
+
+  @override
+  String debugDescribeKeys() => resolved.debugDescribeKeys();
+}
 
 /// One shortcut: what it does and the keys that trigger it. The key
 /// handlers test events with [accepts] and the Help page prints [keys], so
@@ -23,7 +63,7 @@ class KeyBinding {
     for (final a in activators) a: callback,
   };
 
-  /// "Ctrl+F", "/ or Ctrl+F", …
+  /// "Ctrl+F", "/ or Ctrl+F", … (Cmd on macOS; see [primaryIsCmd]).
   String get keys => activators.map(describeActivator).join('  or  ');
 }
 
@@ -36,6 +76,7 @@ class MouseHelp {
 }
 
 String describeActivator(ShortcutActivator activator) {
+  if (activator is PrimaryActivator) activator = activator.resolved;
   // Typed characters, whatever the layout needs to type them (`/` is
   // Shift+7 on some).
   if (activator is CharacterActivator) {
@@ -58,8 +99,8 @@ String describeActivator(ShortcutActivator activator) {
   };
   return [
     if (a.control) 'Ctrl',
-    if (a.alt) 'Alt',
-    if (a.meta) 'Meta',
+    if (a.alt) primaryIsCmd ? 'Option' : 'Alt',
+    if (a.meta) primaryIsCmd ? 'Cmd' : 'Meta',
     if (a.shift) 'Shift',
     key,
   ].join('+');
@@ -73,21 +114,22 @@ abstract final class AppKeys {
     [SingleActivator(LogicalKeyboardKey.escape)],
   );
   static const importFolder = KeyBinding('Import a folder', [
-    SingleActivator(LogicalKeyboardKey.keyI, control: true),
+    PrimaryActivator(LogicalKeyboardKey.keyI),
   ]);
   static const importArchive = KeyBinding('Import archives', [
-    SingleActivator(LogicalKeyboardKey.keyO, control: true),
+    PrimaryActivator(LogicalKeyboardKey.keyO),
   ]);
   static const rescan = KeyBinding('Rescan the library', [
     SingleActivator(LogicalKeyboardKey.f5),
-    SingleActivator(LogicalKeyboardKey.keyR, control: true),
+    PrimaryActivator(LogicalKeyboardKey.keyR),
   ]);
   static const settings = KeyBinding('Settings', [
-    SingleActivator(LogicalKeyboardKey.comma, control: true),
+    PrimaryActivator(LogicalKeyboardKey.comma),
   ]);
   static const help = KeyBinding('This help page', [
     SingleActivator(LogicalKeyboardKey.f1),
   ]);
+  // Ctrl+Tab on macOS too, as in Safari and Finder.
   static const nextTab = KeyBinding('Next tab', [
     SingleActivator(LogicalKeyboardKey.tab, control: true),
   ]);
@@ -95,13 +137,13 @@ abstract final class AppKeys {
     SingleActivator(LogicalKeyboardKey.tab, control: true, shift: true),
   ]);
   static const closeTab = KeyBinding('Close the shown pack tab', [
-    SingleActivator(LogicalKeyboardKey.keyW, control: true),
+    PrimaryActivator(LogicalKeyboardKey.keyW),
   ]);
 
   // Dashboard.
   static const dashboardSearch = KeyBinding('Search the library', [
     CharacterActivator('/'),
-    SingleActivator(LogicalKeyboardKey.keyF, control: true),
+    PrimaryActivator(LogicalKeyboardKey.keyF),
   ]);
   static const leaveSearch = KeyBinding('Leave the search field', [
     SingleActivator(LogicalKeyboardKey.escape),
@@ -112,7 +154,7 @@ abstract final class AppKeys {
     SingleActivator(LogicalKeyboardKey.keyH),
   ]);
   static const fileSearch = KeyBinding('Search this pack’s file names', [
-    SingleActivator(LogicalKeyboardKey.keyF, control: true),
+    PrimaryActivator(LogicalKeyboardKey.keyF),
   ]);
   static const clearFileSearch = KeyBinding(
     'In the file search: clear it, then leave it',
@@ -157,7 +199,7 @@ abstract final class AppKeys {
     SingleActivator(LogicalKeyboardKey.arrowRight),
   ]);
   static const viewerCopy = KeyBinding('Copy the shown image (Linux)', [
-    SingleActivator(LogicalKeyboardKey.keyC, control: true),
+    PrimaryActivator(LogicalKeyboardKey.keyC),
   ]);
 
   // Model viewer.
@@ -286,12 +328,12 @@ const shortcutSections = <(String, List<KeyBinding>)>[
 ];
 
 /// Mouse gestures the Help page lists next to the shortcuts.
-const mouseHelp = [
+List<MouseHelp> get mouseHelp => [
   MouseHelp('Mouse back button', 'Same as Esc: back'),
   MouseHelp('Middle-click a pack', 'Open it in a new tab (behind this one)'),
   MouseHelp('Right-click a pack', 'Menu with "Open in new tab"'),
   MouseHelp('Middle-click a tab', 'Close it'),
-  MouseHelp('Ctrl + wheel over a grid', 'Bigger or smaller thumbnails'),
+  MouseHelp('$primaryKey + wheel over a grid', 'Bigger or smaller thumbnails'),
   MouseHelp('Click a size slider\'s end icon', 'One size smaller or larger'),
   MouseHelp('Hover a dashboard tile', 'Play its animation'),
   MouseHelp(
@@ -337,9 +379,9 @@ const mouseHelp = [
     'Zoom (opens at 1:1); drag to pan, double-click fits',
   ),
   MouseHelp('Wheel over the Frames field', 'Step through counts that fit'),
-  MouseHelp('Ctrl + wheel over All previews', 'Fewer or more columns'),
+  MouseHelp('$primaryKey + wheel over All previews', 'Fewer or more columns'),
   MouseHelp('Wheel over the Edit preview', 'Zoom (−, +, reset on hover)'),
-  MouseHelp('Ctrl / Shift-click images', 'Select frames to combine'),
+  MouseHelp('$primaryKey / Shift-click images', 'Select frames to combine'),
   MouseHelp(
     'Double-click an image or animation card',
     'Open it in the image viewer',

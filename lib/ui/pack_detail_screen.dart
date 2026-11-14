@@ -1252,7 +1252,7 @@ class PreviewGridDialog extends ConsumerWidget {
                   ),
                   // Fewer columns = bigger cards, like the size sliders.
                   IconButton(
-                    tooltip: 'Fewer columns (Ctrl + wheel up)',
+                    tooltip: 'Fewer columns ($primaryKey + wheel up)',
                     icon: const Icon(Icons.remove),
                     onPressed: wanted > 1
                         ? () => settings.setPreviewsColumns(wanted - 1)
@@ -1271,7 +1271,7 @@ class PreviewGridDialog extends ConsumerWidget {
                     ),
                   ),
                   IconButton(
-                    tooltip: 'More columns (Ctrl + wheel down)',
+                    tooltip: 'More columns ($primaryKey + wheel down)',
                     icon: const Icon(Icons.add),
                     onPressed: wanted < 8
                         ? () => settings.setPreviewsColumns(wanted + 1)
@@ -2150,7 +2150,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
             // An icon toggle, the size of the other card icons.
             leading: IconButton(
               key: ValueKey('select:$rel'),
-              tooltip: selected ? 'Deselect' : 'Select (Ctrl-click)',
+              tooltip: selected ? 'Deselect' : 'Select ($primaryKey-click)',
               iconSize: 18,
               visualDensity: VisualDensity.compact,
               isSelected: selected,
@@ -2163,7 +2163,7 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
               if (keys.isShiftPressed) {
                 _clicks.reset();
                 _selectRange(shown, rel);
-              } else if (keys.isControlPressed) {
+              } else if (primaryPressed) {
                 _clicks.reset();
                 _toggle(rel);
               } else if (_clicks.second(rel)) {

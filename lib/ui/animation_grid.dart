@@ -235,8 +235,8 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                       dimmed: _focused != null && _focused != i,
                       playAll: mode == AnimateMode.all,
                       onTap: () {
-                        final keys = HardwareKeyboard.instance;
-                        if (keys.isControlPressed || keys.isShiftPressed) {
+                        if (primaryPressed ||
+                            HardwareKeyboard.instance.isShiftPressed) {
                           _clicks.reset();
                           _focus(_focused == i ? null : i);
                         } else if (_clicks.second(i)) {

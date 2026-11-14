@@ -11,6 +11,7 @@ import 'cursors.dart';
 import '../state/settings.dart';
 import 'pack_detail_screen.dart';
 import 'session.dart';
+import 'shortcuts.dart';
 
 /// Tracks a navigator's top route, so app-wide shortcuts can skip dialogs
 /// and menus, and how many pages ([PageRoute]s, not menus) it holds.
@@ -692,7 +693,7 @@ class _StripTab extends StatelessWidget {
                     if (onClose != null) ...[
                       const SizedBox(width: 2),
                       IconButton(
-                        tooltip: 'Close tab (Ctrl+W)',
+                        tooltip: 'Close tab (${AppKeys.closeTab.keys})',
                         iconSize: 16,
                         visualDensity: VisualDensity.compact,
                         constraints: const BoxConstraints.tightFor(

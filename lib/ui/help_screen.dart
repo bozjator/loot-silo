@@ -41,7 +41,7 @@ class HelpScreen extends StatelessWidget {
                 padding: EdgeInsets.only(top: 16, bottom: 8),
                 child: Center(child: AppLogo(height: 120)),
               ),
-              const _Section('Getting started', [
+              _Section('Getting started', [
                 _P(
                   'Loot Silo keeps your game assets in one library folder, '
                   'sorted as Author / Pack. When you choose a folder that '
@@ -51,23 +51,23 @@ class HelpScreen extends StatelessWidget {
                   'on your computer, Import archive unpacks zip, tar, 7z or '
                   'rar files, and Connect itch.io downloads the asset packs '
                   'you own. Later, the import button in the top bar does the '
-                  'same (Ctrl+I, Ctrl+O, or drop files on the window). Your '
+                  'same ($primaryKey+I, $primaryKey+O, or drop files on the window). Your '
                   'original folder or archive is never changed. 7z and rar '
                   'use 7-Zip or unrar if installed; on macOS the built-in '
                   'tar opens most of them without either.',
                 ),
-                _P(
+                const _P(
                   'Before anything is copied, a review lists the packs found: '
                   'set each one\'s author, title, types and tags, and untick '
                   'the ones you don\'t want.',
                 ),
-                _P(
+                const _P(
                   'A bundle is a pack that holds other packs, such as a big '
                   'collection with one folder per theme. Its tile opens the '
                   'list of its packs; "Bundle details" shows the bundle '
                   'itself.',
                 ),
-                _P(
+                const _P(
                   'What you set on a pack (tags, notes, stars, animation '
                   'fixes) is saved in $packFileName in the pack\'s folder, '
                   'and an author\'s details in $authorFileName in theirs, '
@@ -75,15 +75,15 @@ class HelpScreen extends StatelessWidget {
                   'edit by hand.',
                 ),
               ]),
-              const _Section('Rescan library', [
+              _Section('Rescan library', [
                 _P(
-                  'The rescan button in the top bar (F5 or Ctrl+R) reads the '
+                  'The rescan button in the top bar (F5 or $primaryKey+R) reads the '
                   'whole library folder again: it finds packs and files you '
                   'added, removed or renamed outside the app, and detects '
                   'animations again. Nothing you set is lost, since it is '
                   'kept in the pack files.',
                 ),
-                _P(
+                const _P(
                   'When the app starts, it notices files added, removed or '
                   'renamed since last time and rescans on its own. Rescan '
                   'yourself when you change the library while the app is '
@@ -123,8 +123,8 @@ class HelpScreen extends StatelessWidget {
                   'previews".',
                 ),
               ]),
-              const _Section('Pack page & tabs', [
-                _P(
+              _Section('Pack page & tabs', [
+                const _P(
                   'A pack page shows its previews and info at the top and '
                   'its files in tabs: Animations, Images, Audio, Models, '
                   'Materials and Other files. Press H, or the pin in the '
@@ -132,7 +132,7 @@ class HelpScreen extends StatelessWidget {
                   'more room; rest the pointer on the slim bar left in its '
                   'place to see it again.',
                 ),
-                _P(
+                const _P(
                   'Click a pack to open it; Esc or the mouse back button '
                   'goes back. Middle-click a pack (or right-click → Open in '
                   'new tab) to open it in a tab of its own, so you can keep '
@@ -140,14 +140,14 @@ class HelpScreen extends StatelessWidget {
                 ),
                 _P(
                   'Click a card to focus it, and ←/→ to move to the next. '
-                  'Double-click a card to open it large. Ctrl / Shift-click '
+                  'Double-click a card to open it large. $primaryKey / Shift-click '
                   'images to select several, to copy them or combine them '
                   'into an animation. Flat shows all files in one grid; By '
                   'folder groups them by the pack\'s folders, which you can '
-                  'fold away. The size slider (or Ctrl + wheel) makes the '
+                  'fold away. The size slider (or $primaryKey + wheel) makes the '
                   'cards bigger or smaller.',
                 ),
-                _P(
+                const _P(
                   'The image viewer shows an image at its real size (1:1, '
                   'as in a game), or fitted when it is bigger than the '
                   'window. The wheel zooms and dragging moves it.',
