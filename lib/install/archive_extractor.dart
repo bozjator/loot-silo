@@ -94,8 +94,9 @@ String get archiveToolInstallHint {
 
 /// Unpacks [archivePath] into a new folder under [destParent] and
 /// normalises it: junk (`__MACOSX`, `.DS_Store`, `Thumbs.db`) and symlinks
-/// are dropped, and chains of single folders are collapsed so the result
-/// is one folder holding the content. That folder is named after the
+/// are dropped, archives inside it are unpacked in place (see
+/// [extractNestedArchives]), and chains of single folders are collapsed so
+/// the result is one folder holding the content. That folder is named after the
 /// archive's own single root folder if it has one, else after the archive.
 ///
 /// Synchronous; run it in an isolate. Never writes outside [destParent].
@@ -109,13 +110,9 @@ ExtractedArchive extractArchive(String archivePath, String destParent) {
     p.join(destParent, '.raw-${DateTime.now().microsecondsSinceEpoch}'),
   )..createSync();
   try {
-    switch (format) {
-      case ArchiveKind.zip || ArchiveKind.tar || ArchiveKind.tarGz:
-        _extractWithPackage(archivePath, format, raw.path);
-      case ArchiveKind.sevenZip || ArchiveKind.rar:
-        _extractWithTool(archivePath, format, raw.path);
-    }
+    _extractRaw(archivePath, format, raw.path);
     _removeJunk(raw);
+    extractNestedArchives(raw.path);
     var content = raw;
     String? rootName;
     while (true) {
@@ -139,6 +136,79 @@ ExtractedArchive extractArchive(String archivePath, String destParent) {
   } finally {
     if (raw.existsSync()) raw.deleteSync(recursive: true);
   }
+}
+
+void _extractRaw(String path, ArchiveKind format, String dest) {
+  switch (format) {
+    case ArchiveKind.zip || ArchiveKind.tar || ArchiveKind.tarGz:
+      _extractWithPackage(path, format, dest);
+    case ArchiveKind.sevenZip || ArchiveKind.rar:
+      _extractWithTool(path, format, dest);
+  }
+}
+
+/// How deep archives inside archives are unpacked; deeper ones stay files.
+const maxNestedArchiveDepth = 4;
+
+/// Unpacks every archive under [dir], at any depth, where it lies, and
+/// deletes it: an archive holding one file or one folder leaves that next
+/// to where it was, anything else lands in a folder named after it. Name
+/// clashes get a ` (2)` suffix. Archives found inside are unpacked too, up
+/// to [maxNestedArchiveDepth] levels. One that can't be read (broken,
+/// encrypted, no tool for it) is kept as it is. Synchronous.
+void extractNestedArchives(String dir, {int depth = 0}) {
+  if (depth >= maxNestedArchiveDepth) return;
+  final archives = [
+    for (final e in Directory(
+      dir,
+    ).listSync(recursive: true, followLinks: false))
+      if (e is File && archiveKindOf(e.path) != null) e,
+  ];
+  for (final archive in archives) {
+    final parent = p.dirname(archive.path);
+    final work = Directory(
+      p.join(parent, '.nested-${DateTime.now().microsecondsSinceEpoch}'),
+    )..createSync();
+    try {
+      _extractRaw(archive.path, archiveKindOf(archive.path)!, work.path);
+      _removeJunk(work);
+      extractNestedArchives(work.path, depth: depth + 1);
+      var content = work;
+      String? rootName;
+      while (true) {
+        final entries = content.listSync();
+        if (entries.length != 1 || entries.single is! Directory) break;
+        content = entries.single as Directory;
+        rootName ??= p.basename(content.path);
+      }
+      final entries = content.listSync();
+      if (entries.isEmpty) continue;
+      if (rootName == null && entries.length == 1) {
+        final file = entries.single;
+        file.renameSync(_freePath(parent, p.basename(file.path)));
+      } else {
+        final name = safeFolderName(rootName ?? archiveStem(archive.path));
+        content.renameSync(_freePath(parent, name, isFile: false));
+      }
+      archive.deleteSync();
+    } on Object {
+      // Unreadable: the archive stays as a file of the pack.
+    } finally {
+      if (work.existsSync()) work.deleteSync(recursive: true);
+    }
+  }
+}
+
+/// [name] in [dir], or `name (2)`, `name (3)` … if taken; a file keeps its
+/// extension last (`a (2).png`).
+String _freePath(String dir, String name, {bool isFile = true}) {
+  final ext = isFile ? p.extension(name) : '';
+  final stem = name.substring(0, name.length - ext.length);
+  var path = p.join(dir, name);
+  for (var n = 2; FileSystemEntity.typeSync(path) != .notFound; n++) {
+    path = p.join(dir, '$stem ($n)$ext');
+  }
+  return path;
 }
 
 /// A safe relative path for an archive entry, or null for entries that

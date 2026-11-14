@@ -122,6 +122,76 @@ void main() {
     expect(files(r.folder), ['hit.wav', 'jump.wav']);
   });
 
+  test('archives inside are unpacked where they lie and deleted', () {
+    List<int> bytesOf(Map<String, Object> entries) {
+      final a = Archive();
+      for (final MapEntry(:key, :value) in entries.entries) {
+        a.add(
+          value is String
+              ? ArchiveFile.string(key, value)
+              : ArchiveFile.bytes(key, value as List<int>),
+        );
+      }
+      return ZipEncoder().encodeBytes(a);
+    }
+
+    final deepest = bytesOf({'Deep/a.png': 'x', 'Deep/b.png': 'y'});
+    final archive = Archive()
+      // One file: lands next to where the zip was.
+      ..add(ArchiveFile.bytes('Eel.zip', bytesOf({'Eel.png': 'x'})))
+      // Clashes with a file already there.
+      ..add(ArchiveFile.bytes('Fish.zip', bytesOf({'Fish.png': 'new'})))
+      ..add(ArchiveFile.string('Fish.png', 'old'))
+      // Several files without a root: a folder named after the zip.
+      ..add(
+        ArchiveFile.bytes(
+          'sub/Loose.zip',
+          bytesOf({'1.png': 'x', '2.png': 'y'}),
+        ),
+      )
+      // A zip in a zip in a subfolder; single folders collapse as above.
+      ..add(
+        ArchiveFile.bytes(
+          'sub/deeper/Outer.zip',
+          bytesOf({'Outer/inner.zip': deepest}),
+        ),
+      )
+      // Broken: kept as a file.
+      ..add(ArchiveFile.string('broken.zip', 'not a zip'));
+    final path = p.join(tmp.path, 'Bundle.zip');
+    File(path).writeAsBytesSync(ZipEncoder().encodeBytes(archive));
+
+    final r = extractArchive(path, out);
+    expect(files(r.folder), [
+      'Eel.png',
+      'Fish (2).png',
+      'Fish.png',
+      'broken.zip',
+      'sub/Loose/1.png',
+      'sub/Loose/2.png',
+      'sub/deeper/Outer/a.png',
+      'sub/deeper/Outer/b.png',
+    ]);
+    expect(File(p.join(r.folder, 'Fish (2).png')).readAsStringSync(), 'new');
+    expect(
+      Directory(r.folder).listSync(recursive: true).map((e) => e.path),
+      everyElement(isNot(contains('.nested-'))),
+    );
+  });
+
+  test('a zip holding only a zip unpacks to the inner content', () {
+    final inner = Archive()
+      ..add(ArchiveFile.string('Hero/idle.png', 'x'))
+      ..add(ArchiveFile.string('Hero/run.png', 'y'));
+    final outer = Archive()
+      ..add(ArchiveFile.bytes('Hero.zip', ZipEncoder().encodeBytes(inner)));
+    final path = p.join(tmp.path, 'download.zip');
+    File(path).writeAsBytesSync(ZipEncoder().encodeBytes(outer));
+    final r = extractArchive(path, out);
+    expect(p.basename(r.folder), 'Hero');
+    expect(files(r.folder), ['idle.png', 'run.png']);
+  });
+
   test('broken and empty archives fail cleanly', () {
     final bad = p.join(tmp.path, 'bad.zip');
     File(bad).writeAsStringSync('not a zip');
