@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
@@ -37,6 +39,28 @@ class _PreviewPickerDialogState extends State<PreviewPickerDialog> {
   late final _chosen = [...widget.initial];
   var _filter = '';
 
+  /// The chosen strip: a scrollbar under it, and the mouse wheel scrolls
+  /// it sideways.
+  final _strip = ScrollController();
+
+  @override
+  void dispose() {
+    _strip.dispose();
+    super.dispose();
+  }
+
+  /// A vertical wheel turn scrolls the strip sideways; sideways ones
+  /// (trackpads, Shift + wheel) the list handles itself.
+  void _wheel(PointerSignalEvent e) {
+    if (e is! PointerScrollEvent || !_strip.hasClients) return;
+    final d = e.scrollDelta;
+    if (d.dx != 0 || d.dy == 0) return;
+    final pos = _strip.position;
+    _strip.jumpTo(
+      (pos.pixels + d.dy).clamp(pos.minScrollExtent, pos.maxScrollExtent),
+    );
+  }
+
   bool get _changed {
     final a = widget.initial;
     if (a.length != _chosen.length) return true;
@@ -46,9 +70,38 @@ class _PreviewPickerDialogState extends State<PreviewPickerDialog> {
     return false;
   }
 
-  void _toggle(String f) => setState(() {
-    if (!_chosen.remove(f)) _chosen.add(f);
-  });
+  void _toggle(String f) {
+    final added = !_chosen.contains(f);
+    setState(() {
+      if (!_chosen.remove(f)) _chosen.add(f);
+    });
+    // Show the one just added at the strip's end.
+    if (added) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_strip.hasClients) return;
+        // Worked out from the fixed card width: the list does not lay out
+        // again for a card added out of sight, so its own maxScrollExtent
+        // still ends before the new card.
+        final pos = _strip.position;
+        final end =
+            _stripPadding.horizontal +
+            _chosen.length * _cardExtent -
+            pos.viewportDimension;
+        _strip.animateTo(
+          math.max(0, end),
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      });
+    }
+  }
+
+  /// A chosen card's width in the strip, its margins included. Fixed, so
+  /// the strip's end can be worked out without laying it out.
+  static const _cardExtent = 140.0;
+
+  /// Around the strip's cards; the bottom leaves room for the scrollbar.
+  static const _stripPadding = EdgeInsets.fromLTRB(16, 0, 16, 14);
 
   Widget _thumb(String rel) => PixelImage(File(p.join(widget.packPath, rel)));
 
@@ -98,7 +151,7 @@ class _PreviewPickerDialogState extends State<PreviewPickerDialog> {
               ),
             ),
             SizedBox(
-              height: 112,
+              height: 126,
               child: _chosen.isEmpty
                   ? Center(
                       child: Text(
@@ -108,73 +161,85 @@ class _PreviewPickerDialogState extends State<PreviewPickerDialog> {
                         ),
                       ),
                     )
-                  : ReorderableListView.builder(
-                      key: const ValueKey('chosen-previews'),
-                      scrollDirection: Axis.horizontal,
-                      buildDefaultDragHandles: false,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _chosen.length,
-                      onReorderItem: (from, to) => setState(
-                        () => _chosen.insert(to, _chosen.removeAt(from)),
-                      ),
-                      itemBuilder: (context, i) {
-                        final f = _chosen[i];
-                        return ReorderableDragStartListener(
-                          key: ValueKey('chosen:$f'),
-                          index: i,
-                          child: MouseRegion(
-                            cursor: SystemMouseCursors.grab,
-                            child: Tooltip(
-                              message: f,
-                              waitDuration: const Duration(milliseconds: 600),
-                              child: Container(
-                                width: 132,
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: scheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: i == 0
-                                        ? scheme.primary
-                                        : scheme.outlineVariant,
-                                    width: i == 0 ? 2 : 1,
+                  : Listener(
+                      onPointerSignal: _wheel,
+                      child: Scrollbar(
+                        controller: _strip,
+                        thumbVisibility: true,
+                        child: ReorderableListView.builder(
+                          key: const ValueKey('chosen-previews'),
+                          scrollController: _strip,
+                          scrollDirection: Axis.horizontal,
+                          buildDefaultDragHandles: false,
+                          padding: _stripPadding,
+                          itemExtent: _cardExtent,
+                          itemCount: _chosen.length,
+                          onReorderItem: (from, to) => setState(
+                            () => _chosen.insert(to, _chosen.removeAt(from)),
+                          ),
+                          itemBuilder: (context, i) {
+                            final f = _chosen[i];
+                            return ReorderableDragStartListener(
+                              key: ValueKey('chosen:$f'),
+                              index: i,
+                              child: MouseRegion(
+                                cursor: SystemMouseCursors.grab,
+                                child: Tooltip(
+                                  message: f,
+                                  waitDuration: const Duration(
+                                    milliseconds: 600,
+                                  ),
+                                  child: Container(
+                                    width: _cardExtent - 8,
+                                    margin: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: scheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: i == 0
+                                            ? scheme.primary
+                                            : scheme.outlineVariant,
+                                        width: i == 0 ? 2 : 1,
+                                      ),
+                                    ),
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.all(6),
+                                          child: _thumb(f),
+                                        ),
+                                        Positioned(
+                                          left: 4,
+                                          top: 4,
+                                          child: _Badge(
+                                            i == 0 ? 'Cover' : '${i + 1}',
+                                          ),
+                                        ),
+                                        Positioned(
+                                          right: 0,
+                                          top: 0,
+                                          child: IconButton(
+                                            tooltip: 'Remove',
+                                            iconSize: 16,
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            icon: const Icon(Icons.close),
+                                            onPressed: () => _toggle(f),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Padding(
-                                      padding: const EdgeInsets.all(6),
-                                      child: _thumb(f),
-                                    ),
-                                    Positioned(
-                                      left: 4,
-                                      top: 4,
-                                      child: _Badge(
-                                        i == 0 ? 'Cover' : '${i + 1}',
-                                      ),
-                                    ),
-                                    Positioned(
-                                      right: 0,
-                                      top: 0,
-                                      child: IconButton(
-                                        tooltip: 'Remove',
-                                        iconSize: 16,
-                                        visualDensity: VisualDensity.compact,
-                                        icon: const Icon(Icons.close),
-                                        onPressed: () => _toggle(f),
-                                      ),
-                                    ),
-                                  ],
-                                ),
                               ),
-                            ),
-                          ),
-                        );
-                      },
+                            );
+                          },
+                        ),
+                      ),
                     ),
             ),
             const Divider(height: 1),
