@@ -9,6 +9,7 @@ import 'package:loot_silo/core/library_index.dart';
 import 'package:loot_silo/core/library_service.dart';
 import 'package:loot_silo/itch/itch_api.dart';
 import 'package:loot_silo/itch/itch_key.dart';
+import 'package:loot_silo/state/anim_cache_fill.dart';
 import 'package:loot_silo/state/dashboard.dart';
 import 'package:loot_silo/state/itch.dart';
 import 'package:loot_silo/state/providers.dart';
@@ -220,6 +221,9 @@ Future<Uint8List?> clipRead(WidgetTester tester, String target) async {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  // No background detection competing with the tests for the CPU (M94);
+  // pages fill the cache themselves when they open.
+  AnimCacheFiller.enabled = false;
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
 
   late Directory tmp;
@@ -5360,6 +5364,48 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, find.text('Knight Pack'));
     expect(find.text(title), findsNothing);
   });
+
+  testWidgets(
+    'm94: a RafaelMatos pack opens from the animation cache (real, read-only)',
+    (tester) async {
+      final real = p.canonicalize('../assets_library');
+      if (!Directory(real).existsSync()) return;
+      await tester.pumpWidget(app(real, library: real));
+      await pumpUntil(tester, realPacks());
+      await tester.enterText(find.byType(TextField), 'Village V2.2');
+      await tester.pump(DashboardQueryNotifier.searchDebounce);
+      final village = find.text('Epic RPG World - The Village V2.2');
+      await pumpUntil(tester, village);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      /// From the click to the loaded tabs.
+      Future<int> open() async {
+        final sw = Stopwatch()..start();
+        await tester.tap(village);
+        await pumpUntil(tester, find.textContaining('Animations ('));
+        return sw.elapsedMilliseconds;
+      }
+
+      final cold = await open();
+      final animations = find.textContaining('Animations (');
+      final label = (tester.widget(animations) as Text).data;
+      await tester.pump(const Duration(seconds: 1));
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await pumpUntil(tester, find.byType(PackDetailScreen), gone: true);
+      await tester.pump(const Duration(milliseconds: 500));
+      final cached = await open();
+      debugPrint('m94: The Village opened in $cold ms, then $cached ms');
+      // The same animations, without decoding the sheets again.
+      expect((tester.widget(animations) as Text).data, label);
+      expect(cached, lessThan(cold));
+      expect(cached, lessThan(1500));
+
+      await tester.tap(animations);
+      await tester.pump(const Duration(milliseconds: 500));
+      await settleImages(tester);
+      await captureScreenshot(tester, 'm94_village_animations', settle: false);
+    },
+  );
 
   testWidgets('m61: model viewer — orbit, wireframe, Esc closes', (
     tester,

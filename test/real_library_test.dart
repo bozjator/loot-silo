@@ -401,4 +401,36 @@ void main() {
       );
     },
   );
+
+  test(
+    'M94: RafaelMatos packs open from the animation cache fast (read-only)',
+    skip: Directory(managed).existsSync() ? false : 'no $managed',
+    () {
+      final packs = scanLibrary(managed).packs;
+      for (final pack in packs.where((p) => p.id.startsWith('RafaelMatos/'))) {
+        final files = [
+          for (var i = 0; i < pack.files.length; i++)
+            (pack.files[i], pack.sizes[i]),
+        ];
+        final cold = Stopwatch()..start();
+        final first = loadPackContentsCached(pack.path, files);
+        cold.stop();
+        final warm = Stopwatch()..start();
+        final again = loadPackContentsCached(
+          pack.path,
+          files,
+          cached: first.fresh,
+        );
+        warm.stop();
+        // ignore: avoid_print
+        print(
+          'M94 ${pack.title}: ${cold.elapsedMilliseconds} ms cold, '
+          '${warm.elapsedMilliseconds} ms cached',
+        );
+        expect(again.fresh, isNull, reason: pack.title);
+        expect(again.contents.detected, first.contents.detected);
+        expect(warm.elapsedMilliseconds, lessThan(500), reason: pack.title);
+      }
+    },
+  );
 }

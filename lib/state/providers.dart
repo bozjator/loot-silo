@@ -259,11 +259,24 @@ final packContentsProvider = FutureProvider.autoDispose
     .family<PackContents, String>((ref, packId) async {
       final library = await ref.watch(libraryProvider.future);
       final pack = library.packs.firstWhere((p) => p.id == packId);
-      final files = await ref.read(libraryIndexProvider).filesWithSizes(packId);
-      return _contentsInBackground(pack.path, files);
+      final index = ref.read(libraryIndexProvider);
+      final files = await index.filesWithSizes(packId);
+      // Detected animations come from the index while the pack's images
+      // are unchanged (M94); a fresh detection is stored for next time.
+      final cached = await index.animCache(packId);
+      final (:contents, :fresh) = await _contentsInBackground(
+        pack.path,
+        files,
+        cached,
+      );
+      if (fresh != null) {
+        await index.putAnimCache(packId, fresh.signature, fresh.json);
+      }
+      return contents;
     });
 
-Future<PackContents> _contentsInBackground(
+Future<({PackContents contents, AnimCache? fresh})> _contentsInBackground(
   String path,
   List<(String, int)> files,
-) => Isolate.run(() => loadPackContents(path, files));
+  AnimCache? cached,
+) => Isolate.run(() => loadPackContentsCached(path, files, cached: cached));

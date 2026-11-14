@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' show sha1;
 import 'package:image/image.dart' as img;
 
 import 'package:path/path.dart' as p;
@@ -209,7 +211,54 @@ class PackContents {
 
 /// Splits [files] into images / audio / models / other and detects animations,
 /// applying the sidecar's overrides. Pure Dart; run it in an isolate.
-PackContents loadPackContents(String packPath, List<(String, int)> files) {
+PackContents loadPackContents(String packPath, List<(String, int)> files) =>
+    loadPackContentsCached(packPath, files).contents;
+
+/// Bump when [detectAnimations] changes what it finds, so cached results
+/// ([AnimCache]) are detected again.
+const animDetectorVersion = 1;
+
+/// Animations detected in a pack, stored in the index (M94): valid while
+/// [signature] equals [animationSignature] of the pack.
+typedef AnimCache = ({String signature, String json});
+
+/// What [detectAnimations] depends on, hashed: the images with their sizes,
+/// the atlases, the pack's own "Make animation…" files, whether the pack
+/// path asks for pixel scans, and [animDetectorVersion]. Edits of fps,
+/// frame size or "Not an animation" are applied after detection, so they
+/// keep the cache.
+String animationSignature({
+  required String packPath,
+  required List<String> images,
+  required Map<String, int> sizes,
+  required Set<String> atlases,
+  required Set<String> manual,
+}) {
+  final b = StringBuffer()
+    ..writeln('v$animDetectorVersion')
+    ..writeln(worthPixelScan(packPath));
+  for (final rel in images) {
+    b.writeln('$rel\t${sizes[rel]}');
+  }
+  b.writeln('--atlases');
+  for (final rel in atlases.toList()..sort()) {
+    b.writeln(rel);
+  }
+  b.writeln('--manual');
+  for (final rel in manual.toList()..sort()) {
+    b.writeln(rel);
+  }
+  return sha1.convert(utf8.encode(b.toString())).toString();
+}
+
+/// [loadPackContents], skipping animation detection when [cached] still
+/// matches; `fresh` is the new cache entry when detection ran (null on a
+/// hit).
+({PackContents contents, AnimCache? fresh}) loadPackContentsCached(
+  String packPath,
+  List<(String, int)> files, {
+  AnimCache? cached,
+}) {
   final sidecar = PackSidecar.read(packPath);
   final images = <String>[], audio = <String>[], other = <String>[];
   final models = <String>[];
@@ -253,21 +302,44 @@ PackContents loadPackContents(String packPath, List<(String, int)> files) {
   // find them by their transparent gaps. Files with an animation word get
   // the same check, and their strips a check of the frame width.
   images.sort();
-  final detected = detectAnimations(
-    packPath,
-    images,
-    manual: manualAnimations(sidecar?.animations ?? const {}),
-    maxPixelScans: worthPixelScan(packPath) ? 24 : 0,
-    maxWordScans: detailWordScans,
-    atlases: atlasImages([for (final (rel, _) in content) rel]),
+  final sizes = {for (final (rel, size) in files) rel: size};
+  final manual = manualAnimations(sidecar?.animations ?? const {});
+  final atlases = atlasImages([for (final (rel, _) in content) rel]);
+  final signature = animationSignature(
+    packPath: packPath,
+    images: images,
+    sizes: sizes,
+    atlases: atlases,
+    manual: manual,
   );
+  final List<SpriteAnim> detected;
+  AnimCache? fresh;
+  if (cached != null && cached.signature == signature) {
+    detected = [
+      for (final j in jsonDecode(cached.json) as List)
+        SpriteAnim.fromJson(j as Map<String, Object?>),
+    ];
+  } else {
+    detected = detectAnimations(
+      packPath,
+      images,
+      manual: manual,
+      maxPixelScans: worthPixelScan(packPath) ? 24 : 0,
+      maxWordScans: detailWordScans,
+      atlases: atlases,
+    );
+    fresh = (
+      signature: signature,
+      json: jsonEncode([for (final a in detected) a.toJson()]),
+    );
+  }
   // An animation is listed in the Animations tab only; "Not an animation"
   // brings it back here.
   final animated = {
     for (final a in detected)
       if (!isNotAnimation(sidecar?.animations[a.path])) a.path,
   };
-  return PackContents(
+  final contents = PackContents(
     images: [
       for (final f in images)
         if (!animated.contains(f)) f,
@@ -282,10 +354,11 @@ PackContents loadPackContents(String packPath, List<(String, int)> files) {
     ],
     other: other..sort(),
     detected: detected,
-    sizes: {for (final (rel, size) in files) rel: size},
+    sizes: sizes,
     sidecar: sidecar,
     itchMedia: itchMedia,
   );
+  return (contents: contents, fresh: fresh);
 }
 
 /// Whether material [m] matches a search: by its name, or by a map's role

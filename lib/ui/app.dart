@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../state/anim_cache_fill.dart';
 import '../state/itch.dart' show itchKeyProvider;
 import '../state/providers.dart';
 import '../state/settings.dart';
@@ -95,6 +96,8 @@ class _AppState extends ConsumerState<LootSiloApp> {
 
   @override
   Widget build(BuildContext context) {
+    // Animations are detected in the background after a scan (M94).
+    ref.watch(animCacheFillProvider);
     final theme = ref.watch(settingsProvider.select((s) => s.theme));
     final themeColor = ref.watch(settingsProvider.select((s) => s.themeColor));
     return MaterialApp(

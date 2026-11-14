@@ -96,6 +96,21 @@ class PackSubFolders extends Table {
   Set<Column> get primaryKey => {packId, folder};
 }
 
+/// Animations detected in a pack (M94), so its page opens without decoding
+/// the sheets again. Kept across rescans; valid while [signature] matches
+/// ([animationSignature]).
+@DataClassName('PackAnimRow')
+class PackAnims extends Table {
+  TextColumn get packId => text()();
+  TextColumn get signature => text()();
+
+  /// `SpriteAnim.toJson` of each detected animation, as a JSON list.
+  TextColumn get json => text()();
+
+  @override
+  Set<Column> get primaryKey => {packId};
+}
+
 class ScanStates extends Table {
   TextColumn get root => text()();
   TextColumn get fingerprint => text()();
@@ -110,12 +125,14 @@ class ScanStates extends Table {
 ///
 /// It can always be rebuilt from the library folder, so schema changes
 /// simply drop and recreate everything.
-@DriftDatabase(tables: [Packs, PackFiles, PackSubFolders, ScanStates])
+@DriftDatabase(
+  tables: [Packs, PackFiles, PackSubFolders, PackAnims, ScanStates],
+)
 class LibraryIndex extends _$LibraryIndex {
   LibraryIndex(super.e);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   static const _ftsDdl =
       "CREATE VIRTUAL TABLE IF NOT EXISTS pack_fts USING fts5("
@@ -167,6 +184,11 @@ class LibraryIndex extends _$LibraryIndex {
     await delete(packs).go();
     await delete(packFiles).go();
     await delete(packSubFolders).go();
+    // Cached animations stay for packs that are still there.
+    await (delete(packAnims)..where(
+          (a) => a.packId.isNotIn([for (final pk in result.packs) pk.id]),
+        ))
+        .go();
     await customStatement('DELETE FROM pack_fts');
     await customStatement('DELETE FROM file_fts');
     await customStatement('DELETE FROM file_tri');
@@ -291,6 +313,24 @@ class LibraryIndex extends _$LibraryIndex {
       ..orderBy([(f) => OrderingTerm.asc(f.relPath)]);
     return q.map((f) => f.relPath).get();
   }
+
+  /// The cached animations of [packId] (M94): its signature and JSON.
+  Future<({String signature, String json})?> animCache(String packId) async {
+    final row = await (select(
+      packAnims,
+    )..where((a) => a.packId.equals(packId))).getSingleOrNull();
+    return row == null ? null : (signature: row.signature, json: row.json);
+  }
+
+  /// Stores the animations detected in [packId] under [signature].
+  Future<void> putAnimCache(String packId, String signature, String json) =>
+      into(packAnims).insertOnConflictUpdate(
+        PackAnimsCompanion.insert(
+          packId: packId,
+          signature: signature,
+          json: json,
+        ),
+      );
 
   /// (relative path, size) of every file that belongs to [packId].
   Future<List<(String, int)>> filesWithSizes(String packId) {

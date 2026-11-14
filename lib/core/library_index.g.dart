@@ -1651,6 +1651,270 @@ class PackSubFoldersCompanion extends UpdateCompanion<SubFolderRow> {
   }
 }
 
+class $PackAnimsTable extends PackAnims
+    with TableInfo<$PackAnimsTable, PackAnimRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PackAnimsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _packIdMeta = const VerificationMeta('packId');
+  @override
+  late final GeneratedColumn<String> packId = GeneratedColumn<String>(
+    'pack_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _signatureMeta = const VerificationMeta(
+    'signature',
+  );
+  @override
+  late final GeneratedColumn<String> signature = GeneratedColumn<String>(
+    'signature',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _jsonMeta = const VerificationMeta('json');
+  @override
+  late final GeneratedColumn<String> json = GeneratedColumn<String>(
+    'json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [packId, signature, json];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'pack_anims';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PackAnimRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('pack_id')) {
+      context.handle(
+        _packIdMeta,
+        packId.isAcceptableOrUnknown(data['pack_id']!, _packIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_packIdMeta);
+    }
+    if (data.containsKey('signature')) {
+      context.handle(
+        _signatureMeta,
+        signature.isAcceptableOrUnknown(data['signature']!, _signatureMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_signatureMeta);
+    }
+    if (data.containsKey('json')) {
+      context.handle(
+        _jsonMeta,
+        json.isAcceptableOrUnknown(data['json']!, _jsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_jsonMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {packId};
+  @override
+  PackAnimRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PackAnimRow(
+      packId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pack_id'],
+      )!,
+      signature: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}signature'],
+      )!,
+      json: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}json'],
+      )!,
+    );
+  }
+
+  @override
+  $PackAnimsTable createAlias(String alias) {
+    return $PackAnimsTable(attachedDatabase, alias);
+  }
+}
+
+class PackAnimRow extends DataClass implements Insertable<PackAnimRow> {
+  final String packId;
+  final String signature;
+
+  /// `SpriteAnim.toJson` of each detected animation, as a JSON list.
+  final String json;
+  const PackAnimRow({
+    required this.packId,
+    required this.signature,
+    required this.json,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['pack_id'] = Variable<String>(packId);
+    map['signature'] = Variable<String>(signature);
+    map['json'] = Variable<String>(json);
+    return map;
+  }
+
+  PackAnimsCompanion toCompanion(bool nullToAbsent) {
+    return PackAnimsCompanion(
+      packId: Value(packId),
+      signature: Value(signature),
+      json: Value(json),
+    );
+  }
+
+  factory PackAnimRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PackAnimRow(
+      packId: serializer.fromJson<String>(json['packId']),
+      signature: serializer.fromJson<String>(json['signature']),
+      json: serializer.fromJson<String>(json['json']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'packId': serializer.toJson<String>(packId),
+      'signature': serializer.toJson<String>(signature),
+      'json': serializer.toJson<String>(json),
+    };
+  }
+
+  PackAnimRow copyWith({String? packId, String? signature, String? json}) =>
+      PackAnimRow(
+        packId: packId ?? this.packId,
+        signature: signature ?? this.signature,
+        json: json ?? this.json,
+      );
+  PackAnimRow copyWithCompanion(PackAnimsCompanion data) {
+    return PackAnimRow(
+      packId: data.packId.present ? data.packId.value : this.packId,
+      signature: data.signature.present ? data.signature.value : this.signature,
+      json: data.json.present ? data.json.value : this.json,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PackAnimRow(')
+          ..write('packId: $packId, ')
+          ..write('signature: $signature, ')
+          ..write('json: $json')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(packId, signature, json);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PackAnimRow &&
+          other.packId == this.packId &&
+          other.signature == this.signature &&
+          other.json == this.json);
+}
+
+class PackAnimsCompanion extends UpdateCompanion<PackAnimRow> {
+  final Value<String> packId;
+  final Value<String> signature;
+  final Value<String> json;
+  final Value<int> rowid;
+  const PackAnimsCompanion({
+    this.packId = const Value.absent(),
+    this.signature = const Value.absent(),
+    this.json = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PackAnimsCompanion.insert({
+    required String packId,
+    required String signature,
+    required String json,
+    this.rowid = const Value.absent(),
+  }) : packId = Value(packId),
+       signature = Value(signature),
+       json = Value(json);
+  static Insertable<PackAnimRow> custom({
+    Expression<String>? packId,
+    Expression<String>? signature,
+    Expression<String>? json,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (packId != null) 'pack_id': packId,
+      if (signature != null) 'signature': signature,
+      if (json != null) 'json': json,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PackAnimsCompanion copyWith({
+    Value<String>? packId,
+    Value<String>? signature,
+    Value<String>? json,
+    Value<int>? rowid,
+  }) {
+    return PackAnimsCompanion(
+      packId: packId ?? this.packId,
+      signature: signature ?? this.signature,
+      json: json ?? this.json,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (packId.present) {
+      map['pack_id'] = Variable<String>(packId.value);
+    }
+    if (signature.present) {
+      map['signature'] = Variable<String>(signature.value);
+    }
+    if (json.present) {
+      map['json'] = Variable<String>(json.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PackAnimsCompanion(')
+          ..write('packId: $packId, ')
+          ..write('signature: $signature, ')
+          ..write('json: $json, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $ScanStatesTable extends ScanStates
     with TableInfo<$ScanStatesTable, ScanState> {
   @override
@@ -1929,6 +2193,7 @@ abstract class _$LibraryIndex extends GeneratedDatabase {
   late final $PacksTable packs = $PacksTable(this);
   late final $PackFilesTable packFiles = $PackFilesTable(this);
   late final $PackSubFoldersTable packSubFolders = $PackSubFoldersTable(this);
+  late final $PackAnimsTable packAnims = $PackAnimsTable(this);
   late final $ScanStatesTable scanStates = $ScanStatesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -1938,6 +2203,7 @@ abstract class _$LibraryIndex extends GeneratedDatabase {
     packs,
     packFiles,
     packSubFolders,
+    packAnims,
     scanStates,
   ];
 }
@@ -2784,6 +3050,175 @@ typedef $$PackSubFoldersTableProcessedTableManager =
       SubFolderRow,
       PrefetchHooks Function()
     >;
+typedef $$PackAnimsTableCreateCompanionBuilder = PackAnimsCompanion Function({
+  required String packId,
+  required String signature,
+  required String json,
+  Value<int> rowid,
+});
+typedef $$PackAnimsTableUpdateCompanionBuilder = PackAnimsCompanion Function({
+  Value<String> packId,
+  Value<String> signature,
+  Value<String> json,
+  Value<int> rowid,
+});
+
+class $$PackAnimsTableFilterComposer
+    extends Composer<_$LibraryIndex, $PackAnimsTable> {
+  $$PackAnimsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get packId => $composableBuilder(
+    column: $table.packId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get signature => $composableBuilder(
+    column: $table.signature,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get json => $composableBuilder(
+    column: $table.json,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PackAnimsTableOrderingComposer
+    extends Composer<_$LibraryIndex, $PackAnimsTable> {
+  $$PackAnimsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get packId => $composableBuilder(
+    column: $table.packId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get signature => $composableBuilder(
+    column: $table.signature,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get json => $composableBuilder(
+    column: $table.json,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PackAnimsTableAnnotationComposer
+    extends Composer<_$LibraryIndex, $PackAnimsTable> {
+  $$PackAnimsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get packId =>
+      $composableBuilder(column: $table.packId, builder: (column) => column);
+
+  GeneratedColumn<String> get signature =>
+      $composableBuilder(column: $table.signature, builder: (column) => column);
+
+  GeneratedColumn<String> get json =>
+      $composableBuilder(column: $table.json, builder: (column) => column);
+}
+
+class $$PackAnimsTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryIndex,
+          $PackAnimsTable,
+          PackAnimRow,
+          $$PackAnimsTableFilterComposer,
+          $$PackAnimsTableOrderingComposer,
+          $$PackAnimsTableAnnotationComposer,
+          $$PackAnimsTableCreateCompanionBuilder,
+          $$PackAnimsTableUpdateCompanionBuilder,
+          (
+            PackAnimRow,
+            BaseReferences<_$LibraryIndex, $PackAnimsTable, PackAnimRow>,
+          ),
+          PackAnimRow,
+          PrefetchHooks Function()
+        > {
+  $$PackAnimsTableTableManager(_$LibraryIndex db, $PackAnimsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PackAnimsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PackAnimsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PackAnimsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> packId = const Value.absent(),
+                Value<String> signature = const Value.absent(),
+                Value<String> json = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PackAnimsCompanion(
+                packId: packId,
+                signature: signature,
+                json: json,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String packId,
+                required String signature,
+                required String json,
+                Value<int> rowid = const Value.absent(),
+              }) => PackAnimsCompanion.insert(
+                packId: packId,
+                signature: signature,
+                json: json,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$PackAnimsTable, PackAnimRow>(table),
+                  BaseReferences<_$LibraryIndex, $PackAnimsTable, PackAnimRow>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PackAnimsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryIndex,
+      $PackAnimsTable,
+      PackAnimRow,
+      $$PackAnimsTableFilterComposer,
+      $$PackAnimsTableOrderingComposer,
+      $$PackAnimsTableAnnotationComposer,
+      $$PackAnimsTableCreateCompanionBuilder,
+      $$PackAnimsTableUpdateCompanionBuilder,
+      (
+        PackAnimRow,
+        BaseReferences<_$LibraryIndex, $PackAnimsTable, PackAnimRow>,
+      ),
+      PackAnimRow,
+      PrefetchHooks Function()
+    >;
 typedef $$ScanStatesTableCreateCompanionBuilder = ScanStatesCompanion Function({
   required String root,
   required String fingerprint,
@@ -2962,6 +3397,8 @@ class $LibraryIndexManager {
       $$PackFilesTableTableManager(_db, _db.packFiles);
   $$PackSubFoldersTableTableManager get packSubFolders =>
       $$PackSubFoldersTableTableManager(_db, _db.packSubFolders);
+  $$PackAnimsTableTableManager get packAnims =>
+      $$PackAnimsTableTableManager(_db, _db.packAnims);
   $$ScanStatesTableTableManager get scanStates =>
       $$ScanStatesTableTableManager(_db, _db.scanStates);
 }
