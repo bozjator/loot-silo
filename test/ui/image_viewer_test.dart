@@ -5,6 +5,7 @@ import 'package:loot_silo/state/settings.dart';
 import 'package:loot_silo/ui/image_viewer.dart';
 import 'package:loot_silo/ui/reveal.dart';
 import 'package:loot_silo/ui/widgets/pixel_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -145,6 +146,28 @@ void main() {
           .widget<Text>(find.byKey(const ValueKey('zoom-label')))
           .data!
           .replaceAll('×', ''),
+    );
+
+    testWidgets(
+      'close button: top left on macOS, top right elsewhere; closes',
+      (tester) async {
+        png('a.png', 8, 8);
+        await open(tester, ['a.png']);
+        final close = find.byKey(const ValueKey('dialog-close'));
+        final counter = find.text('1 / 1');
+        expect(close, findsOneWidget);
+        final mac = defaultTargetPlatform == TargetPlatform.macOS;
+        final x = tester.getCenter(close).dx;
+        expect(x < tester.getCenter(counter).dx, mac);
+        expect(x < 1440 / 2, mac);
+        await tester.tap(close);
+        await tester.pumpAndSettle();
+        expect(find.byType(ImageViewer), findsNothing);
+      },
+      variant: const TargetPlatformVariant({
+        TargetPlatform.linux,
+        TargetPlatform.macOS,
+      }),
     );
 
     testWidgets('zoom: label, 1:1 actual pixels, wheel below fit, Fit', (

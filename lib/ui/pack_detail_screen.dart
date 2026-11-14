@@ -55,6 +55,7 @@ import 'widgets/preview_picture.dart';
 import 'widgets/thumb_size.dart';
 import 'widgets/waveform.dart';
 import 'cursors.dart';
+import 'widgets/dialog_close.dart';
 
 /// Everything about one pack: previews, files, animations, metadata.
 class PackDetailScreen extends ConsumerWidget {
@@ -1226,6 +1227,7 @@ class PreviewGridDialog extends ConsumerWidget {
     final wanted = ref.watch(settingsProvider.select((s) => s.previewsColumns));
     final settings = ref.read(settingsProvider.notifier);
     final columns = balancedColumns(images.length, wanted);
+    final left = closeOnLeft(context);
     return Dialog(
       child: ConstrainedBox(
         // The window limits the dialog first.
@@ -1235,9 +1237,13 @@ class PreviewGridDialog extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
+              padding: dialogHeaderPadding(context, text: 20, top: 16),
               child: Row(
                 children: [
+                  if (left) ...[
+                    const DialogCloseButton(),
+                    const SizedBox(width: 8),
+                  ],
                   Expanded(
                     child: Text(
                       'Previews (${images.length})',
@@ -1271,12 +1277,10 @@ class PreviewGridDialog extends ConsumerWidget {
                         ? () => settings.setPreviewsColumns(wanted + 1)
                         : null,
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    tooltip: 'Close',
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
+                  if (!left) ...[
+                    const SizedBox(width: 8),
+                    const DialogCloseButton(),
+                  ],
                 ],
               ),
             ),

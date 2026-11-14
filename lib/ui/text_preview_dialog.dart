@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/text_preview.dart';
 import 'format.dart';
 import 'reveal.dart';
+import 'widgets/dialog_close.dart';
 
 /// Opens [rel] (relative to [packPath]) in the [TextPreviewDialog].
 Future<void> showTextPreview(
@@ -81,13 +82,23 @@ class _TextPreviewDialogState extends ConsumerState<TextPreviewDialog> {
         future: _preview,
         builder: (context, snap) {
           final text = snap.data?.text;
+          final left = closeOnLeft(context);
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 8, 12),
+                padding: dialogHeaderPadding(
+                  context,
+                  text: 20,
+                  top: 12,
+                  bottom: 12,
+                ),
                 child: Row(
                   children: [
+                    if (left) ...[
+                      const DialogCloseButton(),
+                      const SizedBox(width: 8),
+                    ],
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -142,11 +153,7 @@ class _TextPreviewDialogState extends ConsumerState<TextPreviewDialog> {
                       icon: const Icon(Icons.drive_file_move_outline),
                       onPressed: () => ref.read(revealProvider)(_path),
                     ),
-                    IconButton(
-                      tooltip: 'Close',
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
+                    if (!left) const DialogCloseButton(),
                   ],
                 ),
               ),

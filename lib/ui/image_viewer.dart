@@ -14,6 +14,7 @@ import 'reveal.dart';
 import 'widgets/file_menu.dart';
 import 'widgets/pixel_image.dart';
 import 'shortcuts.dart';
+import 'widgets/dialog_close.dart';
 
 /// Opens [images] (paths relative to [packPath]) in the [ImageViewer] at
 /// [index], over a dark backdrop.
@@ -206,6 +207,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     final theme = Theme.of(context);
     final rel = widget.images[_index];
     final file = File(p.join(widget.packPath, rel));
+    final left = closeOnLeft(context);
     return Dialog(
       insetPadding: EdgeInsets.symmetric(
         horizontal: window.width * 0.025,
@@ -219,15 +221,23 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+              padding: dialogHeaderPadding(context, text: 16),
               child: Row(
                 children: [
                   // Same width on both sides keeps the title centred.
                   SizedBox(
                     width: _sideWidth,
-                    child: Text(
-                      '${_index + 1} / ${widget.images.length}',
-                      style: theme.textTheme.labelLarge,
+                    child: Row(
+                      children: [
+                        if (left) ...[
+                          const DialogCloseButton(),
+                          const SizedBox(width: 8),
+                        ],
+                        Text(
+                          '${_index + 1} / ${widget.images.length}',
+                          style: theme.textTheme.labelLarge,
+                        ),
+                      ],
                     ),
                   ),
                   Expanded(
@@ -281,11 +291,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
                           icon: const Icon(Icons.drive_file_move_outline),
                           onPressed: () => ref.read(revealProvider)(file.path),
                         ),
-                        IconButton(
-                          tooltip: 'Close',
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
+                        if (!left) const DialogCloseButton(),
                       ],
                     ),
                   ),

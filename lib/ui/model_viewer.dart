@@ -21,6 +21,7 @@ import 'reveal.dart';
 import 'shortcuts.dart';
 import 'theme_colors.dart';
 import 'widgets/format_chips.dart';
+import 'widgets/dialog_close.dart';
 
 /// The viewer's toggles, kept while the app runs (not saved).
 class ModelViewOptions {
@@ -304,6 +305,7 @@ class _ModelViewerState extends ConsumerState<ModelViewer>
   }
 
   Widget _toolbar(ThemeData theme) {
+    final left = closeOnLeft(context);
     Widget toggle(
       String key,
       String tooltip,
@@ -319,9 +321,10 @@ class _ModelViewerState extends ConsumerState<ModelViewer>
     );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+      padding: dialogHeaderPadding(context, text: 16),
       child: Row(
         children: [
+          if (left) ...[const DialogCloseButton(), const SizedBox(width: 8)],
           SizedBox(
             width: 80,
             child: Text(
@@ -385,11 +388,7 @@ class _ModelViewerState extends ConsumerState<ModelViewer>
             icon: const Icon(Icons.center_focus_strong),
             onPressed: _reset,
           ),
-          IconButton(
-            tooltip: 'Close',
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
+          if (!left) const DialogCloseButton(),
         ],
       ),
     );

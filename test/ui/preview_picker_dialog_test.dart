@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -145,4 +146,37 @@ void main() {
     expect(find.byKey(const ValueKey('pick:hero_0.png')), findsOneWidget);
     expect(find.text('boom'), findsNothing);
   });
+
+  testWidgets(
+    'close button: before the title on macOS, after it elsewhere',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PreviewPickerDialog(
+              packPath: tmp.path,
+              files: const [],
+              initial: const [],
+              custom: true,
+            ),
+          ),
+        ),
+      );
+      final close = tester.getCenter(
+        find.byKey(const ValueKey('dialog-close')),
+      );
+      final title = tester.getCenter(find.text('Choose previews'));
+      expect(
+        close.dx < title.dx,
+        defaultTargetPlatform == TargetPlatform.macOS,
+      );
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.macOS,
+    }),
+  );
 }

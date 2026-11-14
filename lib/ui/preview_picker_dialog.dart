@@ -8,6 +8,7 @@ import '../core/file_search.dart';
 import 'cursors.dart';
 import '../core/animation_detector.dart';
 import 'widgets/preview_picture.dart';
+import 'widgets/dialog_close.dart';
 import 'widgets/thumb_size.dart'
     show detailControlHeight, detailControlRadius, detailControlWidth;
 
@@ -129,6 +130,7 @@ class _PreviewPickerDialogState extends State<PreviewPickerDialog> {
               if (fileMatches(f, words, infix: true)) f,
           ];
     final order = {for (final (i, f) in _chosen.indexed) f: i};
+    final left = closeOnLeft(context);
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1100, maxHeight: 900),
@@ -137,20 +139,23 @@ class _PreviewPickerDialogState extends State<PreviewPickerDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
+              padding: dialogHeaderPadding(
+                context,
+                text: 20,
+                top: 16,
+                bottom: 0,
+                titleOnly: true,
+              ),
               child: Row(
                 children: [
+                  if (left) const DialogCloseButton(),
                   Expanded(
                     child: Text(
                       'Choose previews',
                       style: theme.textTheme.titleLarge,
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Close',
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
+                  if (!left) const DialogCloseButton(),
                 ],
               ),
             ),

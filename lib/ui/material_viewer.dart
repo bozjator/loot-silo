@@ -18,6 +18,7 @@ import 'reveal.dart';
 import 'shortcuts.dart';
 import 'theme_colors.dart';
 import 'widgets/format_chips.dart';
+import 'widgets/dialog_close.dart';
 
 /// What the material viewer's stage shows.
 enum MaterialStageMode {
@@ -338,13 +339,15 @@ class _MaterialViewerState extends ConsumerState<MaterialViewer> {
   }
 
   Widget _toolbar(ThemeData theme) {
+    final left = closeOnLeft(context);
     final m = _material;
     final lit =
         _mode == MaterialStageMode.sphere || _mode == MaterialStageMode.plane;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+      padding: dialogHeaderPadding(context, text: 16),
       child: Row(
         children: [
+          if (left) ...[const DialogCloseButton(), const SizedBox(width: 8)],
           SizedBox(
             width: 80,
             child: Text(
@@ -422,11 +425,7 @@ class _MaterialViewerState extends ConsumerState<MaterialViewer> {
             icon: const Icon(Icons.center_focus_strong),
             onPressed: _reset,
           ),
-          IconButton(
-            tooltip: 'Close',
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
+          if (!left) const DialogCloseButton(),
         ],
       ),
     );
