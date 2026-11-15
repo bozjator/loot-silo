@@ -5650,6 +5650,68 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m98: animation badges on Packs and Expanded tiles (real)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(p.join(real, 'RafaelMatos')).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    final c = ProviderScope.containerOf(tester.element(find.byType(TabsHost)));
+    final rafael = [
+      for (final pk in c.read(libraryProvider).value!.packs)
+        if (pk.id.startsWith('RafaelMatos/')) pk,
+    ];
+    // The index only: nothing is written to the library.
+    await tester.runAsync(
+      () => AnimCacheFiller(
+        c.read(libraryIndexProvider),
+        pause: Duration.zero,
+      ).fill(rafael),
+    );
+    c
+        .read(dashboardQueryProvider.notifier)
+        .restore(DashboardQuery(authors: {rafael.first.author!}));
+    final badge = find.byKey(const ValueKey('pack-animations-badge'));
+    await pumpUntil(tester, badge);
+    await tester.pump(const Duration(milliseconds: 500));
+    // Every RafaelMatos pack has animations; their covers are mockups.
+    final counts = <String, int>{
+      for (final e in find.byType(PackTile).evaluate())
+        (e.widget as PackTile).pack.title:
+            (e.widget as PackTile).animationCount,
+    };
+    debugPrint('m98: animation badges $counts');
+    expect(counts.values.where((n) => n > 0), hasLength(rafael.length));
+    expect(badge, findsNWidgets(rafael.length));
+
+    // Hovering a tile plays one of its animations in the corner.
+    final village = find.byWidgetPredicate(
+      (w) => w is PackTile && w.pack.title.contains('The Village'),
+    );
+    await hoverOver(tester, village);
+    await tester.pump(const Duration(milliseconds: 300));
+    final inset = find.byKey(const ValueKey('pack-animation-inset'));
+    expect(inset, findsOneWidget);
+    expect(
+      find.descendant(of: inset, matching: find.byType(AnimatedSprite)),
+      findsOneWidget,
+    );
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm98_pack_anim_badges', settle: false);
+
+    // Expanded: folder tiles count their own animations.
+    c.read(settingsProvider.notifier).setDashboardView(DashboardView.expanded);
+    await tester.pump(const Duration(milliseconds: 500));
+    await pumpUntil(tester, badge);
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm98_expanded_anim_badges', settle: false);
+    c.read(settingsProvider.notifier).setDashboardView(DashboardView.packs);
+    c.read(dashboardQueryProvider.notifier).clearFilters();
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m98: folder tree on Kenney, then the Files view (real)', (
     tester,
   ) async {

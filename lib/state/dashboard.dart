@@ -423,6 +423,68 @@ class FileListingNotifier extends AsyncNotifier<FileListing?> {
   }
 }
 
+/// The animations of pack [packId] (as its Animations tab shows them, by
+/// file), read from the animation cache (M94) only: empty while the pack
+/// has no entry, or one its files no longer match. Feeds the Packs and
+/// Expanded tiles' animation badge. After any cache write it re-reads only
+/// this pack's row, and works the animations out again only when that row
+/// (or the library) changed.
+final packAnimationsProvider =
+    FutureProvider.family<Map<String, SpriteAnim>, String>((ref, packId) async {
+      ref.watch(animCacheChangesProvider);
+      final lib = await ref.watch(libraryProvider.future);
+      final pack = lib.packs.where((pk) => pk.id == packId).firstOrNull;
+      if (pack == null || pack.isBundle) return const {};
+      final index = ref.read(libraryIndexProvider);
+      final cache = await index.animCache(packId);
+      if (cache == null) return const {};
+      if (_packAnimations[packId]
+          case (:final library, cache: final seen, :final anims)
+          when identical(library, lib) && seen == cache) {
+        return anims;
+      }
+      final files = await index.filesWithSizes(packId);
+      final anims =
+          await _packAnimationsInBackground(pack.path, files, cache) ??
+          const <String, SpriteAnim>{};
+      _packAnimations[packId] = (library: lib, cache: cache, anims: anims);
+      return anims;
+    });
+
+/// The last animations worked out per pack, with the library and cache
+/// entry they came from.
+final _packAnimations =
+    <
+      String,
+      ({LibraryState library, AnimCache cache, Map<String, SpriteAnim> anims})
+    >{};
+
+Future<Map<String, SpriteAnim>?> _packAnimationsInBackground(
+  String path,
+  List<(String, int)> files,
+  AnimCache cache,
+) => Isolate.run(() => cachedAnimations(path, files, cache));
+
+/// What a Packs or Expanded tile shows of its pack's [anims]: how many
+/// there are (in [folder] for a folder tile) and the one to play, unless
+/// the tile's own cover already plays ([coverPlays]).
+({int count, SpriteAnim? sample}) tileAnimations(
+  Map<String, SpriteAnim> anims, {
+  String? folder,
+  bool coverPlays = false,
+}) {
+  final shown = folder == null
+      ? anims.values.toList()
+      : [
+          for (final MapEntry(:key, :value) in anims.entries)
+            if (key.startsWith('$folder/')) value,
+        ];
+  return (
+    count: shown.length,
+    sample: coverPlays ? null : pickTileAnimation(shown),
+  );
+}
+
 /// Counts changes of the animation cache (M94): watch it to refresh after
 /// the background fill or a pack page stored an entry.
 final animCacheChangesProvider = StreamProvider<int>((ref) {

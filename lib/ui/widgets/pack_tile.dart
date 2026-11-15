@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../../core/animation_detector.dart';
 import '../../core/library_index.dart';
 import '../../state/dashboard.dart';
 import '../format.dart';
@@ -54,7 +55,20 @@ class PackTile extends StatefulWidget {
     this.onToggleStar,
     this.subtitle,
     this.bundlePacks = 0,
+    this.animationCount = 0,
+    this.sampleAnimation,
+    this.animationPackPath,
   });
+
+  /// The animations of the pack (or folder), from the animation cache:
+  /// an "N animations" badge in the preview's bottom-left corner.
+  final int animationCount;
+
+  /// One of them, playing in the preview's bottom-right corner while the
+  /// cover plays (hovered, or [alwaysAnimate]); its frames are read from
+  /// [animationPackPath] (the pack, also for a folder tile).
+  final SpriteAnim? sampleAnimation;
+  final String? animationPackPath;
 
   final PackRow pack;
 
@@ -142,6 +156,55 @@ class _PackTileState extends State<PackTile> {
                         text:
                             'Bundle · ${widget.bundlePacks} '
                             'pack${widget.bundlePacks == 1 ? '' : 's'}',
+                      ),
+                    ),
+                  if (widget.animationCount > 0)
+                    Positioned(
+                      left: 6,
+                      bottom: 6,
+                      child: Tooltip(
+                        message:
+                            '${widget.animationCount} '
+                            'animation${widget.animationCount == 1 ? '' : 's'}',
+                        child: _Pill(
+                          key: const ValueKey('pack-animations-badge'),
+                          icon: Icons.animation,
+                          text: formatCount(widget.animationCount),
+                        ),
+                      ),
+                    ),
+                  if (widget.sampleAnimation case final anim?
+                      when animate && widget.animationPackPath != null)
+                    Align(
+                      alignment: Alignment.bottomRight,
+                      child: FractionallySizedBox(
+                        widthFactor: 0.4,
+                        heightFactor: 0.5,
+                        child: Container(
+                          key: const ValueKey('pack-animation-inset'),
+                          margin: const EdgeInsets.all(6),
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: scheme.surface.withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: scheme.outlineVariant),
+                          ),
+                          child: anim.kind == AnimKind.gif
+                              ? PixelImage(
+                                  File(
+                                    p.join(
+                                      widget.animationPackPath!,
+                                      anim.path,
+                                    ),
+                                  ),
+                                  animate: true,
+                                )
+                              : AnimatedSprite(
+                                  packPath: widget.animationPackPath!,
+                                  anim: anim,
+                                  playing: true,
+                                ),
+                        ),
                       ),
                     ),
                   if (widget.onToggleStar case final toggle?
@@ -320,7 +383,7 @@ class _TypeChip extends StatelessWidget {
 
 /// A label over a tile's preview.
 class _Pill extends StatelessWidget {
-  const _Pill({required this.icon, required this.text});
+  const _Pill({super.key, required this.icon, required this.text});
 
   final IconData icon;
   final String text;

@@ -138,7 +138,12 @@ class HelpScreen extends StatelessWidget {
                   'view (all at once, or on hover, as set on the Animations '
                   'tab), marked with an animation badge. Clicking it opens '
                   'the pack on its Animations tab with that animation '
-                  'focused.',
+                  'focused. In Packs and Expanded, a tile whose pack (or '
+                  'folder) has animations shows how many in a badge, and '
+                  'one of them plays in its corner while the cover plays '
+                  '(on hover, or always with Animate all). The counts come '
+                  'from the animation cache, filled in the background or '
+                  'when a pack is opened.',
                 ),
                 _P(
                   'A pack\'s tile shows its cover: one you chose, the '

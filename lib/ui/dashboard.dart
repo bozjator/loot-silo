@@ -447,48 +447,73 @@ class _DashboardState extends ConsumerState<Dashboard> {
                                       folder ??
                                       nodeFolderIn(pack.id, query.node),
                                 ),
-                                child: PackTile(
-                                  pack: tile,
-                                  alwaysAnimate: animateAll,
-                                  bundlePacks: bundles.counts[pack.id] ?? 0,
-                                  subtitle: folder == null
-                                      ? bundles.subtitle(pack)
-                                      : null,
-                                  starred:
-                                      folder == null &&
-                                      favorites.isPack(pack.id),
-                                  onToggleStar: folder == null && !pack.isBundle
-                                      ? () => ref
-                                            .read(favoritesProvider.notifier)
-                                            .togglePack(pack.id)
-                                      : null,
-                                  showTags: query.sort == PackSort.tags,
-                                  fileMatches: folder == null
-                                      ? fileMatchLine(
-                                          fileSearch?.counts[pack.id] ?? 0,
-                                          examples[pack.id] ?? const [],
-                                        )
-                                      : null,
-                                  fileMatchesTooltip: fileMatchTooltip(
-                                    fileSearch?.counts[pack.id] ?? 0,
-                                    examples[pack.id] ?? const [],
-                                  ),
-                                  onFileMatchesTap: () => openPackDetail(
-                                    context,
-                                    pack.id,
-                                    search: search,
-                                    returnFocus: _gridFocus,
-                                  ),
-                                  onTap: () => openPackDetail(
-                                    context,
-                                    pack.id,
-                                    // Inside a pack, the tree's node picks
-                                    // where its page starts (M98).
-                                    folder:
-                                        folder ??
-                                        nodeFolderIn(pack.id, query.node),
-                                    returnFocus: _gridFocus,
-                                  ),
+                                // Its own Consumer: a pack's animations
+                                // arriving rebuild this tile only.
+                                child: Consumer(
+                                  builder: (context, ref, _) {
+                                    final anims = ref
+                                        .watch(packAnimationsProvider(pack.id))
+                                        .value;
+                                    final shown = tileAnimations(
+                                      anims ?? const {},
+                                      folder: folder,
+                                      coverPlays:
+                                          tile.previewAnim != null ||
+                                          (tile.preview?.toLowerCase().endsWith(
+                                                '.gif',
+                                              ) ??
+                                              false),
+                                    );
+                                    return PackTile(
+                                      pack: tile,
+                                      alwaysAnimate: animateAll,
+                                      animationCount: shown.count,
+                                      sampleAnimation: shown.sample,
+                                      animationPackPath: pack.path,
+                                      bundlePacks: bundles.counts[pack.id] ?? 0,
+                                      subtitle: folder == null
+                                          ? bundles.subtitle(pack)
+                                          : null,
+                                      starred:
+                                          folder == null &&
+                                          favorites.isPack(pack.id),
+                                      onToggleStar:
+                                          folder == null && !pack.isBundle
+                                          ? () => ref
+                                                .read(
+                                                  favoritesProvider.notifier,
+                                                )
+                                                .togglePack(pack.id)
+                                          : null,
+                                      showTags: query.sort == PackSort.tags,
+                                      fileMatches: folder == null
+                                          ? fileMatchLine(
+                                              fileSearch?.counts[pack.id] ?? 0,
+                                              examples[pack.id] ?? const [],
+                                            )
+                                          : null,
+                                      fileMatchesTooltip: fileMatchTooltip(
+                                        fileSearch?.counts[pack.id] ?? 0,
+                                        examples[pack.id] ?? const [],
+                                      ),
+                                      onFileMatchesTap: () => openPackDetail(
+                                        context,
+                                        pack.id,
+                                        search: search,
+                                        returnFocus: _gridFocus,
+                                      ),
+                                      onTap: () => openPackDetail(
+                                        context,
+                                        pack.id,
+                                        // Inside a pack, the tree's node picks
+                                        // where its page starts (M98).
+                                        folder:
+                                            folder ??
+                                            nodeFolderIn(pack.id, query.node),
+                                        returnFocus: _gridFocus,
+                                      ),
+                                    );
+                                  },
                                 ),
                               );
                             },
