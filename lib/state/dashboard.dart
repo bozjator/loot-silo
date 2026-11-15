@@ -466,11 +466,16 @@ Future<Map<String, SpriteAnim>?> _packAnimationsInBackground(
 ) => Isolate.run(() => cachedAnimations(path, files, cache));
 
 /// What a Packs or Expanded tile shows of its pack's [anims]: how many
-/// there are (in [folder] for a folder tile) and the one to play, unless
-/// the tile's own cover already plays ([coverPlays]).
-({int count, SpriteAnim? sample}) tileAnimations(
+/// there are (in [folder] for a folder tile); the animation its [cover]
+/// file is (relative to the pack), so the cover plays as on the pack's
+/// Animations tab even where the scan's quicker detection saw a still
+/// (e.g. an `All-Spritesheet.png` of several rows); and, when the cover
+/// doesn't play ([coverPlays] or [cover] an animation), one to play in the
+/// tile's corner.
+({int count, SpriteAnim? cover, SpriteAnim? sample}) tileAnimations(
   Map<String, SpriteAnim> anims, {
   String? folder,
+  String? cover,
   bool coverPlays = false,
 }) {
   final shown = folder == null
@@ -479,9 +484,11 @@ Future<Map<String, SpriteAnim>?> _packAnimationsInBackground(
           for (final MapEntry(:key, :value) in anims.entries)
             if (key.startsWith('$folder/')) value,
         ];
+  final coverAnim = cover == null ? null : anims[cover];
   return (
     count: shown.length,
-    sample: coverPlays ? null : pickTileAnimation(shown),
+    cover: coverAnim,
+    sample: coverPlays || coverAnim != null ? null : pickTileAnimation(shown),
   );
 }
 

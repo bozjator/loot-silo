@@ -198,6 +198,11 @@ void main() {
     final playing = tileAnimations(anims, coverPlays: true);
     expect(playing.count, 2);
     expect(playing.sample, isNull);
+    // A cover the cache knows as an animation: drawn as one, no inset.
+    final sheet = tileAnimations(anims, cover: 'walk/hero_walk.png');
+    expect(sheet.cover!.path, 'walk/hero_walk.png');
+    expect(sheet.sample, isNull);
+    expect(tileAnimations(anims, cover: 'preview.png').cover, isNull);
 
     final sub = c.listen(packAnimationsProvider(knight), (_, _) {});
     addTearDown(sub.close);
@@ -208,6 +213,40 @@ void main() {
       same(anims),
       reason: "another pack's entry: Knight's are reused, not worked out again",
     );
+    await quit(tester);
+  });
+  testWidgets('a cover that is one of the cached animations is drawn as '
+      'that animation: one frame, playing on hover', (tester) async {
+    // The pack's own cover choice: its walk strip.
+    final json = File(p.join(lib, knight, 'asset_pack.json'));
+    json.writeAsStringSync(
+      json.readAsStringSync().replaceFirst(
+        '"title"',
+        '"previews": ["walk/hero_walk.png"], "title"',
+      ),
+    );
+    await start(tester);
+    final tile = tester.widget<PackTile>(tileOf(knight));
+    expect(tile.pack.preview, 'walk/hero_walk.png');
+    expect(tile.coverAnimation!.path, 'walk/hero_walk.png');
+    expect(tile.sampleAnimation, isNull, reason: 'the cover plays itself');
+    final cover = find.descendant(
+      of: tileOf(knight),
+      matching: find.byType(AnimatedSprite),
+    );
+    expect(cover, findsOneWidget);
+    expect(
+      tester.widget<AnimatedSprite>(cover).anim,
+      same(tile.coverAnimation),
+    );
+    expect(tester.widget<AnimatedSprite>(cover).playing, isFalse);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(tileOf(knight)));
+    addTearDown(mouse.removePointer);
+    await tester.pump();
+    expect(tester.widget<AnimatedSprite>(cover).playing, isTrue);
+    expect(inset, findsNothing);
     await quit(tester);
   });
 }

@@ -56,6 +56,7 @@ class PackTile extends StatefulWidget {
     this.subtitle,
     this.bundlePacks = 0,
     this.animationCount = 0,
+    this.coverAnimation,
     this.sampleAnimation,
     this.animationPackPath,
   });
@@ -63,6 +64,11 @@ class PackTile extends StatefulWidget {
   /// The animations of the pack (or folder), from the animation cache:
   /// an "N animations" badge in the preview's bottom-left corner.
   final int animationCount;
+
+  /// The cover as the animation cache knows it (frames read from
+  /// [animationPackPath]): shown as one frame, playing while hovered or
+  /// with [alwaysAnimate], instead of the whole sheet.
+  final SpriteAnim? coverAnimation;
 
   /// One of them, playing in the preview's bottom-right corner while the
   /// cover plays (hovered, or [alwaysAnimate]); its frames are read from
@@ -133,7 +139,17 @@ class _PackTileState extends State<PackTile> {
                         ? _GeneratedPreview(pack: pack)
                         : Padding(
                             padding: const EdgeInsets.all(6),
-                            child: pack.previewAnim != null
+                            child:
+                                widget.coverAnimation != null &&
+                                    widget.coverAnimation!.kind !=
+                                        AnimKind.gif &&
+                                    widget.animationPackPath != null
+                                ? AnimatedSprite(
+                                    packPath: widget.animationPackPath!,
+                                    anim: widget.coverAnimation!,
+                                    playing: animate,
+                                  )
+                                : pack.previewAnim != null
                                 ? AnimatedSprite(
                                     packPath: pack.path,
                                     anim: pack.previewAnim!,

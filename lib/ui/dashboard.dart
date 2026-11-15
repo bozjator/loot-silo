@@ -454,9 +454,15 @@ class _DashboardState extends ConsumerState<Dashboard> {
                                     final anims = ref
                                         .watch(packAnimationsProvider(pack.id))
                                         .value;
+                                    final preview = tile.preview;
                                     final shown = tileAnimations(
                                       anims ?? const {},
                                       folder: folder,
+                                      // A folder tile's cover is relative
+                                      // to its folder.
+                                      cover: preview == null || folder == null
+                                          ? preview
+                                          : '$folder/$preview',
                                       coverPlays:
                                           tile.previewAnim != null ||
                                           (tile.preview?.toLowerCase().endsWith(
@@ -468,6 +474,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                                       pack: tile,
                                       alwaysAnimate: animateAll,
                                       animationCount: shown.count,
+                                      coverAnimation: shown.cover,
                                       sampleAnimation: shown.sample,
                                       animationPackPath: pack.path,
                                       bundlePacks: bundles.counts[pack.id] ?? 0,

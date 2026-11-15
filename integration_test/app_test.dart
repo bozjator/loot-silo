@@ -5707,6 +5707,44 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, badge);
     await settleImages(tester);
     await captureScreenshot(tester, 'm98_expanded_anim_badges', settle: false);
+
+    // Pixel-Banner: each character folder's cover is an All-Spritesheet.png
+    // of several rows. The scan saw a still; the cache knows the animation,
+    // so the tile shows one frame of it instead of the whole sheet.
+    final banner = c
+        .read(libraryProvider)
+        .value!
+        .packs
+        .where((pk) => pk.title == 'Pixel-Banner')
+        .firstOrNull;
+    if (banner != null) {
+      await tester.runAsync(
+        () => AnimCacheFiller(
+          c.read(libraryIndexProvider),
+          pause: Duration.zero,
+        ).fill([banner]),
+      );
+      c
+          .read(dashboardQueryProvider.notifier)
+          .restore(DashboardQuery(node: banner.id));
+      final archer = find.byWidgetPredicate(
+        (w) =>
+            w is PackTile &&
+            w.pack.title == 'ArcherSkeleton' &&
+            w.coverAnimation != null,
+      );
+      await pumpUntil(tester, archer);
+      final tile = tester.widget<PackTile>(archer);
+      expect(tile.pack.preview, 'All-Spritesheet.png');
+      expect(tile.coverAnimation!.path, 'ArcherSkeleton/All-Spritesheet.png');
+      expect(tile.sampleAnimation, isNull);
+      debugPrint(
+        'm98: ArcherSkeleton cover: ${tile.coverAnimation!.cols} x '
+        '${tile.coverAnimation!.rows} frames of its All-Spritesheet',
+      );
+      await settleImages(tester);
+      await captureScreenshot(tester, 'm98_banner_sheet_covers', settle: false);
+    }
     c.read(settingsProvider.notifier).setDashboardView(DashboardView.packs);
     c.read(dashboardQueryProvider.notifier).clearFilters();
     expect(Directory(real).statSync().modified, before);
