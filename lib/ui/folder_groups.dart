@@ -165,7 +165,11 @@ class GroupedGrid extends StatelessWidget {
     this.padding = defaultPadding,
     this.folderAction,
     this.groups,
+    this.controller,
   });
+
+  /// Scrolls the grid; one is made by the scroll view without it.
+  final ScrollController? controller;
 
   /// The padding around the grid unless given.
   static const defaultPadding = EdgeInsets.fromLTRB(16, tabContentGap, 16, 16);
@@ -251,6 +255,7 @@ class GroupedGrid extends StatelessWidget {
       }
     }
     return CustomScrollView(
+      controller: controller,
       physics: physics,
       slivers: [
         SliverPadding(

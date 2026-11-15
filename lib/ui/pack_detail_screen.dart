@@ -419,7 +419,12 @@ class _BodyState extends State<_Body> {
       'Animations',
       contents.animations.length,
       base.animations.length,
-      () => _AnimationsTab(pack: pack, contents: contents),
+      () => _AnimationsTab(
+        pack: pack,
+        contents: contents,
+        // A Files view hit that is an animation opens focused (M97).
+        focus: widget.search != null ? widget.file : null,
+      ),
     );
     add(
       _ImagesTab,
@@ -2257,15 +2262,23 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
 }
 
 class _AnimationsTab extends ConsumerWidget {
-  const _AnimationsTab({required this.pack, required this.contents});
+  const _AnimationsTab({
+    required this.pack,
+    required this.contents,
+    this.focus,
+  });
 
   final PackRow pack;
   final PackContents contents;
+
+  /// The animation shown focused and scrolled into view first.
+  final String? focus;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => AnimationGrid(
     gridId: pack.id,
     packPath: pack.path,
+    focusPath: focus,
     favoriteFiles: ref.watch(
       favoritesProvider.select((f) => f.filesOf(pack.id)),
     ),

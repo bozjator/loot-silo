@@ -254,11 +254,23 @@ String animationSignature({
 /// [loadPackContents], skipping animation detection when [cached] still
 /// matches; `fresh` is the new cache entry when detection ran (null on a
 /// hit).
-({PackContents contents, AnimCache? fresh}) loadPackContentsCached(
-  String packPath,
-  List<(String, int)> files, {
-  AnimCache? cached,
-}) {
+/// A pack's files sorted into kinds, with what animation detection depends
+/// on and its [animationSignature].
+typedef _Sorted = ({
+  PackSidecar? sidecar,
+  List<String> itchMedia,
+  List<MaterialSet> materials,
+  List<String> images,
+  List<String> audio,
+  List<String> models,
+  List<String> other,
+  Map<String, int> sizes,
+  Set<String> manual,
+  Set<String> atlases,
+  String signature,
+});
+
+_Sorted _sortFiles(String packPath, List<(String, int)> files) {
   final sidecar = PackSidecar.read(packPath);
   final images = <String>[], audio = <String>[], other = <String>[];
   final models = <String>[];
@@ -312,6 +324,62 @@ String animationSignature({
     atlases: atlases,
     manual: manual,
   );
+  return (
+    sidecar: sidecar,
+    itchMedia: itchMedia,
+    materials: materials,
+    images: images,
+    audio: audio,
+    models: drawable,
+    other: other,
+    sizes: sizes,
+    manual: manual,
+    atlases: atlases,
+    signature: signature,
+  );
+}
+
+/// The animations a pack's Animations tab shows (overrides applied, "Not
+/// an animation" left out), by file, read from [cached] alone (M97): null
+/// when [cached] no longer matches the pack's files. Never decodes an
+/// image; reads the sidecar (and `.mtlx` files, as a page does).
+Map<String, SpriteAnim>? cachedAnimations(
+  String packPath,
+  List<(String, int)> files,
+  AnimCache cached,
+) {
+  final sorted = _sortFiles(packPath, files);
+  if (sorted.signature != cached.signature) return null;
+  final overrides = sorted.sidecar?.animations ?? const {};
+  return {
+    for (final j in jsonDecode(cached.json) as List)
+      if (SpriteAnim.fromJson(j as Map<String, Object?>) case final a
+          when !isNotAnimation(overrides[a.path]))
+        a.path: applyOverride(a, overrides[a.path]),
+  };
+}
+
+({PackContents contents, AnimCache? fresh}) loadPackContentsCached(
+  String packPath,
+  List<(String, int)> files, {
+  AnimCache? cached,
+}) {
+  final (
+    :sidecar,
+    :itchMedia,
+    :materials,
+    :images,
+    :audio,
+    :models,
+    :other,
+    :sizes,
+    :manual,
+    :atlases,
+    :signature,
+  ) = _sortFiles(
+    packPath,
+    files,
+  );
   final List<SpriteAnim> detected;
   AnimCache? fresh;
   if (cached != null && cached.signature == signature) {
@@ -345,7 +413,7 @@ String animationSignature({
         if (!animated.contains(f)) f,
     ],
     audio: audio..sort(),
-    models: drawable..sort(),
+    models: models..sort(),
     materials: [
       for (final m in materials)
         m.resolution == null

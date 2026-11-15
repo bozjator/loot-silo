@@ -117,6 +117,13 @@ class HelpScreen extends StatelessWidget {
                   'field next to the tabs filters that pack\'s files.',
                 ),
                 _P(
+                  'A matching file that is an animation plays in the Files '
+                  'view (all at once, or on hover, as set on the Animations '
+                  'tab), marked with an animation badge. Clicking it opens '
+                  'the pack on its Animations tab with that animation '
+                  'focused.',
+                ),
+                _P(
                   'A pack\'s tile shows its cover: one you chose, the '
                   'itch.io cover, an image named preview, cover, mockup, '
                   'screenshot or similar, else an animation or its largest '

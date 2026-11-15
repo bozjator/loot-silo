@@ -5577,6 +5577,69 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm96_other_library', settle: false);
   });
 
+  testWidgets('m97: animations play in the Files view (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(p.join(real, 'RafaelMatos')).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    final c = ProviderScope.containerOf(tester.element(find.byType(TabsHost)));
+    // The background fill is off here: fill RafaelMatos's packs (index
+    // only, nothing is written to the library).
+    final rafael = [
+      for (final pk in c.read(libraryProvider).value!.packs)
+        if (pk.id.startsWith('RafaelMatos/')) pk,
+    ];
+    expect(rafael, isNotEmpty);
+    final sw = Stopwatch()..start();
+    await tester.runAsync(
+      () => AnimCacheFiller(
+        c.read(libraryIndexProvider),
+        pause: Duration.zero,
+      ).fill(rafael),
+    );
+    debugPrint(
+      'm97: filled ${rafael.length} packs in ${sw.elapsedMilliseconds} ms',
+    );
+    c.read(settingsProvider.notifier)
+      ..setDashboardView(DashboardView.files)
+      ..setDetailAnimateMode(AnimateMode.all);
+    c
+        .read(dashboardQueryProvider.notifier)
+        .restore(DashboardQuery(text: 'walk', authors: {rafael.first.author!}));
+    final badge = find.byKey(const ValueKey('animation-badge'));
+    await pumpUntil(tester, badge);
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    final playing = find.byWidgetPredicate(
+      (w) => w is AnimatedSprite && w.playing,
+    );
+    expect(playing, findsWidgets);
+    debugPrint('m97: ${badge.evaluate().length} animation tiles on screen');
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm97_files_animations', settle: false);
+
+    // A click opens the pack on Animations with that card focused.
+    final first = find
+        .ancestor(of: playing.first, matching: find.byType(InkWell))
+        .first;
+    final path = tester.widget<AnimatedSprite>(playing.first).anim.path;
+    await tester.tap(first);
+    final focused = find.byWidgetPredicate(
+      (w) => w is ItemCard && w.focused && w.path == path,
+    );
+    await pumpUntil(tester, focused);
+    await tester.pump(const Duration(milliseconds: 500));
+    await settleImages(tester);
+    await captureScreenshot(tester, 'm97_opened_focused', settle: false);
+    c.read(settingsProvider.notifier)
+      ..setDashboardView(DashboardView.packs)
+      ..setDetailAnimateMode(AnimateMode.hover);
+    expect(Directory(real).statSync().modified, before);
+  });
+
   testWidgets('m61: model viewer — orbit, wireframe, Esc closes', (
     tester,
   ) async {

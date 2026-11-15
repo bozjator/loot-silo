@@ -146,6 +146,12 @@ class _DashboardState extends ConsumerState<Dashboard> {
       child: FileResultsGrid(
         key: PageStorageKey('files:$generation'),
         files: files,
+        // Hits that are animations play (M97), as cards do on a pack's
+        // Animations tab.
+        animations: ref.watch(fileAnimationsProvider).value ?? const {},
+        playAll:
+            ref.watch(settingsProvider.select((s) => s.detailAnimateMode)) ==
+            AnimateMode.all,
         tileSize: size,
         scale: _fileScale,
         onOpen: (f) => openPackDetail(

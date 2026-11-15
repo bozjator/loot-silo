@@ -3,12 +3,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/animation_detector.dart';
 import '../core/preview_picker.dart' show previewExts;
 import '../core/type_classifier.dart' show audioExts;
 import '../state/dashboard.dart';
 import 'cursors.dart';
 import 'format.dart';
 import 'tabs.dart';
+import 'widgets/animated_sprite.dart';
 import 'widgets/pixel_image.dart';
 import 'widgets/thumb_size.dart';
 
@@ -16,7 +18,8 @@ import 'widgets/thumb_size.dart';
 const fileResultsSpacing = 8.0;
 
 /// The dashboard's Files view: one tile per file matching the search, an
-/// image thumbnail or an icon, with the file's pack and folder below.
+/// image thumbnail or an icon, with the file's pack and folder below. A
+/// file that is an animation (M97) plays, with an animation badge.
 class FileResultsGrid extends StatelessWidget {
   const FileResultsGrid({
     super.key,
@@ -25,9 +28,17 @@ class FileResultsGrid extends StatelessWidget {
     required this.onOpen,
     this.onOpenInNewTab,
     this.scale,
+    this.animations = const {},
+    this.playAll = false,
   });
 
   final List<FileTile> files;
+
+  /// The hits that are animations, by (pack id, relative path).
+  final Map<(String, String), SpriteAnim> animations;
+
+  /// Every animation plays ("All"); otherwise only the hovered one.
+  final bool playAll;
   final double tileSize;
 
   /// The slider's stops: columns follow them.
@@ -56,16 +67,84 @@ class FileResultsGrid extends StatelessWidget {
       onOpenInNewTab: onOpenInNewTab == null
           ? null
           : () => onOpenInNewTab!(files[i]),
-      child: _FileResultTile(file: files[i], onTap: () => onOpen(files[i])),
+      child: _FileResultTile(
+        file: files[i],
+        anim: animations[(files[i].pack.id, files[i].relPath)],
+        playAll: playAll,
+        onTap: () => onOpen(files[i]),
+      ),
     ),
   );
 }
 
-class _FileResultTile extends StatelessWidget {
-  const _FileResultTile({required this.file, required this.onTap});
+class _FileResultTile extends StatefulWidget {
+  const _FileResultTile({
+    required this.file,
+    required this.onTap,
+    this.anim,
+    this.playAll = false,
+  });
 
   final FileTile file;
   final VoidCallback onTap;
+
+  /// Set when the file is an animation: the tile plays it.
+  final SpriteAnim? anim;
+  final bool playAll;
+
+  @override
+  State<_FileResultTile> createState() => _FileResultTileState();
+}
+
+class _FileResultTileState extends State<_FileResultTile> {
+  var _hover = false;
+
+  FileTile get file => widget.file;
+
+  /// The thumbnail: the animation playing (cropped like the Animations
+  /// tab's cards), the image, or an icon.
+  Widget _stage(ColorScheme scheme, String ext) {
+    final path = p.join(file.pack.path, file.relPath);
+    if (widget.anim case final a?) {
+      final playing = widget.playAll || _hover;
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          a.kind == AnimKind.gif
+              ? PixelImage(File(path), animate: playing)
+              : AnimatedSprite(
+                  packPath: file.pack.path,
+                  anim: a,
+                  playing: playing,
+                ),
+          Align(
+            alignment: Alignment.topLeft,
+            child: Tooltip(
+              message: 'Animation',
+              child: Container(
+                key: const ValueKey('animation-badge'),
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: scheme.surface.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Icon(Icons.animation, size: 16, color: scheme.primary),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return previewExts.contains(ext)
+        ? PixelImage(File(path))
+        : Icon(
+            audioExts.contains(ext)
+                ? Icons.graphic_eq
+                : Icons.description_outlined,
+            size: 40,
+            color: scheme.primary,
+          );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +158,12 @@ class _FileResultTile extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: InkWell(
         mouseCursor: clickCursor,
-        onTap: onTap,
+        onTap: widget.onTap,
+        onHover: widget.anim == null
+            ? null
+            : (h) {
+                if (h != _hover) setState(() => _hover = h);
+              },
         child: Tooltip(
           message: '${file.pack.title}/$rel',
           waitDuration: const Duration(milliseconds: 600),
@@ -91,15 +175,7 @@ class _FileResultTile extends StatelessWidget {
                   color: scheme.surfaceContainerHighest,
                   child: Padding(
                     padding: const EdgeInsets.all(6),
-                    child: previewExts.contains(ext)
-                        ? PixelImage(File(p.join(file.pack.path, rel)))
-                        : Icon(
-                            audioExts.contains(ext)
-                                ? Icons.graphic_eq
-                                : Icons.description_outlined,
-                            size: 40,
-                            color: scheme.primary,
-                          ),
+                    child: _stage(scheme, ext),
                   ),
                 ),
               ),

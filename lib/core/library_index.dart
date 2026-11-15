@@ -343,6 +343,25 @@ class LibraryIndex extends _$LibraryIndex {
     return row == null ? null : (signature: row.signature, json: row.json);
   }
 
+  /// Fires after the animation cache changes (a pack page or the
+  /// background fill stored an entry), so views built on it refresh.
+  Stream<void> animCacheChanges() =>
+      tableUpdates(TableUpdateQuery.onTable(packAnims));
+
+  /// [animCache] of every pack of [packIds] that has one, in one query.
+  Future<Map<String, ({String signature, String json})>> animCaches(
+    Iterable<String> packIds,
+  ) async {
+    final ids = packIds.toSet();
+    if (ids.isEmpty) return const {};
+    final rows = await (select(
+      packAnims,
+    )..where((a) => a.packId.isIn(ids))).get();
+    return {
+      for (final r in rows) r.packId: (signature: r.signature, json: r.json),
+    };
+  }
+
   /// Stores the animations detected in [packId] under [signature].
   Future<void> putAnimCache(String packId, String signature, String json) =>
       into(packAnims).insertOnConflictUpdate(
@@ -359,6 +378,22 @@ class LibraryIndex extends _$LibraryIndex {
       ..where((f) => f.packId.equals(packId))
       ..orderBy([(f) => OrderingTerm.asc(f.relPath)]);
     return q.map((f) => (f.relPath, f.size)).get();
+  }
+
+  /// [filesWithSizes] of every pack of [packIds], in one query.
+  Future<Map<String, List<(String, int)>>> filesWithSizesOf(
+    Iterable<String> packIds,
+  ) async {
+    final ids = packIds.toSet();
+    if (ids.isEmpty) return const {};
+    final q = select(packFiles)
+      ..where((f) => f.packId.isIn(ids))
+      ..orderBy([(f) => OrderingTerm.asc(f.relPath)]);
+    final out = <String, List<(String, int)>>{};
+    for (final f in await q.get()) {
+      (out[f.packId] ??= []).add((f.relPath, f.size));
+    }
+    return out;
   }
 
   /// Folder names inside each pack (two levels deep), for spotting itch

@@ -42,7 +42,12 @@ class AnimationGrid extends ConsumerStatefulWidget {
     this.favoriteFiles = const {},
     this.onToggleFavorite,
     this.previewFor,
+    this.focusPath,
   });
+
+  /// The animation focused and scrolled into view when the grid first
+  /// shows (a Files view hit, M97); its folder is unfolded if needed.
+  final String? focusPath;
 
   /// Keys the scroll position; the pack id.
   final String gridId;
@@ -98,8 +103,56 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
       .read(folderFoldsProvider)
       .set(widget.packPath, FoldTab.animations, _collapsed);
 
+  final _scroll = ScrollController();
+
+  /// Keys the card of [AnimationGrid.focusPath], to scroll it into view.
+  final _focusKey = GlobalKey(debugLabel: 'focused animation');
+
+  @override
+  void initState() {
+    super.initState();
+    final path = widget.focusPath;
+    final i = path == null
+        ? -1
+        : widget.animations.indexWhere((a) => a.path == path);
+    if (i < 0) return;
+    final folder = p.posix.dirname(path!);
+    if (_collapsed.any((f) => folder == f || p.posix.isWithin(f, folder))) {
+      _collapsed.removeWhere((f) => folder == f || p.posix.isWithin(f, folder));
+      _saveFolds();
+    }
+    _focusedCard.value = i;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _keys.requestFocus();
+      _reveal(i, 3);
+    });
+  }
+
+  /// Scrolls card [i] into view: straight there when it's built, else a
+  /// jump to where it should be by its place in the on-screen order, then
+  /// again after that frame ([tries] times at most).
+  void _reveal(int i, int tries) {
+    if (!mounted) return;
+    final card = _focusKey.currentContext;
+    if (card != null) {
+      Scrollable.ensureVisible(card, alignment: 0.5);
+      return;
+    }
+    if (tries <= 0 || !_scroll.hasClients) return;
+    final at = _order.indexOf(i);
+    final n = _order.shown.length;
+    if (at < 0 || n == 0) return;
+    final pos = _scroll.position;
+    final estimate =
+        (pos.maxScrollExtent + pos.viewportDimension) * at / n -
+        pos.viewportDimension / 2;
+    _scroll.jumpTo(estimate.clamp(0.0, pos.maxScrollExtent));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reveal(i, tries - 1));
+  }
+
   @override
   void dispose() {
+    _scroll.dispose();
     _keys.dispose();
     _scale.dispose();
     _focusedCard.dispose();
@@ -219,6 +272,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                   onTap: () => _focus(null),
                   child: GroupedGrid(
                     key: PageStorageKey('animations:${widget.gridId}'),
+                    controller: _scroll,
                     rels: paths,
                     groups: _order.groups(paths),
                     view: view,
@@ -245,6 +299,7 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                     ),
                     // Only built (so only playing) while on screen.
                     itemBuilder: (context, i) => FocusedCard<int>(
+                      key: anims[i].path == widget.focusPath ? _focusKey : null,
                       focus: _focusedCard,
                       id: i,
                       builder: (context, focused, dimmed) => _AnimationTile(

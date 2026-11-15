@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:isolate';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/animation_detector.dart';
 import '../core/library_index.dart';
+import '../core/pack_editor.dart';
 import '../core/type_classifier.dart';
 import '../ui/format.dart';
 import 'favorites.dart';
@@ -214,6 +217,77 @@ final visibleFilesProvider = Provider<AsyncValue<List<FileTile>>>((ref) {
     _ => const AsyncLoading(),
   };
 });
+
+/// Counts changes of the animation cache (M94): watch it to refresh after
+/// the background fill or a pack page stored an entry.
+final animCacheChangesProvider = StreamProvider<int>((ref) {
+  var n = 0;
+  return ref.watch(libraryIndexProvider).animCacheChanges().map((_) => ++n);
+});
+
+/// Which Files view tiles are animations (M97), by (pack id, relative
+/// path), with overrides applied as on the pack's Animations tab. Read
+/// from the animation cache only: a pack with no entry, or one its files
+/// no longer match, shows its hits as stills until the cache is filled.
+/// Nothing is decoded here.
+final fileAnimationsProvider =
+    FutureProvider<Map<(String, String), SpriteAnim>>((ref) async {
+      ref.watch(animCacheChangesProvider);
+      final tiles = ref.watch(visibleFilesProvider).value ?? const [];
+      if (tiles.isEmpty) return const {};
+      final index = ref.read(libraryIndexProvider);
+      final caches = await index.animCaches({for (final t in tiles) t.pack.id});
+      if (caches.isEmpty) return const {};
+      final files = await index.filesWithSizesOf(caches.keys);
+      final paths = {for (final t in tiles) t.pack.id: t.pack.path};
+      final hits = <String, Set<String>>{};
+      for (final t in tiles) {
+        if (caches.containsKey(t.pack.id)) {
+          (hits[t.pack.id] ??= {}).add(t.relPath);
+        }
+      }
+      return _hitAnimationsInBackground([
+        for (final MapEntry(key: id, value: rels) in hits.entries)
+          (
+            id: id,
+            path: paths[id]!,
+            files: files[id] ?? const [],
+            cache: caches[id]!,
+            rels: rels,
+          ),
+      ]);
+    });
+
+/// A pack with Files view hits and its animation cache.
+typedef HitPack = ({
+  String id,
+  String path,
+  List<(String, int)> files,
+  AnimCache cache,
+  Set<String> rels,
+});
+
+Future<Map<(String, String), SpriteAnim>> _hitAnimationsInBackground(
+  List<HitPack> packs,
+) => Isolate.run(() => hitAnimations(packs));
+
+/// [cachedAnimations] of each pack, kept to the hits among them.
+Map<(String, String), SpriteAnim> hitAnimations(List<HitPack> packs) {
+  final out = <(String, String), SpriteAnim>{};
+  for (final pk in packs) {
+    final Map<String, SpriteAnim>? anims;
+    try {
+      anims = cachedAnimations(pk.path, pk.files, pk.cache);
+    } on Object {
+      continue; // An unreadable sidecar: stills, as before.
+    }
+    if (anims == null) continue;
+    for (final rel in pk.rels) {
+      if (anims[rel] case final a?) out[(pk.id, rel)] = a;
+    }
+  }
+  return out;
+}
 
 /// The Files view's tiles for [hits] (null without search text). With the
 /// Favorites filter only starred files are kept, and without search text
