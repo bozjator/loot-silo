@@ -314,8 +314,9 @@ class HelpScreen extends StatelessWidget {
               ]),
               const _Section('3D models', [
                 _P(
-                  'The Models tab shows every GLB, glTF and OBJ model of the '
-                  'pack; hover a card to turn it. Double-click a card to '
+                  'The Models tab shows every GLB, glTF, OBJ, FBX, DAE, 3DS '
+                  'and STL model of the pack; hover a card to turn it. '
+                  'Double-click a card to '
                   'look at it up close: drag to turn around it, the wheel '
                   'zooms, right- or middle-drag moves it, and a double-click '
                   'resets the view. The toolbar switches textures, '
@@ -323,10 +324,11 @@ class HelpScreen extends StatelessWidget {
                 ),
                 _P(
                   'A model saved in several formats is one card with a chip '
-                  'per format. FBX, DAE, STL, Blend, 3DS and VOX are not '
-                  'drawn: their chip opens the file\'s folder, and a model in '
-                  'only those formats is listed under Other files. Models '
-                  'are shown without their animations.',
+                  'per format; click a chip to draw that file. Blend and VOX '
+                  'are not drawn: their chip opens the file\'s folder, and a '
+                  'model in only those formats is listed under Other files. '
+                  'Models are shown without their animations, and STL files '
+                  'have no colours.',
                 ),
               ]),
               const _Section('Materials', [

@@ -33,7 +33,7 @@ void main() {
   });
   tearDown(() => tmp.deleteSync(recursive: true));
 
-  /// Two models: a cube (GLB + OBJ + FBX) and a tall one (GLB).
+  /// Two models: a cube (GLB + OBJ + Blend) and a tall one (GLB).
   Future<void> open(
     WidgetTester tester, {
     int index = 0,
@@ -42,7 +42,7 @@ void main() {
     final dir = p.join(tmp.path, 'Models');
     writeCubeGlb(p.join(dir, 'GLTF format'), 'crate');
     writeCubeObj(p.join(dir, 'OBJ format'), 'crate');
-    File(p.join(dir, 'FBX format', 'crate.fbx'))
+    File(p.join(dir, 'Blend format', 'crate.blend'))
       ..createSync(recursive: true)
       ..writeAsBytesSync([0]);
     writeCubeGlb(
@@ -55,7 +55,7 @@ void main() {
     final items = groupModelFormats([
       'Models/GLTF format/crate.glb',
       'Models/OBJ format/crate.obj',
-      'Models/FBX format/crate.fbx',
+      'Models/Blend format/crate.blend',
       'Models/GLTF format/tower.glb',
     ]);
     await tester.binding.setSurfaceSize(const Size(1400, 900));
@@ -272,10 +272,10 @@ void main() {
     expect(reveals.single, endsWith(p.join('OBJ format', 'crate.mtl')));
     reveals.clear();
     await tester.tap(
-      find.byKey(const ValueKey('format:Models/FBX format/crate.fbx')),
+      find.byKey(const ValueKey('format:Models/Blend format/crate.blend')),
     );
     await tester.pump();
-    expect(reveals.single, endsWith('crate.fbx'));
+    expect(reveals.single, endsWith('crate.blend'));
     await tester.tap(find.text('Copy path'));
     await tester.pump();
     expect(find.text('Copied'), findsOneWidget);

@@ -6355,9 +6355,9 @@ void main() {
           'Models/OBJ format/tree.obj': obj.readAsBytesSync(),
           'Models/OBJ format/tree.mtl': File(p.join(tmpModels.path, 'tree.mtl'))
               .readAsBytesSync(),
-          'Models/FBX format/tree.fbx': [0, 1, 2],
+          'Models/Blend format/tree.blend': [0, 1, 2],
           'Models/GLTF format/broken.glb': [1, 2, 3, 4],
-          'Models/FBX format/fence.fbx': [0],
+          'Models/Blend format/fence.blend': [0],
         },
         overrides: [
           // Read on the test's thread: isolates need real time.
@@ -6402,7 +6402,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     });
 
-    testWidgets('one card per model; FBX-only models stay other files', (
+    testWidgets('one card per model; Blend-only models stay other files', (
       tester,
     ) async {
       await open(tester);
@@ -6412,7 +6412,44 @@ void main() {
       expect(find.textContaining('Other files'), findsOneWidget);
       // Drawn, with formats and the triangle count in the footer.
       expect(find.byKey(const ValueKey('model-paint')), findsOneWidget);
-      expect(find.text('12 triangles · GLB, OBJ, FBX'), findsOneWidget);
+      expect(find.text('12 triangles · GLB, OBJ, BLEND'), findsOneWidget);
+    });
+
+    testWidgets('M100: FBX, STL, DAE and 3DS models are cards too', (
+      tester,
+    ) async {
+      final fbx = File('test/fixtures/models/kenney_road_tile002.fbx')
+          .readAsBytesSync();
+      // A text STL of one triangle.
+      const stl =
+          'solid a\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\n'
+          'vertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid a\n';
+      await openKnight(
+        tester,
+        files: const [],
+        raw: {
+          'Models/FBX format/road.fbx': fbx,
+          'Models/STL format/road.stl': stl.codeUnits,
+          'Models/STL format/wedge.stl': stl.codeUnits,
+          'Models/Blend format/fence.blend': [0],
+        },
+        overrides: [
+          modelCacheProvider.overrideWithValue(
+            ModelCache(read: (path) async => readModelForPreview(path)),
+          ),
+        ],
+      );
+      await tester.tap(find.textContaining('Models ('));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      // The FBX-only road and the STL-only wedge used to be Other files.
+      expect(find.text('Models (2)'), findsOneWidget);
+      expect(find.byKey(const ValueKey('model-error')), findsNothing);
+      expect(find.byKey(const ValueKey('model-paint')), findsNWidgets(2));
+      // The FBX is drawn before the STL of the same model.
+      expect(find.text('38 triangles · FBX, STL'), findsOneWidget);
+      expect(find.text('1 triangles · STL'), findsOneWidget);
     });
 
     testWidgets('a broken file shows the error stage with its reason', (
@@ -6427,7 +6464,7 @@ void main() {
       expect(tip.message, isNotEmpty);
     });
 
-    testWidgets('format chips: OBJ draws the OBJ, FBX is revealed', (
+    testWidgets('format chips: OBJ draws the OBJ, Blend is revealed', (
       tester,
     ) async {
       await open(tester);
@@ -6451,11 +6488,11 @@ void main() {
       expect(tester.widget<ItemCard>(card).path, 'Models/OBJ format/tree.obj');
       expect(find.byKey(const ValueKey('model-paint')), findsOneWidget);
       await tester.tap(
-        find.byKey(const ValueKey('format:Models/FBX format/tree.fbx')),
+        find.byKey(const ValueKey('format:Models/Blend format/tree.blend')),
       );
       await tester.pump();
       expect(tester.widget<ItemCard>(card).path, 'Models/OBJ format/tree.obj');
-      expect(reveals.single, endsWith('Models/FBX format/tree.fbx'));
+      expect(reveals.single, endsWith('Models/Blend format/tree.blend'));
     });
 
     testWidgets('M61: double-click opens the viewer; back button, Esc close', (

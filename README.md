@@ -70,9 +70,10 @@ wheel and drag to pan. Focus mode steps through cards with the arrow keys.
 ### 3D models
 
 The Models tab shows one card per model, whatever formats it comes in (GLB,
-OBJ and FBX of the same tree are one card with a chip per format). GLB, glTF
-and OBJ models are drawn in their own colours and textures; hover a card to
-turn the model. Double-click for the model viewer: orbit, zoom and pan,
+OBJ and FBX of the same tree are one card with a chip per format). GLB, glTF,
+OBJ, FBX, DAE, 3DS and STL models are drawn in their own colours and textures,
+with smooth shading and correct depth, up to millions of triangles; hover a
+card to turn the model. Double-click for the model viewer: orbit, zoom and pan,
 wireframe, flat colours, turntable and floor grid, with an info panel
 (triangles, vertices, size, textures and materials) and the previous or next
 model one key away.
@@ -129,7 +130,7 @@ Press F1 in the app for the full guide and every keyboard shortcut.
 **Which file formats does it support?**
 Images: PNG, GIF, JPG, WebP, BMP, SVG, TGA (Aseprite and PSD files are
 listed). Audio: OGG, WAV, MP3, FLAC, M4A, AIFF, Opus. Fonts: TTF, OTF, WOFF,
-FNT. 3D models: GLB, glTF and OBJ are drawn; FBX, DAE, STL, Blend, 3DS and
+FNT. 3D models: GLB, glTF, OBJ, FBX, DAE, 3DS and STL are drawn; Blend and
 VOX are listed. Materials: maps as PNG, JPG, WebP, BMP or GIF, plus MaterialX,
 Godot (.tres), USD, Blender, Substance and Unity material files. Archives:
 zip, tar, 7z, rar.

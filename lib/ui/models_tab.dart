@@ -32,7 +32,7 @@ import 'widgets/thumb_size.dart';
 /// in: the model drawn from a three-quarter view (turning while hovered),
 /// its name, triangle count and formats. Format chips (all of them while
 /// hovered, else the drawn one) switch the drawn
-/// file (GLB, glTF, OBJ) or show an unreadable one (FBX, DAE…) in the file
+/// file (GLB, FBX, OBJ…) or show an unreadable one (Blend, VOX) in the file
 /// manager. Flat or By folder (format folders left out), star, focus and
 /// the size slider work as in the Images tab.
 class ModelsTab extends ConsumerStatefulWidget {

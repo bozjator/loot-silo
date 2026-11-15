@@ -4891,7 +4891,7 @@ A **16×16** knight with *walk* and *idle* animations.
     final models = p.join(pack, 'Models');
     writeCubeGlb(p.join(models, 'GLTF format'), 'crate');
     writeCubeObj(p.join(models, 'OBJ format'), 'crate');
-    File(p.join(models, 'FBX format', 'crate.fbx'))
+    File(p.join(models, 'Blend format', 'crate.blend'))
       ..createSync(recursive: true)
       ..writeAsBytesSync([0, 1, 2]);
     writeCubeGlb(
@@ -4919,10 +4919,10 @@ A **16×16** knight with *walk* and *idle* animations.
       gone: true,
     );
     expect(find.byKey(const ValueKey('model-paint')), findsNWidgets(2));
-    expect(find.text('12 triangles · GLB, OBJ, FBX'), findsOneWidget);
+    expect(find.text('12 triangles · GLB, OBJ, BLEND'), findsOneWidget);
     await captureScreenshot(tester, 'm60_models_tab', settle: false);
 
-    // OBJ draws the OBJ; FBX is shown in the file manager.
+    // OBJ draws the OBJ; Blend is shown in the file manager.
     final crate = find.byKey(const ValueKey('model:models/crate'));
     // The chips show on hover.
     await hoverOver(tester, crate);
@@ -4937,10 +4937,10 @@ A **16×16** knight with *walk* and *idle* animations.
     );
     expect(tester.widget<ItemCard>(crate).path, 'Models/OBJ format/crate.obj');
     await tester.tap(
-      find.byKey(const ValueKey('format:Models/FBX format/crate.fbx')),
+      find.byKey(const ValueKey('format:Models/Blend format/crate.blend')),
     );
     await tester.pump();
-    expect(revealed.single, endsWith('crate.fbx'));
+    expect(revealed.single, endsWith('crate.blend'));
 
     // Hover turns it; By folder leaves the format folders out.
     await tester.pump(const Duration(seconds: 1));
@@ -6048,6 +6048,90 @@ A **16×16** knight with *walk* and *idle* animations.
     modelViewOptions
       ..wireframe = false
       ..grid = false;
+    expect(Directory(tyre).statSync().modified, before);
+  });
+
+  testWidgets('m100: FBX and 3DS are drawn (real, read-only / temp copy)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    final tyre = p.join(real, 'Unknown Author', 'Tyre');
+    const blocky =
+        '../assets_library/Kenney/Kenney Game Assets 2 version 22/3D assets/'
+        'Blocky Characters (30 assets)/Models';
+    if (!File(p.join(tyre, 'tyre.fbx')).existsSync() ||
+        !Directory(blocky).existsSync()) {
+      return;
+    }
+    final before = Directory(tyre).statSync().modified;
+    modelViewOptions
+      ..textured = true
+      ..wireframe = false
+      ..turntable = false
+      ..grid = false;
+
+    // Rigged FBX characters (plus their OBJ / 3DS), in a temp copy.
+    copyTree('test/fixtures/managed', lib);
+    final pack = p.join(lib, 'HeroMaker', 'Knight Pack');
+    copyTree(blocky, p.join(pack, 'Models'));
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    await tester.tap(find.text('Knight Pack'));
+    await pumpUntil(tester, find.textContaining('Models ('));
+    await tester.tap(find.textContaining('Models ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await pumpUntil(
+      tester,
+      find.byKey(const ValueKey('model-loading')),
+      gone: true,
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byKey(const ValueKey('model-error')), findsNothing);
+    expect(find.textContaining('FBX'), findsWidgets);
+    await captureScreenshot(tester, 'm100_fbx_characters', settle: false);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The Tyre from its FBX, then its 3DS file.
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField).first, 'Tyre');
+    await pumpUntil(tester, find.text('Tyre'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.widgetWithText(PackTile, 'Tyre'));
+    await pumpUntil(tester, find.textContaining('Models ('));
+    await tester.tap(find.textContaining('Models ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await pumpUntil(
+      tester,
+      find.byKey(const ValueKey('model-loading')),
+      gone: true,
+    );
+    final card = find.byType(ItemCard).first;
+    await tester.tap(card);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(card);
+    await pumpUntil(tester, find.byKey(const ValueKey('model-viewer-paint')));
+    ModelPainter painter() =>
+        tester
+                .widget<CustomPaint>(
+                  find.byKey(const ValueKey('model-viewer-paint')),
+                )
+                .painter!
+            as ModelPainter;
+    final obj = painter().mesh;
+    for (final ext in ['fbx', '3ds']) {
+      await tester.tap(find.byKey(ValueKey('format:tyre.$ext')).last);
+      await tester.pump(const Duration(milliseconds: 300));
+      await pumpUntil(tester, find.byKey(const ValueKey('model-viewer-paint')));
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.byKey(const ValueKey('viewer-error')), findsNothing);
+      expect(identical(painter().mesh, obj), isFalse);
+      expect(painter().mesh.triangleCount, 39232);
+      await captureScreenshot(tester, 'm100_tyre_$ext', settle: false);
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 400));
     expect(Directory(tyre).statSync().modified, before);
   });
 

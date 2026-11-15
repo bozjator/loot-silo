@@ -170,7 +170,7 @@ void main() {
       expect(() => readModel(range.path), throwsA(isA<ModelReadError>()));
 
       expect(
-        () => readModel(p.join(tmp.path, 'a.fbx')),
+        () => readModel(p.join(tmp.path, 'a.blend')),
         throwsA(isA<ModelReadError>()),
       );
     });

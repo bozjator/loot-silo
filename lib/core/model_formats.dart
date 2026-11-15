@@ -4,16 +4,17 @@ import 'audio_formats.dart' show formatOf;
 import 'model_mesh.dart' show readableModelExts;
 
 /// Model formats in the order a card picks one: the ones the app can draw
-/// first (GLB, glTF, OBJ), then the ones it only lists.
+/// first (GLB and glTF keep the most of a model, STL has no colours), then
+/// the ones it only lists.
 const modelFormatOrder = [
   'glb',
   'gltf',
   'obj',
   'fbx',
   'dae',
+  '3ds',
   'stl',
   'blend',
-  '3ds',
   'vox',
 ];
 

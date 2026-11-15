@@ -23,7 +23,7 @@ const modelTurnDuration = Duration(seconds: 6);
 class ModelStage extends ConsumerStatefulWidget {
   const ModelStage({super.key, required this.path, this.turning = false});
 
-  /// Absolute path of a GLB, glTF or OBJ file.
+  /// Absolute path of a model file [readModel] can read.
   final String path;
   final bool turning;
 

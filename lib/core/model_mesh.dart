@@ -5,6 +5,11 @@ import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 
+import 'model_3ds.dart';
+import 'model_dae.dart';
+import 'model_fbx.dart';
+import 'model_stl.dart';
+
 /// A model file that can't be drawn: bad data or an unsupported feature.
 /// [reason] is short enough for a tooltip.
 class ModelReadError implements Exception {
@@ -149,12 +154,16 @@ class ModelMesh {
 }
 
 /// Formats [readModel] can draw.
-const readableModelExts = {'glb', 'gltf', 'obj'};
+const readableModelExts = {'glb', 'gltf', 'obj', 'fbx', 'dae', 'stl', '3ds'};
 
 /// Reads a model file by its extension.
 ModelMesh readModel(String path) => switch (p.extension(path).toLowerCase()) {
   '.glb' || '.gltf' => readGltf(path),
   '.obj' => readObj(path),
+  '.fbx' => readFbx(path),
+  '.dae' => readDae(path),
+  '.stl' => readStl(path),
+  '.3ds' => read3ds(path),
   _ => throw const ModelReadError('Format not supported'),
 };
 

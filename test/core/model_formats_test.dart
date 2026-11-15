@@ -12,13 +12,13 @@ void main() {
   test('the Kenney layout: one model per name across format folders', () {
     final models = groupModelFormats([
       'Models/DAE format/tree.dae',
-      'Models/FBX format/tree.fbx',
+      'Models/Blend format/tree.blend',
       'Models/GLTF format/tree.glb',
       'Models/OBJ format/tree.obj',
       'Models/STL format/tree.stl',
       'Models/GLTF format/Rock_Large.gltf',
       'Models/OBJ format/rock_large.obj',
-      'Models/FBX format/fence.fbx',
+      'Models/Blend format/fence.blend',
     ]);
     expect(
       [for (final m in models) m.files],
@@ -26,23 +26,35 @@ void main() {
         [
           'Models/GLTF format/tree.glb',
           'Models/OBJ format/tree.obj',
-          'Models/FBX format/tree.fbx',
           'Models/DAE format/tree.dae',
           'Models/STL format/tree.stl',
+          'Models/Blend format/tree.blend',
         ],
         [
           'Models/GLTF format/Rock_Large.gltf',
           'Models/OBJ format/rock_large.obj',
         ],
-        ['Models/FBX format/fence.fbx'],
+        ['Models/Blend format/fence.blend'],
       ],
     );
     final tree = models.first;
     expect(tree.folder, 'Models');
     expect(tree.groupPath, 'Models/tree.glb');
+    // Everything but the Blender file can be drawn.
     expect(tree.readable, [
       'Models/GLTF format/tree.glb',
       'Models/OBJ format/tree.obj',
+      'Models/DAE format/tree.dae',
+      'Models/STL format/tree.stl',
+    ]);
+    expect(modelFormatOrder.take(7), [
+      'glb',
+      'gltf',
+      'obj',
+      'fbx',
+      'dae',
+      '3ds',
+      'stl',
     ]);
     expect(tree.shown, 'Models/GLTF format/tree.glb');
     expect(models.last.shown, isNull);
@@ -81,21 +93,21 @@ void main() {
         ('Models/GLTF format/tree.glb', 1),
         ('Models/OBJ format/tree.obj', 1),
         ('Models/OBJ format/tree.mtl', 1),
-        ('Models/FBX format/tree.fbx', 1),
+        ('Models/Blend format/tree.blend', 1),
         ('Models/STL format/tree.stl', 1),
-        ('Models/FBX format/fence.fbx', 1),
+        ('Models/Blend format/fence.blend', 1),
         ('Models/GLTF format/fence.bin', 1),
         ('Preview.png', 1),
       ];
       final c = loadPackContents(tmp.path, files);
       expect(c.models, [
-        'Models/FBX format/tree.fbx',
+        'Models/Blend format/tree.blend',
         'Models/GLTF format/tree.glb',
         'Models/OBJ format/tree.obj',
         'Models/STL format/tree.stl',
       ]);
       expect(c.other, [
-        'Models/FBX format/fence.fbx',
+        'Models/Blend format/fence.blend',
         'Models/GLTF format/fence.bin',
         'Models/OBJ format/tree.mtl',
       ]);
