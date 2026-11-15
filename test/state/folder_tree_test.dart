@@ -198,6 +198,62 @@ void main() {
       },
     );
 
+    test('the file search applies the node and filters before its limit, '
+        'and counts only what they keep', () async {
+      // Unscoped, one hit for the whole library: few are in Pixel/Tiles/PNG.
+      final all = await index.searchFiles('png');
+      expect(all.total, greaterThan(2));
+      const q = DashboardQuery(text: 'png', node: 'Pixel/Tiles/PNG');
+      final scope = fileSearchScope(packs, q, Favorites.none)!;
+      expect(scope.packIds, {'Pixel/Tiles'});
+      expect(scope.folder, ('Pixel/Tiles', 'PNG'));
+      for (final limit in [1, 2]) {
+        final found = await index.searchFiles(
+          'png',
+          limit: limit,
+          scope: scope,
+        );
+        expect(found.hits, hasLength(limit), reason: 'limit $limit');
+        expect(
+          found.hits.every(
+            (h) => h.packId == 'Pixel/Tiles' && h.relPath.startsWith('PNG/'),
+          ),
+          isTrue,
+          reason: '${found.hits}',
+        );
+        expect(found.counts, {'Pixel/Tiles': 2});
+        expect(found.capped, limit < 2);
+      }
+      // A type filter: only the packs it keeps.
+      final sfx = fileSearchScope(
+        packs,
+        const DashboardQuery(text: 'ogg', types: {'sfx'}),
+        Favorites.none,
+      )!;
+      expect(sfx.folder, isNull);
+      final sounds = await index.searchFiles('ogg', scope: sfx);
+      expect(sounds.hits, isNotEmpty);
+      expect(sounds.hits.every((h) => sfx.packIds.contains(h.packId)), isTrue);
+      // No filters: the whole library, as before.
+      expect(
+        fileSearchScope(packs, const DashboardQuery(text: 'x'), Favorites.none),
+        isNull,
+      );
+    });
+
+    test("a node folder's _ and % are taken literally", () async {
+      final scope = FileScope(
+        const {'Pixel/Tiles'},
+        folder: ('Pixel/Tiles', 'P_G'),
+      );
+      expect((await index.searchFiles('png', scope: scope)).hits, isEmpty);
+      final pct = FileScope(
+        const {'Pixel/Tiles'},
+        folder: ('Pixel/Tiles', '%'),
+      );
+      expect((await index.searchFiles('png', scope: pct)).hits, isEmpty);
+    });
+
     test('Expanded tiles inside a pack keep the folder holding the node', () {
       final pack = packs.firstWhere((pk) => pk.id == 'Pixel/Tiles');
       final tiles = [

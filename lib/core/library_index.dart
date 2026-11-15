@@ -456,24 +456,45 @@ class LibraryIndex extends _$LibraryIndex {
   /// match first, then by path; at most [limit]. When nothing matches that
   /// way, words of 3+ characters are tried as substrings of the path
   /// ([FileSearch.infix]).
+  ///
+  /// With a [scope], only files of its packs (and inside its folder) are
+  /// searched, so the [limit] counts files the dashboard's filters keep,
+  /// and [FileSearch.counts] follows them too.
   Future<FileSearch> searchFiles(
     String query, {
     int limit = fileHitLimit,
+    FileScope? scope,
   }) async {
+    var where = '';
+    final scoped = <Variable<Object>>[];
+    if (scope != null) {
+      where = ' AND pack_id IN (SELECT value FROM json_each(?))';
+      scoped.add(Variable.withString(jsonEncode(scope.packIds.toList())));
+      if (scope.folder case (final pack, final folder)) {
+        where += r" AND (pack_id <> ? OR rel_path LIKE ? ESCAPE '\')";
+        scoped
+          ..add(Variable.withString(pack))
+          ..add(Variable.withString('${_likeEscape(folder)}/%'));
+      }
+    }
     for (final infix in [false, true]) {
       final q = _fileQuery(query, infix: infix);
       if (q == null) continue;
       final (table, match) = q;
       final rows = await customSelect(
-        'SELECT pack_id, rel_path FROM $table WHERE $table MATCH ? '
+        'SELECT pack_id, rel_path FROM $table WHERE $table MATCH ?$where '
         'ORDER BY rank, rel_path LIMIT ?',
-        variables: [Variable.withString(match), Variable.withInt(limit)],
+        variables: [
+          Variable.withString(match),
+          ...scoped,
+          Variable.withInt(limit),
+        ],
       ).get();
       if (rows.isEmpty) continue;
       final counts = await customSelect(
-        'SELECT pack_id, count(*) AS n FROM $table WHERE $table MATCH ? '
+        'SELECT pack_id, count(*) AS n FROM $table WHERE $table MATCH ?$where '
         'GROUP BY pack_id',
-        variables: [Variable.withString(match)],
+        variables: [Variable.withString(match), ...scoped],
       ).get();
       return FileSearch(
         hits: [
@@ -491,6 +512,33 @@ class LibraryIndex extends _$LibraryIndex {
     }
     return const FileSearch(hits: [], counts: {}, infix: false);
   }
+}
+
+/// [text] for a `LIKE … ESCAPE '\'` pattern: `%`, `_` and `\` taken
+/// literally.
+String _likeEscape(String text) =>
+    text.replaceAllMapped(RegExp(r'[\\%_]'), (m) => '\\${m[0]}');
+
+/// Where [LibraryIndex.searchFiles] looks: the packs the dashboard's
+/// filters keep and, for a tree node inside a pack, that pack's folder.
+class FileScope {
+  const FileScope(this.packIds, {this.folder});
+
+  final Set<String> packIds;
+
+  /// (pack id, folder relative to the pack): that pack's files only under
+  /// the folder.
+  final (String, String)? folder;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FileScope &&
+      other.folder == folder &&
+      other.packIds.length == packIds.length &&
+      other.packIds.containsAll(packIds);
+
+  @override
+  int get hashCode => Object.hash(folder, packIds.length);
 }
 
 /// One file found by [LibraryIndex.searchFiles].

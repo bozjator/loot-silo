@@ -197,13 +197,75 @@ final searchHitsProvider = FutureProvider<List<String>?>((ref) async {
   return ref.read(libraryIndexProvider).search(text);
 });
 
-/// Files matching the search text, or null when there is none.
+/// Files matching the search text, or null when there is none. Searched
+/// within [fileSearchScopeProvider], so the hit limit counts only files the
+/// filters keep.
 final fileSearchProvider = FutureProvider<FileSearch?>((ref) async {
   final text = ref.watch(dashboardQueryProvider.select((q) => q.text.trim()));
   await ref.watch(libraryProvider.future);
   if (text.isEmpty) return null;
-  return ref.read(libraryIndexProvider).searchFiles(text);
+  final scope = ref.watch(fileSearchScopeProvider);
+  return ref.read(libraryIndexProvider).searchFiles(text, scope: scope);
 });
+
+/// Where the file search looks for the current filters and tree node; null
+/// (the whole library) without any. Equal scopes don't re-run the search.
+final fileSearchScopeProvider = Provider<FileScope?>((ref) {
+  final packs = ref.watch(libraryProvider).value?.packs ?? const [];
+  return fileSearchScope(
+    packs,
+    ref.watch(dashboardQueryProvider),
+    ref.watch(favoritesProvider),
+  );
+});
+
+/// The packs whose files a search under [q] may show: those its filters
+/// and node keep, bundles open or not (Packs shows a bundle's own matches,
+/// Expanded and Files its packs'). With the Favorites filter, also the
+/// packs of starred files (Files lists those). A node inside a pack keeps
+/// only that pack's folder. Null when nothing narrows the library.
+FileScope? fileSearchScope(
+  List<PackRow> packs,
+  DashboardQuery q,
+  Favorites favorites,
+) {
+  final node = q.node;
+  if (!q.hasFilters && node == null) return null;
+  final ids = <String>{
+    for (final pk in applyQuery(packs, q, null, favorites: favorites)) pk.id,
+    for (final pk in applyQuery(
+      packs,
+      q,
+      null,
+      favorites: favorites,
+      openBundles: true,
+    ))
+      pk.id,
+  };
+  if (q.favorites) {
+    final starredPacks = {for (final f in favorites.allFiles) f.packId};
+    ids.addAll([
+      for (final pk in applyQuery(
+        packs,
+        q,
+        null,
+        favorites: Favorites(packs: starredPacks),
+        openBundles: true,
+      ))
+        pk.id,
+    ]);
+  }
+  (String, String)? folder;
+  if (node != null) {
+    for (final id in ids) {
+      if (node.startsWith('$id/')) {
+        folder = (id, node.substring(id.length + 1));
+        break;
+      }
+    }
+  }
+  return FileScope(ids, folder: folder);
+}
 
 /// One tile of the Files view: a matching file and its pack.
 typedef FileTile = ({PackRow pack, String relPath});

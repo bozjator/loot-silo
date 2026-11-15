@@ -5755,6 +5755,43 @@ A **16×16** knight with *walk* and *idle* animations.
     await settleImages(tester);
     await tester.pump(const Duration(milliseconds: 300));
     await captureScreenshot(tester, 'm98_tree_files', settle: false);
+
+    // A broad search under one small pack: the node applies before the
+    // hit limit, so every PNG of Topdown Tanks is listed.
+    c.read(dashboardQueryProvider.notifier).setNode(tanks.id);
+    await tester.enterText(find.byType(TextField).first, 'png');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
+    await tester.pump(const Duration(milliseconds: 300));
+    final everywhere = await tester.runAsync(
+      () => c.read(libraryIndexProvider).searchFiles('png'),
+    );
+    final pngs = [
+      for (final f
+          in await tester.runAsync(
+                () => c.read(libraryIndexProvider).filesOf(tanks.id),
+              ) ??
+              const <String>[])
+        if (f.toLowerCase().endsWith('.png')) f,
+    ];
+    for (var i = 0; i < 40; i++) {
+      if ((c.read(visibleFilesProvider).value?.length ?? 0) >= pngs.length) {
+        break;
+      }
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    final under = c.read(visibleFilesProvider).value!;
+    debugPrint(
+      'm98: "png" matches ${everywhere!.total} files in the library, '
+      '${under.length} under ${tanks.title} (${pngs.length} PNGs there)',
+    );
+    expect(everywhere.capped, isTrue);
+    expect(pngs, isNotEmpty);
+    expect(under.length, pngs.length);
+    expect(under.every((f) => f.pack.id == tanks.id), isTrue);
+    c.read(dashboardQueryProvider.notifier).clearFilters();
     c.read(settingsProvider.notifier)
       ..setDashboardView(DashboardView.packs)
       ..setDashboardTreeOpen(false);

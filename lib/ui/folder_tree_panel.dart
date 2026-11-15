@@ -261,6 +261,21 @@ class _FolderTreePanelState extends ConsumerState<FolderTreePanel> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final dim = scheme.onSurfaceVariant.withValues(alpha: 0.5);
+    // Styles worked out once, not per row.
+    final label = theme.textTheme.bodyMedium;
+    final labelDim = label?.copyWith(color: dim);
+    final countStyle = theme.textTheme.labelSmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    final countDim = theme.textTheme.labelSmall?.copyWith(color: dim);
+    final selectedBox = BoxDecoration(color: scheme.secondaryContainer);
+    final cursorBox = BoxDecoration(
+      border: Border.all(color: scheme.primary),
+      borderRadius: BorderRadius.circular(4),
+    );
+    final cursorSelectedBox = cursorBox.copyWith(
+      color: scheme.secondaryContainer,
+    );
     return Focus(
       focusNode: _focus,
       onKeyEvent: _onKey,
@@ -278,91 +293,105 @@ class _FolderTreePanelState extends ConsumerState<FolderTreePanel> {
             final count = counts.of(n);
             final isSelected = n.path == selected;
             final isCursor = _focus.hasFocus && n.path == _cursor;
-            return GestureDetector(
+            final empty = count == 0;
+            Widget tile = InkWell(
+              key: ValueKey('tree:${n.path}'),
+              mouseCursor: clickCursor,
+              onTap: () => _tap(row),
               onSecondaryTapUp: (d) => _menu(row, d.globalPosition),
-              child: Tooltip(
-                message: n.path,
-                waitDuration: const Duration(milliseconds: 700),
-                child: Material(
-                  color: isSelected
-                      ? scheme.secondaryContainer
-                      : Colors.transparent,
-                  shape: isCursor
-                      ? RoundedRectangleBorder(
-                          side: BorderSide(color: scheme.primary),
-                          borderRadius: BorderRadius.circular(4),
-                        )
-                      : null,
-                  child: InkWell(
-                    key: ValueKey('tree:${n.path}'),
-                    mouseCursor: clickCursor,
-                    onTap: () => _tap(row),
-                    child: Padding(
-                      padding: EdgeInsets.only(left: 4.0 + row.depth * 16),
-                      child: Row(
-                        children: [
-                          SizedBox.square(
-                            dimension: 24,
-                            child: row.expandable
-                                ? IconButton(
-                                    key: ValueKey('tree-fold:${n.path}'),
-                                    padding: EdgeInsets.zero,
-                                    iconSize: 18,
-                                    tooltip: row.expanded
-                                        ? 'Collapse'
-                                        : 'Expand',
-                                    icon: Icon(
-                                      row.expanded
-                                          ? Icons.expand_more
-                                          : Icons.chevron_right,
-                                    ),
-                                    onPressed: () => _expanded.toggle(n.path),
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(width: 2),
-                          Icon(
-                            switch (n.kind) {
-                              TreeKind.folder => Icons.folder_outlined,
-                              TreeKind.bundle => Icons.inventory_2_outlined,
-                              TreeKind.section => Icons.folder_special_outlined,
-                              TreeKind.pack => Icons.widgets_outlined,
-                              TreeKind.packFolder => Icons.folder_outlined,
-                            },
-                            size: 18,
-                            color: count == 0 ? dim : scheme.primary,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              n.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: count == 0 ? dim : null,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            formatCount(count),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: count == 0 ? dim : scheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
+              child: Padding(
+                padding: EdgeInsets.only(left: 4.0 + row.depth * 16),
+                child: Row(
+                  children: [
+                    SizedBox.square(
+                      dimension: 24,
+                      child: row.expandable
+                          ? _Chevron(
+                              key: ValueKey('tree-fold:${n.path}'),
+                              expanded: row.expanded,
+                              onTap: () => _expanded.toggle(n.path),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      switch (n.kind) {
+                        TreeKind.folder => Icons.folder_outlined,
+                        TreeKind.bundle => Icons.inventory_2_outlined,
+                        TreeKind.section => Icons.folder_special_outlined,
+                        TreeKind.pack => Icons.widgets_outlined,
+                        TreeKind.packFolder => Icons.folder_outlined,
+                      },
+                      size: 18,
+                      color: empty ? dim : scheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        n.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: empty ? labelDim : label,
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    Text(
+                      formatCount(count),
+                      style: empty ? countDim : countStyle,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                 ),
               ),
+            );
+            if (isSelected || isCursor) {
+              tile = DecoratedBox(
+                decoration: isCursor
+                    ? (isSelected ? cursorSelectedBox : cursorBox)
+                    : selectedBox,
+                position: isCursor
+                    ? DecorationPosition.foreground
+                    : DecorationPosition.background,
+                child: tile,
+              );
+            }
+            return Tooltip(
+              message: n.path,
+              waitDuration: const Duration(milliseconds: 700),
+              child: tile,
             );
           },
         ),
       ),
     );
   }
+}
+
+/// A row's expand / collapse arrow: an icon with a tap handler, lighter than
+/// an [IconButton] (no tooltip, ink or focus of its own) since every visible
+/// row has one.
+class _Chevron extends StatelessWidget {
+  const _Chevron({super.key, required this.expanded, required this.onTap});
+
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: expanded ? 'Collapse' : 'Expand',
+    child: MouseRegion(
+      cursor: clickCursor,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Icon(
+          expanded ? Icons.expand_more : Icons.chevron_right,
+          size: 18,
+        ),
+      ),
+    ),
+  );
 }
 
 /// The folder tree beside the dashboard grid: the panel with a draggable
