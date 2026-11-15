@@ -345,13 +345,13 @@ class _FolderTreePanelState extends ConsumerState<FolderTreePanel> {
               ),
             );
             if (isSelected || isCursor) {
+              // Behind the row, never in front: a filled foreground box
+              // would cover the label (the border shows either way).
               tile = DecoratedBox(
+                key: ValueKey('tree-highlight:${n.path}'),
                 decoration: isCursor
                     ? (isSelected ? cursorSelectedBox : cursorBox)
                     : selectedBox,
-                position: isCursor
-                    ? DecorationPosition.foreground
-                    : DecorationPosition.background,
                 child: tile,
               );
             }

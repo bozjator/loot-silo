@@ -198,6 +198,30 @@ void main() {
     await quit(tester);
   });
 
+  testWidgets('the selected, focused row keeps its label visible: the '
+      'highlight is drawn behind it', (tester) async {
+    await start(tester, settings: open().copyWith(dashboardTreeOpen: true));
+    await wait(tester, () => shownPacks(tester).length == 3);
+    // A click selects the row and gives the tree the keyboard (cursor).
+    await tester.tap(row('HeroMaker'));
+    await tester.pump();
+    final box = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('tree-highlight:HeroMaker')),
+    );
+    final decoration = box.decoration as BoxDecoration;
+    expect(decoration.color, isNotNull, reason: 'selected');
+    expect(decoration.border, isNotNull, reason: 'keyboard cursor');
+    expect(box.position, DecorationPosition.background);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('tree-highlight:HeroMaker')),
+        matching: find.text('HeroMaker'),
+      ),
+      findsOneWidget,
+    );
+    await quit(tester);
+  });
+
   testWidgets('keyboard: Down, Right, Left, Enter', (tester) async {
     final c = await start(
       tester,
