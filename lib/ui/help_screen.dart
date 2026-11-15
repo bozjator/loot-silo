@@ -117,6 +117,19 @@ class HelpScreen extends StatelessWidget {
                   'field next to the tabs filters that pack\'s files.',
                 ),
                 _P(
+                  'The folder tree (the tree button next to Packs / '
+                  'Expanded / Files) shows the library\'s folders down into '
+                  'packs, bundles and their sections, and the folders inside '
+                  'packs. Click a folder to see only what is under it, in '
+                  'every view and together with the search and filters; an '
+                  '"In: …" chip shows it, and × (or a second click) clears '
+                  'it. The numbers count packs above packs and files inside '
+                  'them, for the current search and filters. With the tree '
+                  'focused, the arrow keys move and open folders and Enter '
+                  'selects; right-click a folder to open its pack, show it '
+                  'in the file manager or expand everything below it.',
+                ),
+                _P(
                   'A matching file that is an animation plays in the Files '
                   'view (all at once, or on hover, as set on the Animations '
                   'tab), marked with an animation badge. Clicking it opens '

@@ -1,13 +1,18 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/dashboard.dart';
+import '../state/folder_tree.dart';
 import '../state/favorites.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
 import '../core/library_index.dart' show LibraryIndex;
+import 'cursors.dart';
 import 'file_results.dart';
+import 'folder_tree_panel.dart';
 import 'shortcuts.dart';
 import 'tabs.dart';
 import 'pack_detail_screen.dart';
@@ -102,6 +107,65 @@ class _DashboardState extends ConsumerState<Dashboard> {
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  /// Below this window width the folder tree overlays the grid instead of
+  /// pushing it aside, and closes on a selection.
+  static const treeOverlayBelow = 900.0;
+
+  /// [child] (the grid or the file results) with the folder tree on its
+  /// left while the tree is open (M98).
+  Widget _withTree({required double windowWidth, required Widget child}) {
+    if (!ref.watch(settingsProvider.select((s) => s.dashboardTreeOpen))) {
+      return child;
+    }
+    final settings = ref.read(settingsProvider.notifier);
+    final overlay = windowWidth < treeOverlayBelow;
+    final panel = FolderTreePanel(
+      onOpenPack: (packId, folder, newTab) {
+        if (newTab) {
+          ref.read(tabsProvider.notifier).open(packId, folder: folder);
+        } else {
+          openPackDetail(
+            context,
+            packId,
+            folder: folder,
+            returnFocus: _gridFocus,
+          );
+        }
+      },
+      onSelected: overlay ? () => settings.setDashboardTreeOpen(false) : null,
+      onLeave: _gridFocus.requestFocus,
+    );
+    final side = FolderTreeSide(
+      key: const ValueKey('folder-tree-panel'),
+      panel: panel,
+      maxWidth: windowWidth * 0.4,
+    );
+    if (overlay) {
+      return Stack(
+        children: [
+          Positioned.fill(child: child),
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: Material(
+              elevation: 6,
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              child: side,
+            ),
+          ),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        side,
+        Expanded(child: child),
+      ],
+    );
   }
 
   /// The Files view: a hint without search text, else the matching files.
@@ -209,6 +273,9 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final settings = ref.read(settingsProvider.notifier);
     final tabsNotifier = ref.read(tabsProvider.notifier);
     final favorites = ref.watch(favoritesProvider);
+    final treeOpen = ref.watch(
+      settingsProvider.select((s) => s.dashboardTreeOpen),
+    );
     // Bundles (M95): their pack counts, and titles for their packs' tiles.
     final bundles = bundleInfo(ref.watch(libraryProvider).value?.packs);
     final sliderWidth = ref.watch(appBarActionsWidthProvider);
@@ -219,6 +286,11 @@ class _DashboardState extends ConsumerState<Dashboard> {
     return LayoutBuilder(
       builder: (context, box) {
         final narrow = box.maxWidth < labelsMinWidth;
+        // Below 1000 px the size slider gives up its app-bar width, so the
+        // search keeps room next to the folder tree toggle (M98).
+        final slider = box.maxWidth < 1000
+            ? math.min(sliderWidth ?? 120, 120.0)
+            : sliderWidth;
         return Focus(
           focusNode: _gridFocus,
           autofocus: true,
@@ -250,9 +322,25 @@ class _DashboardState extends ConsumerState<Dashboard> {
                   _search.clear();
                   notifier.clearFilters();
                 },
+                leading: switch (query.node) {
+                  final node? => _NodeChip(
+                    node: node,
+                    onClear: () => notifier.setNode(null),
+                  ),
+                  null => null,
+                },
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    IconButton(
+                      key: const ValueKey('folder-tree-toggle'),
+                      tooltip: 'Folder tree',
+                      isSelected: treeOpen,
+                      icon: const Icon(Icons.account_tree_outlined),
+                      selectedIcon: const Icon(Icons.account_tree),
+                      onPressed: () => settings.setDashboardTreeOpen(!treeOpen),
+                    ),
+                    const SizedBox(width: 4),
                     _ViewToggle(
                       view: view,
                       labels: !narrow,
@@ -266,7 +354,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                         key: const ValueKey('dashboard-size-slider'),
                         range: imageThumbRange,
                         value: imageSize,
-                        width: sliderWidth,
+                        width: slider,
                         scale: _fileScale,
                         onChanged: settings.setImageThumbSize,
                       )
@@ -275,7 +363,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                         key: const ValueKey('dashboard-size-slider'),
                         range: dashboardTileRange,
                         value: tileSize,
-                        width: sliderWidth,
+                        width: slider,
                         scale: _packScale,
                         onChanged: settings.setDashboardTileSize,
                       ),
@@ -293,101 +381,140 @@ class _DashboardState extends ConsumerState<Dashboard> {
                   ),
                 ),
               Expanded(
-                child: filesView
-                    ? _filesBody(
-                        searching: searching,
-                        favorites: query.favorites,
-                        loaded: visibleFiles?.hasValue ?? false,
-                        files: files,
-                        size: imageSize,
-                        search: search,
-                        generation: generation,
-                      )
-                    : tiles.isEmpty && visible.hasValue
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.search_off, size: 48),
-                            const SizedBox(height: 8),
-                            const Text('No packs match'),
-                            TextButton(
-                              onPressed: () {
-                                _search.clear();
-                                notifier.clearFilters();
-                              },
-                              child: const Text('Clear search and filters'),
-                            ),
-                          ],
-                        ),
-                      )
-                    : CtrlWheelResize(
-                        onSteps: (n) => settings.setDashboardTileSize(
-                          _packScale.step(tileSize, n),
-                        ),
-                        child: ThumbRows(
-                          // Each view keeps its own scroll position.
-                          key: PageStorageKey('grid:${view.name}:$generation'),
-                          physics: const CtrlWheelPhysics(),
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                          maxTileWidth: tileSize,
-                          scale: _packScale,
-                          tileHeight: packTileMaxHeight,
-                          itemCount: tiles.length,
-                          itemBuilder: (context, i) {
-                            final DashboardTile(:tile, :pack, :folder) =
-                                tiles[i];
-                            return OpenInNewTab(
-                              key: ValueKey(tiles[i].key),
-                              onOpenInNewTab: () =>
-                                  tabsNotifier.open(pack.id, folder: folder),
-                              child: PackTile(
-                                pack: tile,
-                                alwaysAnimate: animateAll,
-                                bundlePacks: bundles.counts[pack.id] ?? 0,
-                                subtitle: folder == null
-                                    ? bundles.subtitle(pack)
-                                    : null,
-                                starred:
-                                    folder == null && favorites.isPack(pack.id),
-                                onToggleStar: folder == null && !pack.isBundle
-                                    ? () => ref
-                                          .read(favoritesProvider.notifier)
-                                          .togglePack(pack.id)
-                                    : null,
-                                showTags: query.sort == PackSort.tags,
-                                fileMatches: folder == null
-                                    ? fileMatchLine(
-                                        fileSearch?.counts[pack.id] ?? 0,
-                                        examples[pack.id] ?? const [],
-                                      )
-                                    : null,
-                                fileMatchesTooltip: fileMatchTooltip(
-                                  fileSearch?.counts[pack.id] ?? 0,
-                                  examples[pack.id] ?? const [],
-                                ),
-                                onFileMatchesTap: () => openPackDetail(
-                                  context,
-                                  pack.id,
-                                  search: search,
-                                  returnFocus: _gridFocus,
-                                ),
-                                onTap: () => openPackDetail(
-                                  context,
-                                  pack.id,
-                                  folder: folder,
-                                  returnFocus: _gridFocus,
-                                ),
+                child: _withTree(
+                  windowWidth: box.maxWidth,
+                  child: filesView
+                      ? _filesBody(
+                          searching: searching,
+                          favorites: query.favorites,
+                          loaded: visibleFiles?.hasValue ?? false,
+                          files: files,
+                          size: imageSize,
+                          search: search,
+                          generation: generation,
+                        )
+                      : tiles.isEmpty && visible.hasValue
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.search_off, size: 48),
+                              const SizedBox(height: 8),
+                              const Text('No packs match'),
+                              TextButton(
+                                onPressed: () {
+                                  _search.clear();
+                                  notifier.clearFilters();
+                                },
+                                child: const Text('Clear search and filters'),
                               ),
-                            );
-                          },
+                            ],
+                          ),
+                        )
+                      : CtrlWheelResize(
+                          onSteps: (n) => settings.setDashboardTileSize(
+                            _packScale.step(tileSize, n),
+                          ),
+                          child: ThumbRows(
+                            // Each view keeps its own scroll position.
+                            key: PageStorageKey(
+                              'grid:${view.name}:$generation',
+                            ),
+                            physics: const CtrlWheelPhysics(),
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                            maxTileWidth: tileSize,
+                            scale: _packScale,
+                            tileHeight: packTileMaxHeight,
+                            itemCount: tiles.length,
+                            itemBuilder: (context, i) {
+                              final DashboardTile(:tile, :pack, :folder) =
+                                  tiles[i];
+                              return OpenInNewTab(
+                                key: ValueKey(tiles[i].key),
+                                onOpenInNewTab: () => tabsNotifier.open(
+                                  pack.id,
+                                  folder:
+                                      folder ??
+                                      nodeFolderIn(pack.id, query.node),
+                                ),
+                                child: PackTile(
+                                  pack: tile,
+                                  alwaysAnimate: animateAll,
+                                  bundlePacks: bundles.counts[pack.id] ?? 0,
+                                  subtitle: folder == null
+                                      ? bundles.subtitle(pack)
+                                      : null,
+                                  starred:
+                                      folder == null &&
+                                      favorites.isPack(pack.id),
+                                  onToggleStar: folder == null && !pack.isBundle
+                                      ? () => ref
+                                            .read(favoritesProvider.notifier)
+                                            .togglePack(pack.id)
+                                      : null,
+                                  showTags: query.sort == PackSort.tags,
+                                  fileMatches: folder == null
+                                      ? fileMatchLine(
+                                          fileSearch?.counts[pack.id] ?? 0,
+                                          examples[pack.id] ?? const [],
+                                        )
+                                      : null,
+                                  fileMatchesTooltip: fileMatchTooltip(
+                                    fileSearch?.counts[pack.id] ?? 0,
+                                    examples[pack.id] ?? const [],
+                                  ),
+                                  onFileMatchesTap: () => openPackDetail(
+                                    context,
+                                    pack.id,
+                                    search: search,
+                                    returnFocus: _gridFocus,
+                                  ),
+                                  onTap: () => openPackDetail(
+                                    context,
+                                    pack.id,
+                                    // Inside a pack, the tree's node picks
+                                    // where its page starts (M98).
+                                    folder:
+                                        folder ??
+                                        nodeFolderIn(pack.id, query.node),
+                                    returnFocus: _gridFocus,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         ),
-                      ),
+                ),
               ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+/// The folder tree's node in the chip row: "In: Kenney › 2D assets" with ×.
+class _NodeChip extends ConsumerWidget {
+  const _NodeChip({required this.node, required this.onClear});
+
+  final String node;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final packs = ref.watch(libraryProvider).value?.packs ?? const [];
+    final label = nodeLabel(node, packs);
+    return InputChip(
+      key: const ValueKey('node-chip'),
+      avatar: const Icon(Icons.account_tree_outlined, size: 16),
+      label: Text('In: ${middleEllipsis(label, 48)}'),
+      tooltip: label,
+      selected: true,
+      showCheckmark: false,
+      visualDensity: VisualDensity.compact,
+      deleteIcon: deleteIcon,
+      onDeleted: onClear,
     );
   }
 }

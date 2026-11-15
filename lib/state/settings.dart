@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:io';
 
@@ -101,6 +102,8 @@ class LastSession {
     this.sources = const [],
     this.favorites = false,
     this.sort,
+    this.node,
+    this.treeExpanded = const [],
   });
 
   final List<PageSession> tabs;
@@ -115,6 +118,12 @@ class LastSession {
 
   /// A `PackSort` name.
   final String? sort;
+
+  /// The dashboard's folder tree node (M98): a library-relative path.
+  final String? node;
+
+  /// The folder tree's expanded nodes, by path.
+  final List<String> treeExpanded;
 
   static List<String> _strings(Object? v) => [
     if (v is List)
@@ -142,6 +151,8 @@ class LastSession {
       sources: _strings(json['sources']),
       favorites: json['favorites'] == true,
       sort: json['sort'] as String?,
+      node: json['node'] as String?,
+      treeExpanded: _strings(json['tree_expanded']),
     );
   }
 
@@ -156,6 +167,8 @@ class LastSession {
     'sources': sources,
     'favorites': favorites,
     'sort': ?sort,
+    'node': ?node,
+    if (treeExpanded.isNotEmpty) 'tree_expanded': treeExpanded,
   };
 
   @override
@@ -192,6 +205,8 @@ class AppSettings {
     this.audioSortDesc = false,
     this.audioFormat = 'ogg',
     this.previewsColumns = 4,
+    this.dashboardTreeOpen = false,
+    this.dashboardTreeWidth = defaultTreeWidth,
     this.resumeSession = true,
     this.lastSession,
   });
@@ -253,6 +268,16 @@ class AppSettings {
   /// from it. 4 is what the 440 px cards gave in a full-width window.
   final int previewsColumns;
 
+  /// The dashboard's folder tree panel (M98) is shown.
+  final bool dashboardTreeOpen;
+
+  /// The folder tree panel's width in logical pixels.
+  final double dashboardTreeWidth;
+
+  /// [dashboardTreeWidth]'s default and lower bound.
+  static const defaultTreeWidth = 280.0;
+  static const minTreeWidth = 200.0;
+
   /// "Resume where I left off": reopen [lastSession] on start.
   final bool resumeSession;
 
@@ -301,6 +326,11 @@ class AppSettings {
       1,
       8,
     ),
+    dashboardTreeOpen: json['dashboard_tree_open'] == true,
+    dashboardTreeWidth: math.max(
+      minTreeWidth,
+      (json['dashboard_tree_width'] as num?)?.toDouble() ?? defaultTreeWidth,
+    ),
     resumeSession: json['resume_session'] != false,
     // Kept only while resuming is on.
     lastSession: switch (json['last_session']) {
@@ -333,6 +363,8 @@ class AppSettings {
     'audio_sort_desc': audioSortDesc,
     'audio_format': audioFormat,
     'previews_columns': previewsColumns,
+    'dashboard_tree_open': dashboardTreeOpen,
+    'dashboard_tree_width': dashboardTreeWidth,
     'resume_session': resumeSession,
     'last_session': ?lastSession?.toJson(),
   };
@@ -360,6 +392,8 @@ class AppSettings {
     bool? audioSortDesc,
     String? audioFormat,
     int? previewsColumns,
+    bool? dashboardTreeOpen,
+    double? dashboardTreeWidth,
     bool? resumeSession,
     Object? lastSession = _keep,
   }) => AppSettings(
@@ -385,6 +419,8 @@ class AppSettings {
     audioSortDesc: audioSortDesc ?? this.audioSortDesc,
     audioFormat: audioFormat ?? this.audioFormat,
     previewsColumns: previewsColumns ?? this.previewsColumns,
+    dashboardTreeOpen: dashboardTreeOpen ?? this.dashboardTreeOpen,
+    dashboardTreeWidth: dashboardTreeWidth ?? this.dashboardTreeWidth,
     resumeSession: resumeSession ?? this.resumeSession,
     lastSession: identical(lastSession, _keep)
         ? this.lastSession

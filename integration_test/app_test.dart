@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' show FrameTiming;
 
 import 'package:archive/archive_io.dart';
 import 'package:loot_silo/core/audio_duration.dart';
@@ -14,6 +16,9 @@ import 'package:loot_silo/state/anim_cache_fill.dart';
 import 'package:loot_silo/state/dashboard.dart';
 import 'package:loot_silo/state/itch.dart';
 import 'package:loot_silo/state/providers.dart';
+import 'package:loot_silo/ui/file_results.dart';
+import 'package:loot_silo/ui/folder_tree_panel.dart';
+import 'package:loot_silo/state/folder_tree.dart';
 import 'package:loot_silo/state/settings.dart';
 import 'package:loot_silo/ui/app.dart';
 import 'package:loot_silo/ui/bundle_screen.dart';
@@ -5637,6 +5642,122 @@ A **16×16** knight with *walk* and *idle* animations.
     c.read(settingsProvider.notifier)
       ..setDashboardView(DashboardView.packs)
       ..setDetailAnimateMode(AnimateMode.hover);
+    expect(Directory(real).statSync().modified, before);
+  });
+
+  testWidgets('m98: folder tree on Kenney, then the Files view (real)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    if (!Directory(p.join(real, 'Kenney')).existsSync()) return;
+    final before = Directory(real).statSync().modified;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    final c = ProviderScope.containerOf(tester.element(find.byType(TabsHost)));
+    final packs = c.read(libraryProvider).value!.packs;
+    final kenney1 = packs.firstWhere(
+      (pk) => pk.isBundle && pk.title.contains('Game Assets 1'),
+    );
+    await tester.runAsync(() => c.read(packsWithFoldersProvider.future));
+
+    // Frame build / raster times of what a tap changes (debug build).
+    final frames = <FrameTiming>[];
+    void collect(List<FrameTiming> t) => frames.addAll(t);
+    WidgetsBinding.instance.addTimingsCallback(collect);
+    addTearDown(() => WidgetsBinding.instance.removeTimingsCallback(collect));
+    Future<String> timed(Future<void> Function() action) async {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 300)),
+      );
+      frames.clear();
+      await action();
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 1200)),
+      );
+      await tester.pump();
+      if (frames.isEmpty) return 'no frame timings';
+      int ms(Duration d) => d.inMicroseconds ~/ 1000;
+      final build = frames.map((f) => ms(f.buildDuration)).reduce(math.max);
+      final raster = frames.map((f) => ms(f.rasterDuration)).reduce(math.max);
+      return 'build $build ms, raster $raster ms (${frames.length} frames)';
+    }
+
+    // Opening the panel.
+    final open = await timed(
+      () => tester.tap(find.byKey(const ValueKey('folder-tree-toggle'))),
+    );
+    expect(find.byType(FolderTreePanel), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('tree-fold:Kenney')));
+    await tester.pump();
+    await tester.tap(find.byKey(ValueKey('tree-fold:${kenney1.id}')));
+    await tester.pump();
+    // Expanding 2D assets (62 packs): one frame.
+    final section = '${kenney1.id}/2D assets';
+    final expand = await timed(
+      () => tester.tap(find.byKey(ValueKey('tree-fold:$section'))),
+    );
+
+    // Counts for a filter change, on the whole library.
+    final sw = Stopwatch()..start();
+    for (var i = 0; i < 10; i++) {
+      TreeCounts.of(packs, const DashboardQuery(types: {'sprite'}), null);
+    }
+    final countsMs = sw.elapsedMilliseconds / 10;
+    debugPrint(
+      'm98: panel opens: $open; 2D assets expands: $expand; '
+      'counts take $countsMs ms (${packs.length} packs)',
+    );
+
+    final tanks = packs.firstWhere(
+      (pk) =>
+          pk.bundleId == kenney1.id && pk.title.toLowerCase().contains('tank'),
+    );
+    // The tree builds only the rows on screen: scroll to it.
+    final treeScroll = find.descendant(
+      of: find.byType(FolderTreePanel),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(ValueKey('tree:${tanks.id}')),
+      120,
+      scrollable: treeScroll,
+    );
+    await tester.tap(find.byKey(ValueKey('tree:${tanks.id}')));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(c.read(dashboardQueryProvider).node, tanks.id);
+    expect(find.byType(PackTile), findsOneWidget);
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm98_tree_kenney', settle: false);
+
+    // The Files view with a search, under the selected section.
+    await tester.pump(const Duration(seconds: 1));
+    await tester.scrollUntilVisible(
+      find.byKey(ValueKey('tree:$section')),
+      -120,
+      scrollable: treeScroll,
+    );
+    await tester.tap(find.byKey(ValueKey('tree:$section')));
+    await tester.pump(const Duration(milliseconds: 300));
+    c.read(settingsProvider.notifier).setDashboardView(DashboardView.files);
+    await tester.enterText(find.byType(TextField).first, 'tank');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
+    await pumpUntil(tester, find.byType(FileResultsGrid));
+    await tester.pump(const Duration(milliseconds: 500));
+    final files = c.read(visibleFilesProvider).value!;
+    expect(files, isNotEmpty);
+    expect(
+      files.every((f) => '${f.pack.id}/${f.relPath}'.startsWith('$section/')),
+      isTrue,
+    );
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm98_tree_files', settle: false);
+    c.read(settingsProvider.notifier)
+      ..setDashboardView(DashboardView.packs)
+      ..setDashboardTreeOpen(false);
     expect(Directory(real).statSync().modified, before);
   });
 

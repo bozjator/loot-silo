@@ -7,6 +7,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/dashboard.dart';
+import '../state/folder_tree.dart';
 import '../state/providers.dart';
 import 'cursors.dart';
 import '../state/settings.dart';
@@ -133,6 +134,7 @@ class TabsNotifier extends Notifier<Tabs> {
     dashboardNavigator.currentState?.popUntil((r) => r.isFirst);
     state = const Tabs([], 0);
     ref.read(dashboardQueryProvider.notifier).clearFilters();
+    ref.read(treeExpandedProvider.notifier).set(const {});
     ref.read(libraryGenerationProvider.notifier).bump();
   }
 

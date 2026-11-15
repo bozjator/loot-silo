@@ -98,6 +98,12 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   void setLibraryPath(String path) => _save(state.copyWith(libraryPath: path));
 
+  void setDashboardTreeOpen(bool open) =>
+      _save(state.copyWith(dashboardTreeOpen: open));
+
+  void setDashboardTreeWidth(double width) =>
+      _save(state.copyWith(dashboardTreeWidth: width));
+
   void setTheme(ThemeChoice theme) => _save(state.copyWith(theme: theme));
 
   void setThemeColor(ThemeColor color) =>

@@ -380,6 +380,17 @@ class LibraryIndex extends _$LibraryIndex {
     return q.map((f) => (f.relPath, f.size)).get();
   }
 
+  /// Ids of the packs with files in folders (not counting `_itch`): the
+  /// dashboard's folder tree gives them an expander (M98).
+  Future<Set<String>> packsWithFolders() async {
+    final q = selectOnly(packFiles, distinct: true)
+      ..addColumns([packFiles.packId])
+      ..where(
+        packFiles.relPath.like('%/%') & packFiles.relPath.like('_itch/%').not(),
+      );
+    return {for (final r in await q.get()) r.read(packFiles.packId)!};
+  }
+
   /// [filesWithSizes] of every pack of [packIds], in one query.
   Future<Map<String, List<(String, int)>>> filesWithSizesOf(
     Iterable<String> packIds,

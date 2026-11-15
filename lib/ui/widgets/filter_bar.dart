@@ -26,6 +26,7 @@ class FilterBar extends StatelessWidget {
     required this.onClear,
     this.onToggleFavorites,
     this.trailing,
+    this.leading,
     this.compact = false,
   });
 
@@ -53,6 +54,9 @@ class FilterBar extends StatelessWidget {
 
   /// Shown after the sort menu, e.g. the tile size slider.
   final Widget? trailing;
+
+  /// First in the chip row (the folder tree's "In: …" chip).
+  final Widget? leading;
 
   /// Narrow window: the Author, Tag and Source menus show only their icons
   /// (with a count badge when something is selected), so the search box
@@ -144,16 +148,23 @@ class FilterBar extends StatelessWidget {
                 icon: const SizedBox.shrink(),
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 borderRadius: BorderRadius.circular(8),
+                // Narrow: the icon alone, the sort named in its tooltip, so
+                // the search keeps its room (M98's tree toggle needs some).
                 selectedItemBuilder: (context) => [
                   for (final s in PackSort.values)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.sort, size: 20),
-                        const SizedBox(width: 8),
-                        Text(s.label),
-                      ],
-                    ),
+                    compact
+                        ? Tooltip(
+                            message: 'Sort: ${s.label}',
+                            child: const Icon(Icons.sort, size: 20),
+                          )
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.sort, size: 20),
+                              const SizedBox(width: 8),
+                              Text(s.label),
+                            ],
+                          ),
                 ],
                 items: [
                   for (final s in PackSort.values)
@@ -175,6 +186,7 @@ class FilterBar extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
+                    ?leading,
                     if (onToggleFavorites case final toggle?)
                       FilterChip(
                         key: const ValueKey('favorites-chip'),
@@ -245,7 +257,7 @@ class FilterBar extends StatelessWidget {
                 '$resultCount ${resultCount == 1 ? resultUnit : '${resultUnit}s'}',
                 style: theme.textTheme.labelLarge,
               ),
-              if (query.isNarrowed)
+              if (query.isFiltered)
                 TextButton(onPressed: onClear, child: const Text('Clear')),
             ],
           ),

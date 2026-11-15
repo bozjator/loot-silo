@@ -11,6 +11,7 @@ import '../core/pack_editor.dart';
 import '../core/type_classifier.dart';
 import '../ui/format.dart';
 import 'favorites.dart';
+import 'folder_tree.dart';
 import 'providers.dart';
 import 'settings.dart';
 
@@ -41,6 +42,7 @@ class DashboardQuery {
     this.sources = const {},
     this.sort = PackSort.relevance,
     this.favorites = false,
+    this.node,
   });
 
   final String text;
@@ -53,6 +55,13 @@ class DashboardQuery {
   /// Only starred packs, packs with starred files, or (Files view) starred
   /// files.
   final bool favorites;
+
+  /// The folder tree's selected node (M98): a library-relative path. Every
+  /// view keeps what is under it; null: the whole library.
+  final String? node;
+
+  /// Anything to clear (the search, a filter or a tree node).
+  bool get isFiltered => isNarrowed || node != null;
 
   bool get hasFilters =>
       favorites ||
@@ -72,6 +81,7 @@ class DashboardQuery {
     Set<String>? sources,
     PackSort? sort,
     bool? favorites,
+    Object? node = _keep,
   }) => DashboardQuery(
     text: text ?? this.text,
     types: types ?? this.types,
@@ -80,7 +90,11 @@ class DashboardQuery {
     sources: sources ?? this.sources,
     sort: sort ?? this.sort,
     favorites: favorites ?? this.favorites,
+    node: identical(node, _keep) ? this.node : node as String?,
   );
+
+  /// [copyWith]'s "leave [node] as it is"; pass null to clear it.
+  static const _keep = Object();
 }
 
 final dashboardQueryProvider =
@@ -98,7 +112,28 @@ class DashboardQueryNotifier extends Notifier<DashboardQuery> {
   @override
   DashboardQuery build() {
     ref.onDispose(() => _debounce?.cancel());
+    // After a rescan the tree's node may be gone (M98): its chip goes too.
+    ref.listen(libraryProvider, (_, next) {
+      if (!next.isLoading) _checkNode(next.value?.packs);
+    });
     return const DashboardQuery();
+  }
+
+  /// Clears the tree node when nothing in [packs] is at, under or around
+  /// it (a folder inside a pack must still hold files).
+  Future<void> _checkNode(List<PackRow>? packs) async {
+    final node = state.node;
+    if (node == null || packs == null) return;
+    if (packs.any((p) => underNode(p.id, node))) return;
+    final pack = packs
+        .where((p) => !p.isBundle && node.startsWith('${p.id}/'))
+        .firstOrNull;
+    if (pack != null) {
+      final rel = node.substring(pack.id.length + 1);
+      final files = await ref.read(libraryIndexProvider).filesOf(pack.id);
+      if (files.any((f) => f.startsWith('$rel/'))) return;
+    }
+    if (state.node == node) state = state.copyWith(node: null);
   }
 
   /// Search text from the field: applied once typing pauses for
@@ -129,6 +164,11 @@ class DashboardQueryNotifier extends Notifier<DashboardQuery> {
       state = state.copyWith(sources: _toggle(state.sources, v));
   void toggleFavorites() => state = state.copyWith(favorites: !state.favorites);
 
+  /// Selects the folder tree's [node]; the selected node again (or null)
+  /// clears it.
+  void setNode(String? node) =>
+      state = state.copyWith(node: node == state.node ? null : node);
+
   /// Only [author]'s packs: the search and the other filters are cleared, so the grid lists all of them (the sort stays).
   void showAuthor(String author) {
     _debounce?.cancel();
@@ -139,6 +179,7 @@ class DashboardQueryNotifier extends Notifier<DashboardQuery> {
   void restore(DashboardQuery query) {
     _debounce?.cancel();
     state = query;
+    _checkNode(ref.read(libraryProvider).value?.packs);
   }
 
   void clearFilters() {
@@ -300,6 +341,22 @@ List<FileTile> favoriteFileTiles(
   DashboardQuery q,
   Favorites favorites,
 ) {
+  final tiles = _favoriteFileTiles(hits, packs, q, favorites);
+  final node = q.node;
+  if (node == null) return tiles;
+  // A tree node (M98): only the files under it.
+  return [
+    for (final t in tiles)
+      if (underNode('${t.pack.id}/${t.relPath}', node)) t,
+  ];
+}
+
+List<FileTile> _favoriteFileTiles(
+  List<FileHit>? hits,
+  List<PackRow> packs,
+  DashboardQuery q,
+  Favorites favorites,
+) {
   if (!q.favorites) {
     if (hits == null) return const [];
     return filterFileHits(
@@ -361,9 +418,15 @@ List<PackRow> applyQuery(
   Favorites favorites = Favorites.none,
   bool openBundles = false,
 }) {
-  Iterable<PackRow> out = q.isNarrowed || openBundles
+  final node = q.node;
+  // A tree node at or inside a bundle lists its packs, as Expanded does; a
+  // node above it keeps the bundle tile.
+  final inBundle =
+      node != null && packs.any((b) => b.isBundle && underNode(node, b.id));
+  Iterable<PackRow> out = q.isNarrowed || openBundles || inBundle
       ? packs.where((p) => !p.isBundle)
       : packs.where((p) => p.bundleId == null);
+  if (node != null) out = out.where((p) => matchesNode(p.id, node));
   if (hits != null) {
     final hitSet = hits.toSet();
     out = out.where((p) => hitSet.contains(p.id));
@@ -509,6 +572,16 @@ List<DashboardTile> favoriteFolders(
   ];
 }
 
+/// The Expanded tiles under the tree's [node] (M98): a node inside a pack
+/// keeps the folder tiles it is in or above.
+List<DashboardTile> nodeTiles(List<DashboardTile> tiles, String? node) {
+  if (node == null) return tiles;
+  return [
+    for (final t in tiles)
+      if (matchesNode(t.key, node)) t,
+  ];
+}
+
 /// The dashboard grid's tiles: [visiblePacksProvider], split by folder in
 /// the Expanded view.
 final visibleTilesProvider = Provider<AsyncValue<List<DashboardTile>>>((ref) {
@@ -527,12 +600,15 @@ final visibleTilesProvider = Provider<AsyncValue<List<DashboardTile>>>((ref) {
       AsyncValue(:final error?, :final stackTrace),
     ) => AsyncError(error, stackTrace ?? StackTrace.current),
     (AsyncValue(value: final l?), AsyncValue(value: final s?)) => AsyncData(
-      ref.watch(dashboardQueryProvider.select((q) => q.favorites))
-          ? favoriteFolders(
-              expandPacks(l, s, searchText: text),
-              ref.watch(favoritesProvider),
-            )
-          : expandPacks(l, s, searchText: text),
+      nodeTiles(
+        ref.watch(dashboardQueryProvider.select((q) => q.favorites))
+            ? favoriteFolders(
+                expandPacks(l, s, searchText: text),
+                ref.watch(favoritesProvider),
+              )
+            : expandPacks(l, s, searchText: text),
+        ref.watch(dashboardQueryProvider.select((q) => q.node)),
+      ),
     ),
     _ => const AsyncLoading(),
   };
@@ -633,6 +709,9 @@ class Facets {
     if (hits != null) {
       final hitSet = hits.toSet();
       base = base.where((p) => hitSet.contains(p.id));
+    }
+    if (q.node case final node?) {
+      base = base.where((p) => matchesNode(p.id, node));
     }
     final list = base.toList();
     Iterable<PackRow> without(Facet f) =>

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/library_index.dart';
 import '../state/dashboard.dart';
+import '../state/folder_tree.dart';
 import '../state/providers.dart';
 import '../state/settings.dart';
 import 'pack_detail_screen.dart';
@@ -89,6 +90,8 @@ class SessionKeeper {
       sources: q.sources.toList()..sort(),
       favorites: q.favorites,
       sort: q.sort == PackSort.relevance ? null : q.sort.name,
+      node: q.node,
+      treeExpanded: _ref.read(treeExpandedProvider).toList()..sort(),
     );
   }
 
@@ -100,6 +103,7 @@ final sessionKeeperProvider = Provider<SessionKeeper>((ref) {
   ref.onDispose(keeper.dispose);
   ref.listen(tabsProvider, (_, _) => keeper._changed());
   ref.listen(dashboardQueryProvider, (_, _) => keeper._changed());
+  ref.listen(treeExpandedProvider, (_, _) => keeper._changed());
   return keeper;
 });
 
@@ -118,6 +122,8 @@ DashboardQuery restoredQuery(LastSession session, List<PackRow> packs) {
     sources: {...session.sources.where(sources.contains)},
     favorites: session.favorites,
     sort: PackSort.values.asNameMap()[session.sort] ?? PackSort.relevance,
+    // A node that no longer exists is cleared once the tree checks it.
+    node: session.node,
   );
 }
 
@@ -182,6 +188,7 @@ class _SessionHostState extends ConsumerState<SessionHost> {
     ref
         .read(dashboardQueryProvider.notifier)
         .restore(restoredQuery(session, packs));
+    ref.read(treeExpandedProvider.notifier).set(session.treeExpanded.toSet());
     final tabs = ref.read(tabsProvider.notifier);
     var active = 0;
     var kept = 0;
