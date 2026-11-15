@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 
 import 'animation_detector.dart';
 import 'file_search.dart';
+import 'itch_media.dart';
 import 'library_scanner.dart';
 import 'type_classifier.dart';
 
@@ -512,6 +513,74 @@ class LibraryIndex extends _$LibraryIndex {
     }
     return const FileSearch(hits: [], counts: {}, infix: false);
   }
+
+  /// The files of [packs] without search text (the Files view under a tree
+  /// node or filters): in [packs]' order, then by path; by file name with
+  /// [byName]. A [folder] keeps only that pack's files under it. Returns
+  /// [limit] files from [offset], and the total. [packs] holds no bundles
+  /// (their own files aren't searched either).
+  Future<FileListing> listFiles(
+    List<String> packs, {
+    (String, String)? folder,
+    bool byName = false,
+    int offset = 0,
+    int limit = fileHitLimit,
+  }) async {
+    // The files the search knows (`file_fts`): a pack's files less its
+    // itch media. Read from `pack_files`, indexed by pack.
+    var where = r" WHERE f.rel_path NOT LIKE ? ESCAPE '\'";
+    final vars = <Variable<Object>>[
+      Variable.withString(jsonEncode(packs)),
+      Variable.withString('${_likeEscape(itchMediaDir)}/%'),
+    ];
+    if (folder case (final pack, final dir)) {
+      where += r" AND (f.pack_id <> ? OR f.rel_path LIKE ? ESCAPE '\')";
+      vars
+        ..add(Variable.withString(pack))
+        ..add(Variable.withString('${_likeEscape(dir)}/%'));
+    }
+    const from = 'FROM json_each(?) o JOIN pack_files f ON f.pack_id = o.value';
+    // The file name: the path less everything up to its last `/`.
+    const name =
+        "lower(substr(f.rel_path, length(rtrim(f.rel_path, "
+        "replace(f.rel_path, '/', ''))) + 1))";
+    final order = byName
+        ? '$name, f.rel_path COLLATE NOCASE'
+        : 'o.key, f.rel_path COLLATE NOCASE';
+    final rows = await customSelect(
+      'SELECT f.pack_id, f.rel_path $from$where ORDER BY $order '
+      'LIMIT ? OFFSET ?',
+      variables: [...vars, Variable.withInt(limit), Variable.withInt(offset)],
+    ).get();
+    final total = await customSelect(
+      'SELECT count(*) AS n $from$where',
+      variables: vars,
+    ).getSingle();
+    return FileListing(
+      hits: [
+        for (final r in rows)
+          (
+            packId: r.read<String>('pack_id'),
+            relPath: r.read<String>('rel_path'),
+          ),
+      ],
+      total: total.read<int>('n'),
+    );
+  }
+}
+
+/// A page of [LibraryIndex.listFiles], and how many files there are in all.
+class FileListing {
+  const FileListing({required this.hits, required this.total});
+
+  final List<FileHit> hits;
+  final int total;
+
+  bool get complete => hits.length >= total;
+
+  /// This page followed by [more].
+  FileListing append(FileListing more) =>
+      FileListing(hits: [...hits, ...more.hits], total: more.total);
 }
 
 /// [text] for a `LIKE … ESCAPE '\'` pattern: `%`, `_` and `\` taken

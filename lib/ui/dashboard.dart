@@ -168,17 +168,19 @@ class _DashboardState extends ConsumerState<Dashboard> {
     );
   }
 
-  /// The Files view: a hint without search text, else the matching files.
+  /// The Files view: the matching files, or without search text the files
+  /// under the tree node and filters; a hint when nothing is set.
   Widget _filesBody({
     required bool searching,
     required bool favorites,
+    required bool browsing,
     required bool loaded,
     required List<FileTile> files,
     required double size,
     required SearchFilter search,
     required int generation,
   }) {
-    final listing = searching || favorites;
+    final listing = searching || favorites || browsing;
     if (!listing || (loaded && files.isEmpty)) {
       return Center(
         child: Column(
@@ -195,7 +197,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
             const SizedBox(height: 8),
             Text(
               !listing
-                  ? 'Type to search file names'
+                  ? 'Type to search file names, or pick a folder in the tree or a filter'
                   : favorites && !searching
                   ? 'No starred files'
                   : 'No files match',
@@ -218,6 +220,8 @@ class _DashboardState extends ConsumerState<Dashboard> {
             AnimateMode.all,
         tileSize: size,
         scale: _fileScale,
+        // Without search text the files come a page at a time.
+        onNearEnd: ref.read(fileListingProvider.notifier).loadMore,
         onOpen: (f) => openPackDetail(
           context,
           f.pack.id,
@@ -301,7 +305,12 @@ class _DashboardState extends ConsumerState<Dashboard> {
               FilterBar(
                 query: query,
                 facets: ref.watch(facetsProvider),
-                resultCount: filesView ? files.length : tiles.length,
+                resultCount: !filesView
+                    ? tiles.length
+                    : browsingFiles(query)
+                    ? ref.watch(fileListingProvider).value?.total ??
+                          files.length
+                    : files.length,
                 resultUnit: switch (view) {
                   DashboardView.packs => 'pack',
                   DashboardView.expanded => 'tile',
@@ -387,6 +396,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                       ? _filesBody(
                           searching: searching,
                           favorites: query.favorites,
+                          browsing: browsingFiles(query),
                           loaded: visibleFiles?.hasValue ?? false,
                           files: files,
                           size: imageSize,

@@ -15,6 +15,8 @@ import 'package:path/path.dart' as p;
 import '../core/sub_folders_test.dart' show writeFiles;
 
 const bundle = 'Kenney/Game Assets All in One';
+const tiles = 'Pixel/Tiles';
+const slimesId = 'HeroMaker/Slimes';
 
 /// M98: the dashboard's folder tree and its node filter.
 void main() {
@@ -241,6 +243,56 @@ void main() {
       );
     });
 
+    test('listing without search text: pack order, then path; a folder; by '
+        'name; pages and the total', () async {
+      final all = await index.listFiles([tiles, slimesId]);
+      expect(all.hits.map((h) => '${h.packId}:${h.relPath}'), [
+        '$tiles:License.txt',
+        '$tiles:PNG/Default/a.png',
+        '$tiles:PNG/Default/b.png',
+        '$tiles:Vector/Big/d.svg',
+        '$tiles:Vector/c.svg',
+        '$slimesId:License.txt',
+        '$slimesId:slime.png',
+      ]);
+      expect(all.total, 7, reason: 'no _itch/cover.png');
+      expect(all.complete, isTrue);
+      // The dashboard's pack order decides which pack comes first.
+      final swapped = await index.listFiles([slimesId, tiles]);
+      expect(swapped.hits.first.packId, slimesId);
+
+      final png = await index.listFiles([tiles], folder: (tiles, 'PNG'));
+      expect(png.hits.map((h) => h.relPath), [
+        'PNG/Default/a.png',
+        'PNG/Default/b.png',
+      ]);
+
+      final byName = await index.listFiles([tiles, slimesId], byName: true);
+      expect(byName.hits.map((h) => p.posix.basename(h.relPath)), [
+        'a.png',
+        'b.png',
+        'c.svg',
+        'd.svg',
+        'License.txt',
+        'License.txt',
+        'slime.png',
+      ]);
+
+      final page1 = await index.listFiles([tiles, slimesId], limit: 2);
+      final page2 = await index.listFiles(
+        [tiles, slimesId],
+        limit: 2,
+        offset: 2,
+      );
+      expect(page1.total, 7);
+      expect(page1.complete, isFalse);
+      expect(
+        page1.append(page2).hits,
+        all.hits.sublist(0, 4),
+        reason: 'pages follow on',
+      );
+    });
+
     test("a node folder's _ and % are taken literally", () async {
       final scope = FileScope(
         const {'Pixel/Tiles'},
@@ -316,6 +368,39 @@ void main() {
     final tiles = rows.firstWhere((r) => r.node.path == 'Pixel/Tiles');
     expect(tiles.expandable, isTrue);
     expect(rows.last.node.path, 'Pixel/Tiles', reason: 'not loaded yet');
+  });
+
+  test('scale: listing 50,000 files, first and last page', () async {
+    final big = LibraryIndex(NativeDatabase.memory());
+    addTearDown(big.close);
+    final packIds = [for (var k = 0; k < 40; k++) 'Author/Pack $k'];
+    await big.transaction(() async {
+      for (var i = 0; i < 50000; i++) {
+        await big.customStatement(
+          'INSERT INTO pack_files (pack_id, rel_path, size) VALUES (?, ?, 1)',
+          [packIds[i % 40], 'sub${i % 12}/deep${i % 6}/f$i.png'],
+        );
+      }
+    });
+    final sw = Stopwatch()..start();
+    final first = await big.listFiles(packIds);
+    final firstMs = sw.elapsedMilliseconds;
+    sw.reset();
+    final last = await big.listFiles(packIds, offset: 49800);
+    final lastMs = sw.elapsedMilliseconds;
+    sw.reset();
+    final named = await big.listFiles(packIds, byName: true);
+    final namedMs = sw.elapsedMilliseconds;
+    // ignore: avoid_print
+    print(
+      'M98 listing: 50,000 files, first page $firstMs ms, last page '
+      '$lastMs ms, by name $namedMs ms',
+    );
+    expect(first.total, 50000);
+    expect(first.hits, hasLength(LibraryIndex.fileHitLimit));
+    expect(last.hits, hasLength(200));
+    expect(named.hits, hasLength(LibraryIndex.fileHitLimit));
+    expect(firstMs, lessThan(500));
   });
 
   test('scale: 50,000 files build and count fast', () {

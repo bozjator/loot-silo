@@ -112,6 +112,10 @@ class HelpScreen extends StatelessWidget {
                 ),
                 _P(
                   'The Files view lists the matching files instead of packs. '
+                  'Without search text it lists the files under the folder '
+                  'picked in the tree, or of the packs the filters keep, '
+                  'pack by pack (by file name with the Name sort), loading '
+                  'more as you scroll. '
                   'A pack opened from there shows only those files; "Show '
                   'all files" shows the rest. On a pack page, the search '
                   'field next to the tabs filters that pack\'s files.',

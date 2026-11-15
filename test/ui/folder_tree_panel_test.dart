@@ -15,6 +15,7 @@ import 'package:loot_silo/state/itch.dart';
 import 'package:loot_silo/state/providers.dart';
 import 'package:loot_silo/state/settings.dart';
 import 'package:loot_silo/ui/app.dart';
+import 'package:loot_silo/ui/file_results.dart';
 import 'package:loot_silo/ui/folder_tree_panel.dart';
 import 'package:loot_silo/ui/session.dart';
 import 'package:loot_silo/ui/tabs.dart';
@@ -219,6 +220,74 @@ void main() {
       ),
       findsOneWidget,
     );
+    await quit(tester);
+  });
+
+  testWidgets('Files view without search text: the hint, then a node lists '
+      'its files a page at a time; a filter does too', (tester) async {
+    final page = FileListingNotifier.pageSize;
+    FileListingNotifier.pageSize = 2;
+    addTearDown(() => FileListingNotifier.pageSize = page);
+    final c = await start(
+      tester,
+      settings: open().copyWith(
+        dashboardTreeOpen: true,
+        dashboardView: DashboardView.files,
+      ),
+    );
+    const hint =
+        'Type to search file names, or pick a folder in the tree or a filter';
+    await wait(tester, () => find.text(hint).evaluate().isNotEmpty);
+    expect(find.byType(FileResultsGrid), findsNothing);
+
+    List<String> shown() => [
+      for (final f in c.read(visibleFilesProvider).value ?? const <FileTile>[])
+        '${f.pack.id}/${f.relPath}',
+    ];
+    final index = c.read(libraryIndexProvider);
+    final pixel = await tester.runAsync(() => index.listFiles([tiles]));
+    expect(pixel!.total, greaterThan(2), reason: 'more than a page');
+
+    await tester.tap(row('Pixel'));
+    // Pages of 2 follow each other until the grid has them all.
+    await wait(tester, () => shown().length == pixel.total);
+    expect(find.text(hint), findsNothing);
+    expect(find.byType(FileResultsGrid), findsOneWidget);
+    expect(shown(), [for (final h in pixel.hits) '${h.packId}/${h.relPath}']);
+    expect(find.text('${pixel.total} files'), findsOneWidget);
+
+    // A folder inside the pack: its files only.
+    c.read(dashboardQueryProvider.notifier).setNode('$tiles/PNG');
+    await wait(tester, () => shown().length == 2);
+    expect(shown(), ['$tiles/PNG/Default/a.png', '$tiles/PNG/Default/b.png']);
+
+    // No node, a type filter alone: the files of the packs it keeps.
+    c.read(dashboardQueryProvider.notifier).clearFilters();
+    await wait(tester, () => find.text(hint).evaluate().isNotEmpty);
+    final packs = c.read(libraryProvider).value!.packs;
+    final type = packs.firstWhere((pk) => pk.id == tiles).types.first;
+    c.read(dashboardQueryProvider.notifier).toggleType(type);
+    await wait(tester, () => shown().isNotEmpty);
+    final typed = {
+      for (final pk in packs)
+        if (pk.types.contains(type)) pk.id,
+    };
+    expect(
+      shown().every((f) => typed.any((id) => f.startsWith('$id/'))),
+      isTrue,
+    );
+
+    // Typing a search switches to the search's hits.
+    c.read(dashboardQueryProvider.notifier).setNode(tiles);
+    await tester.enterText(find.byType(TextField).first, 'png');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
+    await wait(
+      tester,
+      () =>
+          shown().isNotEmpty &&
+          shown().every((f) => f.startsWith('$tiles/') && f.endsWith('.png')),
+    );
+    expect(c.read(fileListingProvider).value, isNull);
     await quit(tester);
   });
 

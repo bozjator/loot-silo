@@ -4327,7 +4327,12 @@ A **16×16** knight with *walk* and *idle* animations.
     await pumpUntil(tester, realPacks());
     await tester.tap(find.text('Files'));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Type to search file names'), findsOneWidget);
+    expect(
+      find.text(
+        'Type to search file names, or pick a folder in the tree or a filter',
+      ),
+      findsOneWidget,
+    );
     await captureScreenshot(tester, 'm22_files_hint', settle: false);
 
     await tester.enterText(find.byType(TextField), 'barrels');
@@ -5791,6 +5796,66 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(pngs, isNotEmpty);
     expect(under.length, pngs.length);
     expect(under.every((f) => f.pack.id == tanks.id), isTrue);
+    c.read(dashboardQueryProvider.notifier).clearFilters();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+      find.text(
+        'Type to search file names, or pick a folder in the tree or a filter',
+      ),
+      findsOneWidget,
+    );
+
+    // No search text: the node alone lists its files.
+    final index = c.read(libraryIndexProvider);
+    final tankFiles = await tester.runAsync(() => index.listFiles([tanks.id]));
+    c.read(dashboardQueryProvider.notifier).setNode(tanks.id);
+    var watch = Stopwatch()..start();
+    await pumpUntil(tester, find.text('${tankFiles!.total} files'));
+    final browseMs = watch.elapsedMilliseconds;
+    expect(c.read(visibleFilesProvider).value, hasLength(tankFiles.total));
+    await settleImages(tester);
+    await tester.pump(const Duration(milliseconds: 300));
+    await captureScreenshot(tester, 'm98_files_browse', settle: false);
+
+    // An author filter alone: thousands of files, a page at a time.
+    c.read(dashboardQueryProvider.notifier)
+      ..setNode(null)
+      ..toggleAuthor(tanks.author!);
+    watch = Stopwatch()..start();
+    await pumpUntil(
+      tester,
+      find.byWidgetPredicate(
+        (w) =>
+            w is Text &&
+            RegExp(r'^\d{4,} files$').hasMatch(w.data ?? '') &&
+            (c.read(visibleFilesProvider).value?.isNotEmpty ?? false),
+      ),
+    );
+    final authorMs = watch.elapsedMilliseconds;
+    final total = c.read(fileListingProvider).value!.total;
+    expect(
+      c.read(visibleFilesProvider).value,
+      hasLength(LibraryIndex.fileHitLimit),
+    );
+    final grid = find.byType(FileResultsGrid);
+    for (var i = 0; i < 60; i++) {
+      if (c.read(visibleFilesProvider).value!.length >
+          LibraryIndex.fileHitLimit) {
+        break;
+      }
+      await tester.drag(grid, const Offset(0, -2000));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 30)),
+      );
+      await tester.pump();
+    }
+    final loaded = c.read(visibleFilesProvider).value!.length;
+    debugPrint(
+      'm98: browsing ${tanks.title}: ${tankFiles.total} files in $browseMs ms; '
+      'author ${tanks.author}: $total files, first page in $authorMs ms, '
+      '$loaded loaded after scrolling',
+    );
+    expect(loaded, greaterThan(LibraryIndex.fileHitLimit));
     c.read(dashboardQueryProvider.notifier).clearFilters();
     c.read(settingsProvider.notifier)
       ..setDashboardView(DashboardView.packs)

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
@@ -303,11 +304,29 @@ List<FileTile> filterFileHits(
   return out;
 }
 
-/// The Files view's tiles: file hits within the packs the filters allow, in the chosen order.
+/// The Files view's tiles: file hits within the packs the filters allow,
+/// in the chosen order. Without search text, the files under the tree node
+/// and filters ([fileListingProvider], loaded a page at a time).
 final visibleFilesProvider = Provider<AsyncValue<List<FileTile>>>((ref) {
   final library = ref.watch(libraryProvider);
-  final files = ref.watch(fileSearchProvider);
   final q = ref.watch(dashboardQueryProvider);
+  if (browsingFiles(q)) {
+    final listing = ref.watch(fileListingProvider);
+    return switch ((library, listing)) {
+      (AsyncValue(:final error?, :final stackTrace), _) ||
+      (
+        _,
+        AsyncValue(:final error?, :final stackTrace),
+      ) => AsyncError(error, stackTrace ?? StackTrace.current),
+      (
+        AsyncValue(value: final lib?),
+        AsyncValue(hasValue: true, :final value),
+      ) =>
+        AsyncData(listedFileTiles(value?.hits ?? const [], lib.packs)),
+      _ => const AsyncLoading(),
+    };
+  }
+  final files = ref.watch(fileSearchProvider);
   final favorites = ref.watch(favoritesProvider);
   return switch ((library, files)) {
     (AsyncValue(:final error?, :final stackTrace), _) ||
@@ -320,6 +339,89 @@ final visibleFilesProvider = Provider<AsyncValue<List<FileTile>>>((ref) {
     _ => const AsyncLoading(),
   };
 });
+
+/// Whether the Files view lists files without search text: a tree node or
+/// a filter is set. The Favorites filter alone keeps its own listing (every
+/// starred file); with nothing set the view asks for a search.
+bool browsingFiles(DashboardQuery q) =>
+    q.text.trim().isEmpty && !q.favorites && (q.hasFilters || q.node != null);
+
+/// [hits] as tiles, in their order (the index already applied the filters
+/// and sort).
+List<FileTile> listedFileTiles(List<FileHit> hits, List<PackRow> packs) {
+  final byId = {for (final pk in packs) pk.id: pk};
+  return [
+    for (final h in hits)
+      if (byId[h.packId] case final pack?) (pack: pack, relPath: h.relPath),
+  ];
+}
+
+/// The Files view's files without search text ([browsingFiles]): those of
+/// the packs the filters and tree node keep, in the dashboard's pack order
+/// then by path (by file name with the Name sort). Null when not browsing.
+/// Loads [pageSize] files, then the next page on [loadMore].
+final fileListingProvider =
+    AsyncNotifierProvider<FileListingNotifier, FileListing?>(
+      FileListingNotifier.new,
+    );
+
+class FileListingNotifier extends AsyncNotifier<FileListing?> {
+  /// Files per page.
+  @visibleForTesting
+  static var pageSize = LibraryIndex.fileHitLimit;
+
+  List<String> _packs = const [];
+  (String, String)? _folder;
+  var _byName = false;
+  var _loading = false;
+
+  @override
+  Future<FileListing?> build() async {
+    final q = ref.watch(dashboardQueryProvider);
+    final scope = ref.watch(fileSearchScopeProvider);
+    final lib = await ref.watch(libraryProvider.future);
+    _loading = false;
+    if (!browsingFiles(q) || scope == null) return null;
+    // The scope's packs in the dashboard's order (bundles' own files aren't
+    // listed: their packs are).
+    _packs = [
+      for (final pk in applyQuery(
+        lib.packs,
+        q,
+        null,
+        favorites: ref.read(favoritesProvider),
+        openBundles: true,
+      ))
+        if (!pk.isBundle && scope.packIds.contains(pk.id)) pk.id,
+    ];
+    _folder = scope.folder;
+    _byName = q.sort == PackSort.title;
+    return ref
+        .read(libraryIndexProvider)
+        .listFiles(_packs, folder: _folder, byName: _byName, limit: pageSize);
+  }
+
+  /// Loads the next page, unless all are loaded or one is on its way.
+  Future<void> loadMore() async {
+    final current = state.value;
+    if (current == null || current.complete || _loading) return;
+    _loading = true;
+    final packs = _packs;
+    final more = await ref
+        .read(libraryIndexProvider)
+        .listFiles(
+          packs,
+          folder: _folder,
+          byName: _byName,
+          offset: current.hits.length,
+          limit: pageSize,
+        );
+    // The filters changed meanwhile: that listing starts over.
+    if (!identical(packs, _packs) || state.value != current) return;
+    _loading = false;
+    state = AsyncData(current.append(more));
+  }
+}
 
 /// Counts changes of the animation cache (M94): watch it to refresh after
 /// the background fill or a pack page stored an entry.

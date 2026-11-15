@@ -3043,7 +3043,12 @@ void main() {
       await tester.tap(find.text('Files'));
       await tester.pump();
       expect(store.load().dashboardView, DashboardView.files);
-      expect(find.text('Type to search file names'), findsOneWidget);
+      expect(
+        find.text(
+          'Type to search file names, or pick a folder in the tree or a filter',
+        ),
+        findsOneWidget,
+      );
 
       await search(tester, 'barrel');
       await pumpUntil(tester, find.text('Barrels 0'));
@@ -5655,7 +5660,12 @@ void main() {
       );
       await tester.tap(find.text('Files'));
       await tester.pump();
-      expect(find.text('Type to search file names'), findsOneWidget);
+      expect(
+        find.text(
+          'Type to search file names, or pick a folder in the tree or a filter',
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('favorites-chip')));
       await tester.pump();
       expect(find.text('1 file'), findsOneWidget);

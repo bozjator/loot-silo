@@ -30,9 +30,17 @@ class FileResultsGrid extends StatelessWidget {
     this.scale,
     this.animations = const {},
     this.playAll = false,
+    this.onNearEnd,
   });
 
   final List<FileTile> files;
+
+  /// Called when a tile among the last [nearEnd] is built: time to load
+  /// more files (the listing without search text).
+  final VoidCallback? onNearEnd;
+
+  /// How close to the end a built tile asks for more.
+  static const nearEnd = 100;
 
   /// The hits that are animations, by (pack id, relative path).
   final Map<(String, String), SpriteAnim> animations;
@@ -62,17 +70,25 @@ class FileResultsGrid extends StatelessWidget {
       scale: scale,
     ),
     itemCount: files.length,
-    itemBuilder: (context, i) => OpenInNewTab(
-      key: ValueKey('${files[i].pack.id}/${files[i].relPath}'),
-      onOpenInNewTab: onOpenInNewTab == null
-          ? null
-          : () => onOpenInNewTab!(files[i]),
-      child: _FileResultTile(
-        file: files[i],
-        anim: animations[(files[i].pack.id, files[i].relPath)],
-        playAll: playAll,
-        onTap: () => onOpen(files[i]),
-      ),
+    itemBuilder: (context, i) {
+      if (onNearEnd case final more? when i >= files.length - nearEnd) {
+        // Not during the build: loading changes the list.
+        Future.microtask(more);
+      }
+      return _tile(i);
+    },
+  );
+
+  Widget _tile(int i) => OpenInNewTab(
+    key: ValueKey('${files[i].pack.id}/${files[i].relPath}'),
+    onOpenInNewTab: onOpenInNewTab == null
+        ? null
+        : () => onOpenInNewTab!(files[i]),
+    child: _FileResultTile(
+      file: files[i],
+      anim: animations[(files[i].pack.id, files[i].relPath)],
+      playAll: playAll,
+      onTap: () => onOpen(files[i]),
     ),
   );
 }
