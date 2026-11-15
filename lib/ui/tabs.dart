@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../state/dashboard.dart';
 import '../state/providers.dart';
 import 'cursors.dart';
 import '../state/settings.dart';
@@ -95,6 +96,20 @@ class Tabs {
 
 final tabsProvider = NotifierProvider<TabsNotifier, Tabs>(TabsNotifier.new);
 
+/// Counts library folder switches (M96). The dashboard's scroll positions
+/// are keyed by it, so a new library starts at the top.
+final libraryGenerationProvider =
+    NotifierProvider<LibraryGenerationNotifier, int>(
+      LibraryGenerationNotifier.new,
+    );
+
+class LibraryGenerationNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void bump() => state++;
+}
+
 class TabsNotifier extends Notifier<Tabs> {
   /// The dashboard tab's navigator (plain clicks open packs on it).
   final dashboardNavigator = GlobalKey<NavigatorState>(debugLabel: 'dash');
@@ -102,7 +117,24 @@ class TabsNotifier extends Notifier<Tabs> {
   var _next = 0;
 
   @override
-  Tabs build() => const Tabs([], 0);
+  Tabs build() {
+    // Another library folder (M96): its packs aren't the open tabs' packs,
+    // and the dashboard's search and filters named the old library's
+    // authors and tags. A rescan of the same folder keeps everything.
+    ref.listen(settingsProvider.select((s) => s.libraryPath), (before, now) {
+      if (before != now) _libraryChanged();
+    });
+    return const Tabs([], 0);
+  }
+
+  /// Drops every pack and bundle tab, shows the dashboard at its root page
+  /// and clears its search and filters; the view, sort and sizes stay.
+  void _libraryChanged() {
+    dashboardNavigator.currentState?.popUntil((r) => r.isFirst);
+    state = const Tabs([], 0);
+    ref.read(dashboardQueryProvider.notifier).clearFilters();
+    ref.read(libraryGenerationProvider.notifier).bump();
+  }
 
   NavigatorState? get currentNavigator => switch (state.active) {
     0 => dashboardNavigator.currentState,
@@ -168,6 +200,17 @@ class TabsNotifier extends Notifier<Tabs> {
     final tabs = [...state.tabs];
     tabs.insert(to, tabs.removeAt(from));
     state = Tabs(tabs, shown == null ? 0 : tabs.indexOf(shown) + 1);
+  }
+
+  /// Closes the pack tab whose navigator is [navigator]; false when it's
+  /// not a pack tab's (the dashboard's, the app's).
+  bool closeTabOf(NavigatorState navigator) {
+    final i = state.tabs.indexWhere(
+      (t) => t.navigator.currentState == navigator,
+    );
+    if (i < 0) return false;
+    close(i);
+    return true;
   }
 
   /// Ctrl+W: the shown pack tab (never the dashboard).

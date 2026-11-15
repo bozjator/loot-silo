@@ -10,7 +10,10 @@ import 'package:loot_silo/itch/itch_key.dart';
 import 'package:loot_silo/itch/itch_matcher.dart';
 import 'package:loot_silo/itch/itch_page_scraper.dart';
 import 'package:loot_silo/itch/itch_sync.dart';
-import 'package:loot_silo/state/itch.dart' show itchWorkRoot;
+import 'package:drift/native.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:loot_silo/state/itch.dart';
+import 'package:loot_silo/state/providers.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -40,23 +43,30 @@ Map<String, Object?> gameJson(
 OwnedKey key(int id, String title, {String user = 'orcmaker'}) =>
     OwnedKey.fromJson({'id': id * 10, 'game': gameJson(id, title, user: user)});
 
-PackRow pack(String id, {String? author, String? url, int? itchGameId}) =>
-    PackRow(
-      isBundle: false,
-      id: id,
-      path: '/lib/$id',
-      title: id.split('/').last,
-      author: author ?? id.split('/').first,
-      authorUrl: url,
-      types: const [],
-      tags: const [],
-      usedIn: const [],
-      favorite: false,
-      favoriteFiles: const [],
-      itchGameId: itchGameId,
-      fileCount: 1,
-      totalBytes: 1,
-    );
+PackRow pack(
+  String id, {
+  String? author,
+  String? url,
+  int? itchGameId,
+  bool isBundle = false,
+  String? bundleId,
+}) => PackRow(
+  isBundle: isBundle,
+  bundleId: bundleId,
+  id: id,
+  path: '/lib/$id',
+  title: id.split('/').last,
+  author: author ?? id.split('/').first,
+  authorUrl: url,
+  types: const [],
+  tags: const [],
+  usedIn: const [],
+  favorite: false,
+  favoriteFiles: const [],
+  itchGameId: itchGameId,
+  fileCount: 1,
+  totalBytes: 1,
+);
 
 void main() {
   group('ItchApi', () {
@@ -422,4 +432,52 @@ void main() {
     expect(Directory(p.join(tmp.path, 'extract')).existsSync(), isTrue);
     deleteLeftovers(root); // gone: no error
   });
+
+  test(
+    'an owned all-in-one matches its bundle, its packs their own keys',
+    () async {
+      const bundle = 'Kenney/Kenney Game Assets 1 version 42';
+      final container = ProviderContainer(
+        overrides: [
+          itchAccountProvider.overrideWith(
+            (ref) async => ItchAccount(const ItchUser(id: 1, username: 'me'), [
+              key(1, 'Kenney Game Assets 1', user: 'kenney'),
+              key(2, 'Space Shooter Pack', user: 'kenney'),
+            ]),
+          ),
+          libraryProvider.overrideWith(_Library.new),
+          libraryIndexProvider.overrideWithValue(
+            LibraryIndex(NativeDatabase.memory()),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final m = {
+        for (final x in await container.read(itchMatchesProvider.future))
+          x.key.game.id: x,
+      };
+      expect(m[1]!.kind, MatchKind.fuzzy);
+      expect(m[1]!.pack!.id, bundle);
+      expect(m[2]!.pack!.id, '$bundle/Space Shooter Pack');
+    },
+  );
+}
+
+class _Library extends LibraryNotifier {
+  @override
+  Future<LibraryState> build() async => LibraryState(
+    root: '/lib',
+    packs: [
+      pack(
+        'Kenney/Kenney Game Assets 1 version 42',
+        author: 'Kenney',
+        isBundle: true,
+      ),
+      pack(
+        'Kenney/Kenney Game Assets 1 version 42/Space Shooter Pack',
+        author: 'Kenney',
+        bundleId: 'Kenney/Kenney Game Assets 1 version 42',
+      ),
+    ],
+  );
 }

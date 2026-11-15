@@ -59,6 +59,54 @@ import 'widgets/waveform.dart';
 import 'cursors.dart';
 import 'widgets/dialog_close.dart';
 
+/// A tab or page whose pack (or bundle) went away in a rescan (M96): says
+/// so, with a way out. As a pack tab's first page, "Close tab", Esc and
+/// the mouse back button close the tab (its left neighbour shows); pushed
+/// over another page, they go back.
+class MissingPackPage extends ConsumerWidget {
+  const MissingPackPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final navigator = Navigator.maybeOf(context);
+    final canPop = navigator?.canPop() ?? false;
+    void close() {
+      if (navigator == null) return;
+      if (navigator.canPop()) {
+        navigator.pop();
+      } else {
+        ref.read(tabsProvider.notifier).closeTabOf(navigator);
+      }
+    }
+
+    return PopScope(
+      // A tab's first page can't pop: Esc and mouse back close the tab.
+      canPop: canPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) close();
+      },
+      child: Scaffold(
+        appBar: AppBar(),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('This pack is no longer in the library'),
+              const SizedBox(height: 16),
+              FilledButton(
+                // Holds the focus, so Esc reaches the app's back key.
+                autofocus: true,
+                onPressed: navigator == null ? null : close,
+                child: Text(canPop ? 'Back' : 'Close tab'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Everything about one pack: previews, files, animations, metadata.
 class PackDetailScreen extends ConsumerWidget {
   const PackDetailScreen({
@@ -95,14 +143,8 @@ class PackDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final library = ref.watch(libraryProvider).value;
     final pack = library?.packs.where((p) => p.id == packId).firstOrNull;
-    if (pack == null) {
-      return Scaffold(
-        appBar: AppBar(),
-        body: const Center(
-          child: Text('This pack is no longer in the library'),
-        ),
-      );
-    }
+    // Packs and bundles alike: a bundle is a row of the same list.
+    if (pack == null) return const MissingPackPage();
     // A bundle (M95) has a page of its own: its packs.
     if (pack.isBundle) return BundleScreen(bundle: pack);
     final contents = ref.watch(packContentsProvider(packId));

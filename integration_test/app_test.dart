@@ -1207,6 +1207,9 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.enterText(find.byType(TextField), 'oboropixel');
     await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('CharactersAnimationsAssetPack'));
+    // The results settle first (as in m94): a tap on a tile still moving
+    // into place can miss it.
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.text('CharactersAnimationsAssetPack'));
     await pumpUntil(tester, find.textContaining('Animations ('));
     await settleImages(tester);
@@ -1469,6 +1472,9 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.enterText(find.byType(TextField), 'oboropixel');
     await tester.pump(DashboardQueryNotifier.searchDebounce);
     await pumpUntil(tester, find.text('CharactersAnimationsAssetPack'));
+    // The results settle first (as in m94): a tap on a tile still moving
+    // into place can miss it.
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.text('CharactersAnimationsAssetPack'));
     await pumpUntil(tester, find.textContaining('Animations ('));
     await tester.tap(find.textContaining('Animations ('));
@@ -5521,6 +5527,54 @@ A **16×16** knight with *walk* and *idle* animations.
         .map((f) => PackSidecar.read(f.parent.path))
         .where((s) => s?.layout == PackLayout.bundle);
     expect(imported, hasLength(1));
+  });
+
+  testWidgets('m96: library switch closes tabs; a vanished pack page', (
+    tester,
+  ) async {
+    copyTree('test/fixtures/managed', lib);
+    final other = p.join(tmp.path, 'other library');
+    copyTree(
+      'test/fixtures/managed/HeroMaker/Slimes',
+      p.join(other, 'Slimes Again'),
+    );
+    await tester.pumpWidget(app(lib));
+    await pumpUntil(tester, find.text('Knight Pack'));
+    final c = ProviderScope.containerOf(tester.element(find.byType(TabsHost)));
+    c.read(tabsProvider.notifier)
+      ..open('HeroMaker/Knight Pack')
+      ..open('HeroMaker/Slimes')
+      ..select(2);
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // The Slimes folder goes away; a rescan leaves its tab with a way out.
+    Directory(p.join(lib, 'HeroMaker', 'Slimes')).deleteSync(recursive: true);
+    await tester.runAsync(() => c.read(libraryProvider.notifier).rescan());
+    const gone = 'This pack is no longer in the library';
+    await pumpUntil(tester, find.text(gone));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.widgetWithText(FilledButton, 'Close tab'), findsOneWidget);
+    await captureScreenshot(tester, 'm96_missing_pack', settle: false);
+    await tester.tap(find.widgetWithText(FilledButton, 'Close tab'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text(gone), findsNothing);
+    expect(c.read(tabsProvider).tabs.map((t) => t.packId), [
+      'HeroMaker/Knight Pack',
+    ]);
+    expect(c.read(tabsProvider).active, 1);
+
+    // Another library: only the dashboard, nothing filtered.
+    c.read(tabsProvider.notifier).select(0);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.enterText(find.byType(TextField).first, 'knight');
+    await tester.pump(DashboardQueryNotifier.searchDebounce);
+    c.read(settingsProvider.notifier).setLibraryPath(other);
+    await pumpUntil(tester, find.text('Slimes Again'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(c.read(tabsProvider).tabs, isEmpty);
+    expect(c.read(dashboardQueryProvider).isNarrowed, isFalse);
+    expect(find.byType(PackTabStrip), findsNothing);
+    await captureScreenshot(tester, 'm96_other_library', settle: false);
   });
 
   testWidgets('m61: model viewer — orbit, wireframe, Esc closes', (

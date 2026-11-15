@@ -132,11 +132,9 @@ final itchMatchesProvider = FutureProvider<List<ItchMatch>>((ref) async {
   if (account == null) return const [];
   final library = await ref.watch(libraryProvider.future);
   final folders = await ref.read(libraryIndexProvider).folderNames();
-  // A bundle's packs are matched, not the bundle (M95).
-  return matchOwnedKeys(account.keys, [
-    for (final pk in library.packs)
-      if (!pk.isBundle) pk,
-  ], folders: folders);
+  // Bundles too: on itch.io an all-in-one (Kenney Game Assets 1) is sold
+  // as one game, and it's the bundle that has it, not one of its packs.
+  return matchOwnedKeys(account.keys, library.packs, folders: folders);
 });
 
 /// Progress of one game's download or link.

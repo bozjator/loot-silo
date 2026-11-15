@@ -112,6 +112,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
     required List<FileTile> files,
     required double size,
     required SearchFilter search,
+    required int generation,
   }) {
     final listing = searching || favorites;
     if (!listing || (loaded && files.isEmpty)) {
@@ -143,7 +144,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
     return CtrlWheelResize(
       onSteps: (n) => settings.setImageThumbSize(_fileScale.step(size, n)),
       child: FileResultsGrid(
-        key: const PageStorageKey('files'),
+        key: PageStorageKey('files:$generation'),
         files: files,
         tileSize: size,
         scale: _fileScale,
@@ -177,6 +178,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
     final visible = ref.watch(visibleTilesProvider);
     final tiles = visible.value ?? const [];
     final view = ref.watch(settingsProvider.select((s) => s.dashboardView));
+    final generation = ref.watch(libraryGenerationProvider);
     final searching = query.text.trim().isNotEmpty;
     final fileSearch = searching ? ref.watch(fileSearchProvider).value : null;
     final filesView = view == DashboardView.files;
@@ -293,6 +295,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                         files: files,
                         size: imageSize,
                         search: search,
+                        generation: generation,
                       )
                     : tiles.isEmpty && visible.hasValue
                     ? Center(
@@ -318,7 +321,7 @@ class _DashboardState extends ConsumerState<Dashboard> {
                         ),
                         child: ThumbRows(
                           // Each view keeps its own scroll position.
-                          key: PageStorageKey('grid:${view.name}'),
+                          key: PageStorageKey('grid:${view.name}:$generation'),
                           physics: const CtrlWheelPhysics(),
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                           maxTileWidth: tileSize,
