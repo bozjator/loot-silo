@@ -195,10 +195,8 @@ void main() {
     expect(find.byType(ModelViewer), findsNothing);
   });
 
-  testWidgets('toggles redraw without projecting again', (tester) async {
+  testWidgets('toggles change the picture and are kept', (tester) async {
     await open(tester);
-    final cache = painter(tester).cache!;
-    final before = cache.projections;
     for (final t in ['wireframe', 'grid', 'textured']) {
       await tester.tap(find.byKey(ValueKey('toggle-$t')));
       await tester.pump();
@@ -207,7 +205,6 @@ void main() {
     expect(on.wireframe, isTrue);
     expect(on.grid, isTrue);
     expect(on.flat, isTrue);
-    expect(cache.projections, before);
     // Kept for the next viewer this session.
     expect(modelViewOptions.wireframe, isTrue);
 
@@ -284,11 +281,11 @@ void main() {
     expect(find.text('Copied'), findsOneWidget);
   });
 
-  testWidgets('a large mesh draws unsorted while dragging, sorted after', (
+  testWidgets('a large mesh draws without smoothing while dragging', (
     tester,
   ) async {
-    // A strip of 20,002 triangles.
-    const quads = 10001;
+    // A strip of 500,002 triangles.
+    const quads = 250001;
     final pos = Float32List((quads + 1) * 2 * 3);
     for (var i = 0; i <= quads; i++) {
       pos.setAll(i * 6, [i / 100, 0, 0, i / 100, 1, 0]);
@@ -306,17 +303,17 @@ void main() {
       materials: const [ModelMaterial.plain],
     );
     await open(tester, cache: ModelCache(read: (_) async => big));
-    expect(painter(tester).sorted, isTrue);
+    expect(painter(tester).fast, isFalse);
     final g = await tester.startGesture(
       tester.getCenter(stage()),
       kind: PointerDeviceKind.mouse,
     );
     await g.moveBy(const Offset(10, 0));
     await tester.pump();
-    expect(painter(tester).sorted, isFalse);
+    expect(painter(tester).fast, isTrue);
     await g.up();
     await tester.pump();
-    expect(painter(tester).sorted, isTrue);
+    expect(painter(tester).fast, isFalse);
     // Let the double-click window pass.
     await tester.pump(const Duration(milliseconds: 400));
   });

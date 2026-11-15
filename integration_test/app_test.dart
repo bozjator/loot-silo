@@ -5963,6 +5963,94 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(Directory(real).statSync().modified, before);
   });
 
+  testWidgets('m99: the Tyre draws right while it turns (real, read-only)', (
+    tester,
+  ) async {
+    final real = p.canonicalize('../assets_library');
+    final tyre = p.join(real, 'Unknown Author', 'Tyre');
+    if (!File(p.join(tyre, 'tyre.obj')).existsSync()) return;
+    final before = Directory(tyre).statSync().modified;
+    modelViewOptions
+      ..textured = true
+      ..wireframe = false
+      ..turntable = false
+      ..grid = false;
+    await tester.pumpWidget(app(real, library: real));
+    await pumpUntil(tester, realPacks());
+    await tester.enterText(find.byType(TextField).first, 'Tyre');
+    await pumpUntil(tester, find.text('Tyre'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.widgetWithText(PackTile, 'Tyre'));
+    await pumpUntil(tester, find.textContaining('Models ('));
+    await tester.tap(find.textContaining('Models ('));
+    await tester.pump(const Duration(milliseconds: 500));
+    await pumpUntil(
+      tester,
+      find.byKey(const ValueKey('model-loading')),
+      gone: true,
+    );
+    expect(find.byKey(const ValueKey('model-too-large')), findsNothing);
+    await tester.pump(const Duration(milliseconds: 400));
+    await captureScreenshot(tester, 'm99_tyre_card', settle: false);
+
+    final card = find.byType(ItemCard).first;
+    await tester.tap(card);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(card);
+    await pumpUntil(tester, find.byKey(const ValueKey('model-viewer-paint')));
+    await tester.pump(const Duration(milliseconds: 600));
+    ModelPainter painter() =>
+        tester
+                .widget<CustomPaint>(
+                  find.byKey(const ValueKey('model-viewer-paint')),
+                )
+                .painter!
+            as ModelPainter;
+    expect(painter().mesh.triangleCount, 39232);
+    await captureScreenshot(tester, 'm99_tyre_viewer', settle: false);
+
+    // Mid-drag, with the button still down: the far side of the tyre used
+    // to show through here.
+    final stage = find.byKey(const ValueKey('model-viewer-stage'));
+    final drag = await tester.startGesture(
+      tester.getCenter(stage),
+      kind: PointerDeviceKind.mouse,
+    );
+    final frames = <int>[];
+    final watch = Stopwatch()..start();
+    for (var i = 0; i < 40; i++) {
+      await drag.moveBy(const Offset(6, 2));
+      watch.reset();
+      await tester.pump();
+      frames.add(watch.elapsedMicroseconds);
+    }
+    frames.sort();
+    debugPrint(
+      'm99: Tyre (39,232 triangles) drag frames: median '
+      '${(frames[frames.length ~/ 2] / 1000).toStringAsFixed(1)} ms, worst '
+      '${(frames.last / 1000).toStringAsFixed(1)} ms',
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(painter().picture.busy, isFalse);
+    expect(painter().picture.image, isNotNull);
+    await captureScreenshot(tester, 'm99_tyre_dragging', settle: false);
+    await drag.up();
+
+    await tester.tap(find.byKey(const ValueKey('toggle-wireframe')));
+    await tester.tap(find.byKey(const ValueKey('toggle-grid')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.equal);
+    await tester.sendKeyEvent(LogicalKeyboardKey.equal);
+    await tester.sendKeyEvent(LogicalKeyboardKey.equal);
+    await tester.pump(const Duration(milliseconds: 600));
+    await captureScreenshot(tester, 'm99_tyre_wireframe', settle: false);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 400));
+    modelViewOptions
+      ..wireframe = false
+      ..grid = false;
+    expect(Directory(tyre).statSync().modified, before);
+  });
+
   testWidgets('m61: model viewer — orbit, wireframe, Esc closes', (
     tester,
   ) async {

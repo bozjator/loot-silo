@@ -7,8 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/model_mesh.dart';
+import '../core/model_raster.dart';
 import '../state/providers.dart';
 import 'model_painter.dart';
+import 'model_picture.dart';
 import 'theme_colors.dart';
 
 /// One turn of a hovered card.
@@ -38,7 +40,10 @@ class _ModelStageState extends ConsumerState<ModelStage>
 
   /// A [ModelMesh] or a [ModelReadError]; null while reading.
   Object? _result;
-  Map<String, ui.Image> _textures = const {};
+
+  /// Textures loaded for the mesh shown.
+  var _textures = 0;
+  final _picture = ModelPicture();
 
   @override
   void initState() {
@@ -60,6 +65,7 @@ class _ModelStageState extends ConsumerState<ModelStage>
   @override
   void dispose() {
     _turn.dispose();
+    _picture.dispose();
     super.dispose();
   }
 
@@ -67,7 +73,7 @@ class _ModelStageState extends ConsumerState<ModelStage>
     final path = widget.path;
     final cache = ref.read(modelCacheProvider);
     _result = cache.peek(path);
-    _textures = const {};
+    _textures = 0;
     if (_result case final ModelMesh mesh) {
       _loadTextures(mesh);
       return;
@@ -92,12 +98,9 @@ class _ModelStageState extends ConsumerState<ModelStage>
 
   void _loadTextures(ModelMesh mesh) {
     final path = widget.path;
-    for (final key in mesh.textures) {
-      modelTexture(key, mesh, path).then((image) {
-        if (image == null || !mounted || widget.path != path) return;
-        setState(() => _textures = {..._textures, key: image});
-      });
-    }
+    loadModelTextures(mesh, path, () {
+      if (mounted && widget.path == path) setState(() => _textures++);
+    });
   }
 
   @override
@@ -150,6 +153,8 @@ class _ModelStageState extends ConsumerState<ModelStage>
             yaw: defaultModelYaw + _turn.value * 2 * math.pi,
             textures: _textures,
             background: modelStageColor(scheme),
+            pixelRatio: MediaQuery.devicePixelRatioOf(context),
+            picture: _picture,
           ),
         ),
       ),
@@ -158,22 +163,34 @@ class _ModelStageState extends ConsumerState<ModelStage>
   }
 }
 
-/// Decoded textures, shared by every card (Kenney kits use one
-/// `colormap.png` for all their models); the oldest go past 64.
-final _textures = <String, Future<ui.Image?>>{};
+/// Textures in the renderer's memory, shared by every card (Kenney kits
+/// use one `colormap.png` for all their models); the oldest go past 64.
+final _textures = <String, Future<RasterTexture?>>{};
 
 /// The image a material names: a file, or one stored inside [mesh] (keyed
 /// by the model's [path] too). Null when it can't be read or decoded.
-Future<ui.Image?> modelTexture(String key, ModelMesh mesh, String path) {
+Future<RasterTexture?> modelTexture(String key, ModelMesh mesh, String path) {
   final embedded = mesh.images[key];
   final id = embedded == null ? key : '$path#$key';
   final hit = _textures.remove(id);
   if (hit != null) return _textures[id] = hit;
-  Future<ui.Image?> decode() async {
+  Future<RasterTexture?> decode() async {
     try {
       final bytes = embedded ?? await File(key).readAsBytes();
       final codec = await ui.instantiateImageCodec(bytes);
-      return (await codec.getNextFrame()).image;
+      final image = (await codec.getNextFrame()).image;
+      codec.dispose();
+      final pixels = await image.toByteData(
+        format: ui.ImageByteFormat.rawStraightRgba,
+      );
+      final (width, height) = (image.width, image.height);
+      image.dispose();
+      if (pixels == null) return null;
+      return RasterTexture.fromRgba(
+        pixels.buffer.asUint8List(pixels.offsetInBytes, pixels.lengthInBytes),
+        width,
+        height,
+      );
     } on Object {
       return null;
     }
@@ -185,4 +202,25 @@ Future<ui.Image?> modelTexture(String key, ModelMesh mesh, String path) {
     _textures.remove(_textures.keys.first);
   }
   return future;
+}
+
+/// Loads the textures [mesh] (the model at [path]) names and hands them to
+/// the renderer; [onLoaded] runs after each one, to repaint. Textures the
+/// renderer already has are left alone.
+void loadModelTextures(ModelMesh mesh, String path, VoidCallback onLoaded) {
+  if (mesh.textures.isEmpty) return;
+  final RasterMesh raster;
+  try {
+    raster = RasterMesh.of(mesh);
+  } on ModelReadError {
+    return;
+  }
+  for (final key in mesh.textures) {
+    if (raster.hasTexture(key)) continue;
+    modelTexture(key, mesh, path).then((texture) {
+      if (texture == null) return;
+      raster.setTexture(key, texture);
+      onLoaded();
+    });
+  }
 }

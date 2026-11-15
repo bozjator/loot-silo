@@ -52,6 +52,11 @@ dependencies:
   crypto: ^3.0.8
   file_selector: ^1.1.0
   flutter_markdown_plus: ^1.0.12
+  # Dart team; they compile `native/` (the 3D model renderer and FBX
+  # reader) into the app from `hook/build.dart`.
+  hooks: ^2.0.2
+  code_assets: ^1.2.1
+  native_toolchain_c: ^0.19.2
 
 dev_dependencies:
   flutter_test:

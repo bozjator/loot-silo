@@ -186,6 +186,38 @@ void main() {
       expect(m.triangleMaterials.where((t) => t == 1).length, 2);
     });
 
+    test('names in UTF-8 or Latin-1; no normals means facets', () {
+      File(p.join(tmp.path, 'n.mtl'))
+          .writeAsStringSync('newmtl Материал.1\nKd 0.1 0.1 0.1\n');
+      final f = File(p.join(tmp.path, 'n.obj'))
+        ..writeAsStringSync(
+          'mtllib n.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\n'
+          'usemtl Материал.1\nf 1 2 3\n',
+        );
+      final m = readObj(f.path);
+      expect(m.materials.single.name, 'Материал.1');
+      expect(m.materials.single.color, 0xFF1A1A1A);
+      expect(m.facetted, isTrue);
+      // The cube fixtures carry no normals either; a file with `vn` is
+      // shaded from them.
+      f.writeAsStringSync(
+        'v 0 0 0\nv 1 0 0\nv 0 1 0\nvn 0 0 1\nf 1//1 2//1 3//1\n',
+      );
+      expect(readObj(f.path).facetted, isFalse);
+      // Not UTF-8: read as Latin-1.
+      File(p.join(tmp.path, 'n.mtl')).writeAsBytesSync([
+        ...'newmtl caf'.codeUnits,
+        0xE9,
+        ...'\nKd 1 1 1\n'.codeUnits,
+      ]);
+      f.writeAsBytesSync([
+        ...'mtllib n.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nusemtl caf'.codeUnits,
+        0xE9,
+        ...'\nf 1 2 3\n'.codeUnits,
+      ]);
+      expect(readObj(f.path).materials.single.name, 'café');
+    });
+
     test('n-gons fan, vt flips, map_Kd relative to the MTL', () {
       Directory(p.join(tmp.path, 'mat')).createSync();
       File(p.join(tmp.path, 'mat', 'm.mtl')).writeAsStringSync(

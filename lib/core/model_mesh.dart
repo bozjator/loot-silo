@@ -25,7 +25,10 @@ class ModelTooLargeError extends ModelReadError {
 }
 
 /// Above this, a model shows "Too large to preview" instead of drawing.
-const maxPreviewTriangles = 200000;
+/// The renderer draws 4 million triangles about 30 times a second
+/// (measured in `test/core/model_raster_test.dart`); the limit keeps
+/// reading time and memory in check.
+const maxPreviewTriangles = 5000000;
 
 /// How a group of triangles is coloured.
 class ModelMaterial {
@@ -76,6 +79,7 @@ class ModelMesh {
     required this.materials,
     this.uvs,
     this.images = const {},
+    this.facetted = false,
   }) : bounds = _bounds(positions);
 
   /// x, y, z per vertex.
@@ -84,6 +88,10 @@ class ModelMesh {
   /// x, y, z per vertex, unit length. Files without normals get the
   /// average of the faces around each vertex.
   final Float32List normals;
+
+  /// The file left out normals: every triangle is shaded as a flat facet
+  /// from its own normal, since averaged ones would round off hard edges.
+  final bool facetted;
 
   /// Three vertex indices per triangle, counter-clockwise when seen from
   /// the front.
@@ -143,14 +151,16 @@ class ModelMesh {
 /// Formats [readModel] can draw.
 const readableModelExts = {'glb', 'gltf', 'obj'};
 
-/// Reads a GLB, glTF or OBJ file by its extension.
+/// Reads a model file by its extension.
 ModelMesh readModel(String path) => switch (p.extension(path).toLowerCase()) {
   '.glb' || '.gltf' => readGltf(path),
   '.obj' => readObj(path),
   _ => throw const ModelReadError('Format not supported'),
 };
 
-Uint8List _bytes(String path) {
+/// The bytes of a model file (or a file it names); a [ModelReadError] when
+/// it is missing.
+Uint8List modelFileBytes(String path) {
   try {
     return File(path).readAsBytesSync();
   } on FileSystemException {
@@ -158,40 +168,55 @@ Uint8List _bytes(String path) {
   }
 }
 
-/// Collects triangles from the parts of a file, then builds the mesh.
-class _MeshBuilder {
-  final pos = <double>[];
+/// A text model file's characters: UTF-8, or Latin-1 when it isn't valid
+/// UTF-8 (names in old files).
+String modelFileText(Uint8List bytes) {
+  try {
+    return utf8.decode(bytes);
+  } on FormatException {
+    return latin1.decode(bytes);
+  }
+}
+
+/// Collects triangles from the parts of a file, then builds the mesh. A
+/// reader adds vertices ([pos], [nrm] with NaN for "no normal", [uv]), then
+/// triangles ([idx], three vertex numbers each, with one [triMat] entry per
+/// triangle).
+class MeshBuilder {
+  final pos = FloatBuffer();
 
   /// NaN where a part has no normals.
-  final nrm = <double>[];
-  final uv = <double>[];
+  final nrm = FloatBuffer();
+  final uv = FloatBuffer();
   var hasUv = false;
-  final idx = <int>[];
-  final triMat = <int>[];
+  final idx = IntBuffer();
+  final triMat = IntBuffer();
   final materials = <ModelMaterial>[];
   final images = <String, Uint8List>{};
 
   int get vertexCount => pos.length ~/ 3;
 
   ModelMesh build() {
-    if (idx.isEmpty) throw const ModelReadError('No triangles');
-    final positions = Float32List.fromList(pos);
-    final normals = Float32List.fromList(nrm);
-    final indices = Uint32List.fromList(idx);
-    _fillNormals(positions, normals, indices);
+    if (idx.length == 0) throw const ModelReadError('No triangles');
+    final positions = pos.take();
+    final normals = nrm.take();
+    final indices = idx.take();
+    final facetted = _fillNormals(positions, normals, indices);
     return ModelMesh(
+      facetted: facetted,
       positions: positions,
       normals: normals,
       indices: indices,
-      triangleMaterials: Uint16List.fromList(triMat),
+      triangleMaterials: Uint16List.fromList(triMat.take()),
       materials: materials.isEmpty ? [ModelMaterial.plain] : materials,
-      uvs: hasUv ? Float32List.fromList(uv) : null,
+      uvs: hasUv ? uv.take() : null,
       images: images,
     );
   }
 
-  /// Vertices without a normal get the sum of their faces' normals.
-  static void _fillNormals(Float32List pos, Float32List nrm, Uint32List idx) {
+  /// Vertices without a normal get the sum of their faces' normals. True
+  /// when any vertex had none.
+  static bool _fillNormals(Float32List pos, Float32List nrm, Uint32List idx) {
     final missing = <int>{};
     for (var v = 0; v < nrm.length ~/ 3; v++) {
       if (nrm[v * 3].isNaN) {
@@ -199,7 +224,7 @@ class _MeshBuilder {
         nrm[v * 3] = nrm[v * 3 + 1] = nrm[v * 3 + 2] = 0;
       }
     }
-    if (missing.isEmpty) return;
+    if (missing.isEmpty) return false;
     for (var t = 0; t < idx.length; t += 3) {
       final a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
       final ux = pos[b] - pos[a], uy = pos[b + 1] - pos[a + 1];
@@ -226,10 +251,50 @@ class _MeshBuilder {
         nrm[v * 3 + 1] = 1;
       }
     }
+    return true;
   }
 }
 
-int _argb(double r, double g, double b, double a) {
+/// A growing list of 32-bit floats: a big model's numbers stay packed
+/// while it is read.
+class FloatBuffer {
+  var _data = Float32List(1024);
+  var length = 0;
+
+  void add(double v) {
+    if (length == _data.length) {
+      _data = Float32List(length * 2)..setRange(0, length, _data);
+    }
+    _data[length++] = v;
+  }
+
+  void addAll(List<double> values) => values.forEach(add);
+
+  /// The values, cut to size.
+  Float32List take() =>
+      Float32List.fromList(Float32List.sublistView(_data, 0, length));
+}
+
+/// [FloatBuffer] for unsigned 32-bit integers.
+class IntBuffer {
+  var _data = Uint32List(1024);
+  var length = 0;
+
+  void add(int v) {
+    if (length == _data.length) {
+      _data = Uint32List(length * 2)..setRange(0, length, _data);
+    }
+    _data[length++] = v;
+  }
+
+  void addAll(List<int> values) => values.forEach(add);
+
+  Uint32List take() =>
+      Uint32List.fromList(Uint32List.sublistView(_data, 0, length));
+}
+
+/// ARGB from 0–1 channels.
+int argbColor(double r, double g, double b, double a) {
   int c(double v) => (v.clamp(0.0, 1.0) * 255).round();
   return c(a) << 24 | c(r) << 16 | c(g) << 8 | c(b);
 }
@@ -242,7 +307,7 @@ int _argb(double r, double g, double b, double a) {
 /// lists (mode 4). Colours from `baseColorFactor`, the first
 /// `baseColorTexture` (a file or an image inside the model).
 ModelMesh readGltf(String path) {
-  final bytes = _bytes(path);
+  final bytes = modelFileBytes(path);
   try {
     return _Gltf.parse(bytes, p.dirname(path)).read();
   } on ModelReadError {
@@ -263,7 +328,7 @@ class _Gltf {
   final Uint8List? bin;
   final String dir;
   final _buffers = <int, Uint8List>{};
-  final _builder = _MeshBuilder();
+  final _builder = MeshBuilder();
 
   /// glTF material index → index in the builder's list.
   final _materials = <int, int>{};
@@ -323,7 +388,7 @@ class _Gltf {
     if (uri.startsWith('data:')) {
       return UriData.parse(uri).contentAsBytes();
     }
-    return _bytes(p.join(dir, Uri.decodeFull(uri)));
+    return modelFileBytes(p.join(dir, Uri.decodeFull(uri)));
   }
 
   Uint8List _view(int i) {
@@ -518,7 +583,9 @@ class _Gltf {
                 const [1.0, 1.0, 1.0, 1.0])
           (v! as num).toDouble(),
       ];
-      final color = f.length >= 4 ? _argb(f[0], f[1], f[2], f[3]) : 0xFFFFFFFF;
+      final color = f.length >= 4
+          ? argbColor(f[0], f[1], f[2], f[3])
+          : 0xFFFFFFFF;
       String? texture;
       var nearest = false;
       final tex = pbr?['baseColorTexture'] as Map<String, Object?>?;
@@ -630,14 +697,9 @@ class _Gltf {
 /// triangles, negative indices), `usemtl` with `mtllib` (`Kd` colour, `d`
 /// opacity, `map_Kd` texture relative to the MTL file).
 ModelMesh readObj(String path) {
-  final String text;
-  try {
-    text = latin1.decode(_bytes(path));
-  } on FormatException {
-    throw const ModelReadError('Not a text file');
-  }
+  final text = modelFileText(modelFileBytes(path));
   final dir = p.dirname(path);
-  final b = _MeshBuilder();
+  final b = MeshBuilder();
   final vs = <double>[], vns = <double>[], vts = <double>[];
   final mtl = <String, ModelMaterial>{};
   final matIndex = <String, int>{};
@@ -739,14 +801,14 @@ Map<String, ModelMaterial> _readMtl(String path) {
   void flush() {
     if (name == null) return;
     out[name] = ModelMaterial(
-      color: _argb(kd[0], kd[1], kd[2], alpha),
+      color: argbColor(kd[0], kd[1], kd[2], alpha),
       name: name,
       file: path,
       texture: map,
     );
   }
 
-  for (final raw in LineSplitter.split(latin1.decode(file.readAsBytesSync()))) {
+  for (final raw in LineSplitter.split(modelFileText(file.readAsBytesSync()))) {
     final line = raw.trim();
     if (line.isEmpty || line.startsWith('#')) continue;
     final parts = line.split(RegExp(r'\s+'));

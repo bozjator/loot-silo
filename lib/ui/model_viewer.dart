@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +15,8 @@ import '../state/providers.dart';
 import 'folder_groups.dart' show folderTitle;
 import 'format.dart';
 import 'model_painter.dart';
-import 'model_stage.dart' show modelTexture, modelTurnDuration;
+import 'model_picture.dart';
+import 'model_stage.dart' show loadModelTextures, modelTurnDuration;
 import 'reveal.dart';
 import 'shortcuts.dart';
 import 'theme_colors.dart';
@@ -101,15 +101,17 @@ class _ModelViewerState extends ConsumerState<ModelViewer>
   var _zoom = 1.0;
   var _pan = Offset.zero;
 
-  /// A button is down on the stage: large meshes draw unsorted meanwhile.
+  /// A button is down on the stage: large meshes draw faster meanwhile.
   var _dragging = false;
   var _pinchFrom = 1.0;
   var _copied = false;
 
   /// A [ModelMesh] or a [ModelReadError]; null while reading.
   Object? _result;
-  Map<String, ui.Image> _textures = const {};
-  final _paintCache = ModelPaintCache();
+
+  /// Textures loaded for the mesh shown.
+  var _textures = 0;
+  final _picture = ModelPicture();
 
   late final Ticker _turntable = createTicker(_turn);
   Duration _lastTick = Duration.zero;
@@ -127,6 +129,7 @@ class _ModelViewerState extends ConsumerState<ModelViewer>
   @override
   void dispose() {
     _turntable.dispose();
+    _picture.dispose();
     super.dispose();
   }
 
@@ -153,7 +156,7 @@ class _ModelViewerState extends ConsumerState<ModelViewer>
     final path = _path;
     final cache = ref.read(modelCacheProvider);
     _result = cache.peek(path);
-    _textures = const {};
+    _textures = 0;
     if (_result case final ModelMesh mesh) {
       _loadTextures(mesh);
       return;
@@ -178,12 +181,9 @@ class _ModelViewerState extends ConsumerState<ModelViewer>
 
   void _loadTextures(ModelMesh mesh) {
     final path = _path;
-    for (final key in mesh.textures) {
-      modelTexture(key, mesh, path).then((image) {
-        if (image == null || !mounted || _path != path) return;
-        setState(() => _textures = {..._textures, key: image});
-      });
-    }
+    loadModelTextures(mesh, path, () {
+      if (mounted && _path == path) setState(() => _textures++);
+    });
   }
 
   void _reset() => setState(() {
@@ -432,9 +432,10 @@ class _ModelViewerState extends ConsumerState<ModelViewer>
           flat: !_options.textured,
           wireframe: _options.wireframe,
           grid: _options.grid,
-          sorted: !_dragging || mesh.triangleCount <= unsortedDragTriangles,
+          fast: _dragging && mesh.triangleCount > fastDragTriangles,
           lineColor: scheme.onSurface,
-          cache: _paintCache,
+          pixelRatio: MediaQuery.devicePixelRatioOf(context),
+          picture: _picture,
         ),
       ),
       _ => const SizedBox.shrink(),

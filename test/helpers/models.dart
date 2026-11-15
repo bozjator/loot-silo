@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter_test/flutter_test.dart';
+import 'package:loot_silo/ui/model_picture.dart';
 import 'package:path/path.dart' as p;
 
 /// A unit cube (-1…1) as 8 corners and 12 counter-clockwise triangles.
@@ -176,4 +178,18 @@ Kd 0.35 0.7 0.3
   b.writeln('usemtl top');
   b.writeln('f ${cubeQuads[4].map((i) => i + 1).join(' ')}');
   return File(p.join(dir, '$name.obj'))..writeAsStringSync(b.toString());
+}
+
+/// Waits until [picture] shows what was last asked of it. The engine
+/// decodes the pixels in real time, which a widget test only gets through
+/// `runAsync`.
+Future<void> settlePicture(WidgetTester tester, ModelPicture picture) async {
+  for (var i = 0; i < 200 && picture.busy; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 5)),
+    );
+    await tester.pump();
+  }
+  expect(picture.busy, isFalse, reason: 'the picture never arrived');
+  await tester.pump();
 }
