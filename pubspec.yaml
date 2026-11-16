@@ -42,7 +42,9 @@ dependencies:
   desktop_drop: ^0.8.0
   archive: ^4.6.0
   image: ^4.12.0
-  audioplayers: ^6.8.1
+  # Audio playback. Decodes Ogg/Opus/FLAC/MP3/WAV itself on every platform
+  # (Windows' Media Foundation can't open Ogg in a desktop app).
+  flutter_soloud: ^5.2.3
   url_launcher: ^6.3.3
   flutter_secure_storage: ^11.2.0
   http: ^1.6.0
@@ -54,9 +56,9 @@ dependencies:
   flutter_markdown_plus: ^1.0.12
   # Dart team; they compile `native/` (the 3D model renderer and FBX
   # reader) into the app from `hook/build.dart`.
-  hooks: ^2.0.2
-  code_assets: ^1.2.1
-  native_toolchain_c: ^0.19.2
+  hooks: ^2.2.0
+  code_assets: ^2.2.0
+  native_toolchain_c: ^0.19.6
 
 dev_dependencies:
   flutter_test:

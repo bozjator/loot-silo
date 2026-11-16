@@ -4635,7 +4635,7 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await settle(tester);
       expect(strip('Knight Pack'), findsNothing);
-      // The player went away with the tab (audioplayers stops on dispose).
+      // The player went away with the tab (the player stops on dispose).
       expect(a.disposed, isTrue);
       expect(now.playing, isFalse);
     });

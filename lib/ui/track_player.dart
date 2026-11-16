@@ -1,9 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:isolate';
 import 'dart:math' as math;
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_soloud/flutter_soloud.dart';
 
 import '../core/audio_duration.dart';
 
@@ -20,58 +21,234 @@ abstract interface class TrackPlayer {
   Future<void> dispose();
 }
 
-/// [TrackPlayer] on top of audioplayers.
-///
-/// Looping fix: audioplayers handles every completion event by marking the
-/// player completed and stopping its position updater. The Linux plugin
-/// sends one per loop pass while the sound keeps playing, so after the
-/// first pass no position events came and the seek bar froze at the start.
-/// This player owns the updater and starts it again (and marks the player
-/// playing) after a pass ends while looping.
-class AudioplayersTrackPlayer implements TrackPlayer {
-  AudioplayersTrackPlayer() {
-    _player.positionUpdater = _updater;
-    // Subscribed after the player's own handler, so this runs after it.
-    _loopPass = _player.onPlayerComplete.listen((_) {
-      if (!looping) return;
-      _player.state = PlayerState.playing;
-      _updater.start();
-    });
+/// Starts the one SoLoud engine on first use. Never shut down: it lives
+/// until the app exits. A failed start is tried again on the next play.
+Future<void>? _engineStart;
+Future<void> _engine() {
+  if (SoLoud.instance.isInitialized) return Future.value();
+  return _engineStart ??= SoLoud.instance.init().whenComplete(
+    () => _engineStart = null,
+  );
+}
+
+/// Files up to this size are decoded into memory (instant, exact seeks);
+/// larger ones (music) are streamed from disk, which keeps a long track
+/// from taking hundreds of MB once decoded.
+const _memoryLoadBytes = 4 << 20;
+
+/// A loaded file, shared by the players using it: SoLoud keeps one source
+/// per path, so a second load of a path returns the first one.
+class _Shared {
+  _Shared(this.source);
+  final Future<AudioSource> source;
+  var users = 1;
+}
+
+final _sources = <String, _Shared>{};
+
+/// Disposals still running, by path: a new load waits for them, or SoLoud
+/// would hand back the source being disposed.
+final _disposing = <String, Future<void>>{};
+
+Future<AudioSource> _acquire(String path) {
+  final shared = _sources[path];
+  if (shared != null) {
+    shared.users++;
+    return shared.source;
+  }
+  Future<AudioSource> load() async {
+    await _disposing[path];
+    final big = await File(path).length() > _memoryLoadBytes;
+    return SoLoud.instance.loadFile(
+      path,
+      mode: big ? LoadMode.disk : LoadMode.memory,
+    );
   }
 
-  final _player = AudioPlayer();
-  late final _updater = FramePositionUpdater(
-    getPosition: _player.getCurrentPosition,
+  final entry = _Shared(load());
+  _sources[path] = entry;
+  // A failed load is forgotten, so the next play tries again.
+  entry.source.then<void>(
+    (_) {},
+    onError: (Object _) {
+      if (identical(_sources[path], entry)) _sources.remove(path);
+    },
   );
-  late final StreamSubscription<void> _loopPass;
+  return entry.source;
+}
+
+void _releaseSource(String path) {
+  final shared = _sources[path];
+  if (shared == null || --shared.users > 0) return;
+  _sources.remove(path);
+  late final Future<void> done;
+  done = () async {
+    try {
+      final source = await shared.source;
+      if (SoLoud.instance.isInitialized) {
+        await SoLoud.instance.disposeSource(source);
+      }
+    } on Object {
+      // Never loaded, or already gone with the engine.
+    } finally {
+      if (identical(_disposing[path], done)) _disposing.remove(path);
+    }
+  }();
+  _disposing[path] = done;
+}
+
+/// [TrackPlayer] on top of SoLoud, which decodes every format itself
+/// (Ogg Vorbis/Opus, FLAC, MP3, WAV) instead of leaving it to the OS:
+/// Windows' Media Foundation can't open Ogg in a desktop app.
+///
+/// SoLoud has no player objects or event streams: a file is loaded as a
+/// source and played as a voice ([SoundHandle]). Position is polled while
+/// a voice plays; the end comes from the source's events.
+class SoloudTrackPlayer implements TrackPlayer {
+  final _position = StreamController<Duration>.broadcast();
+  final _duration = StreamController<Duration>.broadcast();
+  final _complete = StreamController<void>.broadcast();
+
+  /// The file loaded for this player, and its source once loaded.
+  String? _path;
+  AudioSource? _source;
+  StreamSubscription<void>? _events;
+
+  /// The playing voice; null when stopped or ended.
+  SoundHandle? _handle;
+  Timer? _ticker;
+  var _loop = false;
+
+  /// Bumped by every play and stop, so a play still loading gives up when
+  /// a newer call came meanwhile.
+  var _run = 0;
+
+  static const _tick = Duration(milliseconds: 33);
 
   @override
-  Future<void> play(String path) => _player.play(DeviceFileSource(path));
+  Future<void> play(String path) async {
+    final run = ++_run;
+    await _stopVoice();
+    await _engine();
+    if (run != _run) return;
+    var source = _source;
+    if (_path != path || source == null) {
+      _unload();
+      _path = path;
+      try {
+        source = await _acquire(path);
+      } on Object {
+        // Still ours (no newer play unloaded it): let go of it here.
+        if (_path == path) {
+          _path = null;
+          _releaseSource(path);
+        }
+        rethrow;
+      }
+      // Another play or stop came while loading; it released this path.
+      if (run != _run || _path != path) return;
+      _source = source;
+      _events = source.soundEvents.listen((e) {
+        if (e.event == SoundEventType.handleIsNoMoreValid &&
+            e.handle == _handle) {
+          _ended();
+        }
+      });
+    }
+    final handle = SoLoud.instance.play(source, looping: _loop);
+    _handle = handle;
+    _duration.add(SoLoud.instance.getLength(source));
+    _position.add(Duration.zero);
+    _ticker = Timer.periodic(_tick, (_) => _report());
+  }
+
+  /// The voice reached its end (a looping voice never does).
+  void _ended() {
+    _handle = null;
+    _ticker?.cancel();
+    _ticker = null;
+    final source = _source;
+    if (source != null && SoLoud.instance.isInitialized) {
+      _position.add(SoLoud.instance.getLength(source));
+    }
+    _complete.add(null);
+  }
+
+  /// The voice still playing, if any.
+  SoundHandle? get _live {
+    final handle = _handle;
+    if (handle == null || !SoLoud.instance.isInitialized) return null;
+    return SoLoud.instance.getIsValidVoiceHandle(handle) ? handle : null;
+  }
+
+  void _report() {
+    final handle = _live;
+    if (handle != null) _position.add(SoLoud.instance.getPosition(handle));
+  }
+
+  /// Stops the voice; no completion is reported for it.
+  Future<void> _stopVoice() async {
+    _ticker?.cancel();
+    _ticker = null;
+    final handle = _live;
+    _handle = null;
+    if (handle != null) await SoLoud.instance.stop(handle);
+  }
+
+  /// Lets go of the loaded file.
+  void _unload() {
+    _events?.cancel();
+    _events = null;
+    _source = null;
+    final path = _path;
+    _path = null;
+    if (path != null) _releaseSource(path);
+  }
+
   @override
-  Future<void> stop() => _player.stop();
+  Future<void> stop() {
+    _run++;
+    return _stopVoice();
+  }
+
   @override
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> seek(Duration position) async {
+    final handle = _live;
+    if (handle != null) SoLoud.instance.seek(handle, position);
+  }
+
   @override
-  Future<void> setLoop(bool loop) =>
-      _player.setReleaseMode(loop ? ReleaseMode.loop : ReleaseMode.release);
+  Future<void> setLoop(bool loop) async {
+    _loop = loop;
+    final handle = _live;
+    if (handle != null) SoLoud.instance.setLooping(handle, loop);
+  }
+
   @override
-  bool get looping => _player.releaseMode == ReleaseMode.loop;
+  bool get looping => _loop;
   @override
-  Stream<Duration> get onPosition => _player.onPositionChanged;
+  Stream<Duration> get onPosition => _position.stream;
   @override
-  Stream<Duration> get onDuration => _player.onDurationChanged;
+  Stream<Duration> get onDuration => _duration.stream;
   @override
-  Stream<void> get onComplete => _player.onPlayerComplete;
+  Stream<void> get onComplete => _complete.stream;
+
   @override
   Future<void> dispose() async {
-    await _loopPass.cancel();
-    await _player.dispose();
+    _run++;
+    await _stopVoice();
+    _unload();
+    await Future.wait([
+      _position.close(),
+      _duration.close(),
+      _complete.close(),
+    ]);
   }
 }
 
 /// Makes the Audio tab's player, on first play.
 final trackPlayerFactoryProvider = Provider<TrackPlayer Function()>(
-  (ref) => AudioplayersTrackPlayer.new,
+  (ref) => SoloudTrackPlayer.new,
 );
 
 /// Header infos by absolute path, kept for the session. Null values
