@@ -13,6 +13,7 @@ import 'tabs.dart';
 import 'widgets/animated_sprite.dart';
 import 'widgets/pixel_image.dart';
 import 'widgets/thumb_size.dart';
+import 'widgets/own_semantics_node.dart';
 
 /// The space between file result cards.
 const fileResultsSpacing = 8.0;
@@ -135,16 +136,19 @@ class _FileResultTileState extends State<_FileResultTile> {
                 ),
           Align(
             alignment: Alignment.topLeft,
-            child: Tooltip(
-              message: 'Animation',
-              child: Container(
-                key: const ValueKey('animation-badge'),
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: scheme.surface.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(4),
+            // Its own node: the card's Tooltip is an OverlayPortal too.
+            child: OwnSemanticsNode(
+              child: Tooltip(
+                message: 'Animation',
+                child: Container(
+                  key: const ValueKey('animation-badge'),
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: scheme.surface.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Icon(Icons.animation, size: 16, color: scheme.primary),
                 ),
-                child: Icon(Icons.animation, size: 16, color: scheme.primary),
               ),
             ),
           ),

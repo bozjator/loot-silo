@@ -14,6 +14,7 @@ import 'format.dart';
 import 'widgets/drop_zone.dart';
 import 'widgets/meta_dialogs.dart';
 import 'widgets/overflow_text.dart';
+import 'widgets/own_semantics_node.dart';
 import 'cursors.dart';
 
 /// Top-level so the isolate closure captures nothing but its arguments.
@@ -823,14 +824,18 @@ class _ItemRow extends StatelessWidget {
                   : Row(
                       children: [
                         if (renamed)
-                          Tooltip(
-                            message:
-                                'A folder with this name exists; '
-                                'a number is added',
-                            child: Icon(
-                              Icons.info_outline,
-                              size: 16,
-                              color: theme.colorScheme.tertiary,
+                          // Its own node: the target line can have a
+                          // Tooltip too (OverlayPortals).
+                          OwnSemanticsNode(
+                            child: Tooltip(
+                              message:
+                                  'A folder with this name exists; '
+                                  'a number is added',
+                              child: Icon(
+                                Icons.info_outline,
+                                size: 16,
+                                color: theme.colorScheme.tertiary,
+                              ),
                             ),
                           ),
                         Flexible(
@@ -997,66 +1002,70 @@ class _AuthorPickerState extends State<AuthorPicker> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return RawAutocomplete<AuthorChoice>(
-      textEditingController: _controller,
-      focusNode: _focus,
-      displayStringForOption: (c) => c.name,
-      optionsBuilder: (value) {
-        final q = value.text.trim().toLowerCase();
-        final all = widget.choices();
-        final hits = [
-          for (final c in all)
-            if (q.isEmpty || c.name.toLowerCase().contains(q)) c,
-        ];
-        final exact = all.any((c) => c.name.toLowerCase() == q);
-        return [
-          ...hits,
-          if (!exact) AuthorChoice(value.text.trim(), isNew: true),
-        ];
-      },
-      onSelected: (c) {
-        if (c.isNew && c.name.isEmpty) {
-          // "Add new author…" with nothing typed yet: type the name.
-          _controller.clear();
-          _focus.requestFocus();
-          return;
-        }
-        _commit(c.name, url: c.url);
-        _focus.unfocus();
-      },
-      fieldViewBuilder: (context, controller, focus, onSubmit) => TextField(
-        controller: controller,
-        focusNode: focus,
-        style: theme.textTheme.bodyMedium,
-        decoration: InputDecoration(
-          isDense: true,
-          border: InputBorder.none,
-          // Only built while unknown (a hint is laid out even when hidden).
-          hintText: widget.author == null ? 'Unknown — set author' : null,
-          hintStyle: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.error,
+    // Its suggestions are an OverlayPortal, as its row's Tooltips are.
+    return OwnSemanticsNode(
+      child: RawAutocomplete<AuthorChoice>(
+        textEditingController: _controller,
+        focusNode: _focus,
+        displayStringForOption: (c) => c.name,
+        optionsBuilder: (value) {
+          final q = value.text.trim().toLowerCase();
+          final all = widget.choices();
+          final hits = [
+            for (final c in all)
+              if (q.isEmpty || c.name.toLowerCase().contains(q)) c,
+          ];
+          final exact = all.any((c) => c.name.toLowerCase() == q);
+          return [
+            ...hits,
+            if (!exact) AuthorChoice(value.text.trim(), isNew: true),
+          ];
+        },
+        onSelected: (c) {
+          if (c.isNew && c.name.isEmpty) {
+            // "Add new author…" with nothing typed yet: type the name.
+            _controller.clear();
+            _focus.requestFocus();
+            return;
+          }
+          _commit(c.name, url: c.url);
+          _focus.unfocus();
+        },
+        fieldViewBuilder: (context, controller, focus, onSubmit) => TextField(
+          controller: controller,
+          focusNode: focus,
+          style: theme.textTheme.bodyMedium,
+          decoration: InputDecoration(
+            isDense: true,
+            border: InputBorder.none,
+            // Only built while unknown (a hint is laid out even when hidden).
+            hintText: widget.author == null ? 'Unknown — set author' : null,
+            hintStyle: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
           ),
+          onSubmitted: (_) => onSubmit(),
         ),
-        onSubmitted: (_) => onSubmit(),
-      ),
-      optionsViewBuilder: (context, onSelected, options) => Align(
-        alignment: Alignment.topLeft,
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(8),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 320),
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              shrinkWrap: true,
-              children: [
-                for (final (i, c) in options.indexed)
-                  _AuthorOption(
-                    choice: c,
-                    highlighted: AutocompleteHighlightedOption.of(context) == i,
-                    onTap: () => onSelected(c),
-                  ),
-              ],
+        optionsViewBuilder: (context, onSelected, options) => Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320),
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                shrinkWrap: true,
+                children: [
+                  for (final (i, c) in options.indexed)
+                    _AuthorOption(
+                      choice: c,
+                      highlighted:
+                          AutocompleteHighlightedOption.of(context) == i,
+                      onTap: () => onSelected(c),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -48,6 +49,14 @@ class PlatformSemanticsBinding extends AutomatedTestWidgetsFlutterBinding {
   void resetPlatformTree() {
     _tree.clear();
     rejected.clear();
+    _reportedPortals.clear();
+  }
+
+  /// [rejected] so far, cleared; the tree stays, as the platform's would.
+  List<String> takeRejected() {
+    final taken = List.of(rejected);
+    rejected.clear();
+    return taken;
   }
 
   @override
@@ -75,11 +84,90 @@ class PlatformSemanticsBinding extends AutomatedTestWidgetsFlutterBinding {
         '${orphans.map(_describe).join('; ')}',
       );
     }
+    // Windows: "Nodes left pending by the update".
+    final pending = {
+      for (final id in reached)
+        for (final child in next[id] ?? const <int>[])
+          if (!next.containsKey(child)) child: id,
+    };
+    if (pending.isNotEmpty) {
+      final parents = {...pending.values};
+      rejected.add(
+        'An update lists children it never sends: ${pending.keys.toList()}, '
+        'listed by ${parents.map(_describe).join('; ')}',
+      );
+    }
     // Keep going as if the platform had taken the update, so one mistake
     // is reported once rather than in every later update.
     _tree
       ..addAll(nodes)
       ..removeWhere((id, _) => !reached.contains(id));
+    _checkSharedPortals();
+  }
+
+  /// Portals already reported, so each is reported once.
+  final Set<Object> _reportedPortals = {};
+
+  /// Reports an `OverlayPortal` whose semantics merged into a node that
+  /// keeps another portal's traversal parent. Its overlay has no parent as
+  /// soon as it shows (a Tooltip on hover), which a test rarely does, so
+  /// this is checked while it is hidden.
+  void _checkSharedPortals() {
+    void visit(Element element) {
+      if (element is StatefulElement &&
+          element.widget is OverlayPortal &&
+          !_reportedPortals.contains(element.state)) {
+        final holder = _nodeHolding(element.findRenderObject());
+        final other = holder?.traversalParentIdentifier;
+        if (holder != null && other != null && other != element.state) {
+          _reportedPortals.add(element.state);
+          final kept = other is State
+              ? (other.context as Element).debugGetCreatorChain(12)
+              : '$other';
+          rejected.add(
+            'Two OverlayPortals share semantics node #${holder.id}; the '
+            "first's overlay will have no parent when it shows:\n"
+            '  ${element.debugGetCreatorChain(24)}\n'
+            '  kept: $kept',
+          );
+        }
+      }
+      element.visitChildren(visit);
+    }
+
+    if (rootElement case final Element root) visit(root);
+  }
+
+  /// The semantics node [object]'s semantics end up in.
+  /// Null when they are left out (IndexedStack, Offstage, ExcludeSemantics)
+  /// or clipped away (scrolled out of a list), as Flutter drops those: then
+  /// it can't show either.
+  SemanticsNode? _nodeHolding(RenderObject? object) {
+    var rect = object?.semanticBounds ?? Rect.zero;
+    SemanticsNode? holder;
+    // Up to the root: a list keeps nodes for items just out of view (to
+    // scroll them in), but not the parts of them that are clipped away.
+    for (var o = object; o != null; o = o.parent) {
+      if (holder == null) {
+        if (o.debugSemantics case final SemanticsNode node when node.attached) {
+          holder = node;
+        }
+      }
+      final parent = o.parent;
+      if (parent != null) {
+        var included = false;
+        parent.visitChildrenForSemantics((c) => included |= c == o);
+        if (!included) return null;
+        final transform = Matrix4.identity();
+        parent.applyPaintTransform(o, transform);
+        rect = MatrixUtils.transformRect(transform, rect);
+        if (parent.describeApproximatePaintClip(o) case final Rect clip) {
+          rect = rect.intersect(clip);
+        }
+        if (rect.width <= 0 || rect.height <= 0) return null;
+      }
+    }
+    return holder;
   }
 
   String _describe(int id) {

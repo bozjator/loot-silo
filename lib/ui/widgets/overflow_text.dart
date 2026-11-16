@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'own_semantics_node.dart';
+
 /// One line of text cut with an ellipsis; when it is cut, hovering shows
-/// the whole text in a tooltip.
+/// the whole text in a tooltip. The tooltip line has its own semantics
+/// node ([OwnSemanticsNode]): these lines sit beside others that can have
+/// one too.
 class OverflowText extends StatelessWidget {
   const OverflowText(this.text, {super.key, this.style, this.tooltip});
 
@@ -21,7 +25,7 @@ class OverflowText extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: style,
       );
-      if (tooltip case final tip?) return Tooltip(message: tip, child: line);
+      if (tooltip case final tip?) return _tip(tip, line);
       if (!constraints.hasBoundedWidth) return line;
       final painter = TextPainter(
         text: TextSpan(
@@ -34,7 +38,11 @@ class OverflowText extends StatelessWidget {
       )..layout(maxWidth: constraints.maxWidth);
       final cut = painter.didExceedMaxLines;
       painter.dispose();
-      return cut ? Tooltip(message: text, child: line) : line;
+      return cut ? _tip(text, line) : line;
     },
+  );
+
+  static Widget _tip(String message, Widget line) => OwnSemanticsNode(
+    child: Tooltip(message: message, child: line),
   );
 }

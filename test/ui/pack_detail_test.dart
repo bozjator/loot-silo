@@ -1732,12 +1732,13 @@ void main() {
       WidgetTester tester, {
       bool cards = true,
       Size size = const Size(1644, 900),
+      List<String> more = const [],
     }) async {
       final fake = _FakePlayer();
       await openKnight(
         tester,
         size: size,
-        files: lengths.keys.toList(),
+        files: [...lengths.keys, ...more],
         types: ['music', 'sfx'],
         overrides: [
           trackPlayerFactoryProvider.overrideWithValue(() => fake),
@@ -2083,6 +2084,100 @@ void main() {
         tipOf('music/long_theme.wav'),
         endsWith('\nSwitch to long_theme.wav'),
       );
+    });
+
+    testWidgets('rows: hovering names and details keeps the platform tree', (
+      tester,
+    ) async {
+      // Their Tooltips; flutter_test_config.dart checks each update.
+      await open(tester, cards: false);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      for (final rel in [ogg, coin]) {
+        for (final key in ['name:$rel', 'details:$rel']) {
+          await mouse.moveTo(tester.getCenter(find.byKey(ValueKey(key))));
+          await tester.pump(const Duration(seconds: 2));
+        }
+      }
+      await mouse.moveTo(Offset.zero);
+      await tester.pump(const Duration(seconds: 2));
+      await mouse.removePointer();
+    });
+
+    testWidgets('cards: hovering every part keeps the platform tree', (
+      tester,
+    ) async {
+      await open(tester);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      for (final rel in [ogg, coin]) {
+        for (final key in [
+          'name:$rel',
+          'card-details:$rel',
+          'waveform:$rel',
+          'star:$rel',
+        ]) {
+          await mouse.moveTo(tester.getCenter(find.byKey(ValueKey(key))));
+          await tester.pump(const Duration(seconds: 2));
+        }
+      }
+      for (final e in find.byKey(const ValueKey('card-play')).evaluate()) {
+        await mouse.moveTo(tester.getCenter(find.byWidget(e.widget)));
+        await tester.pump(const Duration(seconds: 2));
+      }
+      await mouse.moveTo(Offset.zero);
+      await tester.pump(const Duration(seconds: 2));
+      await mouse.removePointer();
+    });
+
+    testWidgets('cards: hovering across a scrolled grid keeps the tree', (
+      tester,
+    ) async {
+      // Like Cozy Tunes: more cards than fit, some just out of view.
+      final fake = await open(
+        tester,
+        more: [for (var i = 0; i < 60; i++) 'sfx/fx_$i.ogg'],
+      );
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      // A long track playing: the ring, the times and the seek bar.
+      await tester.tap(
+        find.descendant(
+          of: cardOf(ogg),
+          matching: find.byKey(const ValueKey('card-play')),
+        ),
+      );
+      await tester.pump();
+      fake.length.add(const Duration(minutes: 1, seconds: 40));
+      var at = Duration.zero;
+      Future<void> sweep() async {
+        final view = tester.view.physicalSize / tester.view.devicePixelRatio;
+        for (var y = 250.0; y < view.height; y += 37) {
+          for (var x = 20.0; x < view.width; x += 61) {
+            await mouse.moveTo(Offset(x, y));
+            fake.position.add(at += const Duration(milliseconds: 60));
+            await tester.pump(const Duration(milliseconds: 60));
+          }
+          await tester.pump(const Duration(seconds: 2));
+        }
+      }
+
+      await sweep();
+      for (var i = 0; i < 3; i++) {
+        await mouse.moveTo(const Offset(800, 600));
+        await tester.sendEventToBinding(
+          const PointerScrollEvent(
+            position: Offset(800, 600),
+            scrollDelta: Offset(0, 170),
+            kind: PointerDeviceKind.mouse,
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+        await sweep();
+      }
+      await mouse.moveTo(Offset.zero);
+      await tester.pump(const Duration(seconds: 2));
+      await mouse.removePointer();
     });
 
     testWidgets('rows: a Details column, aligned across rows', (tester) async {

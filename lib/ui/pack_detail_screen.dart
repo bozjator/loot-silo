@@ -58,6 +58,7 @@ import 'widgets/thumb_size.dart';
 import 'widgets/waveform.dart';
 import 'cursors.dart';
 import 'widgets/dialog_close.dart';
+import 'widgets/own_semantics_node.dart';
 import 'widgets/slider_overlay.dart';
 
 /// A tab or page whose pack (or bundle) went away in a rescan (M96): says
@@ -3750,37 +3751,45 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
                 onFlip: () => _sortBy(sort, flip: true),
               ),
               const Spacer(),
-              Tooltip(
-                message: _all
-                    ? 'Stop playing all (Shift+Space)'
-                    : 'Play every sound shown, in order (Shift+Space)',
-                child: FilledButton.tonalIcon(
-                  key: const ValueKey('play-all'),
-                  onPressed: audio.isEmpty ? null : _playAll,
-                  icon: Icon(_all ? Icons.stop : Icons.playlist_play, size: 18),
-                  label: Text(_all ? 'Stop' : 'Play all'),
+              // The toolbar's Tooltips and menu are OverlayPortals.
+              OwnSemanticsNode(
+                child: Tooltip(
+                  message: _all
+                      ? 'Stop playing all (Shift+Space)'
+                      : 'Play every sound shown, in order (Shift+Space)',
+                  child: FilledButton.tonalIcon(
+                    key: const ValueKey('play-all'),
+                    onPressed: audio.isEmpty ? null : _playAll,
+                    icon: Icon(
+                      _all ? Icons.stop : Icons.playlist_play,
+                      size: 18,
+                    ),
+                    label: Text(_all ? 'Stop' : 'Play all'),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
               // The same button type as Play all, so both have one
               // shape; on = the filled primary colour.
-              Tooltip(
-                message: _all
-                    ? 'Repeat the whole list'
-                    : 'Repeat the playing sound',
-                child: Semantics(
-                  toggled: loop,
-                  child: FilledButton.tonalIcon(
-                    key: const ValueKey('loop'),
-                    style: loop
-                        ? FilledButton.styleFrom(
-                            backgroundColor: theme.colorScheme.primary,
-                            foregroundColor: theme.colorScheme.onPrimary,
-                          )
-                        : null,
-                    onPressed: () => _setLoop(!loop),
-                    icon: const Icon(Icons.repeat, size: 18),
-                    label: const Text('Loop'),
+              OwnSemanticsNode(
+                child: Tooltip(
+                  message: _all
+                      ? 'Repeat the whole list'
+                      : 'Repeat the playing sound',
+                  child: Semantics(
+                    toggled: loop,
+                    child: FilledButton.tonalIcon(
+                      key: const ValueKey('loop'),
+                      style: loop
+                          ? FilledButton.styleFrom(
+                              backgroundColor: theme.colorScheme.primary,
+                              foregroundColor: theme.colorScheme.onPrimary,
+                            )
+                          : null,
+                      onPressed: () => _setLoop(!loop),
+                      icon: const Icon(Icons.repeat, size: 18),
+                      label: const Text('Loop'),
+                    ),
                   ),
                 ),
               ),
@@ -3962,12 +3971,15 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
             icon: Icon(playing ? Icons.stop_circle : Icons.play_circle),
             onPressed: () => _toggle(rel),
           ),
-          // The path in the pack, not a folder line under the name.
-          title: Tooltip(
-            message: rel,
-            child: Text(
-              p.basenameWithoutExtension(rel),
-              key: ValueKey('name:$rel'),
+          // The path in the pack, not a folder line under the name. Its
+          // own node: the details line has a Tooltip (OverlayPortal) too.
+          title: OwnSemanticsNode(
+            child: Tooltip(
+              message: rel,
+              child: Text(
+                p.basenameWithoutExtension(rel),
+                key: ValueKey('name:$rel'),
+              ),
             ),
           ),
           trailing: Row(
@@ -4378,62 +4390,69 @@ class _AudioSortMenu extends StatelessWidget {
     mainAxisSize: MainAxisSize.min,
     children: [
       // The arrow's glyph as far from the divider as the name is on the
-      // other side of it.
-      Tooltip(
-        message: descending ? 'Descending' : 'Ascending',
-        child: FilledButton.tonal(
-          key: const ValueKey('audio-sort-direction'),
-          style: _half(
-            start: true,
-            pad: const EdgeInsets.only(
-              left: sortArrowPad,
-              right: sortArrowPadRight,
+      // other side of it. Each OverlayPortal (Tooltips, the menu) in its
+      // own node.
+      OwnSemanticsNode(
+        child: Tooltip(
+          message: descending ? 'Descending' : 'Ascending',
+          child: FilledButton.tonal(
+            key: const ValueKey('audio-sort-direction'),
+            style: _half(
+              start: true,
+              pad: const EdgeInsets.only(
+                left: sortArrowPad,
+                right: sortArrowPadRight,
+              ),
             ),
-          ),
-          onPressed: onFlip,
-          child: Icon(
-            descending ? Icons.arrow_downward : Icons.arrow_upward,
-            size: 18,
+            onPressed: onFlip,
+            child: Icon(
+              descending ? Icons.arrow_downward : Icons.arrow_upward,
+              size: 18,
+            ),
           ),
         ),
       ),
-      MenuAnchor(
-        menuChildren: [
-          for (final s in AudioSort.values)
-            MenuItemButton(
-              key: ValueKey('audio-sort:${s.name}'),
-              style: MenuItemButton.styleFrom(
-                enabledMouseCursor: clickCursor,
-                backgroundColor: s == sort
-                    ? Theme.of(context).colorScheme.secondaryContainer
-                    : null,
+      OwnSemanticsNode(
+        child: MenuAnchor(
+          menuChildren: [
+            for (final s in AudioSort.values)
+              MenuItemButton(
+                key: ValueKey('audio-sort:${s.name}'),
+                style: MenuItemButton.styleFrom(
+                  enabledMouseCursor: clickCursor,
+                  backgroundColor: s == sort
+                      ? Theme.of(context).colorScheme.secondaryContainer
+                      : null,
+                ),
+                onPressed: () => onSort(s),
+                child: Text(s.label),
               ),
-              onPressed: () => onSort(s),
-              child: Text(s.label),
-            ),
-        ],
-        builder: (context, controller, _) => Tooltip(
-          message: 'Sort by',
-          child: FilledButton.tonal(
-            key: const ValueKey('audio-sort'),
-            style: _half(
-              start: false,
-              // The same visible space before the name as after the
-              // drop-down glyph, which sits ~5 px inside its 20 px box.
-              pad: const EdgeInsets.only(
-                left: sortNamePadLeft,
-                right: sortNamePadRight,
+          ],
+          builder: (context, controller, _) => OwnSemanticsNode(
+            child: Tooltip(
+              message: 'Sort by',
+              child: FilledButton.tonal(
+                key: const ValueKey('audio-sort'),
+                style: _half(
+                  start: false,
+                  // The same visible space before the name as after the
+                  // drop-down glyph, which sits ~5 px inside its 20 px box.
+                  pad: const EdgeInsets.only(
+                    left: sortNamePadLeft,
+                    right: sortNamePadRight,
+                  ),
+                ),
+                onPressed: () =>
+                    controller.isOpen ? controller.close() : controller.open(),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(sort.label, key: const ValueKey('audio-sort-label')),
+                    const SizedBox(width: 2),
+                    const Icon(Icons.arrow_drop_down, size: 20),
+                  ],
+                ),
               ),
-            ),
-            onPressed: () =>
-                controller.isOpen ? controller.close() : controller.open(),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(sort.label, key: const ValueKey('audio-sort-label')),
-                const SizedBox(width: 2),
-                const Icon(Icons.arrow_drop_down, size: 20),
-              ],
             ),
           ),
         ),
@@ -4878,8 +4897,13 @@ class _AudioDetails extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         softWrap: false,
       );
-      // The whole line when the column cuts it.
-      return text.isEmpty ? line : Tooltip(message: text, child: line);
+      // The whole line when the column cuts it; in its own node, as the
+      // row's name has a Tooltip (an OverlayPortal) too.
+      return text.isEmpty
+          ? line
+          : OwnSemanticsNode(
+              child: Tooltip(message: text, child: line),
+            );
     },
   );
 }
