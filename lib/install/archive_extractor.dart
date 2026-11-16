@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/leftovers.dart' show clearReadOnly;
 import 'folder_importer.dart' show safeFolderName;
 
 enum ArchiveKind { zip, tar, tarGz, sevenZip, rar }
@@ -145,6 +146,8 @@ void _extractRaw(String path, ArchiveKind format, String dest) {
     case ArchiveKind.sevenZip || ArchiveKind.rar:
       _extractWithTool(path, format, dest);
   }
+  // Read-only entries can't be moved, cleaned up or edited later.
+  clearReadOnly(dest);
 }
 
 /// How deep archives inside archives are unpacked; deeper ones stay files.

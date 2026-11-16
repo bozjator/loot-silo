@@ -197,6 +197,9 @@ class ItchJobsNotifier extends Notifier<Map<int, ItchJob>> {
                 : ItchJob('Failed', error: result.error),
           );
           if (result.ok) await ref.read(libraryProvider.notifier).reload();
+        } on Object catch (e) {
+          // Never leave a row stuck on its last status.
+          _set(k.game.id, ItchJob('Failed', error: '$e'));
         } finally {
           api.close();
         }

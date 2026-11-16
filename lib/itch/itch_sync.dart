@@ -4,6 +4,7 @@ import 'dart:isolate';
 import 'package:path/path.dart' as p;
 
 import '../core/itch_media.dart';
+import '../core/leftovers.dart';
 import '../core/sidecar.dart';
 import '../core/type_classifier.dart';
 import '../core/fs_tree.dart';
@@ -230,6 +231,7 @@ Future<ItchInstallResult> installItchGame(
   } on Object catch (e) {
     return ItchInstallResult(error: '$e');
   } finally {
-    if (work.existsSync()) work.deleteSync(recursive: true);
+    // Never throws: a failed cleanup must not undo a finished install.
+    deleteLeftovers(work.path);
   }
 }

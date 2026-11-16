@@ -434,6 +434,26 @@ void main() {
   });
 
   test(
+    'deleteLeftovers removes read-only folders and files (from archives)',
+    () {
+      final tmp = Directory.systemTemp.createTempSync('left');
+      addTearDown(() {
+        clearReadOnly(tmp.path);
+        tmp.deleteSync(recursive: true);
+      });
+      final work = p.join(tmp.path, 'itch-1-2');
+      final inner = Directory(p.join(work, 'Pack', 'Vol. 2'))
+        ..createSync(recursive: true);
+      File(p.join(inner.path, 'a.ogg')).writeAsStringSync('x');
+      Process.runSync('attrib', ['+R', p.join(inner.path, 'a.ogg')]);
+      Process.runSync('attrib', ['+R', inner.path]);
+      deleteLeftovers(work);
+      expect(Directory(work).existsSync(), isFalse);
+    },
+    skip: !Platform.isWindows,
+  );
+
+  test(
     'an owned all-in-one matches its bundle, its packs their own keys',
     () async {
       const bundle = 'Kenney/Kenney Game Assets 1 version 42';
