@@ -19,6 +19,7 @@ import 'shortcuts.dart';
 import 'theme_colors.dart';
 import 'widgets/format_chips.dart';
 import 'widgets/dialog_close.dart';
+import 'widgets/slider_overlay.dart';
 
 /// What the material viewer's stage shows.
 enum MaterialStageMode {
@@ -383,18 +384,20 @@ class _MaterialViewerState extends ConsumerState<MaterialViewer> {
                 style: theme.textTheme.labelLarge,
               ),
             ),
-            SizedBox(
-              width: 140,
-              child: Slider(
-                key: const ValueKey('material-tiling'),
-                min: 1,
-                max: 8,
-                divisions: 7,
-                value: _tiling,
-                mouseCursor: WidgetStateMouseCursor.resolveWith(
-                  (_) => SystemMouseCursors.click,
+            SliderOverlay(
+              child: SizedBox(
+                width: 140,
+                child: Slider(
+                  key: const ValueKey('material-tiling'),
+                  min: 1,
+                  max: 8,
+                  divisions: 7,
+                  value: _tiling,
+                  mouseCursor: WidgetStateMouseCursor.resolveWith(
+                    (_) => SystemMouseCursors.click,
+                  ),
+                  onChanged: (v) => setState(() => _tiling = v),
                 ),
-                onChanged: (v) => setState(() => _tiling = v),
               ),
             ),
           ],

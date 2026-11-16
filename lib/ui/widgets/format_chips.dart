@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/audio_formats.dart' show formatOf;
 import '../cursors.dart';
+import 'own_semantics_node.dart';
 
 /// A sound's or model's formats as small chips (`OGG · WAV · MP3`), the shown one
 /// highlighted; a click on another switches to that file. Materials use
@@ -127,7 +128,13 @@ class FormatChips extends StatelessWidget {
 
   /// [plain], or the file's details once [details] has them (with how to
   /// switch on the chips that aren't shown).
-  Widget _tip(String f, String plain, Widget chip) {
+  ///
+  /// Each in its own node: the chips' Tooltips are OverlayPortals side by
+  /// side.
+  Widget _tip(String f, String plain, Widget chip) =>
+      OwnSemanticsNode(child: _tooltip(f, plain, chip));
+
+  Widget _tooltip(String f, String plain, Widget chip) {
     final read = details;
     if (read == null) return Tooltip(message: plain, child: chip);
     return FutureBuilder(

@@ -58,6 +58,7 @@ import 'widgets/thumb_size.dart';
 import 'widgets/waveform.dart';
 import 'cursors.dart';
 import 'widgets/dialog_close.dart';
+import 'widgets/slider_overlay.dart';
 
 /// A tab or page whose pack (or bundle) went away in a rescan (M96): says
 /// so, with a way out. As a pack tab's first page, "Close tab", Esc and
@@ -2893,15 +2894,17 @@ class _AnimationEditorState extends State<AnimationEditor> {
                                 constraints: const BoxConstraints(
                                   maxWidth: 240,
                                 ),
-                                child: Slider(
-                                  min: 1,
-                                  max: 30,
-                                  divisions: 29,
-                                  value: a.fps.clamp(1, 30),
-                                  label: a.fps.round().toString(),
-                                  onChanged: (v) => setState(
-                                    () => _anim = a.copyWith(
-                                      fps: v.roundToDouble(),
+                                child: SliderOverlay(
+                                  child: Slider(
+                                    min: 1,
+                                    max: 30,
+                                    divisions: 29,
+                                    value: a.fps.clamp(1, 30),
+                                    label: a.fps.round().toString(),
+                                    onChanged: (v) => setState(
+                                      () => _anim = a.copyWith(
+                                        fps: v.roundToDouble(),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -4614,6 +4617,8 @@ class _AudioCardState extends State<_AudioCard> {
     child: AnimatedOpacity(
       duration: const Duration(milliseconds: 150),
       opacity: shown ? 1 : 0,
+      // In the tree while faded out, as ItemCard's: a Tooltip can be up.
+      alwaysIncludeSemantics: true,
       child: child,
     ),
   );
@@ -4964,7 +4969,7 @@ class _SeekBarState extends State<_SeekBar> {
       child: Row(
         children: [
           elapsed,
-          Expanded(child: slider),
+          Expanded(child: SliderOverlay(child: slider)),
           total,
         ],
       ),

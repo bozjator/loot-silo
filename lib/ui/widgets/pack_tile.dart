@@ -9,6 +9,7 @@ import '../../state/dashboard.dart';
 import '../format.dart';
 import 'animated_sprite.dart';
 import 'favorite_star.dart';
+import 'own_semantics_node.dart';
 import 'pixel_image.dart';
 import '../cursors.dart';
 
@@ -275,33 +276,36 @@ class _PackTileState extends State<PackTile> {
                   ),
                   if (widget.fileMatches case final line?) ...[
                     const SizedBox(height: 6),
-                    Tooltip(
-                      message: widget.fileMatchesTooltip ?? line,
-                      waitDuration: const Duration(milliseconds: 400),
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                          key: const ValueKey('file-matches'),
-                          onTap: widget.onFileMatchesTap,
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.manage_search,
-                                size: 14,
-                                color: scheme.primary,
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  line,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: scheme.primary,
+                    // The animations badge's Tooltip is an OverlayPortal too.
+                    OwnSemanticsNode(
+                      child: Tooltip(
+                        message: widget.fileMatchesTooltip ?? line,
+                        waitDuration: const Duration(milliseconds: 400),
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            key: const ValueKey('file-matches'),
+                            onTap: widget.onFileMatchesTap,
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.manage_search,
+                                  size: 14,
+                                  color: scheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    line,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: scheme.primary,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

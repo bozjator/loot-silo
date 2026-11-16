@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../cursors.dart';
 import 'favorite_star.dart';
+import 'own_semantics_node.dart';
 
 /// Height of an [ItemCard]'s footer (title and details line), for the
 /// grid delegates.
@@ -169,27 +170,30 @@ class _ItemCardState extends State<ItemCard> {
     children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
-        child: Tooltip(
-          message: widget.path,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                widget.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleSmall,
-              ),
-              Text(
-                widget.details,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
+        // The image's corner badges can carry Tooltips too: OverlayPortals.
+        child: OwnSemanticsNode(
+          child: Tooltip(
+            message: widget.path,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  widget.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall,
                 ),
-              ),
-            ],
+                Text(
+                  widget.details,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -205,6 +209,10 @@ class _ItemCardState extends State<ItemCard> {
             key: const ValueKey('card-icons'),
             duration: const Duration(milliseconds: 150),
             opacity: _hover ? 1 : 0,
+            // Kept in the semantics tree while faded out: a fading icon's
+            // Tooltip can still be up, and its overlay needs this node
+            // (else Windows rejects the semantics update; OwnSemanticsNode).
+            alwaysIncludeSemantics: true,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(

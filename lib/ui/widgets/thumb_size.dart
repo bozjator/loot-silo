@@ -6,6 +6,8 @@ import 'package:flutter/rendering.dart';
 
 import '../cursors.dart';
 import '../shortcuts.dart';
+import 'own_semantics_node.dart';
+import 'slider_overlay.dart';
 
 /// Allowed thumbnail sizes, in logical pixels of tile width.
 ///
@@ -570,12 +572,17 @@ class ThumbSizeSlider extends StatelessWidget {
           onPressed: smaller,
         ),
         _track(
-          Tooltip(
-            message: tooltip,
-            child: SliderTheme(
-              data: SliderTheme.of(context)
-                  .copyWith(tickMarkShape: const _DenseTickMarkShape()),
-              child: slider,
+          // The Tooltip and the Slider are both OverlayPortals.
+          OwnSemanticsNode(
+            child: Tooltip(
+              message: tooltip,
+              child: SliderOverlay(
+                child: SliderTheme(
+                  data: SliderTheme.of(context)
+                      .copyWith(tickMarkShape: const _DenseTickMarkShape()),
+                  child: slider,
+                ),
+              ),
             ),
           ),
         ),

@@ -5,6 +5,7 @@ import '../../state/dashboard.dart';
 import '../cursors.dart';
 import '../format.dart';
 import 'favorite_star.dart';
+import 'own_semantics_node.dart';
 
 /// Search box, type chips, author / tag / source menus and sorting.
 class FilterBar extends StatelessWidget {
@@ -286,6 +287,11 @@ class _FacetMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The menu is an OverlayPortal, like its neighbours.
+    return OwnSemanticsNode(child: _menu(context));
+  }
+
+  Widget _menu(BuildContext context) {
     return MenuAnchor(
       style: const MenuStyle(
         maximumSize: WidgetStatePropertyAll(Size(360, 480)),
