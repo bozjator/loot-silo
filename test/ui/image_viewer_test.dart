@@ -67,10 +67,30 @@ void main() {
         return ProcessResult(0, 1, '', '');
       }
 
-      await revealInFileManager(r'C:\lib\x.png', os: 'windows', run: run);
+      final selected = <String>[];
+      await revealInFileManager(
+        'C:/my lib/x.png',
+        os: 'windows',
+        run: run,
+        selectWindows: (path) {
+          selected.add(path);
+          return true;
+        },
+      );
+      expect(selected, [r'C:\my lib\x.png']);
+      expect(calls, isEmpty);
+
+      // The shell call failed: explorer, with separate arguments so a path
+      // with spaces still selects the file.
+      await revealInFileManager(
+        r'C:\my lib\x.png',
+        os: 'windows',
+        run: run,
+        selectWindows: (_) => false,
+      );
       await revealInFileManager('/lib/x.png', os: 'macos', run: run);
       expect(calls, [
-        ['explorer', r'/select,C:\lib\x.png'],
+        ['explorer', '/select,', r'C:\my lib\x.png'],
         ['open', '-R', '/lib/x.png'],
       ]);
     });

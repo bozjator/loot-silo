@@ -50,6 +50,9 @@ dependencies:
   http: ^1.6.0
   html: ^0.15.7
   path: ^1.9.1
+  # Dart team; native strings for the Windows shell call that selects a
+  # file in Explorer (lib/ui/reveal_windows.dart).
+  ffi: ^2.2.0
   path_provider: ^2.1.6
   crypto: ^3.0.8
   file_selector: ^1.1.0
