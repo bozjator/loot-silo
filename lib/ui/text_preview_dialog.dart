@@ -44,7 +44,7 @@ class _TextPreviewDialogState extends ConsumerState<TextPreviewDialog> {
   late final _preview = readTextPreview(_path);
   late var _rendered = isMarkdown(widget.rel);
 
-  void _openExternally() => launchUrl(Uri.file(_path));
+  void _openExternally() => openPath(_path);
 
   /// Web and mail links open in the browser; relative links are ignored.
   void _onLink(String text, String? href, String title) {

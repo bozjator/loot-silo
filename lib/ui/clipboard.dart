@@ -4,7 +4,8 @@ import 'dart:isolate';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
-import 'package:url_launcher/url_launcher.dart';
+
+import 'reveal.dart';
 
 /// Files and images on the system clipboard, and opening files in other
 /// apps. Text uses Flutter's own [Clipboard]; images and files go through
@@ -78,7 +79,7 @@ class PlatformFileClipboard implements FileClipboard {
       Clipboard.setData(ClipboardData(text: text));
 
   @override
-  Future<void> open(String path) => launchUrl(Uri.file(path));
+  Future<void> open(String path) => openPath(path);
 
   @override
   Future<bool> openWith(String path) async =>

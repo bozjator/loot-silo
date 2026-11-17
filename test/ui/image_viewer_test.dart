@@ -96,6 +96,38 @@ void main() {
     });
   });
 
+  group('openPath', () {
+    test('Windows hands the plain path to the shell, not a file: URL', () async {
+      final opened = <String>[];
+      await openPath(
+        'D:/lib/Enemy Bundle #4',
+        os: 'windows',
+        open: (_) => fail('no URL on Windows'),
+        openWindows: (path) {
+          opened.add(path);
+          return true;
+        },
+      );
+      expect(opened, [r'D:\lib\Enemy Bundle #4']);
+    });
+
+    test('elsewhere opens a file: URL, so # is escaped', () async {
+      final dir = Directory.systemTemp.createTempSync('open #4');
+      addTearDown(() => dir.deleteSync());
+      Uri? opened;
+      await openPath(
+        dir.path,
+        os: 'linux',
+        open: (uri) async {
+          opened = uri;
+          return true;
+        },
+      );
+      expect(opened, Uri.directory(dir.path));
+      expect(opened.toString(), contains('%234'));
+    });
+  });
+
   group('ImageViewer', () {
     late Directory tmp;
     late SettingsStore store;

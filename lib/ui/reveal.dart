@@ -63,6 +63,26 @@ Future<void> revealInFileManager(
   }
 }
 
+/// Opens [path] with the system: a folder in the file manager, a file in
+/// its default app. Windows gets the plain path ([shellOpen]); a `file:`
+/// URL there loses everything after a `#` in the path.
+Future<void> openPath(
+  String path, {
+  Future<bool> Function(Uri) open = launchUrl,
+  String? os,
+  bool Function(String path)? openWindows,
+}) async {
+  if ((os ?? Platform.operatingSystem) == 'windows') {
+    (openWindows ?? shellOpen)(p.windows.normalize(path));
+    return;
+  }
+  await open(
+    FileSystemEntity.isDirectorySync(path)
+        ? Uri.directory(path)
+        : Uri.file(path),
+  );
+}
+
 /// Small "show in file manager" button for a file row or card.
 class RevealButton extends ConsumerWidget {
   const RevealButton(this.path, {super.key});

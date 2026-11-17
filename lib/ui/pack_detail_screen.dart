@@ -973,7 +973,7 @@ class _HeaderActions extends StatelessWidget {
         tooltip: 'Open folder',
         visualDensity: VisualDensity.compact,
         icon: const Icon(Icons.folder_open),
-        onPressed: () => launchUrl(Uri.directory(pack.path)),
+        onPressed: () => openPath(pack.path),
       ),
     ],
   );

@@ -16,6 +16,47 @@ typedef _CoUninitD = void Function();
 typedef _AllowFgN = Int32 Function(Uint32);
 typedef _AllowFgD = int Function(int);
 
+typedef _ShellExecuteN =
+    IntPtr Function(
+      IntPtr,
+      Pointer<Utf16>,
+      Pointer<Utf16>,
+      Pointer<Utf16>,
+      Pointer<Utf16>,
+      Int32,
+    );
+typedef _ShellExecuteD =
+    int Function(
+      int,
+      Pointer<Utf16>,
+      Pointer<Utf16>,
+      Pointer<Utf16>,
+      Pointer<Utf16>,
+      int,
+    );
+
+/// Opens [path] (a folder in Explorer, a file in its default app) by
+/// handing the plain path to `ShellExecuteW`. A `file:` URL won't do: the
+/// shell reads `#` as the start of a fragment, so `Enemy Bundle #4` became
+/// `Enemy Bundle ` and nothing opened. Returns false when the shell fails.
+bool shellOpen(String path) {
+  final shellExecute = DynamicLibrary.open('shell32.dll')
+      .lookupFunction<_ShellExecuteN, _ShellExecuteD>('ShellExecuteW');
+  DynamicLibrary.open('user32.dll')
+      .lookupFunction<_AllowFgN, _AllowFgD>('AllowSetForegroundWindow')(
+    0xFFFFFFFF,
+  );
+  final verb = 'open'.toNativeUtf16();
+  final file = path.toNativeUtf16();
+  try {
+    // SW_SHOWNORMAL; values above 32 mean success.
+    return shellExecute(0, verb, file, nullptr, nullptr, 1) > 32;
+  } finally {
+    calloc.free(verb);
+    calloc.free(file);
+  }
+}
+
 /// Opens an Explorer window with [path] selected and focused, through
 /// `SHOpenFolderAndSelectItems` (what Windows' own "Open file location"
 /// uses). `explorer /select,` opens the folder but often leaves the file
