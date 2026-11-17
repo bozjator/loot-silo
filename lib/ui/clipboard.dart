@@ -19,6 +19,11 @@ abstract class FileClipboard {
   /// Open with… is offered.
   bool get canOpenWith;
 
+  /// Copy as GIF to clipboard is offered: apps read a pasted `image/gif`.
+  /// Not on Windows, where browsers, chats and editors only paste PNG or a
+  /// bitmap (one frame); there the GIF goes as a file, Copy as GIF.
+  bool get canCopyGifPicture;
+
   /// The image at [path] as `image/png` (other formats re-encoded once),
   /// at its own size.
   Future<void> copyImage(String path);
@@ -55,6 +60,9 @@ class PlatformFileClipboard implements FileClipboard {
 
   /// The runner has the channel.
   final bool _native;
+
+  @override
+  bool get canCopyGifPicture => _native && !Platform.isWindows;
 
   @override
   bool get canCopyFiles => _native;

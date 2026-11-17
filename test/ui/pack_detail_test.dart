@@ -111,6 +111,8 @@ class _FakeClipboard implements FileClipboard {
   @override
   bool get canOpenWith => linux;
   @override
+  bool get canCopyGifPicture => linux;
+  @override
   Future<void> copyImage(String path) async => calls.add('image:$path');
   @override
   Future<void> copyFiles(List<String> paths) async =>

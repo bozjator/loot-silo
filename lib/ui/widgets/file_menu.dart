@@ -101,7 +101,8 @@ enum FileMenuAction {
   /// The GIF as a picture only (`image/gif`): chats, email.
   copyGif,
 
-  /// The GIF as a file only: file managers, a game's folder.
+  /// The GIF as a file only: file managers, a game's folder; on Windows
+  /// also chats and email (the only GIF item there).
   copyGifFile,
   copyImage,
   copyFiles,
@@ -113,19 +114,22 @@ enum FileMenuAction {
   removePreview,
 }
 
-/// The item's label; [n] files are copied.
-String fileMenuLabel(FileMenuAction a, int n) => switch (a) {
-  FileMenuAction.copyGif => 'Copy as GIF to clipboard',
-  FileMenuAction.copyGifFile => 'Copy as GIF file',
-  FileMenuAction.copyImage => 'Copy image to clipboard',
-  FileMenuAction.copyFiles => n == 1 ? 'Copy file' : 'Copy $n files',
-  FileMenuAction.copyPath => n == 1 ? 'Copy path' : 'Copy $n paths',
-  FileMenuAction.open => 'Open',
-  FileMenuAction.openWith => 'Open with…',
-  FileMenuAction.useAsCover => 'Use as pack cover',
-  FileMenuAction.addPreview => 'Add to pack previews',
-  FileMenuAction.removePreview => 'Remove from pack previews',
-};
+/// The item's label; [n] files are copied. Without [gifPicture] (Copy as
+/// GIF to clipboard isn't offered), the GIF file item is just Copy as GIF.
+String fileMenuLabel(FileMenuAction a, int n, {bool gifPicture = true}) =>
+    switch (a) {
+      FileMenuAction.copyGif => 'Copy as GIF to clipboard',
+      FileMenuAction.copyGifFile =>
+        gifPicture ? 'Copy as GIF file' : 'Copy as GIF',
+      FileMenuAction.copyImage => 'Copy image to clipboard',
+      FileMenuAction.copyFiles => n == 1 ? 'Copy file' : 'Copy $n files',
+      FileMenuAction.copyPath => n == 1 ? 'Copy path' : 'Copy $n paths',
+      FileMenuAction.open => 'Open',
+      FileMenuAction.openWith => 'Open with…',
+      FileMenuAction.useAsCover => 'Use as pack cover',
+      FileMenuAction.addPreview => 'Add to pack previews',
+      FileMenuAction.removePreview => 'Remove from pack previews',
+    };
 
 /// The items [target] gets on this platform: only what applies, never
 /// greyed out. Nothing that a card's own icons already do (star, select,
@@ -139,7 +143,7 @@ List<FileMenuAction> fileMenuActions(
   List<String>? previews,
 }) => [
   if (target.gif != null && clipboard.canCopyFiles) ...[
-    FileMenuAction.copyGif,
+    if (clipboard.canCopyGifPicture) FileMenuAction.copyGif,
     FileMenuAction.copyGifFile,
   ],
   if (target.image != null && clipboard.canCopyFiles) FileMenuAction.copyImage,
@@ -171,6 +175,7 @@ Future<void> showFileMenu(
   final actions = fileMenuActions(target, clipboard, previews: previews);
   if (actions.isEmpty) return;
   final n = target.files.length;
+  final gifPicture = actions.contains(FileMenuAction.copyGif);
   final messenger = ScaffoldMessenger.maybeOf(context);
   final choice = await showMenu<FileMenuAction>(
     context: context,
@@ -197,7 +202,7 @@ Future<void> showFileMenu(
               FileMenuAction.addPreview => Icons.add_photo_alternate_outlined,
               FileMenuAction.removePreview => Icons.hide_image_outlined,
             }),
-            title: Text(fileMenuLabel(a, n)),
+            title: Text(fileMenuLabel(a, n, gifPicture: gifPicture)),
           ),
         ),
       ],
@@ -230,7 +235,7 @@ Future<void> showFileMenu(
           final file = File(p.join(dir.path, '${gifFileName(name)}.gif'))
             ..writeAsBytesSync(bytes);
           await clipboard.copyFiles([file.path]);
-          say('GIF file copied');
+          say(gifPicture ? 'GIF file copied' : 'GIF copied');
         }
       case FileMenuAction.copyFiles:
         await clipboard.copyFiles(target.files);

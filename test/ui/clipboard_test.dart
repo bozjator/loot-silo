@@ -7,12 +7,15 @@ import 'package:loot_silo/ui/widgets/file_menu.dart';
 import 'package:path/path.dart' as p;
 
 class _Caps implements FileClipboard {
-  _Caps(this.linux);
+  _Caps(this.linux, {this.gifPicture = true});
   final bool linux;
+  final bool gifPicture;
   @override
   bool get canCopyFiles => linux;
   @override
   bool get canOpenWith => linux;
+  @override
+  bool get canCopyGifPicture => linux && gifPicture;
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
@@ -126,6 +129,16 @@ void main() {
         'Add to pack previews',
         'Remove from pack previews',
       ],
+    );
+    // Windows: no GIF picture on the clipboard; the file item is Copy as
+    // GIF.
+    expect(fileMenuActions(anim, _Caps(true, gifPicture: false)), [
+      FileMenuAction.copyGifFile,
+      ...fileItems,
+    ]);
+    expect(
+      fileMenuLabel(FileMenuAction.copyGifFile, 1, gifPicture: false),
+      'Copy as GIF',
     );
     expect(fileMenuLabel(FileMenuAction.copyFiles, 3), 'Copy 3 files');
     expect(fileMenuLabel(FileMenuAction.copyPath, 3), 'Copy 3 paths');
