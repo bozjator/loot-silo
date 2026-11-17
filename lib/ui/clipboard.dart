@@ -10,7 +10,8 @@ import 'reveal.dart';
 /// Files and images on the system clipboard, and opening files in other
 /// apps. Text uses Flutter's own [Clipboard]; images and files go through
 /// our `loot_silo/clipboard` channel (Linux runner on GTK, macOS runner on
-/// NSPasteboard), so [canCopyFiles] and [canOpenWith] are false elsewhere.
+/// NSPasteboard, Windows runner on the Win32 clipboard), so [canCopyFiles]
+/// and [canOpenWith] are false elsewhere.
 abstract class FileClipboard {
   /// Copy image / Copy file are offered.
   bool get canCopyFiles;
@@ -23,8 +24,8 @@ abstract class FileClipboard {
   Future<void> copyImage(String path);
 
   /// [paths] as files to paste into a file manager (Linux: `text/uri-list`,
-  /// `x-special/gnome-copied-files`; macOS: file URLs; and the paths as
-  /// text); never an image.
+  /// `x-special/gnome-copied-files`; macOS: file URLs; Windows: `CF_HDROP`;
+  /// and the paths as text); never an image.
   Future<void> copyFiles(List<String> paths);
 
   /// [bytes] offered only as [mime] (`image/gif`), for chats and email.
@@ -46,7 +47,9 @@ final fileClipboardProvider = Provider<FileClipboard>(
 
 class PlatformFileClipboard implements FileClipboard {
   PlatformFileClipboard({bool? native})
-    : _native = native ?? (Platform.isLinux || Platform.isMacOS);
+    : _native =
+          native ??
+          (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
 
   static const channel = MethodChannel('loot_silo/clipboard');
 
