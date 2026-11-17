@@ -2278,7 +2278,7 @@ A **16×16** knight with *walk* and *idle* animations.
     }
 
     await menu();
-    // The GIF items first, then the image card's (M75).
+    // The GIF item first, then the image card's (M75).
     final labels = [
       for (final e
           in find
@@ -2289,12 +2289,8 @@ A **16×16** knight with *walk* and *idle* animations.
               .evaluate())
         ((e.widget as ListTile).title! as Text).data!,
     ];
-    // Windows apps paste only still pictures: no GIF to the clipboard,
-    // and the file item is just Copy as GIF.
-    final windows = Platform.isWindows;
     expect(labels, [
-      if (!windows) 'Copy as GIF to clipboard',
-      windows ? 'Copy as GIF' : 'Copy as GIF file',
+      'Copy as GIF',
       'Copy image to clipboard',
       'Copy file',
       'Copy path',
@@ -2307,48 +2303,22 @@ A **16×16** knight with *walk* and *idle* animations.
     await captureScreenshot(tester, 'm70_copy_as_gif', settle: false);
     await captureScreenshot(tester, 'm75_card_menu', settle: false);
 
-    Future<int> frameCount(Uint8List gif) async =>
-        (await tester.runAsync(() async {
-          final codec = await ui.instantiateImageCodec(gif);
-          final n = codec.frameCount;
-          codec.dispose();
-          return n;
-        }))!;
-
-    Uint8List? gif;
-    List<String> offered;
-    if (!windows) {
-      // To clipboard: only the picture (image/gif), no file.
-      await tester.tap(find.text('Copy as GIF to clipboard'));
-      await pumpUntil(tester, find.text('GIF copied'));
-      gif = await clipRead(tester, 'image/gif');
-      expect(gif, isNotNull);
-      expect(String.fromCharCodes(gif!.take(6)), 'GIF89a');
-      expect(await frameCount(gif), greaterThan(1));
-      offered = (await tester.runAsync(PlatformFileClipboard.targets))!;
-      expect(offered, contains('image/gif'));
-      expect(offered, isNot(contains('text/uri-list')));
-      expect(offered, isNot(contains('x-special/gnome-copied-files')));
-    }
-
-    // GIF file: only the file (a moving .gif), no image target.
-    await menu();
-    await tester.tap(find.text(windows ? 'Copy as GIF' : 'Copy as GIF file'));
-    await pumpUntil(
-      tester,
-      find.text(windows ? 'GIF copied' : 'GIF file copied'),
-    );
+    // Copy as GIF: only the file (a moving .gif), no image target.
+    await tester.tap(find.text('Copy as GIF'));
+    await pumpUntil(tester, find.text('GIF copied'));
     final uris = await clipRead(tester, 'text/uri-list');
     final file = File.fromUri(Uri.parse(utf8.decode(uris!).trim()));
     expect(p.extension(file.path), '.gif');
-    final saved = file.readAsBytesSync();
-    if (gif != null) {
-      expect(saved, gif);
-    } else {
-      expect(String.fromCharCodes(saved.take(6)), 'GIF89a');
-      expect(await frameCount(saved), greaterThan(1));
-    }
-    offered = (await tester.runAsync(PlatformFileClipboard.targets))!;
+    final gif = file.readAsBytesSync();
+    expect(String.fromCharCodes(gif.take(6)), 'GIF89a');
+    final frames = await tester.runAsync(() async {
+      final codec = await ui.instantiateImageCodec(gif);
+      final n = codec.frameCount;
+      codec.dispose();
+      return n;
+    });
+    expect(frames, greaterThan(1));
+    final offered = (await tester.runAsync(PlatformFileClipboard.targets))!;
     expect(offered.where((t) => t.startsWith('image/')), isEmpty);
     if (Platform.isLinux) {
       expect(offered, contains('x-special/gnome-copied-files'));

@@ -111,20 +111,10 @@ class _FakeClipboard implements FileClipboard {
   @override
   bool get canOpenWith => linux;
   @override
-  bool get canCopyGifPicture => linux;
-  @override
   Future<void> copyImage(String path) async => calls.add('image:$path');
   @override
   Future<void> copyFiles(List<String> paths) async =>
       calls.add('files:${paths.join('|')}');
-
-  /// The last [copyBytes] data.
-  Uint8List? bytes;
-  @override
-  Future<void> copyBytes(String mime, Uint8List bytes) async {
-    this.bytes = bytes;
-    calls.add('bytes:$mime ${bytes.length}');
-  }
 
   @override
   Future<void> copyText(String text) async => calls.add('text:$text');
@@ -2798,16 +2788,10 @@ void main() {
         (w) => w is ItemCard && w.path == 'fx/Explosion(16x16).png',
       );
       await rightClick(tester, card.first);
-      // The two GIF items first, then the image card's (M75).
-      expect(items(tester), [
-        'copyGif',
-        'copyGifFile',
-        ...all,
-        'removePreview',
-      ]);
+      // The GIF item first, then the image card's (M75).
+      expect(items(tester), ['copyGif', ...all, 'removePreview']);
       expect(labels(tester), [
-        'Copy as GIF to clipboard',
-        'Copy as GIF file',
+        'Copy as GIF',
         'Copy image to clipboard',
         'Copy file',
         'Copy path',
@@ -2830,27 +2814,17 @@ void main() {
         }
       }
 
-      // Copy as GIF to clipboard: built off the UI thread, offered only as
-      // image/gif bytes (no file, nothing written).
+      // Copy as GIF: built off the UI thread, written to the GIF cache and
+      // offered only as that file (it still moves when pasted).
       final gif = p.join(tmp.path, 'gif_cache', 'Explosion(16x16).gif');
       await rightClick(tester, card.first);
       await pick(tester, 'copyGif');
       expect(find.text('Making GIF…'), findsOneWidget);
-      await until(() => clip.calls.last.startsWith('bytes:'));
-      final bytes = clip.bytes!;
-      expect(clip.calls.last, 'bytes:image/gif ${bytes.length}');
-      expect(String.fromCharCodes(bytes.take(6)), 'GIF89a');
-      expect(File(gif).existsSync(), isFalse);
-      expect(find.text('GIF copied'), findsOneWidget);
-
-      // Copy as GIF file: written to the GIF cache, offered only as that
-      // file.
-      await rightClick(tester, card.first);
-      await pick(tester, 'copyGifFile');
       await until(() => clip.calls.last.startsWith('files:'));
       expect(clip.calls.last, 'files:$gif');
-      expect(File(gif).readAsBytesSync(), bytes);
-      expect(find.text('GIF file copied'), findsOneWidget);
+      final bytes = File(gif).readAsBytesSync();
+      expect(String.fromCharCodes(bytes.take(6)), 'GIF89a');
+      expect(find.text('GIF copied'), findsOneWidget);
 
       // The viewer opened from the animation card has the same menu.
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
@@ -2869,7 +2843,7 @@ void main() {
           matching: find.byType(InteractiveViewer),
         ),
       );
-      expect(items(tester), ['copyGif', 'copyGifFile', ...all]);
+      expect(items(tester), ['copyGif', ...all]);
     });
 
     testWidgets('audio rows and cards, Other files rows: file items', (

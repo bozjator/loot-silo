@@ -357,11 +357,9 @@ class HelpScreen extends StatelessWidget {
                   'them all.',
                 ),
                 _P(
-                  'Animations also have Copy as GIF to clipboard and Copy as '
-                  'GIF file, a looping GIF as the card plays it. Some chat '
-                  'apps show a pasted GIF as a still picture; the file always '
-                  'moves. On Windows, where apps paste only still pictures, '
-                  'there is one item, Copy as GIF, which copies the file.',
+                  'Animations also have Copy as GIF: a looping GIF as the card '
+                  'plays it, copied as a file, so it still moves when you '
+                  'paste it into a chat, an email or a folder.',
                 ),
               ]),
               const _Section('Favorites', [

@@ -9,10 +9,8 @@
 //
 // Methods:
 //   copyImage(Uint8List png)        image/png (and the other pixbuf formats)
-//   copyFiles(List<String> paths, [String mime, Uint8List bytes])
-//                                   text/uri-list, x-special/gnome-copied-files
-//                                   and the paths as text; plus `mime` with
-//                                   `bytes` when given (image/gif)
+//   copyFiles(List<String> paths)   text/uri-list, x-special/gnome-copied-files
+//                                   and the paths as text
 //   read(String target) -> Uint8List?  the clipboard's data for `target`
 //   targets() -> List<String>       the clipboard's target names
 //   openWith(String path) -> bool   the app chooser, then launches the pick

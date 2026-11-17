@@ -7,15 +7,12 @@ import 'package:loot_silo/ui/widgets/file_menu.dart';
 import 'package:path/path.dart' as p;
 
 class _Caps implements FileClipboard {
-  _Caps(this.linux, {this.gifPicture = true});
+  _Caps(this.linux);
   final bool linux;
-  final bool gifPicture;
   @override
   bool get canCopyFiles => linux;
   @override
   bool get canOpenWith => linux;
-  @override
-  bool get canCopyGifPicture => linux && gifPicture;
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
@@ -73,7 +70,7 @@ void main() {
       FileMenuAction.openWith,
     ];
     expect(fileMenuActions(one, _Caps(true)), fileItems);
-    // An animation puts the two GIF items first (M75).
+    // An animation puts its GIF item first (M75).
     final anim = FileMenuTarget(
       files: const ['/a.png'],
       image: '/a.png',
@@ -82,7 +79,6 @@ void main() {
     );
     expect(fileMenuActions(anim, _Caps(true)), [
       FileMenuAction.copyGif,
-      FileMenuAction.copyGifFile,
       ...fileItems,
     ]);
     // A pack's image: the cover / previews items last, as they apply.
@@ -110,16 +106,14 @@ void main() {
     expect(previewItems(['a.png', 'b.png']), [FileMenuAction.removePreview]);
     // Still loading: none.
     expect(previewItems(null), isEmpty);
-    expect(FileMenuAction.values.take(3), [
+    expect(FileMenuAction.values.take(2), [
       FileMenuAction.copyGif,
-      FileMenuAction.copyGifFile,
       FileMenuAction.copyImage,
     ]);
     expect(
       [for (final a in FileMenuAction.values) fileMenuLabel(a, 1)],
       [
-        'Copy as GIF to clipboard',
-        'Copy as GIF file',
+        'Copy as GIF',
         'Copy image to clipboard',
         'Copy file',
         'Copy path',
@@ -129,16 +123,6 @@ void main() {
         'Add to pack previews',
         'Remove from pack previews',
       ],
-    );
-    // Windows: no GIF picture on the clipboard; the file item is Copy as
-    // GIF.
-    expect(fileMenuActions(anim, _Caps(true, gifPicture: false)), [
-      FileMenuAction.copyGifFile,
-      ...fileItems,
-    ]);
-    expect(
-      fileMenuLabel(FileMenuAction.copyGifFile, 1, gifPicture: false),
-      'Copy as GIF',
     );
     expect(fileMenuLabel(FileMenuAction.copyFiles, 3), 'Copy 3 files');
     expect(fileMenuLabel(FileMenuAction.copyPath, 3), 'Copy 3 paths');

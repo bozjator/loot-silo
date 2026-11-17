@@ -23,7 +23,6 @@ class ClipboardPlugin: NSObject {
     switch call.method {
     case "copyImage": result(copyImage(call.arguments))
     case "copyFiles": result(copyFiles(call.arguments))
-    case "copyBytes": result(copyBytes(call.arguments))
     case "read": result(read(call.arguments))
     case "targets": result(targets())
     case "openWith": openWith(call.arguments, result: result)
@@ -76,24 +75,6 @@ class ClipboardPlugin: NSObject {
     pasteboard.clearContents()
     guard pasteboard.writeObjects(items) else {
       return error("clipboard", "the clipboard refused the files")
-    }
-    return nil
-  }
-
-  /// {mime, bytes}: offers only that type (e.g. image/gif → GIF).
-  private func copyBytes(_ args: Any?) -> Any? {
-    guard let map = args as? [String: Any],
-      let mime = map["mime"] as? String,
-      let data = (map["bytes"] as? FlutterStandardTypedData)?.data
-    else {
-      return error("bad-args", "copyBytes takes mime and bytes")
-    }
-    guard let type = Self.pasteboardType(mime: mime) else {
-      return error("bad-args", "unknown type \(mime)")
-    }
-    pasteboard.clearContents()
-    guard pasteboard.setData(data, forType: type) else {
-      return error("clipboard", "the clipboard refused the data")
     }
     return nil
   }

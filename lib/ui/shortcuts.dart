@@ -370,8 +370,7 @@ List<MouseHelp> get mouseHelp => [
   MouseHelp('Open image icon on a card', 'Show it in the image viewer'),
   MouseHelp(
     'Right-click a file card or row (or the viewer\'s picture)',
-    'Copy as GIF to clipboard and Copy as GIF file (animations; on Windows '
-        'Copy as GIF), Copy image '
+    'Copy as GIF (animations), Copy image '
         'to clipboard, Copy file, Copy path, Open, Open with…',
   ),
   MouseHelp(

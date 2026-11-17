@@ -38,23 +38,17 @@ UINT PngFormat() {
   return format;
 }
 
-UINT GifFormat() {
-  static const UINT format = ::RegisterClipboardFormatW(L"GIF");
-  return format;
-}
-
 UINT DropEffectFormat() {
   static const UINT format =
       ::RegisterClipboardFormatW(CFSTR_PREFERREDDROPEFFECT);
   return format;
 }
 
-// The clipboard format for a MIME name: the names Windows apps use for
-// PNG and GIF, the standard formats for text and bitmaps, else a format
+// The clipboard format for a MIME name: the name Windows apps use for
+// PNG, the standard formats for text and bitmaps, else a format
 // registered under the MIME name itself.
 UINT FormatForMime(const std::string& mime) {
   if (mime == "image/png") return PngFormat();
-  if (mime == "image/gif") return GifFormat();
   if (mime == "image/bmp") return CF_DIB;
   if (mime == "text/plain") return CF_UNICODETEXT;
   if (mime == "text/uri-list") return CF_HDROP;
@@ -65,7 +59,6 @@ UINT FormatForMime(const std::string& mime) {
 // formats with no MIME name keep their Windows name.
 std::string MimeForFormat(UINT format) {
   if (format == PngFormat()) return "image/png";
-  if (format == GifFormat()) return "image/gif";
   switch (format) {
     case CF_DIB:
     case CF_DIBV5:
@@ -323,30 +316,6 @@ void CopyFiles(HWND owner, const EncodableValue* args, Result& result) {
   result->Success();
 }
 
-// {mime, bytes}: offers only that type (e.g. image/gif → GIF).
-void CopyBytes(HWND owner, const EncodableValue* args, Result& result) {
-  const auto* map = args ? std::get_if<EncodableMap>(args) : nullptr;
-  const EncodableValue* mime_value = map ? Lookup(*map, "mime") : nullptr;
-  const EncodableValue* bytes_value = map ? Lookup(*map, "bytes") : nullptr;
-  const auto* mime =
-      mime_value ? std::get_if<std::string>(mime_value) : nullptr;
-  const auto* bytes = bytes_value ? std::get_if<Bytes>(bytes_value) : nullptr;
-  if (mime == nullptr || bytes == nullptr) {
-    result->Error("bad-args", "copyBytes takes mime and bytes");
-    return;
-  }
-  const UINT format = FormatForMime(*mime);
-  if (format == 0 || format == CF_HDROP) {
-    result->Error("bad-args", "unknown type " + *mime);
-    return;
-  }
-  if (auto failure = SetClipboard(owner, {{format, *bytes}})) {
-    result->Error("clipboard", "the clipboard refused the data: " + *failure);
-    return;
-  }
-  result->Success();
-}
-
 // The clipboard's data for a MIME target; `text/uri-list` is the copied
 // files' URIs, one per line, and `text/plain` comes as UTF-8. For tests.
 void Read(const EncodableValue* args, Result& result) {
@@ -456,8 +425,6 @@ ClipboardPlugin::ClipboardPlugin(flutter::BinaryMessenger* messenger,
           CopyImage(window_, args, result);
         } else if (method == "copyFiles") {
           CopyFiles(window_, args, result);
-        } else if (method == "copyBytes") {
-          CopyBytes(window_, args, result);
         } else if (method == "read") {
           Read(args, result);
         } else if (method == "targets") {
