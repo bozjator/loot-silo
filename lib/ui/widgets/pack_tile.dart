@@ -120,6 +120,7 @@ class _PackTileState extends State<PackTile> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final glass = isGlass(context);
+    final fill = fillsCovers(context);
     final preview = pack.preview;
     // MouseRegion, not InkWell.onHover: a disabled InkWell gets no hover.
     final card = Card(
@@ -162,30 +163,47 @@ class _PackTileState extends State<PackTile> {
                       scale: glass && _hover ? 1.06 : 1,
                       child: preview == null
                           ? _GeneratedPreview(pack: pack)
+                          : widget.coverAnimation != null &&
+                                widget.coverAnimation!.kind != AnimKind.gif &&
+                                widget.animationPackPath != null
+                          ? Padding(
+                              padding: const EdgeInsets.all(6),
+                              child: AnimatedSprite(
+                                packPath: widget.animationPackPath!,
+                                anim: widget.coverAnimation!,
+                                playing: animate,
+                              ),
+                            )
+                          : pack.previewAnim != null
+                          ? Padding(
+                              padding: const EdgeInsets.all(6),
+                              child: AnimatedSprite(
+                                packPath: pack.path,
+                                anim: pack.previewAnim!,
+                                playing: animate,
+                              ),
+                            )
+                          // Fill (Settings → Pack covers): the image covers
+                          // the whole picture area, cropped at the sides it
+                          // overflows, in whole-pixel steps up so pixel art
+                          // stays crisp. Fit: the whole image, inset.
+                          : fill
+                          ? PixelImage(
+                              File(p.join(pack.path, preview)),
+                              animate: animate,
+                              fit: BoxFit.cover,
+                              scale: (s) => s >= 1 ? s.ceilToDouble() : s,
+                              errorBuilder: (_) =>
+                                  _GeneratedPreview(pack: pack),
+                            )
                           : Padding(
                               padding: const EdgeInsets.all(6),
-                              child:
-                                  widget.coverAnimation != null &&
-                                      widget.coverAnimation!.kind !=
-                                          AnimKind.gif &&
-                                      widget.animationPackPath != null
-                                  ? AnimatedSprite(
-                                      packPath: widget.animationPackPath!,
-                                      anim: widget.coverAnimation!,
-                                      playing: animate,
-                                    )
-                                  : pack.previewAnim != null
-                                  ? AnimatedSprite(
-                                      packPath: pack.path,
-                                      anim: pack.previewAnim!,
-                                      playing: animate,
-                                    )
-                                  : PixelImage(
-                                      File(p.join(pack.path, preview)),
-                                      animate: animate,
-                                      errorBuilder: (_) =>
-                                          _GeneratedPreview(pack: pack),
-                                    ),
+                              child: PixelImage(
+                                File(p.join(pack.path, preview)),
+                                animate: animate,
+                                errorBuilder: (_) =>
+                                    _GeneratedPreview(pack: pack),
+                              ),
                             ),
                     ),
                   ),

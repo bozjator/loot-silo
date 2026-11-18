@@ -102,6 +102,7 @@ class _AppState extends ConsumerState<LootSiloApp> {
     final theme = ref.watch(settingsProvider.select((s) => s.theme));
     final themeColor = ref.watch(settingsProvider.select((s) => s.themeColor));
     final style = ref.watch(settingsProvider.select((s) => s.style));
+    final coverFit = ref.watch(settingsProvider.select((s) => s.coverFit));
     return MaterialApp(
       title: appName,
       debugShowCheckedModeBanner: false,
@@ -125,8 +126,18 @@ class _AppState extends ConsumerState<LootSiloApp> {
               : child!,
         ),
       ),
-      theme: appTheme(themeColor, Brightness.light, style: style),
-      darkTheme: appTheme(themeColor, Brightness.dark, style: style),
+      theme: appTheme(
+        themeColor,
+        Brightness.light,
+        style: style,
+        coverFit: coverFit,
+      ),
+      darkTheme: appTheme(
+        themeColor,
+        Brightness.dark,
+        style: style,
+        coverFit: coverFit,
+      ),
       home: const SessionHost(child: TabsHost(dashboard: HomeScreen())),
     );
   }

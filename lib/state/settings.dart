@@ -28,6 +28,11 @@ enum ThemeColor {
 /// solid surfaces, no hover glow. Shapes and type are the same in both.
 enum AppStyle { glass, classic }
 
+/// How a pack tile's cover sits in its picture area (Settings →
+/// Appearance). Fit: the whole image, with room around it. Fill: the image
+/// covers the area, cropped at the sides it overflows.
+enum CoverFit { fit, fill }
+
 /// How a pack's Images and Animations tabs list their files.
 enum ItemsView { flat, folders }
 
@@ -192,6 +197,7 @@ class AppSettings {
     this.theme = ThemeChoice.system,
     this.themeColor = ThemeColor.teal,
     this.style = AppStyle.glass,
+    this.coverFit = CoverFit.fill,
     this.animateAll = false,
     this.audioLoop = false,
     this.dashboardTileSize = 240,
@@ -226,6 +232,9 @@ class AppSettings {
 
   /// Glass (the default) or Classic.
   final AppStyle style;
+
+  /// Pack tile covers: filling the area (the default) or the whole image.
+  final CoverFit coverFit;
 
   /// Play every sprite preview on the dashboard, not just the hovered one.
   final bool animateAll;
@@ -300,6 +309,7 @@ class AppSettings {
     themeColor:
         ThemeColor.values.asNameMap()[json['theme_color']] ?? ThemeColor.teal,
     style: AppStyle.values.asNameMap()[json['style']] ?? AppStyle.glass,
+    coverFit: CoverFit.values.asNameMap()[json['cover_fit']] ?? CoverFit.fill,
     animateAll: json['animate_all'] == true,
     audioLoop: json['audio_loop'] == true,
     dashboardTileSize: (json['dashboard_tile_size'] as num?)?.toDouble() ?? 240,
@@ -355,6 +365,7 @@ class AppSettings {
     'theme': theme.name,
     'theme_color': themeColor.name,
     'style': style.name,
+    'cover_fit': coverFit.name,
     'animate_all': animateAll,
     'audio_loop': audioLoop,
     'dashboard_tile_size': dashboardTileSize,
@@ -385,6 +396,7 @@ class AppSettings {
     ThemeChoice? theme,
     ThemeColor? themeColor,
     AppStyle? style,
+    CoverFit? coverFit,
     bool? animateAll,
     bool? audioLoop,
     double? dashboardTileSize,
@@ -413,6 +425,7 @@ class AppSettings {
     theme: theme ?? this.theme,
     themeColor: themeColor ?? this.themeColor,
     style: style ?? this.style,
+    coverFit: coverFit ?? this.coverFit,
     animateAll: animateAll ?? this.animateAll,
     audioLoop: audioLoop ?? this.audioLoop,
     dashboardTileSize: dashboardTileSize ?? this.dashboardTileSize,

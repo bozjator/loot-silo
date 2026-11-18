@@ -30,11 +30,13 @@ extension ThemeColorSeed on ThemeColor {
 
 /// The app's theme for [brightness], seeded from [color]. [style] picks the
 /// surfaces: see-through glass over the AuroraBackdrop, or solid ones. The
-/// shapes and type are the same in both.
+/// shapes and type are the same in both. [coverFit] is how pack tiles show
+/// their covers.
 ThemeData appTheme(
   ThemeColor color,
   Brightness brightness, {
   AppStyle style = AppStyle.glass,
+  CoverFit coverFit = CoverFit.fill,
 }) {
   final dark = brightness == Brightness.dark;
   final glass = style == AppStyle.glass;
@@ -71,7 +73,9 @@ ThemeData appTheme(
   return withClickCursors(
     base.copyWith(
       textTheme: text,
-      extensions: [AppLook(glass: glass)],
+      extensions: [
+        AppLook(glass: glass, fillCovers: coverFit == CoverFit.fill),
+      ],
       // Glass pages are see-through: the AuroraBackdrop under the navigator
       // shows through, and every surface on it is glass.
       scaffoldBackgroundColor: glass

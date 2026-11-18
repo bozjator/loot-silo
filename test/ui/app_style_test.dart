@@ -50,8 +50,7 @@ void main() {
       expect(
         (classic.inputDecorationTheme.border! as OutlineInputBorder)
             .borderRadius,
-        (glass.inputDecorationTheme.border! as OutlineInputBorder)
-            .borderRadius,
+        (glass.inputDecorationTheme.border! as OutlineInputBorder).borderRadius,
       );
     }
   });
@@ -108,6 +107,35 @@ void main() {
     );
   });
 
+  group('pack covers setting', () {
+    test('defaults to fill and round-trips by name', () {
+      expect(const AppSettings().coverFit, CoverFit.fill);
+      final f = File(p.join(tmp.path, 'settings.json'));
+      final store = SettingsStore(f)
+        ..save(const AppSettings(coverFit: CoverFit.fit));
+      expect(f.readAsStringSync(), contains('"cover_fit": "fit"'));
+      expect(store.load().coverFit, CoverFit.fit);
+      expect(
+        AppSettings.fromJson({'cover_fit': 'zoom'}).coverFit,
+        CoverFit.fill,
+      );
+      expect(AppSettings.fromJson({}).coverFit, CoverFit.fill);
+    });
+
+    test('the theme carries it, in both styles', () {
+      for (final style in AppStyle.values) {
+        bool fills(CoverFit fit) => appTheme(
+          ThemeColor.teal,
+          Brightness.dark,
+          style: style,
+          coverFit: fit,
+        ).extension<AppLook>()!.fillCovers;
+        expect(fills(CoverFit.fit), isFalse);
+        expect(fills(CoverFit.fill), isTrue);
+      }
+    });
+  });
+
   testWidgets('picking Classic in Settings saves it and restyles the app', (
     tester,
   ) async {
@@ -126,7 +154,12 @@ void main() {
           builder: (context, ref, _) {
             final s = ref.watch(settingsProvider);
             return MaterialApp(
-              theme: appTheme(s.themeColor, Brightness.light, style: s.style),
+              theme: appTheme(
+                s.themeColor,
+                Brightness.light,
+                style: s.style,
+                coverFit: s.coverFit,
+              ),
               home: const SettingsScreen(),
             );
           },
@@ -147,5 +180,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(glass(), isTrue);
     expect(store.load().style, AppStyle.glass);
+
+    // Pack covers: Fill by default; Fit, then Fill again.
+    expect(find.text('Pack covers'), findsOneWidget);
+    bool fills() => fillsCovers(tester.element(find.byType(SettingsScreen)));
+    expect(fills(), isTrue);
+    await tester.tap(find.text('Fit'));
+    await tester.pumpAndSettle();
+    expect(fills(), isFalse);
+    expect(store.load().coverFit, CoverFit.fit);
+    await tester.tap(find.text('Fill'));
+    await tester.pumpAndSettle();
+    expect(fills(), isTrue);
+    expect(store.load().coverFit, CoverFit.fill);
   });
 }

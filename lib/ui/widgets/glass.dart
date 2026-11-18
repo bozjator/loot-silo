@@ -292,15 +292,21 @@ class GlassSheen extends StatelessWidget {
   }
 }
 
-/// Which look the theme has (Settings → Appearance → Style); widgets that
-/// differ between Glass and Classic read it with [isGlass].
+/// Which look the theme has (Settings → Appearance): the Style, read with
+/// [isGlass], and whether pack covers fill their tiles ([fillsCovers]).
 class AppLook extends ThemeExtension<AppLook> {
-  const AppLook({required this.glass});
+  const AppLook({required this.glass, this.fillCovers = false});
 
   final bool glass;
 
+  /// Pack tile covers fill the picture area (Settings → Covers: Fill).
+  final bool fillCovers;
+
   @override
-  AppLook copyWith({bool? glass}) => AppLook(glass: glass ?? this.glass);
+  AppLook copyWith({bool? glass, bool? fillCovers}) => AppLook(
+    glass: glass ?? this.glass,
+    fillCovers: fillCovers ?? this.fillCovers,
+  );
 
   @override
   AppLook lerp(AppLook? other, double t) =>
@@ -311,3 +317,8 @@ class AppLook extends ThemeExtension<AppLook> {
 /// [AppLook] (built outside appTheme), which then looks classic.
 bool isGlass(BuildContext context) =>
     Theme.of(context).extension<AppLook>()?.glass ?? false;
+
+/// Whether pack tile covers fill their picture area; false for a theme
+/// without [AppLook], which then shows the whole image.
+bool fillsCovers(BuildContext context) =>
+    Theme.of(context).extension<AppLook>()?.fillCovers ?? false;

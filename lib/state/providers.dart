@@ -111,6 +111,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   void setStyle(AppStyle style) => _save(state.copyWith(style: style));
 
+  void setCoverFit(CoverFit fit) => _save(state.copyWith(coverFit: fit));
+
   void setAnimateAll(bool on) => _save(state.copyWith(animateAll: on));
 
   void setAudioLoop(bool on) => _save(state.copyWith(audioLoop: on));

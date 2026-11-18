@@ -130,6 +130,22 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
               ListTile(
+                leading: const Icon(Icons.crop_original),
+                title: const Text('Pack covers'),
+                subtitle: const Text(
+                  'Fill: the cover fills its tile, cropped at the edges. '
+                  'Fit: the whole cover, with room around it.',
+                ),
+                trailing: SegmentedButton<CoverFit>(
+                  segments: const [
+                    ButtonSegment(value: CoverFit.fill, label: Text('Fill')),
+                    ButtonSegment(value: CoverFit.fit, label: Text('Fit')),
+                  ],
+                  selected: {settings.coverFit},
+                  onSelectionChanged: (s) => notifier.setCoverFit(s.first),
+                ),
+              ),
+              ListTile(
                 leading: const Icon(Icons.palette_outlined),
                 title: const Text('Colour'),
                 subtitle: Padding(
