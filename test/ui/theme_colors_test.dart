@@ -155,7 +155,8 @@ void main() {
     Future<Color> chipColour(ThemeColor color) async {
       await tester.pumpWidget(
         MaterialApp(
-          theme: appTheme(color, Brightness.light),
+          // Either style would do; the expected colour below is Classic's.
+          theme: appTheme(color, Brightness.light, style: AppStyle.classic),
           home: Scaffold(
             body: RepaintBoundary(
               key: key,
@@ -213,9 +214,27 @@ void main() {
 
     final teal = await chipColour(ThemeColor.teal);
     final red = await chipColour(ThemeColor.red);
-    final scheme = ColorScheme.fromSeed(seedColor: Colors.red);
     expect(red, isNot(teal));
-    // The selected chip is filled with the scheme's secondary container.
-    expect(red, scheme.secondaryContainer.withAlpha(255));
+    // The selected chip: the field fill tinted with the theme colour. The
+    // capture holds the chip alone (the page is painted outside it), so the
+    // see-through colour with its channels premultiplied.
+    final theme = appTheme(
+      ThemeColor.red,
+      Brightness.light,
+      style: AppStyle.classic,
+    );
+    final want = Color.alphaBlend(
+      theme.colorScheme.primary.withValues(alpha: 0.16),
+      theme.inputDecorationTheme.fillColor!,
+    );
+    int channel(double v) => (v * 255).round();
+    for (final (got, exp) in [
+      (red.a, want.a),
+      (red.r, want.r * want.a),
+      (red.g, want.g * want.a),
+      (red.b, want.b * want.a),
+    ]) {
+      expect(channel(got), closeTo(channel(exp), 2));
+    }
   });
 }

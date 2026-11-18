@@ -3765,6 +3765,10 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
                       : 'Play every sound shown, in order (Shift+Space)',
                   child: FilledButton.tonalIcon(
                     key: const ValueKey('play-all'),
+                    style: FilledButton.styleFrom(
+                      side: toolbarEdge(context),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                     onPressed: audio.isEmpty ? null : _playAll,
                     icon: Icon(
                       _all ? Icons.stop : Icons.playlist_play,
@@ -3786,12 +3790,16 @@ class _AudioTabState extends ConsumerState<_AudioTab> {
                     toggled: loop,
                     child: FilledButton.tonalIcon(
                       key: const ValueKey('loop'),
-                      style: loop
-                          ? FilledButton.styleFrom(
-                              backgroundColor: theme.colorScheme.primary,
-                              foregroundColor: theme.colorScheme.onPrimary,
-                            )
-                          : null,
+                      style: FilledButton.styleFrom(
+                        side: toolbarEdge(context),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        backgroundColor: loop
+                            ? theme.colorScheme.primary
+                            : null,
+                        foregroundColor: loop
+                            ? theme.colorScheme.onPrimary
+                            : null,
+                      ),
                       onPressed: () => _setLoop(!loop),
                       icon: const Icon(Icons.repeat, size: 18),
                       label: const Text('Loop'),
@@ -4340,6 +4348,12 @@ class _SortHeader extends StatelessWidget {
   }
 }
 
+/// The outline of the Audio tab's buttons (sort, Play all, Loop): the
+/// Rows / Cards switch's, so the toolbar's buttons are drawn alike.
+BorderSide toolbarEdge(BuildContext context) =>
+    Theme.of(context).segmentedButtonTheme.style?.side?.resolve(const {}) ??
+    BorderSide(color: Theme.of(context).colorScheme.outline);
+
 /// Padding before the audio sort's direction arrow (from the stadium end).
 const sortArrowPad = 11.0;
 
@@ -4381,6 +4395,9 @@ class _AudioSortMenu extends StatelessWidget {
     const round = Radius.circular(999);
     return FilledButton.styleFrom(
       minimumSize: const Size(0, 40),
+      // The outline is drawn around the halves' boxes: no touch-target
+      // margin around their faces (none on desktop anyway).
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       padding: pad,
       shape: RoundedRectangleBorder(
         borderRadius: start
@@ -4391,7 +4408,19 @@ class _AudioSortMenu extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context) {
+    final edge = toolbarEdge(context);
+    // One outline around both halves and one line between them, as the
+    // Rows / Cards switch has (each half outlined would double the line
+    // where they meet).
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: ShapeDecoration(shape: StadiumBorder(side: edge)),
+      child: _halves(context, edge),
+    );
+  }
+
+  Widget _halves(BuildContext context, BorderSide edge) => Row(
     key: const ValueKey('audio-sort-button'),
     mainAxisSize: MainAxisSize.min,
     children: [
@@ -4401,19 +4430,23 @@ class _AudioSortMenu extends StatelessWidget {
       OwnSemanticsNode(
         child: Tooltip(
           message: descending ? 'Descending' : 'Ascending',
-          child: FilledButton.tonal(
-            key: const ValueKey('audio-sort-direction'),
-            style: _half(
-              start: true,
-              pad: const EdgeInsets.only(
-                left: sortArrowPad,
-                right: sortArrowPadRight,
+          child: DecoratedBox(
+            position: DecorationPosition.foreground,
+            decoration: BoxDecoration(border: Border(right: edge)),
+            child: FilledButton.tonal(
+              key: const ValueKey('audio-sort-direction'),
+              style: _half(
+                start: true,
+                pad: const EdgeInsets.only(
+                  left: sortArrowPad,
+                  right: sortArrowPadRight,
+                ),
               ),
-            ),
-            onPressed: onFlip,
-            child: Icon(
-              descending ? Icons.arrow_downward : Icons.arrow_upward,
-              size: 18,
+              onPressed: onFlip,
+              child: Icon(
+                descending ? Icons.arrow_downward : Icons.arrow_upward,
+                size: 18,
+              ),
             ),
           ),
         ),
