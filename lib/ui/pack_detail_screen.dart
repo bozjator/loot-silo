@@ -518,31 +518,51 @@ class _BodyState extends State<_Body> {
         ),
       ),
     );
+    // Dressed like the search box beside it: its fill and edge, and its
+    // focused edge when on.
+    final input = Theme.of(context).inputDecorationTheme;
+    final scheme = Theme.of(context).colorScheme;
+    final favoritesSide = favorites
+        ? BorderSide(color: scheme.primary, width: 1.5)
+        : (input.enabledBorder?.borderSide ?? BorderSide.none);
     final favoritesChip = Padding(
       padding: const EdgeInsets.only(left: 8),
       child: SizedBox(
         height: detailControlHeight,
-        child: FilterChip(
-          key: const ValueKey('detail-favorites-chip'),
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          mouseCursor: clickCursor,
-          avatar: Icon(
-            favorites ? Icons.star : Icons.star_border,
-            size: 18,
-            color: FavoriteStar.color,
+        // A chip lays its fill over a canvas-coloured Material, which made
+        // the see-through fill look solid; clear it so the page shows
+        // through as it does under the search box.
+        child: Theme(
+          data: Theme.of(context).copyWith(canvasColor: Colors.transparent),
+          child: FilterChip(
+            key: const ValueKey('detail-favorites-chip'),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            mouseCursor: clickCursor,
+            avatar: Icon(
+              favorites ? Icons.star : Icons.star_border,
+              size: 18,
+              color: FavoriteStar.color,
+            ),
+            showCheckmark: false,
+            tooltip: favorites
+                ? 'Favorites: show all files'
+                : 'Favorites: show only the starred files of this pack',
+            // Only the star and the count: `★ 12`.
+            label: Text(formatCount(widget.favoriteFiles.length)),
+            visualDensity: detailChipDensity,
+            backgroundColor: input.fillColor,
+            selectedColor: Color.alphaBlend(
+              scheme.primary.withValues(alpha: 0.16),
+              input.fillColor ?? scheme.surface,
+            ),
+            side: favoritesSide,
+            shape: RoundedRectangleBorder(
+              borderRadius: detailControlRadius,
+              side: favoritesSide,
+            ),
+            selected: favorites,
+            onSelected: (on) => setState(() => _onlyFavorites = on),
           ),
-          showCheckmark: false,
-          tooltip: favorites
-              ? 'Favorites: show all files'
-              : 'Favorites: show only the starred files of this pack',
-          // Only the star and the count: `★ 12`.
-          label: Text(formatCount(widget.favoriteFiles.length)),
-          visualDensity: detailChipDensity,
-          shape: const RoundedRectangleBorder(
-            borderRadius: detailControlRadius,
-          ),
-          selected: favorites,
-          onSelected: (on) => setState(() => _onlyFavorites = on),
         ),
       ),
     );

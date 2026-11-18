@@ -424,9 +424,9 @@ const detailControlWidth = 260.0;
 const detailControlHeight = 36.0;
 
 /// Corner radius of the pack detail toolbar's controls: the search box and
-/// the Favorites chip next to it use this one value (a Material 3 chip's
-/// own 8 px), so their corners match.
-const detailControlRadius = BorderRadius.all(Radius.circular(8));
+/// the Favorites chip next to it use this one value (the theme's pill
+/// fields), so their corners match.
+const detailControlRadius = BorderRadius.all(Radius.circular(999));
 
 /// The chip density that paints a chip [detailControlHeight] tall.
 ///
