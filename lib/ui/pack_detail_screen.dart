@@ -820,11 +820,9 @@ class _Header extends StatelessWidget {
         constraints: BoxConstraints(
           maxHeight: math.max(300, MediaQuery.sizeOf(context).height * 0.5),
         ),
-        // The preview box is as tall as the info column (at least
-        // [previewBoxMinHeightFor] the window), so neither sticks out
-        // below the other.
+        // The preview box is as tall as the info column, so neither sticks
+        // out below the other.
         child: _HeaderRow(
-          minBoxHeight: previewBoxMinHeightFor(MediaQuery.sizeOf(context)),
           box: _Carousel(
             key: const ValueKey('header-preview'),
             pack: pack,
@@ -844,35 +842,23 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// Header preview box: width, and height when the info column is shorter.
+/// Header preview box width.
 const previewBoxWidth = 440.0;
-const previewBoxMinHeight = 320.0;
 
-/// The box's least height in a window of [window]: [previewBoxMinHeight],
-/// down to 240 in short windows (40% of the height) so the grid's first
-/// row stays in view.
-double previewBoxMinHeightFor(Size window) =>
-    (window.height * 0.4).clamp(240.0, previewBoxMinHeight);
+/// How far the preview box reaches below the info column: as far as the
+/// title's letters sit below the column's top, so the box sticks out
+/// evenly above the first line and below the last.
+const previewBoxBelowInfo = 12.0;
 
 /// [box] (the preview, [previewBoxWidth] wide) beside [info]: the info is
-/// laid out first and the box takes its height, at least [minBoxHeight],
+/// laid out first and the box takes its height plus [previewBoxBelowInfo],
 /// never more than the space given.
 class _HeaderRow extends MultiChildRenderObjectWidget {
-  _HeaderRow({
-    required this.minBoxHeight,
-    required Widget box,
-    required Widget info,
-  }) : super(children: [box, info]);
-
-  final double minBoxHeight;
+  _HeaderRow({required Widget box, required Widget info})
+    : super(children: [box, info]);
 
   @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderHeaderRow()..minBoxHeight = minBoxHeight;
-
-  @override
-  void updateRenderObject(BuildContext context, _RenderHeaderRow render) =>
-      render.minBoxHeight = minBoxHeight;
+  RenderObject createRenderObject(BuildContext context) => _RenderHeaderRow();
 }
 
 class _HeaderRowParentData extends ContainerBoxParentData<RenderBox> {}
@@ -882,14 +868,6 @@ class _RenderHeaderRow extends RenderBox
         ContainerRenderObjectMixin<RenderBox, _HeaderRowParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox, _HeaderRowParentData> {
   static const _gap = 24.0;
-
-  double get minBoxHeight => _minBoxHeight;
-  var _minBoxHeight = previewBoxMinHeight;
-  set minBoxHeight(double v) {
-    if (v == _minBoxHeight) return;
-    _minBoxHeight = v;
-    markNeedsLayout();
-  }
 
   @override
   void setupParentData(RenderBox child) {
@@ -908,12 +886,13 @@ class _RenderHeaderRow extends RenderBox
       BoxConstraints(
         minWidth: infoWidth,
         maxWidth: infoWidth,
-        maxHeight: constraints.maxHeight,
+        // Room for the box's [previewBoxBelowInfo] when the info is long.
+        maxHeight: math.max(0.0, constraints.maxHeight - previewBoxBelowInfo),
       ),
       parentUsesSize: true,
     );
     final height = constraints.constrainHeight(
-      math.max(info.size.height, _minBoxHeight),
+      info.size.height + previewBoxBelowInfo,
     );
     box.layout(BoxConstraints.tightFor(width: previewBoxWidth, height: height));
     (info.parentData! as _HeaderRowParentData).offset = const Offset(
@@ -1191,42 +1170,62 @@ class _CarouselState extends ConsumerState<_Carousel> {
                   ),
                 ),
               if (images.length > 1) ...[
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton.filledTonal(
-                    tooltip: 'Previous image',
-                    icon: const Icon(Icons.chevron_left),
-                    onPressed: () => setState(
-                      () => _index = (i - 1 + images.length) % images.length,
+                // The arrows and the caption fade in while the pointer is
+                // on the box (a click always comes with it there).
+                Positioned(
+                  left: 12,
+                  top: 0,
+                  bottom: 0,
+                  child: _HoverFade(
+                    shown: _hover,
+                    child: Center(
+                      child: IconButton.filledTonal(
+                        tooltip: 'Previous image',
+                        icon: const Icon(Icons.chevron_left),
+                        onPressed: () => setState(
+                          () =>
+                              _index = (i - 1 + images.length) % images.length,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton.filledTonal(
-                    tooltip: 'Next image',
-                    icon: const Icon(Icons.chevron_right),
-                    onPressed: () =>
-                        setState(() => _index = (i + 1) % images.length),
+                Positioned(
+                  right: 12,
+                  top: 0,
+                  bottom: 0,
+                  child: _HoverFade(
+                    shown: _hover,
+                    child: Center(
+                      child: IconButton.filledTonal(
+                        tooltip: 'Next image',
+                        icon: const Icon(Icons.chevron_right),
+                        onPressed: () =>
+                            setState(() => _index = (i + 1) % images.length),
+                      ),
+                    ),
                   ),
                 ),
                 Positioned(
                   bottom: 8,
                   left: 0,
                   right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: scheme.surface.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '${i + 1} / ${images.length} · ${p.basename(images[i])}',
-                        style: Theme.of(context).textTheme.labelSmall,
+                  child: _HoverFade(
+                    shown: _hover,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.surface.withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${i + 1} / ${images.length} · ${p.basename(images[i])}',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
                       ),
                     ),
                   ),
@@ -1257,6 +1256,22 @@ class _CarouselState extends ConsumerState<_Carousel> {
       ),
     );
   }
+}
+
+/// [child] at full opacity while [shown], faded out otherwise. It stays in
+/// the tree, so it is there the moment it shows.
+class _HoverFade extends StatelessWidget {
+  const _HoverFade({required this.shown, required this.child});
+
+  final bool shown;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedOpacity(
+    opacity: shown ? 1 : 0,
+    duration: const Duration(milliseconds: 150),
+    child: child,
+  );
 }
 
 /// Every preview candidate of a pack in a grid; a click opens it in the

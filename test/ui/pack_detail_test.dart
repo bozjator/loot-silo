@@ -5267,16 +5267,10 @@ void main() {
       final box = tester.getSize(find.byKey(const ValueKey('header-preview')));
       final info = tester.getSize(find.byKey(const ValueKey('header-info')));
       expect(box.width, previewBoxWidthForTest);
-      expect(box.height, info.height);
-      // At least the minimum, unless the window leaves less room.
-      expect(box.height, greaterThanOrEqualTo(300));
+      // The info's height and the room above the title's letters, again
+      // below: no minimum height of its own.
+      expect(box.height, info.height + previewBoxBelowInfo);
       expect(tester.takeException(), isNull);
-    });
-
-    test('the box minimum shrinks in short windows', () {
-      expect(previewBoxMinHeightFor(const Size(1440, 900)), 320);
-      expect(previewBoxMinHeightFor(const Size(1280, 720)), 288);
-      expect(previewBoxMinHeightFor(const Size(800, 400)), 240);
     });
 
     testWidgets('the viewer from the header steps through the mockups', (
