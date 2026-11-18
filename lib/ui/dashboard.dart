@@ -20,6 +20,7 @@ import 'session.dart';
 import 'widgets/filter_bar.dart';
 import 'widgets/thumb_size.dart';
 import 'widgets/pack_tile.dart';
+import 'widgets/tab_toolbar.dart' show tabContentGap;
 
 /// Width of the app bar's row of icon buttons, measured when it lays out
 /// (null before that). The dashboard's size slider is made as wide.
@@ -431,7 +432,12 @@ class _DashboardState extends ConsumerState<Dashboard> {
                               'grid:${view.name}:$generation',
                             ),
                             physics: const CtrlWheelPhysics(),
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                            padding: const EdgeInsets.fromLTRB(
+                              16,
+                              tabContentGap,
+                              16,
+                              16,
+                            ),
                             maxTileWidth: tileSize,
                             scale: _packScale,
                             tileHeight: packTileMaxHeight,

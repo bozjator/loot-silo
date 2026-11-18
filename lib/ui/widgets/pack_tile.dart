@@ -10,6 +10,7 @@ import '../format.dart';
 import 'animated_sprite.dart';
 import 'favorite_star.dart';
 import 'own_semantics_node.dart';
+import 'glass.dart';
 import 'pixel_image.dart';
 import '../cursors.dart';
 
@@ -118,6 +119,7 @@ class _PackTileState extends State<PackTile> {
     final animate = _hover || widget.alwaysAnimate;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final glass = isGlass(context);
     final preview = pack.preview;
     // MouseRegion, not InkWell.onHover: a disabled InkWell gets no hover.
     final card = Card(
@@ -134,36 +136,60 @@ class _PackTileState extends State<PackTile> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  ColoredBox(
-                    color: scheme.surfaceContainerHighest,
-                    child: preview == null
-                        ? _GeneratedPreview(pack: pack)
-                        : Padding(
-                            padding: const EdgeInsets.all(6),
-                            child:
-                                widget.coverAnimation != null &&
-                                    widget.coverAnimation!.kind !=
-                                        AnimKind.gif &&
-                                    widget.animationPackPath != null
-                                ? AnimatedSprite(
-                                    packPath: widget.animationPackPath!,
-                                    anim: widget.coverAnimation!,
-                                    playing: animate,
-                                  )
-                                : pack.previewAnim != null
-                                ? AnimatedSprite(
-                                    packPath: pack.path,
-                                    anim: pack.previewAnim!,
-                                    playing: animate,
-                                  )
-                                : PixelImage(
-                                    File(p.join(pack.path, preview)),
-                                    animate: animate,
-                                    errorBuilder: (_) =>
-                                        _GeneratedPreview(pack: pack),
-                                  ),
+                  // A recessed glass well, lit from above in the theme colour.
+                  DecoratedBox(
+                    decoration: !glass
+                        ? BoxDecoration(color: scheme.surfaceContainerHighest)
+                        : BoxDecoration(
+                            gradient: RadialGradient(
+                              center: const Alignment(0, -0.6),
+                              radius: 1.2,
+                              colors: [
+                                scheme.primary.withValues(
+                                  alpha: _hover ? 0.28 : 0.12,
+                                ),
+                                Colors.black.withValues(
+                                  alpha: scheme.brightness == Brightness.dark
+                                      ? 0.35
+                                      : 0.04,
+                                ),
+                              ],
+                            ),
                           ),
+                    child: AnimatedScale(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOutCubic,
+                      scale: glass && _hover ? 1.06 : 1,
+                      child: preview == null
+                          ? _GeneratedPreview(pack: pack)
+                          : Padding(
+                              padding: const EdgeInsets.all(6),
+                              child:
+                                  widget.coverAnimation != null &&
+                                      widget.coverAnimation!.kind !=
+                                          AnimKind.gif &&
+                                      widget.animationPackPath != null
+                                  ? AnimatedSprite(
+                                      packPath: widget.animationPackPath!,
+                                      anim: widget.coverAnimation!,
+                                      playing: animate,
+                                    )
+                                  : pack.previewAnim != null
+                                  ? AnimatedSprite(
+                                      packPath: pack.path,
+                                      anim: pack.previewAnim!,
+                                      playing: animate,
+                                    )
+                                  : PixelImage(
+                                      File(p.join(pack.path, preview)),
+                                      animate: animate,
+                                      errorBuilder: (_) =>
+                                          _GeneratedPreview(pack: pack),
+                                    ),
+                            ),
+                    ),
                   ),
+                  const GlassSheen(),
                   if (pack.isBundle)
                     Positioned(
                       left: 6,
@@ -203,7 +229,7 @@ class _PackTileState extends State<PackTile> {
                           padding: const EdgeInsets.all(3),
                           decoration: BoxDecoration(
                             color: scheme.surface.withValues(alpha: 0.85),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: scheme.outlineVariant),
                           ),
                           child: anim.kind == AnimKind.gif
@@ -346,7 +372,7 @@ class _PackTileState extends State<PackTile> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: card,
+      child: HoverLift(hover: _hover, radius: 14, child: card),
     );
   }
 }
@@ -387,15 +413,20 @@ class _TypeChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
       decoration: BoxDecoration(
-        color: scheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(4),
+        color: scheme.primary.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.45)),
       ),
       child: Text(
         text,
-        style: Theme.of(context).textTheme.labelSmall
-            ?.copyWith(color: scheme.onSecondaryContainer),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: scheme.brightness == Brightness.dark
+              ? scheme.primaryFixedDim
+              : scheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

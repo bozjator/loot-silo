@@ -14,6 +14,7 @@ import 'widgets/animated_sprite.dart';
 import 'widgets/pixel_image.dart';
 import 'widgets/thumb_size.dart';
 import 'widgets/own_semantics_node.dart';
+import 'widgets/tab_toolbar.dart' show tabContentGap;
 
 /// The space between file result cards.
 const fileResultsSpacing = 8.0;
@@ -60,14 +61,14 @@ class FileResultsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) => GridView.builder(
     physics: const CtrlWheelPhysics(),
-    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+    padding: const EdgeInsets.fromLTRB(16, tabContentGap, 16, 16),
     // A square thumbnail over a name and a pack · folder line.
     gridDelegate: ThumbGridDelegate(
       maxTileWidth: tileSize,
       imageAspect: 1,
       footer: (_) => 44,
       spacing: fileResultsSpacing,
-      mainAxisPadding: 20,
+      mainAxisPadding: tabContentGap + 16,
       scale: scale,
     ),
     itemCount: files.length,

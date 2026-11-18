@@ -9,8 +9,10 @@ const tabToolbarPadding = EdgeInsets.fromLTRB(16, 4, 16, 0);
 /// sits where the Images tab's does.
 const tabToolbarHeight = 48.0;
 
-/// Space between a tab's toolbar and the first row of its content.
-const tabContentGap = 4.0;
+/// Space between a tab's toolbar and the first row of its content: room for
+/// a hovered card's lift and glow (HoverLift), which the scroll view would
+/// otherwise clip once its content overflows.
+const tabContentGap = 28.0;
 
 /// The toolbar row at the top of the Animations, Images and Audio tabs.
 class TabToolbar extends StatelessWidget {

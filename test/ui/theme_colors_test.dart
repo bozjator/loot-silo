@@ -108,6 +108,7 @@ void main() {
         ColorScheme.fromSeed(
           seedColor: Colors.teal,
           brightness: brightness,
+          dynamicSchemeVariant: DynamicSchemeVariant.vibrant,
         ).primary,
       );
       final purple = find.byKey(const ValueKey('theme-color:purple'));
@@ -129,6 +130,7 @@ void main() {
         ColorScheme.fromSeed(
           seedColor: Colors.purple,
           brightness: brightness,
+          dynamicSchemeVariant: DynamicSchemeVariant.vibrant,
         ).primary,
       );
       expect(

@@ -288,14 +288,19 @@ class _AnimationGridState extends ConsumerState<AnimationGrid> {
                       }
                     }),
                     physics: const CtrlWheelPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    padding: const EdgeInsets.fromLTRB(
+                      16,
+                      tabContentGap,
+                      16,
+                      16,
+                    ),
                     // A square stage over a title and a details line.
                     gridDelegate: ThumbGridDelegate(
                       maxTileWidth: size,
                       scale: _scale,
                       imageAspect: 1,
                       footer: (_) => itemCardFooter,
-                      mainAxisPadding: 24,
+                      mainAxisPadding: tabContentGap + 16,
                     ),
                     // Only built (so only playing) while on screen.
                     itemBuilder: (context, i) => FocusedCard<int>(

@@ -19,6 +19,7 @@ import '../version.dart';
 import 'shortcuts.dart';
 import 'widgets/branding.dart';
 import 'widgets/drop_zone.dart';
+import 'widgets/glass.dart';
 import 'widgets/measure_size.dart';
 
 /// Root widget of Loot Silo.
@@ -100,6 +101,7 @@ class _AppState extends ConsumerState<LootSiloApp> {
     ref.watch(animCacheFillProvider);
     final theme = ref.watch(settingsProvider.select((s) => s.theme));
     final themeColor = ref.watch(settingsProvider.select((s) => s.themeColor));
+    final style = ref.watch(settingsProvider.select((s) => s.style));
     return MaterialApp(
       title: appName,
       debugShowCheckedModeBanner: false,
@@ -118,11 +120,13 @@ class _AppState extends ConsumerState<LootSiloApp> {
         },
         child: CallbackShortcuts(
           bindings: {...AppKeys.back.bind(_back), ..._appShortcuts},
-          child: child!,
+          child: style == AppStyle.glass
+              ? AuroraBackdrop(child: child!)
+              : child!,
         ),
       ),
-      theme: appTheme(themeColor, Brightness.light),
-      darkTheme: appTheme(themeColor, Brightness.dark),
+      theme: appTheme(themeColor, Brightness.light, style: style),
+      darkTheme: appTheme(themeColor, Brightness.dark, style: style),
       home: const SessionHost(child: TabsHost(dashboard: HomeScreen())),
     );
   }

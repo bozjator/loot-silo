@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../version.dart';
+import 'glass.dart';
 
 /// Branding images, built by `tool/branding/make_branding.py` from the two
 /// source images in `tool/branding/source` (icon_full_centered.png and
@@ -87,7 +88,27 @@ class AppBarTitle extends StatelessWidget {
         excludeFromSemantics: true,
       ),
       const SizedBox(width: 10),
-      const Text(appName),
+      // The name in a sweep of the theme's colours.
+      Builder(
+        builder: (context) {
+          // Classic: the plain title.
+          if (!isGlass(context)) return const Text(appName);
+          final scheme = Theme.of(context).colorScheme;
+          return ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (bounds) =>
+                LinearGradient(colors: [scheme.primary, scheme.tertiary])
+                    .createShader(bounds),
+            child: const Text(
+              appName,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+              ),
+            ),
+          );
+        },
+      ),
     ],
   );
 }

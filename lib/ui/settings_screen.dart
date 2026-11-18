@@ -111,6 +111,25 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
               ListTile(
+                leading: const Icon(Icons.auto_awesome_outlined),
+                title: const Text('Style'),
+                subtitle: const Text(
+                  'Glass: a lit backdrop, see-through surfaces and a glow '
+                  'on hover. Classic: plain, solid surfaces.',
+                ),
+                trailing: SegmentedButton<AppStyle>(
+                  segments: const [
+                    ButtonSegment(value: AppStyle.glass, label: Text('Glass')),
+                    ButtonSegment(
+                      value: AppStyle.classic,
+                      label: Text('Classic'),
+                    ),
+                  ],
+                  selected: {settings.style},
+                  onSelectionChanged: (s) => notifier.setStyle(s.first),
+                ),
+              ),
+              ListTile(
                 leading: const Icon(Icons.palette_outlined),
                 title: const Text('Colour'),
                 subtitle: Padding(

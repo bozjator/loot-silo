@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../cursors.dart';
 import 'favorite_star.dart';
+import 'glass.dart';
 import 'own_semantics_node.dart';
 
 /// Height of an [ItemCard]'s footer (title and details line), for the
@@ -88,6 +89,7 @@ class _ItemCardState extends State<ItemCard> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     const duration = Duration(milliseconds: 200);
+    final glass = isGlass(context);
     final showLeading =
         widget.leading != null && (_hover || widget.showLeading);
     return MouseRegion(
@@ -99,63 +101,97 @@ class _ItemCardState extends State<ItemCard> {
         child: AnimatedScale(
           duration: duration,
           scale: widget.focused ? 1.04 : 1,
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: widget.focused || widget.selected
-                  ? BorderSide(color: scheme.primary, width: 2)
-                  : BorderSide.none,
-            ),
-            child: InkWell(
-              mouseCursor: clickCursor,
-              onTap: widget.onTap,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: ColoredBox(
-                      color: scheme.surfaceContainerHighest,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Padding(
-                            padding: EdgeInsets.all(widget.stagePadding),
-                            child: widget.stage(_hover),
-                          ),
-                          // At the audio card's insets (its star / reveal row
-                          // sits at the card's top-right corner, 0 / 0).
-                          if (showLeading)
-                            Positioned(
-                              top: 0,
-                              left: 0,
-                              child: _plain(widget.leading!),
-                            )
-                          else if (widget.badge case final badge?)
-                            Positioned(top: 6, left: 6, child: badge),
-                          if (widget.onToggleStar case final toggle?
-                              when _hover || widget.starred)
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: _plain(
-                                FavoriteStar(
-                                  key: ValueKey('star:${widget.path}'),
-                                  starred: widget.starred,
-                                  onPressed: toggle,
+          child: HoverLift(
+            hover: _hover,
+            highlighted: widget.focused,
+            radius: 14,
+            child: Card(
+              clipBehavior: Clip.antiAlias,
+              margin: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: widget.focused || widget.selected
+                    ? BorderSide(color: scheme.primary, width: 2)
+                    : glass
+                    // HoverLift draws the hover rim.
+                    ? BorderSide(
+                        color:
+                            (scheme.brightness == Brightness.dark
+                                    ? Colors.white
+                                    : Colors.black)
+                                .withValues(alpha: 0.10),
+                      )
+                    : BorderSide.none,
+              ),
+              child: InkWell(
+                mouseCursor: clickCursor,
+                onTap: widget.onTap,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: !glass
+                            ? BoxDecoration(
+                                color: scheme.surfaceContainerHighest,
+                              )
+                            : BoxDecoration(
+                                gradient: RadialGradient(
+                                  center: const Alignment(0, -0.3),
+                                  radius: 1.1,
+                                  colors: [
+                                    scheme.primary.withValues(
+                                      alpha: _hover ? 0.26 : 0.10,
+                                    ),
+                                    Colors.black.withValues(
+                                      alpha:
+                                          scheme.brightness == Brightness.dark
+                                          ? 0.35
+                                          : 0.04,
+                                    ),
+                                  ],
                                 ),
                               ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Padding(
+                              padding: EdgeInsets.all(widget.stagePadding),
+                              child: widget.stage(_hover),
                             ),
-                        ],
+                            // At the audio card's insets (its star / reveal row
+                            // sits at the card's top-right corner, 0 / 0).
+                            if (showLeading)
+                              Positioned(
+                                top: 0,
+                                left: 0,
+                                child: _plain(widget.leading!),
+                              )
+                            else if (widget.badge case final badge?)
+                              Positioned(top: 6, left: 6, child: badge),
+                            if (widget.onToggleStar case final toggle?
+                                when _hover || widget.starred)
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: _plain(
+                                  FavoriteStar(
+                                    key: ValueKey('star:${widget.path}'),
+                                    starred: widget.starred,
+                                    onPressed: toggle,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  SizedBox(
-                    height: itemCardFooter,
-                    child: _footer(theme, scheme),
-                  ),
-                ],
+                    SizedBox(
+                      height: itemCardFooter,
+                      child: _footer(theme, scheme),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

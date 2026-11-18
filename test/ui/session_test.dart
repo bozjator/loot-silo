@@ -268,6 +268,9 @@ void main() {
     expect(find.byType(SettingsScreen), findsOneWidget);
     final tile = find.byKey(const ValueKey('resume-session'));
     await tester.scrollUntilVisible(tile, 200);
+    // Wholly on screen, not just its top edge, so the tap lands on it.
+    await tester.ensureVisible(tile);
+    await tester.pumpAndSettle();
     expect(find.text('Resume where I left off'), findsOneWidget);
     await tester.tap(tile);
     await tester.pumpAndSettle();

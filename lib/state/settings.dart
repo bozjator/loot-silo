@@ -23,6 +23,11 @@ enum ThemeColor {
   blueGrey,
 }
 
+/// The app's look (Settings → Appearance). Glass: a lit backdrop behind
+/// see-through surfaces, and cards that lift and glow on hover. Classic:
+/// solid surfaces, no hover glow. Shapes and type are the same in both.
+enum AppStyle { glass, classic }
+
 /// How a pack's Images and Animations tabs list their files.
 enum ItemsView { flat, folders }
 
@@ -186,6 +191,7 @@ class AppSettings {
     this.libraryPath,
     this.theme = ThemeChoice.system,
     this.themeColor = ThemeColor.teal,
+    this.style = AppStyle.glass,
     this.animateAll = false,
     this.audioLoop = false,
     this.dashboardTileSize = 240,
@@ -217,6 +223,9 @@ class AppSettings {
 
   /// The theme's seed colour; teal (the original look) by default.
   final ThemeColor themeColor;
+
+  /// Glass (the default) or Classic.
+  final AppStyle style;
 
   /// Play every sprite preview on the dashboard, not just the hovered one.
   final bool animateAll;
@@ -290,6 +299,7 @@ class AppSettings {
     theme: ThemeChoice.values.asNameMap()[json['theme']] ?? ThemeChoice.system,
     themeColor:
         ThemeColor.values.asNameMap()[json['theme_color']] ?? ThemeColor.teal,
+    style: AppStyle.values.asNameMap()[json['style']] ?? AppStyle.glass,
     animateAll: json['animate_all'] == true,
     audioLoop: json['audio_loop'] == true,
     dashboardTileSize: (json['dashboard_tile_size'] as num?)?.toDouble() ?? 240,
@@ -344,6 +354,7 @@ class AppSettings {
     'library_path': ?libraryPath,
     'theme': theme.name,
     'theme_color': themeColor.name,
+    'style': style.name,
     'animate_all': animateAll,
     'audio_loop': audioLoop,
     'dashboard_tile_size': dashboardTileSize,
@@ -373,6 +384,7 @@ class AppSettings {
     String? libraryPath,
     ThemeChoice? theme,
     ThemeColor? themeColor,
+    AppStyle? style,
     bool? animateAll,
     bool? audioLoop,
     double? dashboardTileSize,
@@ -400,6 +412,7 @@ class AppSettings {
     libraryPath: libraryPath ?? this.libraryPath,
     theme: theme ?? this.theme,
     themeColor: themeColor ?? this.themeColor,
+    style: style ?? this.style,
     animateAll: animateAll ?? this.animateAll,
     audioLoop: audioLoop ?? this.audioLoop,
     dashboardTileSize: dashboardTileSize ?? this.dashboardTileSize,
