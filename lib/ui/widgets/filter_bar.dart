@@ -5,6 +5,7 @@ import '../../state/dashboard.dart';
 import '../cursors.dart';
 import '../format.dart';
 import 'favorite_star.dart';
+import 'field_chips.dart';
 import 'own_semantics_node.dart';
 
 /// Search box, type chips, author / tag / source menus and sorting.
@@ -183,74 +184,77 @@ class FilterBar extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    ?leading,
-                    if (onToggleFavorites case final toggle?)
-                      FilterChip(
-                        key: const ValueKey('favorites-chip'),
-                        mouseCursor: clickCursor,
-                        avatar: Icon(
-                          query.favorites ? Icons.star : Icons.star_border,
-                          size: 18,
-                          color: FavoriteStar.color,
-                        ),
-                        showCheckmark: false,
-                        tooltip: 'Favorites',
-                        // Only the star and the count: `★ 12`.
-                        label: Text(
-                          formatCount(facets.favorites),
-                          style: facets.favorites == 0
-                              ? TextStyle(color: dim)
-                              : null,
-                        ),
-                        visualDensity: VisualDensity.compact,
-                        selected: query.favorites,
-                        onSelected: (_) => toggle(),
-                      ),
-                    // Types no pack in view has are hidden, unless
-                    // selected (then dimmed, at 0).
-                    for (final t in AssetType.values)
-                      if (typeCounts[t.id] ?? 0 case final count
-                          when count > 0 || query.types.contains(t.id))
+                // Chips dressed like the search box above them.
+                child: FieldChips(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      ?leading,
+                      if (onToggleFavorites case final toggle?)
                         FilterChip(
+                          key: const ValueKey('favorites-chip'),
                           mouseCursor: clickCursor,
-                          label: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                t.id,
-                                style: count == 0
-                                    ? TextStyle(color: dim)
-                                    : null,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '$count',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: dim,
-                                ),
-                              ),
-                            ],
+                          avatar: Icon(
+                            query.favorites ? Icons.star : Icons.star_border,
+                            size: 18,
+                            color: FavoriteStar.color,
+                          ),
+                          showCheckmark: false,
+                          tooltip: 'Favorites',
+                          // Only the star and the count: `★ 12`.
+                          label: Text(
+                            formatCount(facets.favorites),
+                            style: facets.favorites == 0
+                                ? TextStyle(color: dim)
+                                : null,
                           ),
                           visualDensity: VisualDensity.compact,
-                          selected: query.types.contains(t.id),
-                          onSelected: (_) => onToggleType(t.id),
+                          selected: query.favorites,
+                          onSelected: (_) => toggle(),
                         ),
-                    for (final (value, toggle, icon) in active)
-                      // Coloured like a selected type chip, own icon kept.
-                      InputChip(
-                        avatar: Icon(icon, size: 16),
-                        label: Text(value),
-                        selected: true,
-                        showCheckmark: false,
-                        visualDensity: VisualDensity.compact,
-                        deleteIcon: deleteIcon,
-                        onDeleted: () => toggle(value),
-                      ),
-                  ],
+                      // Types no pack in view has are hidden, unless
+                      // selected (then dimmed, at 0).
+                      for (final t in AssetType.values)
+                        if (typeCounts[t.id] ?? 0 case final count
+                            when count > 0 || query.types.contains(t.id))
+                          FilterChip(
+                            mouseCursor: clickCursor,
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  t.id,
+                                  style: count == 0
+                                      ? TextStyle(color: dim)
+                                      : null,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$count',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: dim,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            visualDensity: VisualDensity.compact,
+                            selected: query.types.contains(t.id),
+                            onSelected: (_) => onToggleType(t.id),
+                          ),
+                      for (final (value, toggle, icon) in active)
+                        // Coloured like a selected type chip, own icon kept.
+                        InputChip(
+                          avatar: Icon(icon, size: 16),
+                          label: Text(value),
+                          selected: true,
+                          showCheckmark: false,
+                          visualDensity: VisualDensity.compact,
+                          deleteIcon: deleteIcon,
+                          onDeleted: () => toggle(value),
+                        ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 12),

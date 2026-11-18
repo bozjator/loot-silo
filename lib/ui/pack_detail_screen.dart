@@ -45,6 +45,7 @@ import 'text_preview_dialog.dart';
 import 'track_player.dart';
 import 'widgets/animated_sprite.dart';
 import 'widgets/favorite_star.dart';
+import 'widgets/field_chips.dart';
 import 'widgets/file_menu.dart';
 import 'widgets/format_chips.dart';
 import 'widgets/tab_toolbar.dart';
@@ -518,22 +519,12 @@ class _BodyState extends State<_Body> {
         ),
       ),
     );
-    // Dressed like the search box beside it: its fill and edge, and its
-    // focused edge when on.
-    final input = Theme.of(context).inputDecorationTheme;
-    final scheme = Theme.of(context).colorScheme;
-    final favoritesSide = favorites
-        ? BorderSide(color: scheme.primary, width: 1.5)
-        : (input.enabledBorder?.borderSide ?? BorderSide.none);
     final favoritesChip = Padding(
       padding: const EdgeInsets.only(left: 8),
       child: SizedBox(
         height: detailControlHeight,
-        // A chip lays its fill over a canvas-coloured Material, which made
-        // the see-through fill look solid; clear it so the page shows
-        // through as it does under the search box.
-        child: Theme(
-          data: Theme.of(context).copyWith(canvasColor: Colors.transparent),
+        // Dressed like the search box beside it.
+        child: FieldChips(
           child: FilterChip(
             key: const ValueKey('detail-favorites-chip'),
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -550,15 +541,8 @@ class _BodyState extends State<_Body> {
             // Only the star and the count: `★ 12`.
             label: Text(formatCount(widget.favoriteFiles.length)),
             visualDensity: detailChipDensity,
-            backgroundColor: input.fillColor,
-            selectedColor: Color.alphaBlend(
-              scheme.primary.withValues(alpha: 0.16),
-              input.fillColor ?? scheme.surface,
-            ),
-            side: favoritesSide,
-            shape: RoundedRectangleBorder(
+            shape: const RoundedRectangleBorder(
               borderRadius: detailControlRadius,
-              side: favoritesSide,
             ),
             selected: favorites,
             onSelected: (on) => setState(() => _onlyFavorites = on),
@@ -1726,27 +1710,29 @@ class _ChipRow extends StatelessWidget {
         ),
         Expanded(
           // The edit / add icon follows the last chip, so it wraps to the
-          // next line with them.
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              for (final v in values)
-                Chip(
-                  label: Text(v),
+          // next line with them. The chips look like the search box.
+          child: FieldChips(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (final v in values)
+                  Chip(
+                    label: Text(v),
+                    visualDensity: VisualDensity.compact,
+                    deleteIcon: deleteIcon,
+                    onDeleted: onDelete == null ? null : () => onDelete!(v),
+                    deleteButtonTooltipMessage: 'Remove $v',
+                  ),
+                IconButton(
+                  tooltip: editTooltip ?? 'Edit ${label.toLowerCase()}',
                   visualDensity: VisualDensity.compact,
-                  deleteIcon: deleteIcon,
-                  onDeleted: onDelete == null ? null : () => onDelete!(v),
-                  deleteButtonTooltipMessage: 'Remove $v',
+                  icon: Icon(editIcon, size: 18),
+                  onPressed: onEdit,
                 ),
-              IconButton(
-                tooltip: editTooltip ?? 'Edit ${label.toLowerCase()}',
-                visualDensity: VisualDensity.compact,
-                icon: Icon(editIcon, size: 18),
-                onPressed: onEdit,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
