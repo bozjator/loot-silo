@@ -270,6 +270,10 @@ class _Header extends ConsumerWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     FilledButton.tonalIcon(
+                      // Outlined like "Show in file manager" beside it.
+                      style: FilledButton.styleFrom(
+                        side: BorderSide(color: scheme.outline),
+                      ),
                       icon: const Icon(Icons.call_merge, size: 18),
                       label: const Text('Merge into one pack'),
                       onPressed: busy ? null : onMerge,
