@@ -207,6 +207,41 @@ void main() {
     expect(height(0), greaterThan(height(4) + 30));
   });
 
+  testWidgets('type chips line up at the card bottom across a row', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1040, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    // A two-line title next to one-line titles, same chips.
+    final packs = [
+      longPack(0),
+      for (var i = 1; i < 4; i++) longPack(i, title: 'Short $i'),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(fontFamily: 'Roboto'),
+        home: Scaffold(
+          body: ThumbRows(
+            padding: const EdgeInsets.all(16),
+            maxTileWidth: 240,
+            itemCount: packs.length,
+            itemBuilder: (_, i) => PackTile(pack: packs[i]),
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    final chips = find.text('+2'); // The last chip.
+    expect(chips, findsNWidgets(4));
+    final bottoms = [
+      for (var i = 0; i < 4; i++) tester.getBottomLeft(chips.at(i)).dy,
+    ];
+    expect(bottoms.toSet(), hasLength(1));
+    // 10 px card padding plus the chip's own border and padding.
+    final card = tester.getBottomLeft(find.byType(PackTile).at(1)).dy;
+    expect(card - bottoms[1], lessThan(16));
+  });
+
   testWidgets('end icons step one size, disabled at the ends (M50)', (
     tester,
   ) async {

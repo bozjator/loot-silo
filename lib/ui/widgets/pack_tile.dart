@@ -129,184 +129,206 @@ class _PackTileState extends State<PackTile> {
       child: InkWell(
         mouseCursor: clickCursor,
         onTap: widget.onTap,
+        // Preview and title on top, chips at the bottom: in a row stretched
+        // to its tallest tile, the chips line up across the row.
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            AspectRatio(
-              aspectRatio: 4 / 3,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // A recessed glass well, lit from above in the theme colour.
-                  DecoratedBox(
-                    decoration: !glass
-                        ? BoxDecoration(color: scheme.surfaceContainerHighest)
-                        : BoxDecoration(
-                            gradient: RadialGradient(
-                              center: const Alignment(0, -0.6),
-                              radius: 1.2,
-                              colors: [
-                                scheme.primary.withValues(
-                                  alpha: _hover ? 0.28 : 0.12,
-                                ),
-                                Colors.black.withValues(
-                                  alpha: scheme.brightness == Brightness.dark
-                                      ? 0.35
-                                      : 0.04,
-                                ),
-                              ],
-                            ),
-                          ),
-                    child: AnimatedScale(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOutCubic,
-                      scale: glass && _hover ? 1.06 : 1,
-                      child: preview == null
-                          ? _GeneratedPreview(pack: pack)
-                          : widget.coverAnimation != null &&
-                                widget.coverAnimation!.kind != AnimKind.gif &&
-                                widget.animationPackPath != null
-                          ? Padding(
-                              padding: const EdgeInsets.all(6),
-                              child: AnimatedSprite(
-                                packPath: widget.animationPackPath!,
-                                anim: widget.coverAnimation!,
-                                playing: animate,
-                              ),
-                            )
-                          : pack.previewAnim != null
-                          ? Padding(
-                              padding: const EdgeInsets.all(6),
-                              child: AnimatedSprite(
-                                packPath: pack.path,
-                                anim: pack.previewAnim!,
-                                playing: animate,
-                              ),
-                            )
-                          // Fill (Settings → Pack covers): the image covers
-                          // the whole picture area, cropped at the sides it
-                          // overflows, in whole-pixel steps up so pixel art
-                          // stays crisp. Fit: the whole image, inset.
-                          : fill
-                          ? PixelImage(
-                              File(p.join(pack.path, preview)),
-                              animate: animate,
-                              fit: BoxFit.cover,
-                              scale: (s) => s >= 1 ? s.ceilToDouble() : s,
-                              errorBuilder: (_) =>
-                                  _GeneratedPreview(pack: pack),
-                            )
-                          : Padding(
-                              padding: const EdgeInsets.all(6),
-                              child: PixelImage(
-                                File(p.join(pack.path, preview)),
-                                animate: animate,
-                                errorBuilder: (_) =>
-                                    _GeneratedPreview(pack: pack),
-                              ),
-                            ),
-                    ),
-                  ),
-                  const GlassSheen(),
-                  if (pack.isBundle)
-                    Positioned(
-                      left: 6,
-                      top: 6,
-                      child: _Pill(
-                        icon: Icons.folder_copy_outlined,
-                        text:
-                            'Bundle · ${widget.bundlePacks} '
-                            'pack${widget.bundlePacks == 1 ? '' : 's'}',
-                      ),
-                    ),
-                  if (widget.animationCount > 0)
-                    Positioned(
-                      left: 6,
-                      bottom: 6,
-                      child: Tooltip(
-                        message:
-                            '${widget.animationCount} '
-                            'animation${widget.animationCount == 1 ? '' : 's'}',
-                        child: _Pill(
-                          key: const ValueKey('pack-animations-badge'),
-                          icon: Icons.animation,
-                          text: formatCount(widget.animationCount),
-                        ),
-                      ),
-                    ),
-                  if (widget.sampleAnimation case final anim?
-                      when animate && widget.animationPackPath != null)
-                    Align(
-                      alignment: Alignment.bottomRight,
-                      child: FractionallySizedBox(
-                        widthFactor: 0.4,
-                        heightFactor: 0.5,
-                        child: Container(
-                          key: const ValueKey('pack-animation-inset'),
-                          margin: const EdgeInsets.all(6),
-                          padding: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            color: scheme.surface.withValues(alpha: 0.85),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: scheme.outlineVariant),
-                          ),
-                          child: anim.kind == AnimKind.gif
-                              ? PixelImage(
-                                  File(
-                                    p.join(
-                                      widget.animationPackPath!,
-                                      anim.path,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // A recessed glass well, lit from above in the theme colour.
+                      DecoratedBox(
+                        decoration: !glass
+                            ? BoxDecoration(
+                                color: scheme.surfaceContainerHighest,
+                              )
+                            : BoxDecoration(
+                                gradient: RadialGradient(
+                                  center: const Alignment(0, -0.6),
+                                  radius: 1.2,
+                                  colors: [
+                                    scheme.primary.withValues(
+                                      alpha: _hover ? 0.28 : 0.12,
                                     ),
+                                    Colors.black.withValues(
+                                      alpha:
+                                          scheme.brightness == Brightness.dark
+                                          ? 0.35
+                                          : 0.04,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                        child: AnimatedScale(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOutCubic,
+                          scale: glass && _hover ? 1.06 : 1,
+                          child: preview == null
+                              ? _GeneratedPreview(pack: pack)
+                              : widget.coverAnimation != null &&
+                                    widget.coverAnimation!.kind !=
+                                        AnimKind.gif &&
+                                    widget.animationPackPath != null
+                              ? Padding(
+                                  padding: const EdgeInsets.all(6),
+                                  child: AnimatedSprite(
+                                    packPath: widget.animationPackPath!,
+                                    anim: widget.coverAnimation!,
+                                    playing: animate,
                                   ),
-                                  animate: true,
                                 )
-                              : AnimatedSprite(
-                                  packPath: widget.animationPackPath!,
-                                  anim: anim,
-                                  playing: true,
+                              : pack.previewAnim != null
+                              ? Padding(
+                                  padding: const EdgeInsets.all(6),
+                                  child: AnimatedSprite(
+                                    packPath: pack.path,
+                                    anim: pack.previewAnim!,
+                                    playing: animate,
+                                  ),
+                                )
+                              // Fill (Settings → Pack covers): the image covers
+                              // the whole picture area, cropped at the sides it
+                              // overflows, in whole-pixel steps up so pixel art
+                              // stays crisp. Fit: the whole image, inset.
+                              : fill
+                              ? PixelImage(
+                                  File(p.join(pack.path, preview)),
+                                  animate: animate,
+                                  fit: BoxFit.cover,
+                                  scale: (s) => s >= 1 ? s.ceilToDouble() : s,
+                                  errorBuilder: (_) =>
+                                      _GeneratedPreview(pack: pack),
+                                )
+                              : Padding(
+                                  padding: const EdgeInsets.all(6),
+                                  child: PixelImage(
+                                    File(p.join(pack.path, preview)),
+                                    animate: animate,
+                                    errorBuilder: (_) =>
+                                        _GeneratedPreview(pack: pack),
+                                  ),
                                 ),
                         ),
                       ),
-                    ),
-                  if (widget.onToggleStar case final toggle?
-                      when _hover || widget.starred)
-                    Positioned(
-                      right: 4,
-                      top: 4,
-                      child: Material(
-                        color: scheme.surface.withValues(alpha: 0.85),
-                        shape: const CircleBorder(),
-                        child: FavoriteStar(
-                          key: const ValueKey('pack-star'),
-                          starred: widget.starred,
-                          onPressed: toggle,
+                      const GlassSheen(),
+                      if (pack.isBundle)
+                        Positioned(
+                          left: 6,
+                          top: 6,
+                          child: _Pill(
+                            icon: Icons.folder_copy_outlined,
+                            text:
+                                'Bundle · ${widget.bundlePacks} '
+                                'pack${widget.bundlePacks == 1 ? '' : 's'}',
+                          ),
+                        ),
+                      if (widget.animationCount > 0)
+                        Positioned(
+                          left: 6,
+                          bottom: 6,
+                          child: Tooltip(
+                            message:
+                                '${widget.animationCount} '
+                                'animation${widget.animationCount == 1 ? '' : 's'}',
+                            child: _Pill(
+                              key: const ValueKey('pack-animations-badge'),
+                              icon: Icons.animation,
+                              text: formatCount(widget.animationCount),
+                            ),
+                          ),
+                        ),
+                      if (widget.sampleAnimation case final anim?
+                          when animate && widget.animationPackPath != null)
+                        Align(
+                          alignment: Alignment.bottomRight,
+                          child: FractionallySizedBox(
+                            widthFactor: 0.4,
+                            heightFactor: 0.5,
+                            child: Container(
+                              key: const ValueKey('pack-animation-inset'),
+                              margin: const EdgeInsets.all(6),
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: scheme.surface.withValues(alpha: 0.85),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: scheme.outlineVariant,
+                                ),
+                              ),
+                              child: anim.kind == AnimKind.gif
+                                  ? PixelImage(
+                                      File(
+                                        p.join(
+                                          widget.animationPackPath!,
+                                          anim.path,
+                                        ),
+                                      ),
+                                      animate: true,
+                                    )
+                                  : AnimatedSprite(
+                                      packPath: widget.animationPackPath!,
+                                      anim: anim,
+                                      playing: true,
+                                    ),
+                            ),
+                          ),
+                        ),
+                      if (widget.onToggleStar case final toggle?
+                          when _hover || widget.starred)
+                        Positioned(
+                          right: 4,
+                          top: 4,
+                          child: Material(
+                            color: scheme.surface.withValues(alpha: 0.85),
+                            shape: const CircleBorder(),
+                            child: FavoriteStar(
+                              key: const ValueKey('pack-star'),
+                              starred: widget.starred,
+                              onPressed: toggle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        pack.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.subtitle ?? pack.author ?? 'Unknown author',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
-                    ),
-                ],
-              ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    pack.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    widget.subtitle ?? pack.author ?? 'Unknown author',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
                   Wrap(
                     spacing: 4,
                     runSpacing: 4,
