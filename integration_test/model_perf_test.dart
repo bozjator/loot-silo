@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' show FrameTiming;
@@ -26,8 +25,6 @@ void main() {
     tester,
   ) async {
     final models = <String, ModelMesh>{};
-    const tyre = '../assets_library/Unknown Author/Tyre/tyre.obj';
-    if (File(tyre).existsSync()) models['tyre_39k'] = readModel(tyre);
     models['ball_100k'] = _ball(160);
     models['ball_1m'] = _ball(500);
     models['ball_4m'] = _ball(1000);

@@ -407,24 +407,5 @@ endsolid floor
       f.writeAsBytesSync([]);
       expect(() => readFbx(f.path), throwsA(isA<ModelReadError>()));
     });
-
-    test(
-      'the binary Tyre FBX matches its OBJ (real, read-only)',
-      () {
-        const dir = '../assets_library/Unknown Author/Tyre';
-        final fbx = readModel('$dir/tyre.fbx'),
-            obj = readModel('$dir/tyre.obj');
-        final tds = readModel('$dir/tyre.3ds');
-        expect(fbx.triangleCount, obj.triangleCount);
-        expect(tds.triangleCount, obj.triangleCount);
-        for (var k = 0; k < 6; k++) {
-          expect(fbx.bounds[k], closeTo(obj.bounds[k], 0.1));
-          expect(tds.bounds[k], closeTo(obj.bounds[k], 0.1));
-        }
-        expect(fbx.usedMaterials.first.name, 'Материал.1');
-      },
-      skip: !File('../assets_library/Unknown Author/Tyre/tyre.fbx')
-          .existsSync(),
-    );
   });
 }

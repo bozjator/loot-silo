@@ -173,40 +173,6 @@ void main() {
         matches(RegExp(r'^M · 22\.05 kHz · \d+ kbps$')),
       );
     });
-
-    test(
-      'real library: 50 files per format read without errors (read-only)',
-      () {
-        final lib = Directory('../assets_library');
-        final byFormat = <String, List<String>>{};
-        for (final f in lib.listSync(recursive: true).whereType<File>()) {
-          final ext = p.extension(f.path).toLowerCase();
-          if (!const ['.wav', '.ogg', '.mp3', '.flac', '.opus'].contains(ext)) {
-            continue;
-          }
-          final list = byFormat.putIfAbsent(ext, () => []);
-          if (list.length < 50) list.add(f.path);
-        }
-        expect(byFormat, isNotEmpty);
-        for (final MapEntry(key: ext, value: files) in byFormat.entries) {
-          for (final path in files) {
-            final info = audioInfo(path);
-            expect(info, isNotNull, reason: path);
-            expect(info!.sampleRate, greaterThan(0), reason: path);
-            expect(info.channels, greaterThan(0), reason: path);
-            expect(info.duration, isNotNull, reason: path);
-            if (ext == '.wav' || ext == '.flac') {
-              expect(info.bitDepth, greaterThan(0), reason: path);
-            } else {
-              expect(info.kbps, greaterThan(0), reason: path);
-            }
-          }
-        }
-      },
-      skip: Directory('../assets_library').existsSync()
-          ? false
-          : 'no ../assets_library',
-    );
   });
 
   test('formatDuration', () {

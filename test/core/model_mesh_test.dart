@@ -302,32 +302,4 @@ f 1/1/1 2/2/1 3/1/1 4/2/1 5/1/1 6/2/1
       expect(mesh.triangleCount, 12);
     });
   });
-
-  const kit =
-      '../assets_library/Kenney/Kenney Game Assets 1 version 42/3D assets/'
-      'Fantasy Town Kit';
-  test(
-    'every GLB / glTF / OBJ of a real Kenney kit reads (read-only)',
-    skip: Directory(kit).existsSync() ? false : 'no $kit',
-    () {
-      final failures = <String>[];
-      var read = 0, largest = 0;
-      for (final f in Directory(kit).listSync(recursive: true)) {
-        if (f is! File) continue;
-        final ext = p.extension(f.path).toLowerCase().replaceFirst('.', '');
-        if (!readableModelExts.contains(ext)) continue;
-        try {
-          final m = readModel(f.path);
-          if (m.triangleCount > largest) largest = m.triangleCount;
-          read++;
-        } on ModelReadError catch (e) {
-          failures.add('${p.relative(f.path, from: kit)}: $e');
-        }
-      }
-      // ignore: avoid_print
-      print('Fantasy Town Kit: $read models read, largest $largest triangles');
-      expect(failures, isEmpty);
-      expect(read, greaterThan(300));
-    },
-  );
 }

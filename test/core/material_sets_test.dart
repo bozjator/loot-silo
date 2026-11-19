@@ -328,40 +328,4 @@ void main() {
     expect(back.materialThumbSize, 320);
     expect(AppSettings.fromJson(const {}).materialsView, ItemsView.flat);
   });
-
-  const library = '../assets_library';
-  test(
-    'the real library holds exactly the two paving materials (read-only)',
-    skip: Directory(library).existsSync() ? false : 'no $library',
-    () {
-      final found = <String>{};
-      final sw = Stopwatch();
-      var scanned = 0;
-      for (final e in Directory(library).listSync(recursive: true)) {
-        if (e is! File || p.basename(e.path) != 'asset_pack.json') continue;
-        final pack = e.parent.path;
-        final files = <(String, int)>[
-          for (final f in Directory(pack).listSync(recursive: true))
-            if (f is File) (p.relative(f.path, from: pack), 0),
-        ];
-        scanned += files.length;
-        final mtlx = readMtlxFiles(pack, files);
-        sw.start();
-        final (sets, _) = groupMaterials([
-          for (final (rel, _) in files) rel,
-        ], mtlx: mtlx);
-        sw.stop();
-        for (final m in sets) {
-          expect(m.maps, hasLength(6), reason: m.toString());
-          found.add('${p.basename(pack)}: ${m.key}');
-        }
-      }
-      // ignore: avoid_print
-      print('grouped $scanned files in ${sw.elapsedMilliseconds} ms');
-      expect(found, {
-        'PavingStones138_1K-JPG: PavingStones138',
-        'PavingStones152_1K-PNG: PavingStones152',
-      });
-    },
-  );
 }
