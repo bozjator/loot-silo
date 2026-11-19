@@ -48,6 +48,7 @@ import 'widgets/favorite_star.dart';
 import 'widgets/field_chips.dart';
 import 'widgets/file_menu.dart';
 import 'widgets/format_chips.dart';
+import 'widgets/glass.dart' show fillsCovers;
 import 'widgets/tab_toolbar.dart';
 import 'widgets/item_card.dart';
 import 'widgets/meta_dialogs.dart';
@@ -1109,19 +1110,24 @@ class _CarouselState extends ConsumerState<_Carousel> {
     final i = images.isEmpty ? 0 : _index % images.length;
     final anims = widget.contents.animationsByPath;
     final Widget view;
+    // Settings → Pack covers, as on the dashboard tiles.
+    var inset = 8.0;
     if (images.isEmpty) {
       view = Center(
         child: Icon(iconForTypes(pack.types), size: 72, color: scheme.primary),
       );
     } else {
       // An animation plays, also when it is not the cover.
-      view = PreviewPicture(
+      final picture = PreviewPicture(
         packPath: pack.path,
         rel: images[i],
         anim:
             anims[images[i]] ??
             (i == 0 && images[i] == pack.preview ? pack.previewAnim : null),
+        fill: fillsCovers(context),
       );
+      if (picture.fills) inset = 0;
+      view = picture;
     }
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
@@ -1152,7 +1158,7 @@ class _CarouselState extends ConsumerState<_Carousel> {
                       message: 'Enlarge',
                       waitDuration: const Duration(milliseconds: 600),
                       child: Padding(
-                        padding: const EdgeInsets.all(8),
+                        padding: EdgeInsets.all(inset),
                         child: view,
                       ),
                     ),
@@ -1301,6 +1307,9 @@ class PreviewGridDialog extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final wanted = ref.watch(settingsProvider.select((s) => s.previewsColumns));
+    final fill = ref.watch(
+      settingsProvider.select((s) => s.previewsFit == CoverFit.fill),
+    );
     final settings = ref.read(settingsProvider.notifier);
     final columns = balancedColumns(images.length, wanted);
     final left = closeOnLeft(context);
@@ -1326,6 +1335,31 @@ class PreviewGridDialog extends ConsumerWidget {
                       style: theme.textTheme.titleLarge,
                     ),
                   ),
+                  SegmentedButton<CoverFit>(
+                    key: const ValueKey('previews-fit'),
+                    showSelectedIcon: false,
+                    style: const ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    segments: const [
+                      ButtonSegment(
+                        value: CoverFit.fit,
+                        icon: Icon(Icons.fit_screen_outlined, size: 18),
+                        label: Text('Fit'),
+                        tooltip: 'Show whole images',
+                      ),
+                      ButtonSegment(
+                        value: CoverFit.fill,
+                        icon: Icon(Icons.crop_free, size: 18),
+                        label: Text('Fill'),
+                        tooltip: 'Fill the cards, cropping the images',
+                      ),
+                    ],
+                    selected: {fill ? CoverFit.fill : CoverFit.fit},
+                    onSelectionChanged: (s) =>
+                        settings.setPreviewsFit(s.single),
+                  ),
+                  const SizedBox(width: 16),
                   // Fewer columns = bigger cards, like the size sliders.
                   IconButton(
                     tooltip: 'Fewer columns ($primaryKey + wheel up)',
@@ -1402,13 +1436,21 @@ class PreviewGridDialog extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(6),
-                                  child: PreviewPicture(
-                                    packPath: packPath,
-                                    rel: images[i],
-                                    anim: animations[images[i]],
-                                  ),
+                                child: Builder(
+                                  builder: (context) {
+                                    final picture = PreviewPicture(
+                                      packPath: packPath,
+                                      rel: images[i],
+                                      anim: animations[images[i]],
+                                      fill: fill,
+                                    );
+                                    return Padding(
+                                      padding: EdgeInsets.all(
+                                        picture.fills ? 0 : 6,
+                                      ),
+                                      child: picture,
+                                    );
+                                  },
                                 ),
                               ),
                               Padding(

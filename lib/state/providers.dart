@@ -157,6 +157,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
     if (c != state.previewsColumns) _save(state.copyWith(previewsColumns: c));
   }
 
+  void setPreviewsFit(CoverFit fit) => _save(state.copyWith(previewsFit: fit));
+
   /// Off also forgets the saved session.
   void setResumeSession(bool on) => _save(
     state.copyWith(

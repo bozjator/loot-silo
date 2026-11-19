@@ -217,6 +217,7 @@ class AppSettings {
     this.audioSortDesc = false,
     this.audioFormat = 'ogg',
     this.previewsColumns = 4,
+    this.previewsFit = CoverFit.fit,
     this.dashboardTreeOpen = false,
     this.dashboardTreeWidth = defaultTreeWidth,
     this.resumeSession = true,
@@ -286,6 +287,10 @@ class AppSettings {
   /// from it. 4 is what the 440 px cards gave in a full-width window.
   final int previewsColumns;
 
+  /// How the "All previews" grid's cards show their images: the whole
+  /// image (Fit) or cropped to fill the card (Fill).
+  final CoverFit previewsFit;
+
   /// The dashboard's folder tree panel (M98) is shown.
   final bool dashboardTreeOpen;
 
@@ -346,6 +351,8 @@ class AppSettings {
       1,
       8,
     ),
+    previewsFit:
+        CoverFit.values.asNameMap()[json['previews_fit']] ?? CoverFit.fit,
     dashboardTreeOpen: json['dashboard_tree_open'] == true,
     dashboardTreeWidth: math.max(
       minTreeWidth,
@@ -385,6 +392,7 @@ class AppSettings {
     'audio_sort_desc': audioSortDesc,
     'audio_format': audioFormat,
     'previews_columns': previewsColumns,
+    'previews_fit': previewsFit.name,
     'dashboard_tree_open': dashboardTreeOpen,
     'dashboard_tree_width': dashboardTreeWidth,
     'resume_session': resumeSession,
@@ -416,6 +424,7 @@ class AppSettings {
     bool? audioSortDesc,
     String? audioFormat,
     int? previewsColumns,
+    CoverFit? previewsFit,
     bool? dashboardTreeOpen,
     double? dashboardTreeWidth,
     bool? resumeSession,
@@ -445,6 +454,7 @@ class AppSettings {
     audioSortDesc: audioSortDesc ?? this.audioSortDesc,
     audioFormat: audioFormat ?? this.audioFormat,
     previewsColumns: previewsColumns ?? this.previewsColumns,
+    previewsFit: previewsFit ?? this.previewsFit,
     dashboardTreeOpen: dashboardTreeOpen ?? this.dashboardTreeOpen,
     dashboardTreeWidth: dashboardTreeWidth ?? this.dashboardTreeWidth,
     resumeSession: resumeSession ?? this.resumeSession,
