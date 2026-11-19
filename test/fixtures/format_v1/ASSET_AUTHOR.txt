@@ -1,0 +1,7 @@
+user: RafaelMatos
+url: https://rafaelmatos.itch.io
+itch_user: rafaelmatos
+license: CC BY 4.0
+credit: Rafael Matos (rafaelmatos.itch.io)
+attribution: required
+format_version: 1

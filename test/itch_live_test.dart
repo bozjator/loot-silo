@@ -11,6 +11,9 @@ import 'package:loot_silo/itch/itch_key.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  // flutter_test_config.dart installs a test binding, which answers every
+  // HTTP request with 400; this test needs the real network.
+  HttpOverrides.global = null;
   final key = Platform.environment['ITCH_LIVE'] == '1'
       ? keyFromEnvironment()
       : null;

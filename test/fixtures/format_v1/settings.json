@@ -1,0 +1,69 @@
+{
+  "format_version": 1,
+  "library_path": "/home/user/Game Assets",
+  "theme": "system",
+  "theme_color": "orange",
+  "style": "glass",
+  "cover_fit": "fill",
+  "animate_all": false,
+  "audio_loop": true,
+  "dashboard_tile_size": 264.1111111111111,
+  "image_thumb_size": 169.21428571428572,
+  "animation_thumb_size": 253.66666666666666,
+  "model_thumb_size": 200.0,
+  "material_thumb_size": 200.0,
+  "detail_header_pinned": true,
+  "images_view": "folders",
+  "animations_view": "flat",
+  "models_view": "flat",
+  "materials_view": "flat",
+  "dashboard_view": "packs",
+  "detail_animate_mode": "hover",
+  "audio_view": "cards",
+  "audio_sort": "name",
+  "audio_sort_desc": false,
+  "audio_format": "ogg",
+  "previews_columns": 4,
+  "previews_fit": "fill",
+  "dashboard_tree_open": false,
+  "dashboard_tree_width": 349.1953125,
+  "resume_session": true,
+  "last_session": {
+    "tabs": [
+      {
+        "pack_id": "RafaelMatos/Epic RPG World - Volcano",
+        "folder": "Characters"
+      },
+      {
+        "pack_id": "Kenney/Kenney Game Assets 2",
+        "tab": "audio",
+        "search": "jump",
+        "favorites": true
+      }
+    ],
+    "active": 1,
+    "dashboard_page": {
+      "pack_id": "OboroPixel/CharactersAnimationsAssetPack",
+      "tab": "animations"
+    },
+    "search": "slime",
+    "types": [
+      "character"
+    ],
+    "authors": [
+      "RafaelMatos"
+    ],
+    "tags": [
+      "rpg"
+    ],
+    "sources": [
+      "itch"
+    ],
+    "favorites": true,
+    "sort": "title",
+    "node": "RafaelMatos",
+    "tree_expanded": [
+      "RafaelMatos"
+    ]
+  }
+}

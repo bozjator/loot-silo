@@ -2798,11 +2798,11 @@ A **16×16** knight with *walk* and *idle* animations.
     // No settings file yet: the first-start screen.
     await tester.pumpWidget(app(lib, restart: true));
     await pumpUntil(tester, find.text('Choose a library folder'));
-    // The app bar name; since M52 the logo below shows it too, as text.
+    // The app bar's name picture; since M52 the logo below shows it too.
     expect(
       find.descendant(
         of: find.byType(AppBar),
-        matching: find.text('Loot Silo'),
+        matching: find.byKey(const ValueKey('app-bar-title')),
       ),
       findsOneWidget,
     );
@@ -2818,7 +2818,7 @@ A **16×16** knight with *walk* and *idle* animations.
     expect(
       find.descendant(
         of: find.byType(AppBar),
-        matching: find.text('Loot Silo'),
+        matching: find.byKey(const ValueKey('app-bar-title')),
       ),
       findsOneWidget,
     );
@@ -2843,7 +2843,8 @@ A **16×16** knight with *walk* and *idle* animations.
       await pumpUntil(tester, logo);
       expectLockup(tester);
       await settleImages(tester);
-      expect(find.byKey(const ValueKey('app-bar-icon')), findsOneWidget);
+      expect(find.byKey(const ValueKey('app-bar-title')), findsOneWidget);
+      expect(find.byKey(const ValueKey('app-bar-icon')), findsNothing);
       await captureScreenshot(tester, 'm52_first_start_$name', settle: false);
 
       await tester.tap(find.text('Choose folder'));
@@ -3022,6 +3023,7 @@ A **16×16** knight with *walk* and *idle* animations.
             brightness: theme == ThemeChoice.dark
                 ? Brightness.dark
                 : Brightness.light,
+            dynamicSchemeVariant: DynamicSchemeVariant.vibrant,
           ).primary,
         );
         await settleImages(tester);
@@ -3888,9 +3890,16 @@ A **16×16** knight with *walk* and *idle* animations.
     await tester.tap(tile(village));
     await pumpUntil(tester, find.textContaining('Animations (').hitTestable());
     await tester.pump(const Duration(milliseconds: 500));
+    // Since 4fb4391 the page's bar holds the tab strip and nothing else.
     final shown = detail.hitTestable();
+    final bar = find.descendant(of: shown.first, matching: find.byType(AppBar));
+    expect(bar, findsOneWidget);
     expect(
-      find.descendant(of: shown.first, matching: find.byType(AppBar)),
+      find.descendant(of: bar, matching: find.byType(PackTabStrip)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: bar, matching: find.byType(BackButton)),
       findsNothing,
     );
     await settleImages(tester);
@@ -5435,6 +5444,9 @@ A **16×16** knight with *walk* and *idle* animations.
     );
     expect(find.textContaining('Bundle · 90 packs'), findsOneWidget);
     expect(find.text('Explosion Pack'), findsNothing);
+    // Built is not on screen: the tile can sit below the window's edge.
+    await tester.ensureVisible(kenney);
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(kenney);
     await pumpUntil(tester, find.text('Merge into one pack'));
     await tester.pump(const Duration(seconds: 1));
@@ -5451,6 +5463,8 @@ A **16×16** knight with *walk* and *idle* animations.
       300,
       scrollable: find.byType(Scrollable).last,
     );
+    await tester.ensureVisible(explosion);
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(explosion);
     await pumpUntil(tester, find.textContaining('Images ('));
     await tester.pump(const Duration(seconds: 1));

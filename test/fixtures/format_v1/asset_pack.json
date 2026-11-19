@@ -1,0 +1,39 @@
+{
+  "format_version": 1,
+  "title": "Epic RPG World - Volcano",
+  "types": [
+    "environment",
+    "character"
+  ],
+  "tags": [
+    "environment",
+    "rpg"
+  ],
+  "source": "itch",
+  "source_path": "https://rafaelmatos.itch.io/epic-rpg-world-volcano",
+  "itch_game_id": 3095455,
+  "itch_url": "https://rafaelmatos.itch.io/epic-rpg-world-volcano",
+  "previews": [
+    "_itch/cover.gif",
+    "Preview/volcano.png"
+  ],
+  "notes": "Lava tiles fit the boss level.",
+  "used_in": [
+    "Pirates"
+  ],
+  "animations": {
+    "Characters/elemental-attack1_20frames.png": {
+      "manual": true,
+      "frame_w": 256,
+      "frame_h": 224,
+      "frames": 20,
+      "fps": 12
+    },
+    "Characters/elemental-sheet.png": false
+  },
+  "favorite": true,
+  "favorite_files": [
+    "Characters/elemental-attack1_20frames.png"
+  ],
+  "layout": "pack"
+}
