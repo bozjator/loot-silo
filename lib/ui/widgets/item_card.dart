@@ -84,6 +84,9 @@ class ItemCard extends StatefulWidget {
 class _ItemCardState extends State<ItemCard> {
   var _hover = false;
 
+  /// How far before the footer icons the title starts fading out.
+  static const _fadeWidth = 16.0;
+
   /// The stage's corner icons: plain, like the audio card's star and
   /// reveal, with a soft shadow so they read over white and black sprites.
   Widget _plain(Widget child) => IconTheme.merge(
@@ -232,7 +235,9 @@ class _ItemCardState extends State<ItemCard> {
   }
 
   /// Title and details; the icons overlay them only while hovered, so the
-  /// title gets the full width the rest of the time.
+  /// title gets the full width the rest of the time. While hovered, the
+  /// text fades out under the icons, which sit on the card's own (possibly
+  /// see-through) background.
   Widget _footer(ThemeData theme, ColorScheme scheme) => Stack(
     children: [
       Padding(
@@ -241,25 +246,54 @@ class _ItemCardState extends State<ItemCard> {
         child: OwnSemanticsNode(
           child: Tooltip(
             message: widget.path,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  widget.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-                Text(
-                  widget.details,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(end: _hover && widget.actions.isNotEmpty ? 1 : 0),
+              duration: const Duration(milliseconds: 150),
+              builder: (context, t, child) => t == 0
+                  ? child!
+                  : ShaderMask(
+                      blendMode: BlendMode.dstIn,
+                      shaderCallback: (bounds) {
+                        // The icons' left edge in the text's own box: the
+                        // footer's 10 px right padding against the icons'
+                        // 2 px inset.
+                        final end =
+                            bounds.width + 8 - widget.actions.length * 40;
+                        final start = end - _fadeWidth;
+                        final w = bounds.width;
+                        return LinearGradient(
+                          colors: [
+                            Colors.black,
+                            Colors.black.withValues(alpha: 1 - t),
+                          ],
+                          stops: [
+                            (start / w).clamp(0.0, 1.0),
+                            (end / w).clamp(0.0, 1.0),
+                          ],
+                        ).createShader(bounds);
+                      },
+                      child: child,
+                    ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall,
                   ),
-                ),
-              ],
+                  Text(
+                    widget.details,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -280,23 +314,9 @@ class _ItemCardState extends State<ItemCard> {
             // Tooltip can still be up, and its overlay needs this node
             // (else Windows rejects the semantics update; OwnSemanticsNode).
             alwaysIncludeSemantics: true,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    scheme.surfaceContainerLow.withValues(alpha: 0),
-                    scheme.surfaceContainerLow,
-                  ],
-                  stops: const [0, 0.2],
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.only(left: 16),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: widget.actions,
-                ),
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: widget.actions,
             ),
           ),
         ),
