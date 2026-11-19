@@ -4836,7 +4836,28 @@ void main() {
       return material.color != Colors.transparent;
     }
 
-    testWidgets('M36: no top bar with the strip; Dashboard tab goes back', (
+    /// [page]'s bar holds the tab strip and nothing else.
+    void expectStripOnlyBar(WidgetTester tester, Finder page) {
+      final bar = find.descendant(of: page, matching: find.byType(AppBar));
+      expect(bar, findsOneWidget);
+      expect(
+        find.descendant(of: bar, matching: find.byType(PackTabStrip)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: bar, matching: find.byType(BackButton)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: bar,
+          matching: find.byIcon(Icons.settings_outlined),
+        ),
+        findsNothing,
+      );
+    }
+
+    testWidgets('M36: the strip is the whole bar; Dashboard tab goes back', (
       tester,
     ) async {
       // No pack tab: the detail page keeps its bar with the back arrow.
@@ -4855,21 +4876,17 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       expect(detail, findsNothing);
 
-      // With a tab open, a pack opened by a plain click has no bar: only
-      // the strip, where the Dashboard tab isn't selected.
+      // With a tab open, a pack opened by a plain click has a bar of only
+      // the strip (no back arrow, no icons), where the Dashboard tab isn't
+      // selected. The tabs sit where the dashboard's bar shows them.
       await middleClick(tester, tile('Slimes'));
       expect(selected(tester, strip('Dashboard')), isTrue);
+      final onDashboard = tester.getTopLeft(strip('Dashboard').hitTestable());
       await tester.tap(tile('Knight Pack'));
       await pumpUntil(tester, detail);
       await tester.pump(const Duration(seconds: 1));
-      expect(
-        find.descendant(of: detail, matching: find.byType(AppBar)),
-        findsNothing,
-      );
-      expect(
-        find.descendant(of: detail, matching: find.byType(PackTabStrip)),
-        findsOneWidget,
-      );
+      expectStripOnlyBar(tester, detail);
+      expect(tester.getTopLeft(strip('Dashboard').hitTestable()), onDashboard);
       expect(selected(tester, strip('Dashboard')), isFalse);
       expect(selected(tester, strip('Slimes')), isFalse);
       // The pin / folder icons are in the header, not a bar.
@@ -4895,10 +4912,8 @@ void main() {
       await settle(tester);
       expect(selected(tester, strip('Slimes')), isTrue);
       expect(selected(tester, strip('Dashboard')), isFalse);
-      expect(
-        find.descendant(of: detail, matching: find.byType(AppBar)),
-        findsNothing,
-      );
+      expectStripOnlyBar(tester, detail);
+      expect(tester.getTopLeft(strip('Dashboard').hitTestable()), onDashboard);
     });
 
     testWidgets('M36: the slim bar carries the icons too', (tester) async {

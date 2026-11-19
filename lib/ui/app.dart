@@ -215,6 +215,7 @@ class HomeScreen extends ConsumerWidget {
     final library = ref.watch(libraryProvider);
     final scanning = library.isLoading;
     void rescan() => rescanLibrary(ref);
+    final showTabs = tabsShown(ref);
     // A newly chosen library (first run, or switched in Settings) scans
     // behind a wait screen: Riverpod keeps the previous value while it
     // loads, which is the empty state on first run and the old library's
@@ -231,8 +232,17 @@ class HomeScreen extends ConsumerWidget {
     // Ctrl+I/O/R, F5 and Ctrl+, are bound app-wide (LootSiloApp).
     return Scaffold(
       appBar: AppBar(
-        title: const AppBarTitle(),
-        bottom: tabStrip(ref, progress: scanning),
+        // With pack tabs open they take the title's place; a pack page's
+        // bar shows them at the same spot, without the icons.
+        centerTitle: false,
+        titleSpacing: showTabs ? tabStripTitleSpacing : null,
+        title: showTabs ? const PackTabStrip() : const AppBarTitle(),
+        bottom: scanning
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(4),
+                child: LinearProgressIndicator(),
+              )
+            : null,
         actions: [
           // Measured: the dashboard's size slider is as wide as this row.
           MeasureSize(

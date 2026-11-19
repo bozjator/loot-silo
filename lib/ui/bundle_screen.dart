@@ -98,7 +98,7 @@ class _BundleScreenState extends ConsumerState<BundleScreen> {
     final theme = Theme.of(context);
     const spacing = 12.0;
     return Scaffold(
-      appBar: tabStrip(ref) ?? AppBar(title: Text(bundle.title)),
+      appBar: tabStripBar(ref) ?? AppBar(title: Text(bundle.title)),
       body: LayoutBuilder(
         builder: (context, box) {
           const pad = EdgeInsets.fromLTRB(16, 12, 16, 16);

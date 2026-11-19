@@ -344,8 +344,9 @@ class TabsHost extends ConsumerWidget {
   }
 }
 
-/// Dashboard plus one tab per open pack, under the app bar of the
-/// dashboard and of pack pages. Shown only while a pack tab is open.
+/// Dashboard plus one tab per open pack, in the title slot of the
+/// dashboard's app bar (left of its icons) and of pack pages' bars (the
+/// whole width). Shown only while a pack tab is open.
 ///
 /// The Dashboard tab stays put; the pack tabs scroll (mouse wheel or the
 /// arrows that show when they don't fit), and the list button jumps to
@@ -814,20 +815,24 @@ class OpenInNewTab extends StatelessWidget {
   }
 }
 
-/// An app bar's `bottom`: the tab strip while a pack tab is open, plus a
-/// thin progress bar when [progress]; null when neither shows.
-PreferredSizeWidget? tabStrip(WidgetRef ref, {bool progress = false}) {
-  final shown = ref.watch(tabsProvider.select((t) => t.tabs.isNotEmpty));
-  if (!shown && !progress) return null;
-  return PreferredSize(
-    preferredSize: Size.fromHeight(
-      (shown ? PackTabStrip.height : 0) + (progress ? 4 : 0),
-    ),
-    child: Column(
-      children: [
-        if (shown) const PackTabStrip(),
-        if (progress) const LinearProgressIndicator(),
-      ],
-    ),
+/// Whether the tab strip shows: while a pack tab is open.
+bool tabsShown(WidgetRef ref) =>
+    ref.watch(tabsProvider.select((t) => t.tabs.isNotEmpty));
+
+/// The strip's title spacing in an app bar; with its own 8 px padding the
+/// first tab starts where the app's title does.
+const tabStripTitleSpacing = 8.0;
+
+/// A pack (or bundle) page's bar: the tab strip in the title slot, where
+/// the dashboard's bar shows it too, so the tabs stay put between the
+/// dashboard and a pack. No icons here: the tabs take the whole width.
+/// Null without pack tabs.
+PreferredSizeWidget? tabStripBar(WidgetRef ref) {
+  if (!tabsShown(ref)) return null;
+  return AppBar(
+    automaticallyImplyLeading: false,
+    centerTitle: false,
+    titleSpacing: tabStripTitleSpacing,
+    title: const PackTabStrip(),
   );
 }

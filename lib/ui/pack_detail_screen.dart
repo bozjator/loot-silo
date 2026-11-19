@@ -174,10 +174,10 @@ class PackDetailScreen extends ConsumerWidget {
         return KeyEventResult.handled;
       },
       child: Scaffold(
-        // With the tab strip there is no bar: the title is in the header
-        // and the tab, the icons in the header's corner. Without it, a bar
-        // with the back arrow.
-        appBar: tabStrip(ref) ?? AppBar(title: Text(pack.title)),
+        // With the tab strip the bar is only the tabs: the title is in the
+        // header and the tab, the icons in the header's corner. Without it,
+        // a bar with the back arrow.
+        appBar: tabStripBar(ref) ?? AppBar(title: Text(pack.title)),
         // While a rescan reloads the contents, the old ones stay on screen,
         // so the open tab and its state survive.
         body: switch (contents) {
