@@ -732,6 +732,20 @@ void main() {
       final open = icon('Open image');
       expect(icon('Make animation…'), open);
       expect(icon('Show in file manager'), open);
+
+      // On the picture: Make animation bottom left, Open image bottom right,
+      // both above the footer.
+      Rect at2(String tooltip) => tester.getRect(
+        find.descendant(of: card(rel), matching: find.byTooltip(tooltip)),
+      );
+      final make = at2('Make animation…');
+      final opener = at2('Open image');
+      final footerTop = box.bottom - itemCardFooter;
+      expect(make.left, lessThan(box.left + 40));
+      expect(opener.right, greaterThan(box.right - 40));
+      expect(make.bottom, lessThanOrEqualTo(footerTop + 1));
+      expect(opener.bottom, lessThanOrEqualTo(footerTop + 1));
+      expect(make.bottom, greaterThan(footerTop - 40));
     });
 
     testWidgets('Ctrl-click selects without focusing', (tester) async {

@@ -2356,16 +2356,15 @@ class _ImagesTabState extends ConsumerState<_ImagesTab> {
                   _focus(_focused == rel ? null : rel);
                 }
               },
-              actions: [
-                if (canAnimate)
-                  CardIconButton(
-                    tooltip: 'Make animation…',
-                    icon: Icons.animation,
-                    onPressed: () => _makeAnimation(rel),
-                  ),
-                OpenImageButton(onPressed: open),
-                RevealButton(file.path),
-              ],
+              bottomLeft: canAnimate
+                  ? CardIconButton(
+                      tooltip: 'Make animation…',
+                      icon: Icons.animation,
+                      onPressed: () => _makeAnimation(rel),
+                    )
+                  : null,
+              bottomRight: OpenImageButton(onPressed: open),
+              actions: [RevealButton(file.path)],
             ),
           ),
         );

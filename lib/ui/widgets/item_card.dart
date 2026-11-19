@@ -14,9 +14,10 @@ const itemCardFooter = 64.0;
 /// A [stage] over a footer with a title and a details line. Clicking focuses
 /// the card ([focused] draws a border and grows it a little, [dimmed] fades
 /// the others). On hover, [actions] overlay the footer's right end, the star
-/// shows in the stage's top-right corner (always when [starred]) and
-/// [leading] in the top-left (always with [showLeading]). [badge] sits in
-/// the top-left corner whenever there is no [leading] shown.
+/// shows in the stage's top-right corner (always when [starred]),
+/// [leading] in the top-left (always with [showLeading]) and [bottomLeft] /
+/// [bottomRight] in the stage's bottom corners. [badge] sits in the top-left
+/// corner whenever there is no [leading] shown.
 /// Behind the plain icons on a card's picture: a dark halo for light
 /// pictures, the icon's own colour for dark ones.
 const cardIconShadows = [
@@ -39,6 +40,8 @@ class ItemCard extends StatefulWidget {
     this.starred = false,
     this.onToggleStar,
     this.actions = const [],
+    this.bottomLeft,
+    this.bottomRight,
     this.leading,
     this.showLeading = false,
     this.badge,
@@ -65,6 +68,10 @@ class ItemCard extends StatefulWidget {
 
   /// Hover icons, all [CardIconButton] sized.
   final List<Widget> actions;
+
+  /// Hover icons in the stage's bottom corners, [CardIconButton] sized.
+  final Widget? bottomLeft;
+  final Widget? bottomRight;
   final Widget? leading;
   final bool showLeading;
   final Widget? badge;
@@ -82,6 +89,18 @@ class _ItemCardState extends State<ItemCard> {
   Widget _plain(Widget child) => IconTheme.merge(
     data: const IconThemeData(shadows: cardIconShadows),
     child: child,
+  );
+
+  /// A stage corner icon that fades in on hover; hidden ones ignore clicks
+  /// and stay in the semantics tree (see the footer's icons).
+  Widget _hoverCorner(Widget child) => IgnorePointer(
+    ignoring: !_hover,
+    child: AnimatedOpacity(
+      duration: const Duration(milliseconds: 150),
+      opacity: _hover ? 1 : 0,
+      alwaysIncludeSemantics: true,
+      child: _plain(child),
+    ),
   );
 
   @override
@@ -181,6 +200,18 @@ class _ItemCardState extends State<ItemCard> {
                                     onPressed: toggle,
                                   ),
                                 ),
+                              ),
+                            if (widget.bottomLeft case final icon?)
+                              Positioned(
+                                left: 0,
+                                bottom: 0,
+                                child: _hoverCorner(icon),
+                              ),
+                            if (widget.bottomRight case final icon?)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: _hoverCorner(icon),
                               ),
                           ],
                         ),

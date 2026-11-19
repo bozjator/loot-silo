@@ -384,8 +384,9 @@ class AnimateModeToggle extends StatelessWidget {
 }
 
 /// One animation in the grid ([ItemCard]). Plays when [focused], or when
-/// not [dimmed] and either [playAll] or hovered. Its icons (edit, open,
-/// reveal) fade in on hover; an edited animation keeps a dot in the stage's
+/// not [dimmed] and either [playAll] or hovered. Its icons fade in on hover
+/// (edit bottom-left and open bottom-right on the stage, reveal in the
+/// footer); an edited animation keeps a dot in the stage's
 /// top-left corner.
 class _AnimationTile extends StatelessWidget {
   const _AnimationTile({
@@ -470,17 +471,16 @@ class _AnimationTile extends StatelessWidget {
                 ),
               )
             : null,
-        actions: [
-          if (a.kind != AnimKind.gif)
-            CardIconButton(
-              tooltip: edited ? 'Edit animation (edited)' : 'Edit animation',
-              color: edited ? scheme.primary : null,
-              icon: Icons.tune,
-              onPressed: onEdit,
-            ),
-          OpenImageButton(onPressed: onOpen),
-          RevealButton(file),
-        ],
+        bottomLeft: a.kind == AnimKind.gif
+            ? null
+            : CardIconButton(
+                tooltip: edited ? 'Edit animation (edited)' : 'Edit animation',
+                color: edited ? scheme.primary : null,
+                icon: Icons.tune,
+                onPressed: onEdit,
+              ),
+        bottomRight: OpenImageButton(onPressed: onOpen),
+        actions: [RevealButton(file)],
       ),
     );
   }
