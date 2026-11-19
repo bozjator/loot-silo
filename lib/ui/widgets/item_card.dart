@@ -239,6 +239,9 @@ class _ItemCardState extends State<ItemCard> {
   /// text fades out under the icons, which sit on the card's own (possibly
   /// see-through) background.
   Widget _footer(ThemeData theme, ColorScheme scheme) => Stack(
+    // The text's box spans the footer, however short the title: the fade
+    // under the icons is placed from its right edge.
+    fit: StackFit.expand,
     children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
