@@ -1299,8 +1299,7 @@ class PreviewGridDialog extends ConsumerWidget {
   final List<String> images;
   final Map<String, int> sizes;
 
-  static const _spacing = 8.0;
-  static const _footer = 26.0;
+  static const _spacing = 14.0;
   static const _padding = EdgeInsets.fromLTRB(16, 0, 16, 16);
 
   @override
@@ -1400,8 +1399,7 @@ class PreviewGridDialog extends ConsumerWidget {
                 onSteps: (n) => settings.setPreviewsColumns(wanted - n),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    // The cards share the width; each keeps a 4:3 image
-                    // area over its name.
+                    // The cards share the width, each a 4:3 picture.
                     final width =
                         (constraints.maxWidth -
                             _padding.horizontal -
@@ -1415,58 +1413,22 @@ class PreviewGridDialog extends ConsumerWidget {
                         crossAxisCount: columns,
                         crossAxisSpacing: _spacing,
                         mainAxisSpacing: _spacing,
-                        mainAxisExtent: width * 3 / 4 + _footer,
+                        mainAxisExtent: width * 3 / 4,
                       ),
                       itemCount: images.length,
-                      itemBuilder: (context, i) => Card(
+                      itemBuilder: (context, i) => _PreviewGridCard(
                         key: ValueKey('preview:${images[i]}'),
-                        clipBehavior: Clip.antiAlias,
-                        margin: EdgeInsets.zero,
-                        child: InkWell(
-                          mouseCursor: clickCursor,
-                          onTap: () => showImageViewer(
-                            context,
-                            packPath: packPath,
-                            images: images,
-                            index: i,
-                            sizes: sizes,
-                            animations: animations,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(
-                                child: Builder(
-                                  builder: (context) {
-                                    final picture = PreviewPicture(
-                                      packPath: packPath,
-                                      rel: images[i],
-                                      anim: animations[images[i]],
-                                      fill: fill,
-                                    );
-                                    return Padding(
-                                      padding: EdgeInsets.all(
-                                        picture.fills ? 0 : 6,
-                                      ),
-                                      child: picture,
-                                    );
-                                  },
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-                                child: Tooltip(
-                                  message: images[i],
-                                  child: Text(
-                                    p.basename(images[i]),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.labelSmall,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                        packPath: packPath,
+                        rel: images[i],
+                        anim: animations[images[i]],
+                        fill: fill,
+                        onTap: () => showImageViewer(
+                          context,
+                          packPath: packPath,
+                          images: images,
+                          index: i,
+                          sizes: sizes,
+                          animations: animations,
                         ),
                       ),
                     );
@@ -1475,6 +1437,91 @@ class PreviewGridDialog extends ConsumerWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A card of the previews grid: the picture alone, its file name a chip
+/// at the bottom while the pointer is on it. A click calls [onTap].
+class _PreviewGridCard extends StatefulWidget {
+  const _PreviewGridCard({
+    super.key,
+    required this.packPath,
+    required this.rel,
+    required this.anim,
+    required this.fill,
+    required this.onTap,
+  });
+
+  final String packPath;
+  final String rel;
+  final SpriteAnim? anim;
+  final bool fill;
+  final VoidCallback onTap;
+
+  @override
+  State<_PreviewGridCard> createState() => _PreviewGridCardState();
+}
+
+class _PreviewGridCardState extends State<_PreviewGridCard> {
+  var _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final picture = PreviewPicture(
+      packPath: widget.packPath,
+      rel: widget.rel,
+      anim: widget.anim,
+      fill: widget.fill,
+    );
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        margin: EdgeInsets.zero,
+        child: InkWell(
+          mouseCursor: clickCursor,
+          onTap: widget.onTap,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Padding(
+                padding: EdgeInsets.all(picture.fills ? 0 : 6),
+                child: picture,
+              ),
+              // As the header cover's caption.
+              Positioned(
+                left: 8,
+                right: 8,
+                bottom: 8,
+                child: _HoverFade(
+                  shown: _hover,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.surface.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        p.basename(widget.rel),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

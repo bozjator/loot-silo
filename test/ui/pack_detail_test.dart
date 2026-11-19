@@ -5401,7 +5401,6 @@ void main() {
                 of: find.byType(PreviewGridDialog),
                 matching: find.byWidgetPredicate(
                   (w) =>
-                      w is Card &&
                       w.key is ValueKey<String> &&
                       (w.key! as ValueKey<String>).value.startsWith('preview:'),
                 ),
@@ -5429,7 +5428,7 @@ void main() {
         final rows = {for (final r in rects) r.top}.toList()..sort();
         expect(rows, hasLength(2));
         expect(rects.where((r) => r.top == rows.first), hasLength(4));
-        // The row spans the grid: 16 px padding a side, 8 px gaps.
+        // The row spans the grid: 16 px padding a side, 14 px gaps.
         final grid = tester.getRect(
           find.descendant(
             of: find.byType(PreviewGridDialog),
@@ -5440,7 +5439,7 @@ void main() {
           ..sort((a, b) => a.left.compareTo(b.left));
         expect(first.first.left, closeTo(grid.left + 16, 0.5));
         expect(first.last.right, closeTo(grid.right - 16, 0.5));
-        expect(first[1].left - first[0].right, closeTo(8, 0.5));
+        expect(first[1].left - first[0].right, closeTo(14, 0.5));
       },
     );
 
