@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:loot_silo/core/sidecar.dart';
@@ -87,6 +88,7 @@ void main() {
         favoriteFiles: ['x.png'],
       ).toJson();
       expect(json, {
+        'format_version': 1,
         'favorite': true,
         'favorite_files': ['x.png'],
       });
@@ -95,12 +97,13 @@ void main() {
       expect(back.favoriteFiles, ['x.png']);
       expect(back.extra, isEmpty);
       expect(const PackSidecar(title: 't').copyWith(favorite: false).toJson(), {
+        'format_version': 1,
         'title': 't',
       });
     });
 
-    test('empty sidecar writes an empty object', () {
-      expect(const PackSidecar().toJson(), isEmpty);
+    test('empty sidecar writes only its format version', () {
+      expect(const PackSidecar().toJson(), {'format_version': 1});
     });
 
     test('malformed or missing json reads as null', () {
@@ -109,6 +112,42 @@ void main() {
       expect(PackSidecar.read(tmp.path), isNull);
       File('${tmp.path}/$packFileName').writeAsStringSync('[1]');
       expect(PackSidecar.read(tmp.path), isNull);
+    });
+  });
+
+  group('format_version', () {
+    late Directory tmp;
+    setUp(() => tmp = Directory.systemTemp.createTempSync('format_version'));
+    tearDown(() => tmp.deleteSync(recursive: true));
+
+    test('author file without a version line loads as version 1', () {
+      File('${tmp.path}/$authorFileName')
+          .writeAsStringSync('user: Kenney\nurl: https://kenney.itch.io/\n');
+      final a = AuthorInfo.read('${tmp.path}/$authorFileName')!;
+      expect(a.user, 'Kenney');
+      expect(a.extra, isEmpty);
+      a.write(tmp.path);
+      final text = File('${tmp.path}/$authorFileName').readAsStringSync();
+      expect(text, endsWith('format_version: 1\n'));
+      expect(AuthorInfo.parse(text)!.extra, isEmpty);
+    });
+
+    test('pack file without a version loads and is written as version 1', () {
+      File('${tmp.path}/$packFileName').writeAsStringSync(
+        '{"title": "Dungeon", "tags": ["cave"], "mystery": {"a": 1}}',
+      );
+      final s = PackSidecar.read(tmp.path)!;
+      expect(s.title, 'Dungeon');
+      expect(s.extra, {
+        'mystery': {'a': 1},
+      });
+      s.write(tmp.path);
+      final json = jsonDecode(
+        File('${tmp.path}/$packFileName').readAsStringSync(),
+      ) as Map<String, Object?>;
+      expect(json['format_version'], 1);
+      expect(json['mystery'], {'a': 1});
+      expect(PackSidecar.fromJson(json).extra.keys, ['mystery']);
     });
   });
 }

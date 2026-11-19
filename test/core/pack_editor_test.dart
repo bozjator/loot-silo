@@ -69,6 +69,7 @@ void main() {
     // Missing files are skipped; duplicates are stored once.
     savePreviews(tmp.path, ['b.png', 'gone.png', 'a.png', 'b.png']);
     expect(sidecarJson(), {
+      'format_version': 1,
       'tags': ['x'],
       'future_field': 1,
       'previews': ['b.png', 'gone.png', 'a.png'],
@@ -126,6 +127,7 @@ void main() {
       setFavoriteFile(tmp.path, 'b/z.png', favorite: true);
       setFavoriteFile(tmp.path, 'a.wav', favorite: true);
       expect(sidecarJson(), {
+        'format_version': 1,
         'title': 'Orcs',
         'tags': ['orc'],
         'animations': {'walk.png': false},
@@ -149,6 +151,7 @@ void main() {
     test('starring creates a sidecar when missing', () {
       setFavoriteFile(tmp.path, 'x.png', favorite: true);
       expect(sidecarJson(), {
+        'format_version': 1,
         'favorite_files': ['x.png'],
       });
     });
@@ -156,7 +159,7 @@ void main() {
 
   test('updatePackSidecar creates a sidecar when missing', () {
     updatePackSidecar(tmp.path, title: 'New name');
-    expect(sidecarJson(), {'title': 'New name'});
+    expect(sidecarJson(), {'format_version': 1, 'title': 'New name'});
   });
 
   test('saveAnimationOverride stores only what differs, null removes', () {

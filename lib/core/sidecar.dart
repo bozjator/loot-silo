@@ -10,7 +10,8 @@ const packFileName = 'asset_pack.json';
 ///
 /// The format is `key: value` per line. `user` and `url` are the original
 /// keys; `itch_user` and `license` were added by the app. Unknown keys are
-/// kept so a round trip never loses information.
+/// kept so a round trip never loses information. `format_version` is the
+/// last line; a file without one is version 1.
 class AuthorInfo {
   const AuthorInfo({
     required this.user,
@@ -26,6 +27,9 @@ class AuthorInfo {
   final String? license;
   final Map<String, String> extra;
 
+  /// The `format_version` this app writes.
+  static const formatVersion = 1;
+
   static final _line = RegExp(r'^\s*([A-Za-z_][\w-]*)\s*:\s*(.*?)\s*$');
   static final _itchHost = RegExp(r'^([a-z0-9-]+)\.itch\.io$');
 
@@ -37,6 +41,7 @@ class AuthorInfo {
       if (m == null || m.group(2)!.isEmpty) continue;
       values.putIfAbsent(m.group(1)!.toLowerCase(), () => m.group(2)!);
     }
+    values.remove('format_version');
     final user = values.remove('user');
     if (user == null) return null;
     return AuthorInfo(
@@ -103,6 +108,7 @@ class AuthorInfo {
     if (itchUser != null) b.writeln('itch_user: $itchUser');
     if (license != null) b.writeln('license: $license');
     extra.forEach((k, v) => b.writeln('$k: $v'));
+    b.writeln('format_version: $formatVersion');
     return b.toString();
   }
 
@@ -131,7 +137,8 @@ enum PackSource { manual, imported, itch }
 /// packs. Absent: the detector's guess.
 enum PackLayout { pack, bundle }
 
-/// Contents of an `asset_pack.json` file. Every field is optional.
+/// Contents of an `asset_pack.json` file. Every field is optional;
+/// a file without `format_version` is version 1.
 class PackSidecar {
   const PackSidecar({
     this.title,
@@ -180,8 +187,17 @@ class PackSidecar {
   /// Unknown keys, preserved on write.
   final Map<String, Object?> extra;
 
+  /// The `format_version` this app writes.
+  static const formatVersion = 1;
+
   static const _known = {
-    'title', 'types', 'tags', 'source', 'source_path', 'itch_game_id', //
+    'format_version',
+    'title',
+    'types',
+    'tags',
+    'source',
+    'source_path',
+    'itch_game_id', //
     'itch_url', 'previews', 'notes', 'used_in', 'animations',
     'favorite', 'favorite_files', 'layout',
   };
@@ -215,6 +231,7 @@ class PackSidecar {
   }
 
   Map<String, Object?> toJson() => {
+    'format_version': formatVersion,
     'title': ?title,
     if (types.isNotEmpty) 'types': types,
     if (tags.isNotEmpty) 'tags': tags,

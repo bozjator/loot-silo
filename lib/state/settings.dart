@@ -222,7 +222,12 @@ class AppSettings {
     this.dashboardTreeWidth = defaultTreeWidth,
     this.resumeSession = true,
     this.lastSession,
+    this.extra = const {},
   });
+
+  /// The `format_version` this app writes. Older versions are upgraded on
+  /// read; a file without one is version 1.
+  static const formatVersion = 1;
 
   /// The managed library folder; null until the user picks one.
   final String? libraryPath;
@@ -308,6 +313,9 @@ class AppSettings {
   /// nothing was saved or [resumeSession] is off.
   final LastSession? lastSession;
 
+  /// Keys this version doesn't know (from a newer app), kept on write.
+  final Map<String, Object?> extra;
+
   factory AppSettings.fromJson(Map<String, Object?> json) => AppSettings(
     libraryPath: json['library_path'] as String?,
     theme: ThemeChoice.values.asNameMap()[json['theme']] ?? ThemeChoice.system,
@@ -365,9 +373,26 @@ class AppSettings {
         LastSession.fromJson(m),
       _ => null,
     },
+    extra: {
+      for (final e in json.entries)
+        if (!_known.contains(e.key)) e.key: e.value,
+    },
   );
 
+  static const _known = {
+    'format_version', 'library_path', 'theme', 'theme_color', 'style', //
+    'cover_fit', 'animate_all', 'audio_loop', 'dashboard_tile_size',
+    'image_thumb_size', 'animation_thumb_size', 'model_thumb_size',
+    'material_thumb_size', 'detail_header_pinned', 'images_view',
+    'animations_view', 'models_view', 'materials_view', 'dashboard_view',
+    'detail_animate_mode', 'audio_view', 'audio_sort', 'audio_sort_desc',
+    'audio_format', 'previews_columns', 'previews_fit', 'dashboard_tree_open',
+    'dashboard_tree_width', 'resume_session', 'last_session',
+  };
+
   Map<String, Object?> toJson() => {
+    ...extra,
+    'format_version': formatVersion,
     'library_path': ?libraryPath,
     'theme': theme.name,
     'theme_color': themeColor.name,
@@ -461,6 +486,7 @@ class AppSettings {
     lastSession: identical(lastSession, _keep)
         ? this.lastSession
         : lastSession as LastSession?,
+    extra: extra,
   );
 
   /// [copyWith]'s "leave [lastSession] as it is"; pass null to clear it.
