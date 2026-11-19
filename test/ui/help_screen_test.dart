@@ -34,6 +34,26 @@ void main() {
     expect(animationWords, orderedEquals([...animationWords]..sort()));
   });
 
+  // Desktop, where scrollables get a scrollbar of their own.
+  testWidgets('the page scrolls with one steady scrollbar', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const MaterialApp(home: HelpScreen()));
+    await tester.pump();
+    final page = find.byType(Scrollable).first;
+    final lengths = <double>{};
+    for (var i = 0; i < 30; i++) {
+      lengths.add(tester.state<ScrollableState>(page).position.maxScrollExtent);
+      await tester.drag(page, const Offset(0, -400));
+      await tester.pump();
+    }
+    // The length is known from the start, so the thumb doesn't jump
+    // (a lazy list re-guessed it from 6000 to 26000 px).
+    expect(lengths, hasLength(1));
+    // Only the page's: no paragraph shows a scrollbar of its own.
+    expect(find.byWidgetPredicate((w) => w is RawScrollbar), findsOneWidget);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
   testWidgets('every shortcut and gesture of the table is listed', (
     tester,
   ) async {

@@ -7,12 +7,11 @@ import '../state/settings.dart';
 import '../version.dart';
 import 'itch_screen.dart';
 import 'help_screen.dart';
-import 'shortcuts.dart';
 import 'theme_colors.dart';
 import 'widgets/branding.dart';
 import 'widgets/project_links.dart';
 
-/// Keyboard shortcuts, listed on the settings screen.
+/// Library, appearance, itch.io and about; the shortcuts are on Help (F1).
 class SettingsScreen extends ConsumerWidget {
   /// Its route's name, so Ctrl+, doesn't open it twice.
   static const routeName = 'settings';
@@ -229,22 +228,6 @@ class SettingsScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              section('Keyboard shortcuts'),
-              for (final k in shortcutSections.first.$2)
-                ListTile(
-                  dense: true,
-                  leading: SizedBox(
-                    width: 180,
-                    child: Text(
-                      k.keys,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  title: Text(k.label),
-                ),
               section('Help'),
               ListTile(
                 leading: const Icon(Icons.help_outline),

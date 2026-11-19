@@ -821,11 +821,11 @@ void main() {
         300,
         scrollable: find.byType(Scrollable).first,
       );
-      final shortcuts = tester.getTopLeft(find.text('Keyboard shortcuts')).dy;
       final help = tester.getTopLeft(find.text('Help')).dy;
       final entry = tester.getTopLeft(find.text('How Loot Silo works')).dy;
       final about = tester.getTopLeft(find.text('About')).dy;
-      expect(shortcuts, lessThan(help));
+      // The shortcuts live on the Help page only.
+      expect(find.text('Keyboard shortcuts'), findsNothing);
       expect(help, lessThan(entry));
       expect(entry, lessThan(about));
     });
