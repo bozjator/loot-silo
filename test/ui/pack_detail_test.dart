@@ -6616,6 +6616,25 @@ void main() {
       expect(find.text('Models'), findsOneWidget);
       expect(find.textContaining('GLTF format'), findsNothing);
     });
+
+    testWidgets('a material pack with models opens on Models', (tester) async {
+      final (json, bin) = cubeGltf();
+      await openKnight(
+        tester,
+        files: const ['Wood_BaseColor.png', 'Wood_Normal.png'],
+        types: ['material'],
+        raw: {'Models/tree.glb': glbBytes(json, bin)},
+        overrides: [
+          modelCacheProvider.overrideWithValue(
+            ModelCache(read: (path) async => readModelForPreview(path)),
+          ),
+        ],
+      );
+      await tester.pump();
+      expect(find.text('Materials (1)'), findsOneWidget);
+      expect(find.byKey(const ValueKey('model:models/tree')), findsOneWidget);
+      expect(find.byKey(const ValueKey('material:Wood')), findsNothing);
+    });
   });
 
   group('Materials tab (M62)', () {

@@ -589,18 +589,19 @@ class _BodyState extends State<_Body> {
         ),
       ],
     ];
-    // Music / sfx packs open on their Audio tab, packs typed `material` on
-    // Materials, 3D packs on Models; a
+    // Music / sfx packs open on their Audio tab, 3D and material packs on
+    // Models when they have one, else material packs on Materials; a
     // clicked file result on the tab that lists it.
     final audioTab = tabs.indexWhere((t) => t.$1 == _AudioTab);
     final modelsTab = tabs.indexWhere((t) => t.$1 == ModelsTab);
     final materialsTab = tabs.indexWhere((t) => t.$1 == MaterialsTab);
+    final materialPack = pack.types.contains(AssetType.material.id);
     var initial = isAudioPack(pack.types) && audioTab >= 0
         ? audioTab
-        : pack.types.contains(AssetType.material.id) && materialsTab >= 0
-        ? materialsTab
-        : isModelPack(pack.types) && modelsTab >= 0
+        : (isModelPack(pack.types) || materialPack) && modelsTab >= 0
         ? modelsTab
+        : materialPack && materialsTab >= 0
+        ? materialsTab
         : 0;
     if (widget.file case final file? when widget.search != null) {
       final at = tabs.indexWhere(
