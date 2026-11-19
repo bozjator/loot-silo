@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../version.dart';
-import 'glass.dart';
 
 /// Branding images, built by `tool/branding/make_branding.py` from the two
 /// source images in `tool/branding/source` (icon_full_centered.png and
@@ -19,6 +18,9 @@ abstract final class Branding {
   /// "LootSilo" over the slogan, as one picture (outlined, so it reads on
   /// light and dark backgrounds).
   static const title = 'assets/branding/title_slogan.png';
+
+  /// "LootSilo" alone, as one picture, for the app bar.
+  static const name = 'assets/branding/title.png';
 
   /// The README logo: [AppLogo]'s lockup as one image. Not bundled.
   static const logoReadme = 'assets/branding/logo_readme.png';
@@ -71,44 +73,20 @@ class AppLogo extends StatelessWidget {
   );
 }
 
-/// The app bar title: the small silo icon, then "Loot Silo".
+/// The app bar title: the "LootSilo" picture ([Branding.name]).
 class AppBarTitle extends StatelessWidget {
   const AppBarTitle({super.key});
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Image.asset(
-        Branding.iconSmall,
-        key: const ValueKey('app-bar-icon'),
-        width: 28,
-        height: 28,
-        filterQuality: FilterQuality.medium,
-        excludeFromSemantics: true,
-      ),
-      const SizedBox(width: 10),
-      // The name in a sweep of the theme's colours.
-      Builder(
-        builder: (context) {
-          // Classic: the plain title.
-          if (!isGlass(context)) return const Text(appName);
-          final scheme = Theme.of(context).colorScheme;
-          return ShaderMask(
-            blendMode: BlendMode.srcIn,
-            shaderCallback: (bounds) =>
-                LinearGradient(colors: [scheme.primary, scheme.tertiary])
-                    .createShader(bounds),
-            child: const Text(
-              appName,
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
-              ),
-            ),
-          );
-        },
-      ),
-    ],
+  Widget build(BuildContext context) => Semantics(
+    label: appName,
+    image: true,
+    excludeSemantics: true,
+    child: Image.asset(
+      Branding.name,
+      key: const ValueKey('app-bar-title'),
+      height: 26,
+      filterQuality: FilterQuality.medium,
+    ),
   );
 }

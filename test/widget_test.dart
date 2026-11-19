@@ -41,20 +41,17 @@ void main() {
       ),
     );
     expect(find.text('Choose a library folder'), findsOneWidget);
-    // M48/M49: the icon and name in the app bar, the logo (name and
-    // slogan) over the message.
+    // M48/M49: the name picture (no icon) in the app bar, the logo (name
+    // and slogan) over the message.
     final bar = find.byType(AppBar);
-    expect(
-      find.descendant(of: bar, matching: find.text('Loot Silo')),
-      findsOneWidget,
-    );
     expect(
       find.descendant(
         of: bar,
-        matching: find.byKey(const ValueKey('app-bar-icon')),
+        matching: find.byKey(const ValueKey('app-bar-title')),
       ),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('app-bar-icon')), findsNothing);
     // M52: the lockup with the app icon's silo.
     expectLockup(tester);
     expect(
@@ -137,11 +134,11 @@ void main() {
     await tester.pump();
     // M45: one import icon in the app bar, no import buttons.
     final bar = find.byType(AppBar);
-    // M49: the silo icon before the name.
+    // M49: the name picture, without the silo icon.
     expect(
       find.descendant(
         of: bar,
-        matching: find.byKey(const ValueKey('app-bar-icon')),
+        matching: find.byKey(const ValueKey('app-bar-title')),
       ),
       findsOneWidget,
     );
