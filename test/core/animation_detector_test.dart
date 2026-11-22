@@ -461,6 +461,44 @@ void main() {
     expect(strong.anim, isNull);
   });
 
+  test('a chosen "20frames" cover laid out in rows animates as that grid', () {
+    // 5 × 4 frames of 24×20, each a blob with a 3 px transparent border.
+    const rel = 'imp-attack2_prep_20frames.png';
+    png(
+      rel,
+      120,
+      80,
+      blobs: [
+        for (var i = 0; i < 20; i++)
+          ((i % 5) * 24 + 3, (i ~/ 5) * 20 + 3, 18, 14),
+      ],
+    );
+    final cover = choosePreviewAnimation(
+      tmp.path,
+      [rel],
+      preview: rel,
+      rank: 1,
+    );
+    expect(cover.preview, rel);
+    final a = cover.anim!;
+    expect((a.frameW, a.frameH, a.cols, a.rows), (24, 20, 5, 4));
+    // A clean one-row strip keeps the name's frames.
+    const strip = 'beam_4frames.png';
+    png(
+      strip,
+      80,
+      80,
+      blobs: [for (var i = 0; i < 4; i++) (i * 20 + 3, 3, 14, 74)],
+    );
+    final s = choosePreviewAnimation(
+      tmp.path,
+      [strip],
+      preview: strip,
+      rank: 1,
+    ).anim!;
+    expect((s.frameW, s.cols, s.rows), (20, 4, 1));
+  });
+
   test('SpriteAnim JSON round trip and copyWith', () {
     const a = SpriteAnim(
       path: 's.png',

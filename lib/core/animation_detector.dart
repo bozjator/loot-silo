@@ -1222,7 +1222,18 @@ List<String> animationCandidates(Iterable<String> files, {int limit = 400}) {
   }
   final size = readImageSize(p.join(packPath, preview));
   if (size == null) return (preview: preview, anim: null);
-  var sheet = detectSheet(preview, size.$1, size.$2);
+  final (w, h) = size;
+  final found = _detectSheet(preview, w, h);
+  var sheet = found?.anim;
+  // A `…_20frames.png` cover laid out in rows: the same grid as on the
+  // Animations tab ([gridFromCountHint]), not 20 slices across.
+  if (found?.countHint case final n?
+      when countGrids(w, h, n).isNotEmpty &&
+          wordScanSize(w, h) &&
+          !atlasImages(files).contains(preview)) {
+    final decoded = _alphaOf(packPath, preview);
+    if (decoded != null) sheet = gridFromCountHint(sheet!, decoded, n) ?? sheet;
+  }
   // A strip made with "Combine" / "Make animation" chosen as the cover:
   // its saved frame size, as on the Animations tab, even where the name
   // alone finds no frames (non-square frames).
