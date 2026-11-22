@@ -11,6 +11,7 @@ import '../state/providers.dart';
 import '../state/settings.dart';
 import 'pack_detail_screen.dart';
 import 'tabs.dart';
+import 'track_player.dart' show shutDownAudio;
 
 /// The session key of a pack page opened in the Dashboard tab; pack tabs
 /// use [tabSessionKey].
@@ -129,7 +130,8 @@ DashboardQuery restoredQuery(LastSession session, List<PackRow> packs) {
 
 /// Restores the saved session once the library has loaded (when "Resume
 /// where I left off" is on), then starts recording it; flushes it when the
-/// app is asked to exit. A library that fails to load restores nothing.
+/// app is asked to exit, and stops the audio engine then. A library that
+/// fails to load restores nothing.
 class SessionHost extends ConsumerStatefulWidget {
   const SessionHost({super.key, required this.child});
 
@@ -149,6 +151,7 @@ class _SessionHostState extends ConsumerState<SessionHost> {
     _lifecycle = AppLifecycleListener(
       onExitRequested: () async {
         ref.read(sessionKeeperProvider).flush();
+        await shutDownAudio();
         return AppExitResponse.exit;
       },
       onDetach: () => ref.read(sessionKeeperProvider).flush(),

@@ -44,10 +44,11 @@ dependencies:
   image: ^4.12.0
   # Audio playback. Decodes Ogg/Opus/FLAC/MP3/WAV itself on every platform
   # (Windows' Media Foundation can't open Ogg in a desktop app).
-  # Held below 5.3: from 5.3.0 (still in 5.3.1) the macOS plugin calls
-  # soloud_vst3HostUnloadAll() on quit even when the native library was
-  # never loaded (no audio played), jumping to address 0 -> crash on quit.
-  flutter_soloud: '>=5.2.3 <5.3.0'
+  # At least 5.3.2: 5.2.x hangs the process at exit on Windows once the
+  # engine has run (fixed in 5.3.0), and 5.3.0-5.3.1 crash on quit on macOS
+  # when no audio was played (fixed in 5.3.2). The app also shuts the
+  # engine down itself on exit (shutDownAudio in lib/ui/track_player.dart).
+  flutter_soloud: ^5.3.2
   url_launcher: ^6.3.3
   flutter_secure_storage: ^11.2.0
   http: ^1.6.0

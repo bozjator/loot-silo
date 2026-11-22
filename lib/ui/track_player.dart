@@ -21,14 +21,30 @@ abstract interface class TrackPlayer {
   Future<void> dispose();
 }
 
-/// Starts the one SoLoud engine on first use. Never shut down: it lives
-/// until the app exits. A failed start is tried again on the next play.
+/// Starts the one SoLoud engine on first use. It lives until the app exits
+/// ([shutDownAudio]). A failed start is tried again on the next play.
 Future<void>? _engineStart;
 Future<void> _engine() {
   if (SoLoud.instance.isInitialized) return Future.value();
   return _engineStart ??= SoLoud.instance.init().whenComplete(
     () => _engineStart = null,
   );
+}
+
+/// Stops the SoLoud engine, if it ever started; call it when the app is
+/// about to exit. Left running, its audio thread is killed by the exit and
+/// the plugin's own cleanup can wait on it forever: flutter_soloud 5.2.x
+/// left the process hanging on Windows that way.
+Future<void> shutDownAudio() async {
+  try {
+    await _engineStart;
+  } on Object {
+    // A start that failed left nothing to stop.
+  }
+  if (!SoLoud.instance.isInitialized) return;
+  SoLoud.instance.deinit();
+  _sources.clear();
+  _disposing.clear();
 }
 
 /// Files up to this size are decoded into memory (instant, exact seeks);
