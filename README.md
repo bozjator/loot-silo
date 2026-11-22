@@ -96,6 +96,10 @@ an audio editor. Each sound shows its waveform (WAV, MP3 and Ogg Vorbis), so
 a short click and a long whoosh look different before you play them; a sound
 saved in several formats is one row with a chip per format.
 
+<p align="center">
+  <img src="docs/media/loot-silo-pack-details-view-audio-tab-cards-view.png" alt="A music pack's Audio tab in Cards view: a grid of OGG loops, each with a play button, length, waveform and file details, one playing with its progress highlighted, plus Play all and Loop buttons" width="900">
+</p>
+
 ### Credits and licenses
 
 Keep the license and attribution for every author, mark which packs a game
