@@ -452,7 +452,8 @@ bool hasAnimationWord(String rel) => pathWords(rel).any(_isAnimWord);
 /// gaps ([detectSheetByGaps]; strips up to [maxWordStripWidth] ×
 /// [maxWordStripHeight], grids up to [maxWordGridSide] a side). An
 /// undetected file with an animation word then takes the grid of a
-/// detected sheet of exactly its size in its folder ([borrowGrid]). Any
+/// detected sheet of exactly its size in its folder ([borrowGrid]), when
+/// that grid's cuts are transparent in its own pixels too. Any
 /// other undetected file whose size is a whole number of an animation's
 /// frames in its folder is cut into those cells when the cuts are
 /// transparent ([cellGrid]; same budget). A
@@ -594,7 +595,26 @@ List<SpriteAnim> detectAnimations(
       sureness[rel] = -1;
     }
   }
-  final borrowed = borrowGrid(sureness, out, sizes);
+  // A folder holds all sorts: a neighbour's grid is only taken when its
+  // cuts fall on transparent lines here too. A shadow line halfway down
+  // one rocky-dude sheet (160×80) doesn't cut the others, nor do 16 px
+  // cells borrowed by 32×32 single props; a boat whose wake hides its
+  // own gaps still takes its siblings' 288×256.
+  final borrowed = <SpriteAnim>[];
+  for (final a in borrowGrid(sureness, out, sizes)) {
+    final (w, h) = sizes[a.path]!;
+    if (!wordScanSize(w, h) ||
+        wordScans >= maxWordScans ||
+        wordPixels + w * h > maxWordPixels) {
+      continue;
+    }
+    wordScans++;
+    wordPixels += w * h;
+    if (_alphaOf(packPath, a.path) case (final alpha, final dw, final dh)
+        when _cleanCuts(alpha, dw, dh, a.frameW, a.frameH)) {
+      borrowed.add(a);
+    }
+  }
   final replaced = {for (final a in borrowed) a.path};
   out
     ..removeWhere((a) => replaced.contains(a.path))

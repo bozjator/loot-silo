@@ -831,9 +831,12 @@ void main() {
       expect(wordScanSize(4097, 2048), isFalse);
     });
 
-    test('a same-size file without gaps borrows its sibling\'s grid', () {
+    test('a sibling\'s grid is only taken where its cuts are clean', () {
+      // 308 single 32×32 props took one sheet's 16 px cells: an opaque
+      // file (every cut through the drawing) takes no grid. Neither does
+      // one of another size or in another folder.
       png('ship/sail-anim.png', 150, 40, blobs: cells(30, 40, 5, 1));
-      png('ship/sail-anim-fx.png', 150, 40); // particles: no clean gap
+      png('ship/sail-anim-fx.png', 150, 40);
       png('ship/sail-anim-wide.png', 170, 40); // other size
       png('other/sail-anim-fx.png', 150, 40); // other folder
       final anims = detect([
@@ -842,8 +845,7 @@ void main() {
         'ship/sail-anim-wide.png',
         'other/sail-anim-fx.png',
       ]);
-      final fx = anims['ship/sail-anim-fx.png']!;
-      expect((fx.frameW, fx.frameH, fx.cols, fx.rows), (30, 40, 5, 1));
+      expect(anims.containsKey('ship/sail-anim-fx.png'), isFalse);
       expect(anims.containsKey('ship/sail-anim-wide.png'), isFalse);
       expect(anims.containsKey('other/sail-anim-fx.png'), isFalse);
     });
