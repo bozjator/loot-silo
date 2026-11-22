@@ -286,35 +286,46 @@ void _extractWithPackage(String path, ArchiveKind format, String dest) {
   }
 }
 
-void _extractWithTool(String path, ArchiveKind format, String dest) {
-  final sevenZip = findTool(['7zz', '7z', '7za']);
-  final unrar = format == ArchiveKind.rar ? findTool(['unrar']) : null;
-  final bsdtar = systemBsdtar;
-  final ProcessResult result;
-  if (sevenZip != null) {
+void _extractWithTool(String path, ArchiveKind format, String dest) =>
+    extractWithTools(path, format, dest);
+
+/// Unpacks a 7z or rar archive at [path] into [dest] with the first tool
+/// that manages it. RAR tries unrar first: Debian and Ubuntu ship 7-Zip
+/// without its RAR codec ("Unsupported Method"), and some unrar builds
+/// (unrar-free) can't read RAR5, so each tool found is tried in turn.
+/// [environment] overrides the PATH search, for tests.
+void extractWithTools(
+  String path,
+  ArchiveKind format,
+  String dest, {
+  Map<String, String>? environment,
+}) {
+  final sevenZip = findTool(['7zz', '7z', '7za'], environment: environment);
+  final unrar = format == ArchiveKind.rar
+      ? findTool(['unrar'], environment: environment)
+      : null;
+  final bsdtar = environment == null ? systemBsdtar : null;
+  final attempts = <(String, List<String>, {bool isTar})>[
     // -p- fails encrypted archives instead of waiting for a password.
-    result = Process.runSync(sevenZip, [
-      'x',
-      '-y',
-      '-bd',
-      '-p-',
-      '-o$dest',
-      path,
-    ]);
-  } else if (unrar != null) {
-    result = Process.runSync(unrar, ['x', '-o+', '-y', '-p-', path, '$dest/']);
-  } else if (bsdtar != null) {
+    if (unrar != null)
+      (unrar, ['x', '-o+', '-y', '-p-', path, '$dest/'], isTar: false),
+    if (sevenZip != null)
+      (sevenZip, ['x', '-y', '-bd', '-p-', '-o$dest', path], isTar: false),
     // bsdtar refuses absolute and `..` entries unless given -P.
-    result = Process.runSync(bsdtar, ['-x', '-f', path, '-C', dest]);
-  } else {
+    if (bsdtar != null) (bsdtar, ['-x', '-f', path, '-C', dest], isTar: true),
+  ];
+  if (attempts.isEmpty) {
     throw ExtractError(
       'Extracting ${p.basename(path)} needs 7-Zip'
       '${format == ArchiveKind.rar ? ' or unrar' : ''}; '
       '$archiveToolInstallHint.',
     );
   }
-  if (result.exitCode != 0) {
-    final usedTar = sevenZip == null && unrar == null;
+  String? firstMessage;
+  var onlyTar = true;
+  for (final (tool, args, :isTar) in attempts) {
+    final result = Process.runSync(tool, args);
+    if (result.exitCode == 0) return;
     final lines = [
       for (final l in '${result.stderr}'.split('\n'))
         if (l.trim().isNotEmpty) l.trim(),
@@ -323,15 +334,21 @@ void _extractWithTool(String path, ArchiveKind format, String dest) {
     // with "Error exit delayed from previous errors".
     final message = lines.isEmpty
         ? ''
-        : usedTar
+        : isTar
         ? lines.first.replaceFirst('tar: ', '')
         : lines.last;
-    throw ExtractError(
-      'Could not extract ${p.basename(path)}'
-      '${message.isEmpty ? '' : ': $message'}'
-      '${usedTar ? '. If it opens elsewhere, $archiveToolInstallHint' : ''}',
-    );
+    firstMessage ??= message;
+    onlyTar = onlyTar && isTar;
+    // Start the next tool from an empty folder.
+    for (final e in Directory(dest).listSync(followLinks: false)) {
+      e.deleteSync(recursive: true);
+    }
   }
+  throw ExtractError(
+    'Could not extract ${p.basename(path)}'
+    '${firstMessage!.isEmpty ? '' : ': $firstMessage'}'
+    '${onlyTar ? '. If it opens elsewhere, $archiveToolInstallHint' : ''}',
+  );
 }
 
 const _junkNames = {'__MACOSX', '.DS_Store', 'Thumbs.db', 'desktop.ini'};

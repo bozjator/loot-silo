@@ -253,6 +253,50 @@ void main() {
     );
   }, skip: systemBsdtar == null && sevenZip == null ? 'no rar tool' : false);
 
+  test('rar goes to unrar first, then 7-Zip when unrar fails', () {
+    final bin = Directory(p.join(tmp.path, 'bin'))..createSync();
+    final log = p.join(tmp.path, 'calls.log');
+    // A fake tool: logs its name, then fails or writes a file into the
+    // destination (unrar's last argument, 7-Zip's -o<dest>).
+    void fake(String name, {required bool works}) {
+      final script = File(p.join(bin.path, name))
+        ..writeAsStringSync('''#!/bin/sh
+echo $name >> "$log"
+${works ? '''for a in "\$@"; do case "\$a" in -o/*) d="\${a#-o}";; */) d="\$a";; esac; done
+echo x > "\$d/sfx.wav"; exit 0''' : 'echo "ERROR: Unsupported Method : sfx.wav" >&2; exit 2'}
+''');
+      Process.runSync('chmod', ['+x', script.path]);
+    }
+
+    final dest = Directory(p.join(tmp.path, 'dest'))..createSync();
+    final env = {'PATH': bin.path};
+    fake('7z', works: true);
+    fake('unrar', works: false);
+    extractWithTools('x.rar', ArchiveKind.rar, dest.path, environment: env);
+    expect(File(log).readAsLinesSync(), ['unrar', '7z']);
+    expect(files(dest.path), ['sfx.wav']);
+
+    // Both failing reports the first tool's reason.
+    File(log).deleteSync();
+    fake('7z', works: false);
+    expect(
+      () => extractWithTools(
+        'x.rar',
+        ArchiveKind.rar,
+        dest.path,
+        environment: env,
+      ),
+      throwsA(
+        isA<ExtractError>().having(
+          (e) => e.message,
+          'message',
+          'Could not extract x.rar: ERROR: Unsupported Method : sfx.wav',
+        ),
+      ),
+    );
+    expect(File(log).readAsLinesSync(), ['unrar', '7z']);
+  }, skip: Platform.isWindows ? 'shell scripts' : false);
+
   test('missing tools give an actionable error', () {
     expect(findTool(['7z'], environment: {'PATH': tmp.path}), isNull);
   });
