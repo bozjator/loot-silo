@@ -12,10 +12,11 @@
 **Loot Silo is a game asset manager for game devs.** It is a desktop
 asset library organizer and sprite / spritesheet viewer for everything you
 have bought, bundled or downloaded: pixel art, tilesets, characters, UI,
-VFX, sound effects, music and fonts. Import your packs once, then find any
-sprite, sound or tileset in seconds, watch animations play, and copy the
-credits into your game. It also works as an itch.io asset manager: link your
-itch.io purchases and keep them in the same library.
+VFX, 3D models, PBR materials, sound effects, music and fonts. Import your
+packs once, then find any sprite, sound, model or texture in seconds, watch
+animations play, and copy the credits into your game. It also works as an
+itch.io asset manager: connect your account and Loot Silo downloads every
+asset pack you own straight into the same library.
 
 <p align="center">
   <img src="docs/media/loot-silo-dashboard-with-open-tabs.png" alt="The Loot Silo dashboard: a grid of game asset packs with covers, authors and type tags, filter chips, and four packs open in tabs" width="900">
@@ -26,7 +27,8 @@ itch.io purchases and keep them in the same library.
 ### Library and import
 
 Drop in folders or archives (zip, tar, 7z, rar), from the import menu or by
-drag and drop. Loot Silo finds the packs inside, guesses author and type,
+drag and drop; archives inside imported folders are unpacked too. Loot Silo
+finds the packs inside, guesses author and type,
 shows you a review before anything is copied, and checks every copied file
 against its SHA-1. Your library is one folder arranged as `Author/Pack` —
 plain files you can open in any file manager. Big collections become bundles
@@ -39,7 +41,9 @@ Search packs, authors, tags and file names as you type. Filter by type
 author, tag
 or source; star your favorite packs; sort by best match, name, author, size,
 file count, tags or type. Packs, Expanded and Files views; a slider sets the
-thumbnail size, and pack covers play their animations.
+thumbnail size, and pack covers play their animations. The folder tree shows
+your packs, bundles and the folders inside them, with counts; click a folder
+to see only what is under it, in every view.
 
 ### Sprite sheet and animation detection
 
@@ -53,9 +57,10 @@ automatically, at the right frame size — all at once or on hover.
 </p>
 
 When a guess is wrong, fix it in the Edit dialog: frame width and height,
-frame count, FPS, or mark the file "Not an animation". "Make animation…"
-turns any image into a sheet, and you can combine single frame files into a
-strip.
+frame count, FPS, which row of a grid plays, or mark the file "Not an
+animation". "Make animation…" turns any image into a sheet, and you can
+combine single frame files into a strip. Copy as GIF turns any animation into
+a looping GIF file, ready for your devlog, Discord or game jam page.
 
 <p align="center">
   <img src="docs/media/loot-silo-animation-config.png" alt="The animation Edit dialog: a sprite playing next to its FPS slider, frame width, frame height and frame count" width="900">
@@ -66,6 +71,8 @@ strip.
 Images open at 1:1, actual pixels as in your game, so pixel art stays crisp
 (an image bigger than the window opens fitted); switch to Fit, zoom with the
 wheel and drag to pan. Focus mode steps through cards with the arrow keys.
+Right-click any file to copy the image, copy the file, copy its path, or open
+it with the program of your choice.
 
 ### 3D models
 
@@ -93,8 +100,11 @@ materials get the Material type, so you can filter for them on the dashboard.
 Play sound effects and music loops right in the pack, with length and size
 shown, Play all and Loop, so you find the right "jump" sound without opening
 an audio editor. Each sound shows its waveform (WAV, MP3 and Ogg Vorbis), so
-a short click and a long whoosh look different before you play them; a sound
-saved in several formats is one row with a chip per format.
+a short click and a long whoosh look different before you play them; click
+the waveform of a longer sound to seek. Show sounds as rows or cards, and
+sort them by name, length, size, sample rate, bitrate and more. A sound saved
+in several formats is shown once, with a chip per format; Settings picks the
+format played first.
 
 <p align="center">
   <img src="docs/media/loot-silo-pack-details-view-audio-tab-cards-view.png" alt="A music pack's Audio tab in Cards view: a grid of OGG loops, each with a play button, length, waveform and file details, one playing with its progress highlighted, plus Play all and Loop buttons" width="900">
@@ -103,19 +113,24 @@ saved in several formats is one row with a chip per format.
 ### Credits and licenses
 
 Keep the license and attribution for every author, mark which packs a game
-uses, and get the credits for that game ready to paste.
+uses, and get the credits for that game ready to paste, or save them as
+`CREDITS.md` / `CREDITS.txt`. License and readme files open inside the app,
+Markdown rendered.
 
 ### itch.io sync
 
-Add your itch.io API key (kept in the system keyring) and Loot Silo lists
-your purchases, matches them to packs you already have, and imports the
-rest.
+Add your itch.io API key once (kept in the system keyring) and Loot Silo
+lists every purchase, claim and bundle you own. "Download all missing"
+fetches, unpacks and files each pack as `Author/Pack`, with its cover and
+screenshots from the itch.io page. Packs you already have on disk are
+recognised and linked, not downloaded twice, and game builds and programs
+are skipped.
 
 ### Tabs, resume and themes
 
-Open packs in tabs (middle-click, Ctrl+Tab to switch); Loot Silo reopens where
-you left off — tabs, filters, sort and view. Pick a colour theme, light or
-dark.
+Open packs in tabs (middle-click, Ctrl+Tab to switch, drag to reorder);
+Loot Silo reopens where you left off — tabs, filters, sort, view, even folded
+folders. Pick the Glass or Classic style, light or dark, and a colour theme.
 
 Press F1 in the app for the full guide and every keyboard shortcut.
 
@@ -126,8 +141,8 @@ Press F1 in the app for the full guide and every keyboard shortcut.
   and your library is still a tidy folder.
 - **No cloud, no account.** Everything stays on your disk. The only network
   calls are the itch.io ones you turn on.
-- **Made for game dev.** It knows what a sprite sheet, a tileset and a
-  credits screen are.
+- **Made for game dev.** It knows what a sprite sheet, a tileset, a PBR
+  material and a credits screen are.
 
 ## FAQ
 
@@ -153,8 +168,9 @@ that is mostly Loot Silo. See the [license](LICENSE).
 
 ## Build from source
 
-Needs the Flutter SDK (stable) with Linux desktop support, plus
-`libsecret-1-dev` (for the itch.io key) and, for 7z and rar archives, `7zz`,
+Needs the Flutter SDK (stable) with desktop support for your system, plus
+`libsecret-1-dev` on Linux (for the itch.io key) and, for 7z and rar
+archives, `7zz`,
 `7z` or `unrar` on the PATH. On macOS the system `tar` reads most 7z and rar
 archives; 7-Zip (`brew install sevenzip`) covers the rest, such as encrypted
 or multi-volume ones.
@@ -170,7 +186,8 @@ A release build lands in `build/linux/x64/release/bundle/`:
 flutter build linux --release
 ```
 
-Windows and macOS runners are included but not yet tested.
+Windows and macOS are tested as well; build on that system with
+`flutter build windows --release` or `flutter build macos --release`.
 
 ### Branding
 
