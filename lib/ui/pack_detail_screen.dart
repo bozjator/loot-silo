@@ -3411,6 +3411,7 @@ class _NumberField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         isDense: true,
+        floatingLabelAlignment: FloatingLabelAlignment.center,
         errorText: errorText,
         errorMaxLines: errorMaxLines,
       ),
