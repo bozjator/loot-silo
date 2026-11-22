@@ -81,8 +81,11 @@ cp LICENSE "$STAGE/LICENSE.txt"
 elif command -v zip >/dev/null; then
   zip -qr -y "../$NAME.zip" .
 else
-  # Windows' own bsdtar (not Git Bash's GNU tar) writes zips.
-  "${SYSTEMROOT:-C:/Windows}/System32/tar.exe" -a -cf "../$NAME.zip" .
+  # Windows' own bsdtar (not Git Bash's GNU tar) writes zips. Name the
+  # entries rather than passing ".": that stores every path as "./…" plus a
+  # bare "./" entry, which Explorer refuses to extract.
+  shopt -s dotglob
+  "${SYSTEMROOT:-C:/Windows}/System32/tar.exe" -a -cf "../$NAME.zip" *
 fi)
 
 echo "Packed $DIST/$NAME.zip"
