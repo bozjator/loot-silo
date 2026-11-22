@@ -397,12 +397,7 @@ class _GameTile extends ConsumerWidget {
                   color: theme.colorScheme.surfaceContainerHighest,
                   child: const Icon(Icons.image_outlined),
                 )
-              : Image.network(
-                  game.coverUrl!,
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.none,
-                  errorBuilder: (_, _, _) => const Icon(Icons.broken_image),
-                ),
+              : ItchCover(NetworkImage(game.coverUrl!)),
         ),
       ),
       title: Text(game.title),
@@ -463,6 +458,112 @@ class _GameTile extends ConsumerWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// A game's cover. Animated covers (GIFs are common on itch.io) show their
+/// first frame and play only while hovered: a GIF playing in every row
+/// redraws the whole window at its frame rate, heavy under the Glass
+/// backdrop, with nothing else on screen moving.
+class ItchCover extends StatefulWidget {
+  const ItchCover(this.image, {super.key});
+
+  final ImageProvider image;
+
+  @override
+  State<ItchCover> createState() => _ItchCoverState();
+}
+
+class _ItchCoverState extends State<ItchCover> {
+  ImageStream? _stream;
+
+  /// Whether [_listener] is on [_stream]. A stream with no listeners can be
+  /// disposed by the image cache, and removing from it then throws.
+  var _listening = false;
+  ImageInfo? _info;
+  Object? _error;
+  var _hover = false;
+  late final _listener = ImageStreamListener(_onImage, onError: _onError);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(ItchCover old) {
+    super.didUpdateWidget(old);
+    if (old.image != widget.image) {
+      _info?.dispose();
+      _info = null;
+      _error = null;
+      _resolve();
+    }
+  }
+
+  void _resolve({bool force = false}) {
+    final stream = widget.image.resolve(createLocalImageConfiguration(context));
+    if (!force && stream.key == _stream?.key) return;
+    _unlisten();
+    _stream = stream..addListener(_listener);
+    _listening = true;
+  }
+
+  void _unlisten() {
+    if (_listening) _stream?.removeListener(_listener);
+    _listening = false;
+  }
+
+  void _onImage(ImageInfo info, bool sync) {
+    if (!mounted) return;
+    setState(() {
+      _info?.dispose();
+      _info = info;
+    });
+    // Holding no listener pauses multi-frame codecs on their current frame.
+    if (!_hover) _unlisten();
+  }
+
+  void _onError(Object error, StackTrace? stack) {
+    // A later frame of a GIF that fails to decode keeps the last good one.
+    if (mounted && _info == null) setState(() => _error = error);
+  }
+
+  void _setHover(bool hover) {
+    _hover = hover;
+    if (hover && !_listening) {
+      _resolve(force: true);
+    } else if (!hover) {
+      _unlisten();
+    }
+  }
+
+  @override
+  void dispose() {
+    _unlisten();
+    _info?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget child;
+    if (_error != null) {
+      child = const Icon(Icons.broken_image);
+    } else {
+      child = RawImage(
+        image: _info?.image,
+        scale: _info?.scale ?? 1,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.none,
+      );
+    }
+    return MouseRegion(
+      onEnter: (_) => _setHover(true),
+      onExit: (_) => _setHover(false),
+      child: SizedBox.expand(child: child),
     );
   }
 }
