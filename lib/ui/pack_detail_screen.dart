@@ -3327,7 +3327,7 @@ class _FramesField extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.center,
     children: [
       IconButton(
         tooltip: 'Fewer frames',
@@ -3361,6 +3361,8 @@ class _FramesField extends StatelessWidget {
           },
           child: _NumberField(
             label: 'Frames',
+            width: 80,
+            errorMaxLines: 3,
             controller: controller,
             onSubmit: onSubmit,
             onChanged: onChanged,
@@ -3385,9 +3387,13 @@ class _NumberField extends StatelessWidget {
     required this.onSubmit,
     this.onChanged,
     this.errorText,
+    this.width = 110,
+    this.errorMaxLines = 2,
   });
 
   final String label;
+  final double width;
+  final int errorMaxLines;
   final TextEditingController controller;
   final VoidCallback onSubmit;
 
@@ -3397,15 +3403,16 @@ class _NumberField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 110,
+    width: width,
     child: TextField(
       controller: controller,
       keyboardType: TextInputType.number,
+      textAlign: TextAlign.center,
       decoration: InputDecoration(
         labelText: label,
         isDense: true,
         errorText: errorText,
-        errorMaxLines: 2,
+        errorMaxLines: errorMaxLines,
       ),
       onSubmitted: (_) => onSubmit(),
       onChanged: onChanged == null ? null : (_) => onChanged!(),
