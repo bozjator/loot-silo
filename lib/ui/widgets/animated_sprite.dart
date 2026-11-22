@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 
@@ -45,9 +44,18 @@ class AnimatedSprite extends StatefulWidget {
   State<AnimatedSprite> createState() => _AnimatedSpriteState();
 }
 
-class _AnimatedSpriteState extends State<AnimatedSprite>
-    with SingleTickerProviderStateMixin {
-  late final Ticker _ticker = createTicker(_tick);
+class _AnimatedSpriteState extends State<AnimatedSprite> {
+  /// Steps the frames at the animation's own rate. A timer, not a Ticker:
+  /// a Ticker asks for a frame on every vsync, and each of those redraws
+  /// the whole window (heavy under the Glass backdrop) although the sprite
+  /// changes only a few times a second.
+  Timer? _timer;
+
+  /// The period [_timer] runs at, to restart it when the fps changes.
+  Duration? _period;
+
+  /// Off in a muted subtree (a hidden tab), like a Ticker would be.
+  var _tickerMode = true;
   final _images = <ui.Image>[];
 
   /// Streams still being listened to; a listener detaches itself once its
@@ -63,7 +71,9 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _tickerMode = TickerMode.valuesOf(context).enabled;
     if (!_loading) _load();
+    _syncTimer();
   }
 
   @override
@@ -88,7 +98,7 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
       _frame = 0;
       _skipEmpty();
     }
-    _syncTicker();
+    _syncTimer();
   }
 
   void _load() {
@@ -122,7 +132,7 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
               _frame = 0;
             });
             _skipEmpty();
-            _syncTicker();
+            _syncTimer();
           }
         },
         onError: (e, _) {
@@ -187,26 +197,30 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
       _frames = kept;
       _frame = _frame % kept.length;
     });
-    _syncTicker();
+    _syncTimer();
   }
 
-  void _syncTicker() {
-    final shouldRun = widget.playing && _frames.length > 1;
-    if (shouldRun && !_ticker.isActive) {
-      _ticker.start();
-    } else if (!shouldRun && _ticker.isActive) {
-      _ticker.stop();
-      if (_frame != 0) setState(() => _frame = 0);
+  void _syncTimer() {
+    final fps = widget.fps ?? widget.anim.fps;
+    final shouldRun =
+        widget.playing && _tickerMode && _frames.length > 1 && fps > 0;
+    final period = shouldRun
+        ? Duration(microseconds: (Duration.microsecondsPerSecond / fps).round())
+        : null;
+    if (period == _period) return;
+    _timer?.cancel();
+    _timer = null;
+    _period = period;
+    if (period != null) {
+      _timer = Timer.periodic(period, (_) => _tick());
+    } else if (!widget.playing && _frame != 0) {
+      setState(() => _frame = 0);
     }
   }
 
-  void _tick(Duration elapsed) {
-    final fps = widget.fps ?? widget.anim.fps;
-    final next =
-        (elapsed.inMicroseconds * fps / Duration.microsecondsPerSecond)
-            .floor() %
-        _frames.length;
-    if (next != _frame) setState(() => _frame = next);
+  void _tick() {
+    if (_frames.isEmpty) return;
+    setState(() => _frame = (_frame + 1) % _frames.length);
   }
 
   void _release() {
@@ -223,7 +237,7 @@ class _AnimatedSpriteState extends State<AnimatedSprite>
 
   @override
   void dispose() {
-    _ticker.dispose();
+    _timer?.cancel();
     _release();
     super.dispose();
   }

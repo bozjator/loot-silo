@@ -8,7 +8,10 @@ import 'package:flutter/material.dart';
 /// above it pick up its colour.
 ///
 /// Static on purpose: a drifting backdrop repainted every frame under the
-/// translucent cards slowed hover effects over time.
+/// translucent cards slowed hover effects over time. Drawn once into an
+/// image per size and theme ([_RenderAurora]): every frame the window is
+/// redrawn (a playing sprite, a hover glow) then costs one image copy, not
+/// four window-sized gradients, a vignette and thousands of dots.
 class AuroraBackdrop extends StatelessWidget {
   const AuroraBackdrop({super.key, required this.child});
 
@@ -20,18 +23,111 @@ class AuroraBackdrop extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        RepaintBoundary(
-          child: CustomPaint(
-            isComplex: true,
-            painter: _AuroraPainter(
-              scheme: scheme,
-              dark: scheme.brightness == Brightness.dark,
-            ),
+        _Aurora(
+          painter: _AuroraPainter(
+            scheme: scheme,
+            dark: scheme.brightness == Brightness.dark,
           ),
+          pixelRatio: MediaQuery.devicePixelRatioOf(context),
         ),
         child,
       ],
     );
+  }
+}
+
+class _Aurora extends LeafRenderObjectWidget {
+  const _Aurora({required this.painter, required this.pixelRatio});
+
+  final _AuroraPainter painter;
+  final double pixelRatio;
+
+  @override
+  _RenderAurora createRenderObject(BuildContext context) =>
+      _RenderAurora(painter, pixelRatio);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderAurora renderObject) {
+    renderObject
+      ..painter = painter
+      ..pixelRatio = pixelRatio;
+  }
+}
+
+/// Paints [_AuroraPainter] into an image at the screen's pixel size and
+/// draws that image; repaints the image only when the size, pixel ratio or
+/// theme changes.
+class _RenderAurora extends RenderBox {
+  _RenderAurora(this._painter, this._pixelRatio);
+
+  _AuroraPainter _painter;
+  set painter(_AuroraPainter value) {
+    if (!value.shouldRepaint(_painter)) return;
+    _painter = value;
+    _dropImage();
+    markNeedsPaint();
+  }
+
+  double _pixelRatio;
+  set pixelRatio(double value) {
+    if (value == _pixelRatio) return;
+    _pixelRatio = value;
+    _dropImage();
+    markNeedsPaint();
+  }
+
+  ui.Image? _image;
+  Size? _imageSize;
+
+  @override
+  bool get isRepaintBoundary => true;
+
+  @override
+  bool get sizedByParent => true;
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) => constraints.biggest;
+
+  void _dropImage() {
+    _image?.dispose();
+    _image = null;
+    _imageSize = null;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (size.isEmpty) return;
+    if (_image == null || _imageSize != size) {
+      _dropImage();
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder)..scale(_pixelRatio);
+      _painter.paint(canvas, size);
+      final picture = recorder.endRecording();
+      _image = picture.toImageSync(
+        math.max(1, (size.width * _pixelRatio).ceil()),
+        math.max(1, (size.height * _pixelRatio).ceil()),
+      );
+      picture.dispose();
+      _imageSize = size;
+    }
+    final image = _image!;
+    context.canvas.drawImageRect(
+      image,
+      Offset.zero & Size(image.width.toDouble(), image.height.toDouble()),
+      Rect.fromLTWH(
+        offset.dx,
+        offset.dy,
+        image.width / _pixelRatio,
+        image.height / _pixelRatio,
+      ),
+      Paint()..filterQuality = FilterQuality.low,
+    );
+  }
+
+  @override
+  void dispose() {
+    _dropImage();
+    super.dispose();
   }
 }
 

@@ -101,6 +101,37 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('playing asks for a frame only when the sprite changes', (
+    tester,
+  ) async {
+    // A Ticker asked for one every vsync, redrawing the whole window
+    // (costly under the Glass backdrop) for a sprite at 10 fps.
+    await pumpSprite(tester, playing: true);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    final before = src(tester);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(src(tester), isNot(before));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a muted subtree (hidden tab) does not play', (tester) async {
+    await pumpSprite(tester, playing: true);
+    final sprite = tester.widget<AnimatedSprite>(find.byType(AnimatedSprite));
+    await tester.pumpWidget(
+      TickerMode(
+        enabled: false,
+        child: Center(child: SizedBox(width: 64, height: 64, child: sprite)),
+      ),
+    );
+    final shown = src(tester);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(src(tester), shown);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('a total-frames override stops before the remaining cells', (
     tester,
   ) async {
