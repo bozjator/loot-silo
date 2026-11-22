@@ -539,6 +539,23 @@ void main() {
       expect(grid.withFrameCount(5)!.frameCount, 5);
     });
 
+    test('its own count keeps the grid, empty cells and all', () {
+      // cabin-…-opening animation.png: 3360×352, 7 cells of 480, 6 used.
+      // Re-cut into 6 it was 560 px frames, through the drawings.
+      const cabin = SpriteAnim(
+        path: 'cabin-opening animation.png',
+        kind: AnimKind.sheet,
+        frameW: 480,
+        frameH: 352,
+        cols: 7,
+        frameTotal: 6,
+      );
+      expect(cabin.withFrameCount(6), cabin);
+      expect(applyOverride(cabin, {'frames': 6, 'fps': 8}).frameW, 480);
+      // Other counts still re-slice the sheet.
+      expect(cabin.withFrameCount(5)!.frameW, 672);
+    });
+
     test('frame size edits clear it, fps edits keep it', () {
       final s = strip.withFrameCount(16)!;
       expect(s.copyWith(fps: 8).frameTotal, 16);
@@ -686,6 +703,26 @@ void main() {
       final a = detect(['fx/slash.png'])['fx/slash.png']!;
       expect((a.frameW, a.frameH, a.cols, a.rows), (30, 40, 5, 1));
       expect(a.frameCount, 5);
+    });
+
+    test('a frame-count name on a grid: N frames in rows, not one strip', () {
+      // imp-attack2_prep_20frames.png: 960×640 is 5 × 4 frames of 192×160;
+      // the name alone gave one row of 20 frames 48 px wide.
+      const rel = 'imp/imp-attack2_prep_20frames.png';
+      png(rel, 120, 80, blobs: cells(24, 20, 5, 4));
+      final a = detect([rel])[rel]!;
+      expect((a.frameW, a.frameH, a.cols, a.rows), (24, 20, 5, 4));
+      expect(a.frameCount, 20);
+      // Without pixel checks the name's strip stays.
+      final named = detectAnimations(tmp.path, [rel]).single;
+      expect((named.frameW, named.cols, named.rows), (6, 20, 1));
+    });
+
+    test('a frame-count strip with clean cuts stays one row', () {
+      const rel = 'fx/beam_4frames.png';
+      png(rel, 80, 80, blobs: cells(20, 80, 4, 1));
+      final a = detect([rel])[rel]!;
+      expect((a.frameW, a.frameH, a.cols, a.rows), (20, 80, 4, 1));
     });
 
     test('a grid with an empty last cell: the frame total is the used '

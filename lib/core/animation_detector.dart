@@ -132,9 +132,11 @@ class SpriteAnim {
   /// that leaves the last row in use is tried, so 17 frames on a 1920×320
   /// sheet are 12 × 2 of 160 px, not only `ceil(n / rows)` columns. Square
   /// cells win, then this sheet's row count, then fewer empty cells. Null
-  /// when no grid fits or this isn't a sheet.
+  /// when no grid fits or this isn't a sheet. This sheet's own count keeps
+  /// its grid: 6 frames of 480 px with an empty 7th cell stay 480, not 560.
   SpriteAnim? withFrameCount(int n) {
     if (kind != AnimKind.sheet || n < 1 || n > maxFrameCount) return null;
+    if (n == frameCount) return this;
     final sheetW = frameW * cols;
     final sheetH = frameH * rows;
     (int, int)? best;
@@ -333,8 +335,13 @@ bool _notAnimation(String rel) {
 }
 
 /// [detectSheet], also saying whether the frames are only the square-strip
-/// guess (no size or frame-count hint behind them).
-({SpriteAnim anim, bool squareGuess})? _detectSheet(String rel, int w, int h) {
+/// guess (no size or frame-count hint behind them), and the count of a
+/// frame-count hint the one-row strip came from ([countHint]).
+({SpriteAnim anim, bool squareGuess, int? countHint})? _detectSheet(
+  String rel,
+  int w,
+  int h,
+) {
   if (w <= 0 || h <= 0 || _notAnimation(rel)) return null;
   final sheetWord = pathWords(rel).any(_isSheetWord);
 
@@ -357,13 +364,15 @@ bool _notAnimation(String rel) {
   final hint = _hintedSize(rel);
   if (hint != null) {
     final g = grid(hint.$1, hint.$2);
-    if (g != null) return (anim: g, squareGuess: false);
+    if (g != null) return (anim: g, squareGuess: false, countHint: null);
     // A small hint that isn't a frame size may count cells instead:
     // `spritesheet7x7.png` is 7 × 7 frames.
     final (c, r) = hint;
     if (c <= 16 && r <= 16 && w % c == 0 && h % r == 0) {
       final cells = grid(w ~/ c, h ~/ r);
-      if (cells != null) return (anim: cells, squareGuess: false);
+      if (cells != null) {
+        return (anim: cells, squareGuess: false, countHint: null);
+      }
     }
   }
   final framesHint = _framesHint.firstMatch(p.basenameWithoutExtension(rel));
@@ -371,14 +380,14 @@ bool _notAnimation(String rel) {
     final n = int.parse(framesHint[1]!);
     if (n >= 2 && w % n == 0) {
       final g = grid(w ~/ n, h);
-      if (g != null) return (anim: g, squareGuess: false);
+      if (g != null) return (anim: g, squareGuess: false, countHint: n);
     }
   }
   if (h <= 512 && w % h == 0) {
     final n = w ~/ h;
     if (n >= 3 && n <= maxSheetFrames || n == 2 && sheetWord) {
       final g = grid(h, h);
-      if (g != null) return (anim: g, squareGuess: true);
+      if (g != null) return (anim: g, squareGuess: true, countHint: null);
     }
   }
   return null;
@@ -533,6 +542,20 @@ List<SpriteAnim> detectAnimations(
         recuts++;
         s = stripFromColumnGaps(packPath, found.anim) ?? s;
       }
+    }
+    // `imp-attack2_prep_20frames.png` (960×640) is 5 × 4 frames, not one
+    // row of 20 frames 48 px wide: a frame-count strip whose cuts run
+    // through the drawings is re-cut into a grid of that many frames.
+    if (found?.countHint case final n?
+        when countGrids(w, h, n).isNotEmpty &&
+            !atlases.contains(rel) &&
+            wordScanSize(w, h) &&
+            wordScans < maxWordScans &&
+            wordPixels + w * h <= maxWordPixels) {
+      wordScans++;
+      wordPixels += w * h;
+      final decoded = _alphaOf(packPath, rel);
+      if (decoded != null) s = gridFromCountHint(s!, decoded, n) ?? s;
     }
     // Big images are rarely one animation and cost the most to decode:
     // bounded by size, by count and by pixels per pack. A file named as one
@@ -902,6 +925,47 @@ SpriteAnim? layerGrid(
     rows: rows,
     frameTotal: last + 1 < total ? last + 1 : null,
   );
+}
+
+/// Grids of exactly [n] frames over a [w]×[h] image with more than one
+/// row, the squarest cells first: the other ways a file named `…_20frames`
+/// may be cut.
+List<(int, int)> countGrids(int w, int h, int n) {
+  double skew(int fw, int fh) => (fw / fh - 1).abs() + (fh / fw - 1).abs();
+  return [
+    for (var r = 2; r <= n; r++)
+      if (n % r == 0 && w % (n ~/ r) == 0 && h % r == 0)
+        (w ~/ (n ~/ r), h ~/ r),
+  ]..sort((a, b) => skew(a.$1, a.$2).compareTo(skew(b.$1, b.$2)));
+}
+
+/// A one-row strip [strip] of [n] frames from a frame-count hint, re-cut
+/// into the first grid of [countGrids] whose cuts are transparent
+/// ([_cleanCuts]) and every cell drawn, when the strip's own cuts run
+/// through the drawings. Null when the strip is clean or no grid fits.
+SpriteAnim? gridFromCountHint(
+  SpriteAnim strip,
+  (Uint8List, int, int) decoded,
+  int n,
+) {
+  final (alpha, w, h) = decoded;
+  if (_cleanCuts(alpha, w, h, strip.frameW, strip.frameH)) return null;
+  for (final (fw, fh) in countGrids(w, h, n)) {
+    final cols = w ~/ fw, rows = h ~/ fh;
+    if (!_cleanCuts(alpha, w, h, fw, fh) ||
+        filledCells(alpha, w, fw, fh, cols, rows) != n) {
+      continue;
+    }
+    return SpriteAnim(
+      path: strip.path,
+      kind: AnimKind.sheet,
+      frameW: fw,
+      frameH: fh,
+      cols: cols,
+      rows: rows,
+    );
+  }
+  return null;
 }
 
 /// The starting guess for "Make animation…" on an image nothing detected:

@@ -2848,11 +2848,22 @@ class _AnimationEditorState extends State<AnimationEditor> {
 
   /// Re-slices the sheet into the typed total frame count on the best grid
   /// that fits; frame width and height follow. A count with no fitting grid
-  /// keeps the old slicing.
+  /// keeps the old slicing. The detected count brings back the detected
+  /// grid, so stepping away and back doesn't drift (a sheet with empty
+  /// cells at the end would otherwise be stretched over them).
   void _applyFrames() {
     if (_n.text.trim().isEmpty) return;
     final n = int.tryParse(_n.text.trim());
-    final next = n == null ? null : _anim.withFrameCount(n);
+    final detected = widget.detected;
+    final next = n == null
+        ? null
+        : detected.kind == AnimKind.sheet && n == detected.frameCount
+        ? detected.copyWith(
+            fps: _anim.fps,
+            playRow: _anim.playRow,
+            zoom: _anim.zoom,
+          )
+        : _anim.withFrameCount(n);
     setState(() {
       if (next == null) {
         _framesError =
